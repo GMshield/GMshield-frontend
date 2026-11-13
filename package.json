@@ -1,0 +1,44 @@
+{
+  "name": "gmshield-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.13.0"
+  },
+  "scripts": {
+    "generate:types": "node --import ./scripts/use-typescript6.mjs node_modules/openapi-typescript/bin/cli.js contracts/public.json --output src/server/backend/generated/public.d.ts",
+    "dev": "npm run generate:types && next dev",
+    "build": "npm run generate:types && next build",
+    "start": "next start",
+    "lint": "node --import ./scripts/use-typescript6.mjs node_modules/eslint/bin/eslint.js --max-warnings 0 .",
+    "typecheck": "npm run generate:types && tsc --noEmit",
+    "test": "npm run generate:types && vitest run",
+    "stand-in-backend": "node stand-in-backend/server.mjs",
+    "test:ci": "npm run generate:types && vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=reports/junit/junit.xml"
+  },
+  "dependencies": {
+    "next": "16.4.3",
+    "openapi-fetch": "0.17.0",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@typescript/typescript6": "6.0.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.14.0",
+    "eslint-config-next": "16.4.3",
+    "openapi-typescript": "7.13.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}
