@@ -1,0 +1,10 @@
+{
+  "app": {
+    "title": "GMshield",
+    "description": "A rules assistant for tabletop RPG game masters."
+  },
+  "home": {
+    "heading": "GMshield",
+    "lead": "Under construction. The screens arrive in the next releases."
+  }
+}

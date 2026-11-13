@@ -7,3 +7,9 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 .vercel/
+# Generated on every build and test from contracts/public.json (npm run generate:types)
+src/server/backend/generated/
+# Test output, and the scratch copy of the build-guard test
+reports/
+.build-guard/
+.gmshield-reports/
