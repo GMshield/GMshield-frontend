@@ -1,9 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 
 import { createStandInServer, loadContract } from '../../stand-in-backend/server.mjs';
 
-export const CONTRACT_PATH = new URL('../../contracts/public.json', import.meta.url).pathname;
+export const CONTRACT_PATH = fileURLToPath(new URL('../../contracts/public.json', import.meta.url));
 
 export type Running = { url: string; close: () => Promise<void>; requests: { headers: Record<string, unknown> }[] };
 

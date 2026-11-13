@@ -44,7 +44,10 @@ they sit in `src/`.
   `accept-language`, `content-type` and `traceparent`. It forwards the request's W3C `traceparent`
   with a new span id, or starts a new trace. No browser code calls the backend, and no
   `NEXT_PUBLIC_` variable exists.
-- **Proxy.** Every answer carries `Cache-Control: no-store` and a Content-Security-Policy that
+- **Proxy.** Every answer except Next.js's static files (`/_next/static`, `/_next/image` and
+  `/favicon.ico`, which the proxy's matcher skips) carries `Cache-Control: no-store`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, a `Permissions-Policy` that
+  turns off camera, microphone and geolocation, and a Content-Security-Policy that
   allows the site's own origin only, with a new nonce per request for the inline scripts and
   styles of Next.js (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`,
   `form-action 'self'`). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
@@ -99,8 +102,9 @@ that names the settings, never a value, and exits with status 78.
 secret, and the backend is `http://stand-in-backend:8080` unless `GMSHIELD_BACKEND_URL` is set:
 the `stand-in-backend` image of this repository, which answers every path of
 `contracts/public.json` with a valid example and any other path with a 404 problem detail. Until
-Story 1.4 makes the pipeline start it beside the frontend, the frontend's staging start reports
-unhealthy, as the backend's does.
+Story 1.4 makes the pipeline start the frontend in test mode beside it, the pipeline starts the
+frontend without `GMSHIELD_MODE` or `GMSHIELD_BACKEND_URL`, so the start is refused (exit 78) and
+the staging stage fails, as the backend's does.
 
 ## Build and run
 

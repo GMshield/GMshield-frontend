@@ -14,6 +14,12 @@ function request(path: string, init: { method?: string; headers?: Record<string,
   });
 }
 
+function expectSecurityHeaders(response: Response): void {
+  expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(response.headers.get('referrer-policy')).toBe('same-origin');
+  expect(response.headers.get('permissions-policy')).toBe('camera=(), microphone=(), geolocation=()');
+}
+
 function directives(policy: string): Map<string, string[]> {
   return new Map(
     policy.split(';').map((part) => {
@@ -40,6 +46,7 @@ describe('proxy', () => {
     // Next.js reads the nonce from the request's policy: the same policy is forwarded.
     expect(response.headers.get('x-middleware-request-content-security-policy')).toBe(policy);
     expect(response.headers.get('x-middleware-request-x-nonce')).toBe(nonce);
+    expectSecurityHeaders(response);
   });
 
   it('allows the site itself only: every fetch directive is self, plus the nonce on scripts and styles', () => {
@@ -77,6 +84,7 @@ describe('proxy', () => {
     expect(response.headers.get('content-type')).toBe('application/problem+json');
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('x-middleware-next')).toBeNull();
+    expectSecurityHeaders(response);
     const body = await response.json();
     expect(body).toMatchObject({
       type: 'urn:gmshield:problem:request.cross_origin',

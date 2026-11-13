@@ -7,6 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 
 const PROBLEM_TYPE = 'application/problem+json';
 const TRACEPARENT = /^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}/;
@@ -167,7 +168,7 @@ export function createStandInServer(contract, { quiet = false } = {}) {
 }
 
 if (import.meta.main) {
-  const contractPath = process.env.STAND_IN_CONTRACT ?? new URL('../contracts/public.json', import.meta.url).pathname;
+  const contractPath = process.env.STAND_IN_CONTRACT ?? fileURLToPath(new URL('../contracts/public.json', import.meta.url));
   const port = Number(process.env.PORT ?? 8080);
   const contract = loadContract(contractPath);
   const server = createStandInServer(contract);

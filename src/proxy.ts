@@ -15,6 +15,13 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  */
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/** Set on every answer of the proxy, beside the Content-Security-Policy and `no-store`. */
+export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
 export function contentSecurityPolicy(nonce: string, development: boolean): string {
   const scripts = `'self' 'nonce-${nonce}'${development ? " 'unsafe-eval'" : ''}`;
   return [
@@ -84,6 +91,7 @@ export function proxy(request: NextRequest): NextResponse {
           'Content-Type': 'application/problem+json',
           'Content-Security-Policy': policy,
           'Cache-Control': 'no-store',
+          ...SECURITY_HEADERS,
         },
       },
     );
@@ -98,6 +106,9 @@ export function proxy(request: NextRequest): NextResponse {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', policy);
   response.headers.set('Cache-Control', 'no-store');
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(name, value);
+  }
   return response;
 }
 

@@ -10,7 +10,7 @@
     "generate:types": "node --import ./scripts/use-typescript6.mjs node_modules/openapi-typescript/bin/cli.js contracts/public.json --output src/server/backend/generated/public.d.ts",
     "dev": "npm run generate:types && next dev",
     "build": "npm run generate:types && next build",
-    "start": "next start",
+    "start": "node .next/standalone/server.js",
     "lint": "node --import ./scripts/use-typescript6.mjs node_modules/eslint/bin/eslint.js --max-warnings 0 .",
     "typecheck": "npm run generate:types && tsc --noEmit",
     "test": "npm run generate:types && vitest run",
