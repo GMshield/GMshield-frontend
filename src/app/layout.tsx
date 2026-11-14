@@ -16,8 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // Reading the request headers renders every page per request, which the nonce in the
 // Content-Security-Policy (proxy.ts) needs: Next.js puts it on its own inline scripts.
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const language = await currentLanguage();
   return (
-    <html lang={await currentLanguage()}>
+    <html lang={language}>
       <body>{children}</body>
     </html>
   );

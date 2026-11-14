@@ -88,12 +88,25 @@ function stringExample(format) {
   }
 }
 
+function escapeForPattern(text) {
+  return text.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+}
+
+/** `/a/{id}/b` -> /^\/a\/[^/]+\/b$/, scanned by hand: no regular expression that can backtrack. */
 function templateToPattern(template) {
-  const escaped = template
-    .split(/(\{[^}]+\})/)
-    .map((part) => (part.startsWith('{') ? '[^/]+' : part.replace(/[.*+?^$()|[\]\\]/g, '\\$&')))
-    .join('');
-  return new RegExp(`^${escaped}$`);
+  let pattern = '';
+  let rest = template;
+  for (;;) {
+    const open = rest.indexOf('{');
+    const close = open === -1 ? -1 : rest.indexOf('}', open + 1);
+    if (close <= open + 1) {
+      pattern += escapeForPattern(rest);
+      break;
+    }
+    pattern += `${escapeForPattern(rest.slice(0, open))}[^/]+`;
+    rest = rest.slice(close + 1);
+  }
+  return new RegExp(`^${pattern}$`);
 }
 
 /** The answer to a request: status, content type and body. */
@@ -111,7 +124,7 @@ export function answer(contract, method, pathname, traceId) {
     }
     const statuses = Object.keys(operation.responses ?? {})
       .filter((code) => /^2\d\d$/.test(code))
-      .sort();
+      .sort((a, b) => a.localeCompare(b));
     const status = Number(statuses[0] ?? 204);
     const content = operation.responses?.[String(status)]?.content ?? {};
     const [type, media] = Object.entries(content)[0] ?? [];
@@ -149,7 +162,8 @@ function log(traceId, event, fields = {}) {
 export function createStandInServer(contract, { quiet = false } = {}) {
   return createServer((request, response) => {
     const traceId = TRACEPARENT.exec(request.headers.traceparent ?? '')?.[1] ?? randomBytes(16).toString('hex');
-    const pathname = new URL(request.url ?? '/', 'http://stand-in').pathname;
+    // A base only to parse the request's path; nothing connects to it.
+    const pathname = new URL(request.url ?? '/', 'http://stand-in').pathname; // NOSONAR: not a connection
     const result = answer(contract, request.method ?? 'GET', pathname, traceId);
     // The request body is never read: drain it so that the connection can be reused.
     request.resume();
