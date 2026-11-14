@@ -12,7 +12,8 @@ import 'server-only';
 export const MODE = 'GMSHIELD_MODE';
 export const TEST_MODE = 'test';
 export const BACKEND_URL = 'GMSHIELD_BACKEND_URL';
-export const TEST_MODE_BACKEND_URL = 'http://stand-in-backend:8080';
+// Test mode only: the stand-in backend on the pipeline's isolated run network, which has no TLS.
+export const TEST_MODE_BACKEND_URL = 'http://stand-in-backend:8080'; // NOSONAR: test-mode address
 
 export type Settings = {
   readonly testMode: boolean;
@@ -33,6 +34,14 @@ export class SettingsRefused extends Error {
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
+
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') {
+    end -= 1;
+  }
+  return url.slice(0, end);
+}
 
 function present(value: string | undefined): value is string {
   return value !== undefined && value.trim() !== '';
@@ -62,7 +71,7 @@ export function checkSettings(environment: Environment): Settings {
   if (!isHttpUrl(backendUrl)) {
     throw new SettingsRefused('setting.invalid', [BACKEND_URL]);
   }
-  return { testMode, backendUrl: backendUrl.replace(/\/+$/, '') };
+  return { testMode, backendUrl: withoutTrailingSlashes(backendUrl) };
 }
 
 /** The settings of this process. The start-up check has already refused a start without them. */
