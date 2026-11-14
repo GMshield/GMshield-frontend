@@ -152,6 +152,11 @@ Reports for every run are kept by the pipeline; see [GMshield-pipeline](https://
 
 ## Pipeline contract
 
+In production (Story 1.6) the frontend publishes no host port and joins the internal networks
+`gmshield-edge` and `gmshield-app` only, so it has no internet; it reaches the backend over HTTP at
+`http://gmshield-backend:8080` (`GMSHIELD_BACKEND_URL` in `~/gmshield-ci/secrets/frontend.env`). It
+runs as 10001 with a read-only root filesystem and every capability dropped.
+
 The pipeline reads [`.gmshield/pipeline.toml`](.gmshield/pipeline.toml) and builds the multi-stage
 `Dockerfile`: `test` runs the lint, type check, unit tests and `next build`; `test-reports` holds
 the JUnit results and `lcov.info`; `stand-in-backend` is the test-mode backend; the production
