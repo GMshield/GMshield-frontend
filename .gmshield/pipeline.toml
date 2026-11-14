@@ -15,3 +15,9 @@ openapi = ""                 # the frontend publishes no OpenAPI document
 
 [deploy]
 host_port = 3000               # 127.0.0.1:<host_port> on roberto-server (0 = not published)
+
+# The develop pipeline's throwaway copy (active DAST) runs with GMSHIELD_MODE=test and talks to the
+# Dockerfile's stand-in backend at http://stand-in-backend:8080 (src/server/settings.ts).
+[[staging.companions]]
+target = "stand-in-backend"
+alias = "stand-in-backend"
