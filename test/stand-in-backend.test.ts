@@ -52,6 +52,14 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'DELETE', '/api/v1/session', 't')).toEqual({ status: 204, type: null, body: null });
   });
 
+  it('answers the library paths (Story 1.11) with a starter system and campaign', () => {
+    const system = { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' };
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha', system };
+    expect(answer(contract, 'GET', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: campaign });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}`, 't')).toMatchObject({ status: 200, body: campaign });
+    expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

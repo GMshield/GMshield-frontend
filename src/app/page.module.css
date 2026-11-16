@@ -42,7 +42,3 @@
   min-height: var(--space-touch-target);
   color: var(--color-text);
 }
-
-.signOut {
-  margin: var(--space-8) 0 0;
-}

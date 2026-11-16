@@ -2,6 +2,8 @@ import { cookies, headers } from 'next/headers';
 
 import { LANGUAGES, languageFor, type Language } from '@/messages';
 
+import { SIDEBAR_COOKIE, sidebarFrom, type SidebarState } from './sidebar-cookie';
+
 /**
  * Theme and language before sign-in: two cookies, read by the server on every request, so the
  * page is rendered in the right theme and never flashes another one. Nothing here is stored in the
@@ -42,6 +44,17 @@ export function preferencesFor(
     theme: themeFrom(stored.theme) ?? DEFAULT_THEME,
     language: languageFrom(stored.language) ?? languageFor(acceptLanguage),
   };
+}
+
+/**
+ * The sidebar's state on a wide screen (Story 1.11): `__Host-gmshield-sidebar`, defined in `./sidebar-cookie`
+ * so that the sidebar, a client component, can write it without importing the server's `next/headers`.
+ */
+export { SIDEBAR_COOKIE, SIDEBAR_STATES, sidebarFrom, type SidebarState } from './sidebar-cookie';
+
+/** The sidebar's state of the request being rendered (Server Components only). */
+export async function currentSidebar(): Promise<SidebarState> {
+  return sidebarFrom((await cookies()).get(SIDEBAR_COOKIE)?.value);
 }
 
 /** The preferences of the request being rendered (Server Components and Server Actions only). */

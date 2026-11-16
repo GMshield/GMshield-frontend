@@ -5,10 +5,37 @@
   },
   "home": {
     "heading": "GMshield",
-    "lead": "Assistente de regras para mestres de RPG de mesa.",
-    "greeting": "Olá, {username}",
-    "signedInLead": "Você entrou. As telas da sua biblioteca chegam nas próximas entregas.",
-    "signOut": "Sair"
+    "lead": "Assistente de regras para mestres de RPG de mesa."
+  },
+  "shell": {
+    "name": "GMshield",
+    "menu": "Menu de GMshield",
+    "signedInAs": "Conectado como {username}",
+    "signOut": "Sair",
+    "openMenu": "Abrir menu",
+    "closeMenu": "Fechar menu",
+    "navigation": "Navegação principal",
+    "currentCampaign": "Campanha atual",
+    "noCampaign": "Nenhuma campanha",
+    "context": "Sistema e campanha",
+    "entries": {
+      "questions": "Consultas",
+      "rules": "Criação de Regras",
+      "campaigns": "Minhas Mesas",
+      "systems": "Sistemas",
+      "characters": "Personagens",
+      "files": "Meus Arquivos",
+      "addFile": "Adicionar Arquivo"
+    }
+  },
+  "placeholder": {
+    "questions": "Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.",
+    "rules": "Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.",
+    "campaigns": "Aqui você vai ver e organizar suas campanhas.",
+    "systems": "Aqui você vai ver e organizar seus sistemas de jogo.",
+    "characters": "Aqui você vai guardar os personagens das suas campanhas.",
+    "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um.",
+    "addFile": "Aqui você vai enviar um livro ou arquivo para a sua biblioteca."
   },
   "notFound": {
     "title": "Não encontrado.",

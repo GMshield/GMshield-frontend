@@ -1,0 +1,209 @@
+/*
+ * The sidebar (Story 1.11). From 1280px it is a column beside the main one, open or closed by its cookie;
+ * under 1280px it starts closed and opens over the main column (768 to 1279px) or as a full-screen sheet
+ * (under 768px). A hidden part is display: none, so it also leaves the Tab order.
+ */
+.area {
+  display: contents;
+}
+
+.panel {
+  grid-area: sidebar;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: var(--width-sidebar);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  overflow-y: auto;
+  border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  backdrop-filter: var(--glass-blur);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.collapse,
+.handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* The band under the logo: the current campaign (the switcher comes with Epic 3). */
+.campaign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-2) 0;
+  text-align: center;
+}
+
+.campaignLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+}
+
+.campaignName {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  overflow-wrap: anywhere;
+}
+
+.nav {
+  flex: 1 0 auto;
+}
+
+.entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entries li + li {
+  border-top: 1px solid var(--color-rule);
+}
+
+/* 44px rows, centred, with a hairline between them; the current one on the active background. */
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  color: var(--color-text);
+  font-size: var(--font-nav-size);
+  font-weight: var(--font-nav-weight);
+  line-height: var(--font-nav-line-height);
+  text-align: center;
+  text-decoration: none;
+}
+
+.entry[aria-current='page'] {
+  background-color: var(--color-surface-active);
+}
+
+/* "Adicionar Arquivo": a grey control pill with an upload icon. */
+.add {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: var(--space-touch-target);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}
+
+.add[aria-current='page'] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Closed: the logo mark at the top left and the handle at mid-height on the left edge. */
+.mark,
+.handle {
+  display: none;
+}
+
+.mark {
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 10;
+}
+
+.handle {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  z-index: 10;
+  width: var(--space-touch-target);
+  height: calc(2 * var(--space-touch-target));
+  transform: translateY(-50%);
+  border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Light: the control grey with a white chevron, as drawn. */
+:root[data-theme='light'] .handle {
+  background-color: var(--color-chip);
+  color: var(--color-chip-icon);
+}
+
+@media (min-width: 1280px) {
+  .area[data-wide='closed'] .panel {
+    display: none;
+  }
+
+  .area[data-wide='closed'] .mark,
+  .area[data-wide='closed'] .handle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 1279px) {
+  /* Over the main column: it slides in when opened (no slide under reduced motion: --motion-slide is 0ms). */
+  .panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    transition: transform var(--motion-slide) ease-out;
+  }
+
+  @starting-style {
+    .panel {
+      transform: translateX(-100%);
+    }
+  }
+
+  .area:not([data-narrow='open']) .panel {
+    display: none;
+  }
+
+  .area:not([data-narrow='open']) .mark,
+  .area:not([data-narrow='open']) .handle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  .panel {
+    right: 0;
+    width: 100%;
+    border-radius: 0;
+  }
+}

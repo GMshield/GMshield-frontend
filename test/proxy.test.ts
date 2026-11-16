@@ -50,6 +50,11 @@ describe('proxy', () => {
     expectSecurityHeaders(response);
   });
 
+  it('names the requested path for the signed-in layout, replacing what the browser sent (Story 1.11)', async () => {
+    const response = await proxy(request('/systems?x=1', { headers: { 'x-gmshield-path': '//evil.example/' } }));
+    expect(response.headers.get('x-middleware-request-x-gmshield-path')).toBe('/systems?x=1');
+  });
+
   it('allows the site itself only: every fetch directive is self, plus the nonce on scripts and styles', () => {
     const map = directives(contentSecurityPolicy('abc123==', false));
     const fetchDirectives = ['default-src', 'script-src', 'style-src', 'img-src', 'font-src', 'connect-src', 'media-src', 'manifest-src', 'worker-src', 'frame-src', 'child-src'];

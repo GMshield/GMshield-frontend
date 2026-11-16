@@ -265,12 +265,22 @@ describe('the username step (completeSignInAction)', () => {
       'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } },
     });
     expect(await redirectOf(() => completeSignInAction(INITIAL_USERNAME_FORM, form('  Mestre_Ana ', true)))).toBe('/');
-    expect(JSON.parse(server.calls[0]!.body)).toEqual({ attemptToken: ATTEMPT, username: 'Mestre_Ana', termsAccepted: true });
+    // Story 1.11: the interface's language names the account's first system and campaign (pt-BR without a cookie).
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ attemptToken: ATTEMPT, username: 'Mestre_Ana', termsAccepted: true, language: 'pt-BR' });
     expect(setCalls).toEqual([
       { name: '__Host-gmshield-session', value: expect.stringMatching(SESSION_VALUE), options: { ...COOKIE, maxAge: 604800 } },
       { name: '__Host-gmshield-sign-in', value: '', options: EXPIRED },
       { name: '__Host-gmshield-return', value: '', options: EXPIRED },
     ]);
+  });
+
+  it('sends the language of the language cookie (Story 1.11)', async () => {
+    cookieJar = { '__Host-gmshield-sign-in': ATTEMPT, '__Host-gmshield-lang': 'en' };
+    const server = await useBackend({
+      'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } },
+    });
+    expect(await redirectOf(() => completeSignInAction(INITIAL_USERNAME_FORM, form('Mestre_Ana', true)))).toBe('/');
+    expect(JSON.parse(server.calls[0]!.body)).toMatchObject({ language: 'en' });
   });
 
   it('clears the return cookie after sign-in even when it leads to / (an unsafe or plain path)', async () => {
@@ -337,15 +347,10 @@ describe('"Sair" (signOutAction)', () => {
 });
 
 describe('the home page (/) and the username page', () => {
-  it('signed in: "Olá, <username>", the preferences form and "Sair", with the session sent as X-Session-Token', async () => {
+  it('signed in: / sends the visitor on to the shell (/questions), with the session sent as X-Session-Token', async () => {
     const server = await useBackend({ 'GET /api/v1/me': { status: 200, body: { username: 'Mestre_Ana' } } });
     cookieJar = { '__Host-gmshield-session': SESSION };
-    const html = renderToStaticMarkup(await HomePage());
-    expect(html).toContain('<h1');
-    expect(html).toContain('Olá, Mestre_Ana');
-    expect(html).toContain('>Sair<');
-    expect(html).toContain('name="theme"');
-    expect(html).not.toContain('Continuar com Google');
+    expect(await redirectOf(() => HomePage())).toBe('/questions');
     expect(server.calls[0]?.headers['x-session-token']).toBe(SESSION);
   });
 
