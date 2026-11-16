@@ -6,5 +6,61 @@
   "home": {
     "heading": "GMshield",
     "lead": "Under construction. The screens arrive in the next releases."
+  },
+  "notFound": {
+    "title": "Not found.",
+    "home": "Go to the start"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "theme": "Theme",
+    "themes": {
+      "illustrated": "Illustrated",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "language": "Language",
+    "languages": {
+      "pt-BR": "Português (Brasil)",
+      "en": "English"
+    },
+    "apply": "Apply"
+  },
+  "dialog": {
+    "cancel": "Cancel"
+  },
+  "notice": {
+    "status": {
+      "danger": "Error",
+      "warning": "Warning",
+      "success": "Done"
+    },
+    "dismiss": "Dismiss notice"
+  },
+  "errors": {
+    "categories": {
+      "request": "The request could not be completed.",
+      "server": "Something went wrong on the server. Try again in a moment.",
+      "integrity": "This data failed its integrity check and is not shown."
+    },
+    "codes": {
+      "request": {
+        "invalid": "The request is not valid.",
+        "not_found": "Not found.",
+        "method_not_allowed": "This action is not allowed here.",
+        "not_acceptable": "The server cannot answer in this format.",
+        "too_large": "The request is too large.",
+        "unsupported_media_type": "This type of content is not accepted.",
+        "rejected": "The request was refused.",
+        "cross_origin": "The request did not come from GMshield and was refused."
+      },
+      "server": {
+        "unexpected": "Something went wrong on the server. Try again in a moment.",
+        "unavailable": "The service is unavailable right now. Try again in a moment."
+      },
+      "integrity": {
+        "failed": "This data failed its integrity check and is not shown."
+      }
+    }
   }
 }

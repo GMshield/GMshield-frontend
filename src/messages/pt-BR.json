@@ -6,5 +6,61 @@
   "home": {
     "heading": "GMshield",
     "lead": "Em construção. As telas chegam nas próximas entregas."
+  },
+  "notFound": {
+    "title": "Não encontrado.",
+    "home": "Ir para o início"
+  },
+  "preferences": {
+    "title": "Preferências",
+    "theme": "Tema",
+    "themes": {
+      "illustrated": "Ilustrado",
+      "dark": "Escuro",
+      "light": "Claro"
+    },
+    "language": "Idioma",
+    "languages": {
+      "pt-BR": "Português (Brasil)",
+      "en": "English"
+    },
+    "apply": "Aplicar"
+  },
+  "dialog": {
+    "cancel": "Cancelar"
+  },
+  "notice": {
+    "status": {
+      "danger": "Erro",
+      "warning": "Atenção",
+      "success": "Pronto"
+    },
+    "dismiss": "Dispensar aviso"
+  },
+  "errors": {
+    "categories": {
+      "request": "O pedido não pôde ser atendido.",
+      "server": "Algo deu errado no servidor. Tente de novo em instantes.",
+      "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados."
+    },
+    "codes": {
+      "request": {
+        "invalid": "O pedido não é válido.",
+        "not_found": "Não encontrado.",
+        "method_not_allowed": "Esta ação não é permitida aqui.",
+        "not_acceptable": "O servidor não consegue responder neste formato.",
+        "too_large": "O pedido é grande demais.",
+        "unsupported_media_type": "Este tipo de conteúdo não é aceito.",
+        "rejected": "O pedido foi recusado.",
+        "cross_origin": "O pedido não veio do GMshield e foi recusado."
+      },
+      "server": {
+        "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
+        "unavailable": "O serviço está indisponível agora. Tente de novo em instantes."
+      },
+      "integrity": {
+        "failed": "Estes dados não passaram na verificação de integridade e não são mostrados."
+      }
+    }
   }
 }

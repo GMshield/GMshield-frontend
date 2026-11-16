@@ -1,24 +1,24 @@
+import '@fontsource-variable/dm-sans';
+import './globals.css';
+
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
-import { languageFor, messagesFor } from '@/messages';
-
-async function currentLanguage() {
-  return languageFor((await headers()).get('accept-language'));
-}
+import { messagesFor } from '@/messages';
+import { currentPreferences } from '@/preferences';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const messages = messagesFor(await currentLanguage());
+  const messages = messagesFor((await currentPreferences()).language);
   return { title: messages.app.title, description: messages.app.description };
 }
 
-// Reading the request headers renders every page per request, which the nonce in the
-// Content-Security-Policy (proxy.ts) needs: Next.js puts it on its own inline scripts.
+// The theme and language come from the cookies (src/preferences.ts), so the server renders the
+// right theme and no client script can flash another. Reading the request also renders every page
+// per request, which the nonce in the Content-Security-Policy (proxy.ts) needs.
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const language = await currentLanguage();
+  const { theme, language } = await currentPreferences();
   return (
-    <html lang={language}>
+    <html lang={language} data-theme={theme}>
       <body>{children}</body>
     </html>
   );

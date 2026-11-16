@@ -14,10 +14,13 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    include: ['test/**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '.build-guard/**'],
     testTimeout: 10_000,
+    // Plain tests run in Node; component tests (*.test.tsx) in jsdom.
+    projects: [
+      { extends: true, test: { name: 'node', environment: 'node', include: ['test/**/*.test.ts'] } },
+      { extends: true, test: { name: 'dom', environment: 'jsdom', include: ['test/**/*.test.tsx'] } },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'lcov'],

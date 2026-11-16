@@ -1,0 +1,75 @@
+@import './styles/tokens.css';
+
+/*
+ * Base styles. Colours come from the theme's roles only (tokens.css); the server sets
+ * <html data-theme> from the theme cookie. No style attribute anywhere: the CSP blocks them.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* No body background: html paints the canvas, and the illustrated backdrop sits between them. */
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-body-weight);
+  line-height: var(--font-body-line-height);
+}
+
+/*
+ * Illustrated: the scrim over the backdrop, on a layer fixed to the viewport behind the page. The
+ * scrim is uniform and sized by the brightest pixel of the whole backdrop (test/contrast.test.ts),
+ * so any crop at any width keeps text at 4.5:1 or better. The backdrop is pixel art: it scales
+ * without smoothing, and only this layer is pixelated (pictures inside the page are not).
+ */
+:root[data-theme='illustrated'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--color-canvas);
+  background-image: linear-gradient(var(--color-scrim), var(--color-scrim)), url('./assets/backdrop.webp');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+/* The focus ring: every focusable element, every theme. Nothing removes it. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-slide: 0ms;
+  }
+}
