@@ -6,7 +6,7 @@ import { currentPreferences } from '@/preferences';
 import legal from '../legal.module.css';
 import styles from '../page.module.css';
 
-const PARAGRAPHS = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
+const PARAGRAPHS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'] as const;
 
 /** The draft privacy notice (Story 1.9), marked "Rascunho / Draft"; Epic 10 replaces it with the reviewed text. */
 export default async function PrivacyPage() {

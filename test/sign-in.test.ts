@@ -20,6 +20,7 @@ const cookiesModule = await import('@/server/session-cookies');
 const { GET: callback } = await import('@/app/auth/google/callback/route');
 const { completeSignInAction, signOutAction } = await import('@/app/sign-in/actions');
 const { POST: start } = await import('@/app/sign-in/google/route');
+const { GET: ended } = await import('@/app/sign-in/ended/route');
 const { INITIAL_USERNAME_FORM } = await import('@/app/sign-in/form-state');
 const { signInNoticeFrom } = await import('@/app/sign-in/notice');
 const { default: HomePage } = await import('@/app/page');
@@ -220,6 +221,23 @@ describe('Google redirect (GET /auth/google/callback)', () => {
   });
 });
 
+describe('the callback relay waits for the backend', () => {
+  it('gives the callback 16 s, enough for the backend to wait 15 s on Google', async () => {
+    expect(accounts.GOOGLE_CALLBACK_TIMEOUT_MS).toBe(16_000);
+    // Slower than every other call's 2 s limit: only the callback still gets its answer.
+    await useBackend({
+      'POST /api/v1/sign-in/google/callback': { status: 200, body: { outcome: 'username_required' }, delayMs: 2500 },
+      'GET /api/v1/me': { status: 200, body: { username: 'x' }, delayMs: 2500 },
+    });
+    expect(await accounts.finishGoogleSignIn({ attemptToken: ATTEMPT, state: 's', code: 'c' })).toEqual({
+      ok: true,
+      data: { outcome: 'username_required' },
+    });
+    captureOutput();
+    expect(await accounts.currentAccount(SESSION)).toMatchObject({ ok: false, status: 503 });
+  }, 10_000);
+});
+
 describe('the username step (completeSignInAction)', () => {
   function form(username: string, terms: boolean): FormData {
     const data = new FormData();
@@ -253,7 +271,7 @@ describe('the username step (completeSignInAction)', () => {
     await backend?.close();
     await useBackend({ 'POST /api/v1/sign-in/complete': problem(400, 'request.username_invalid', { min: 3, max: 24 }) });
     expect((await completeSignInAction(INITIAL_USERNAME_FORM, form('ab', true))).error).toBe(
-      'Use de 3 a 24 caracteres: letras de a a z, números, "_", "." e "-".',
+      'Use de 3 a 24 caracteres: letras de a a z, maiúsculas ou minúsculas, números, "_", "." e "-".',
     );
     await backend?.close();
     await useBackend({ 'POST /api/v1/sign-in/complete': problem(400, 'request.terms_required') });
@@ -304,13 +322,30 @@ describe('the home page (/) and the username page', () => {
     expect(server.calls[0]?.headers['x-session-token']).toBe(SESSION);
   });
 
-  it('an ended session: the sign-in screen with "Sua sessão terminou."', async () => {
+  it('an ended session: through GET /sign-in/ended, which clears the stale cookie, to "Sua sessão terminou." once', async () => {
     await useBackend({ 'GET /api/v1/me': problem(401, 'session.required') });
     cookieJar = { '__Host-gmshield-session': SESSION };
-    const html = renderToStaticMarkup(await HomePage());
+    expect(await redirectOf(() => HomePage())).toBe('/sign-in/ended');
+
+    const response = ended();
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/?signIn=session.required');
+    expect(response.headers.getSetCookie()).toEqual([
+      expect.stringMatching(/^__Host-gmshield-session=; Path=\/; (Expires=[^;]+; )?Max-Age=0; Secure; HttpOnly; SameSite=lax$/i),
+    ]);
+    // Back on / without the cookie: the sign-in screen with the message, and no backend call.
+    cookieJar = {};
+    const html = renderToStaticMarkup(await HomePage({ searchParams: Promise.resolve({ signIn: 'session.required' }) }));
     expect(html).toContain('Sua sessão terminou.');
     expect(html).toContain('Continuar com Google');
-    expect(html).not.toContain('Sair');
+  });
+
+  it('any other failure of /api/v1/me: the sign-in screen saying what happened, the cookie kept', async () => {
+    await useBackend({ 'GET /api/v1/me': problem(500, 'integrity.failed') });
+    cookieJar = { '__Host-gmshield-session': SESSION };
+    const html = renderToStaticMarkup(await HomePage());
+    expect(html).toContain('Estes dados não passaram na verificação de integridade');
+    expect(setCalls).toEqual([]);
   });
 
   it('signed out: no backend call, the sign-in screen', async () => {

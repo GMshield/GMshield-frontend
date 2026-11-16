@@ -12,7 +12,7 @@
             "type" : "boolean"
           },
           "username" : {
-            "description" : "3 to 24 characters: letters a to z, digits, \"_\", \".\" and \"-\"; unique whatever the case",
+            "description" : "3 to 24 characters: letters a to z in upper or lower case, digits, \"_\", \".\" and \"-\"; unique whatever the case, shown as typed",
             "example" : "mestre_ana",
             "type" : "string"
           }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { Notice } from '@/components/Notice';
 import { PillButton, SolidPillButton } from '@/components/PillButton';
@@ -29,8 +30,13 @@ export default async function HomePage({ searchParams }: { readonly searchParams
     if (account.ok) {
       return <SignedIn username={account.data.username} preferences={preferences} />;
     }
-    // An ended session shows the sign-in screen; any other failure says what happened.
-    notice = signInNoticeFor(problemFields(account.problem).code);
+    const { code } = problemFields(account.problem);
+    if (code === 'session.required') {
+      // An ended session: the stale cookie goes, then the sign-in screen says so once.
+      redirect('/sign-in/ended');
+    }
+    // Any other failure says what happened.
+    notice = signInNoticeFor(code);
   }
   return <SignInScreen preferences={preferences} notice={notice} />;
 }

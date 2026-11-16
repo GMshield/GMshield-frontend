@@ -101,7 +101,7 @@ describe('sign-in texts (Story 1.9)', () => {
     expect(errorText({ category: 'request', code: 'request.username_taken' }, 'pt-BR')).toBe('Este nome de usuário já está em uso.');
     expect(errorText({ category: 'request', code: 'request.sign_in_expired' }, 'pt-BR')).toBe('A tentativa de entrar expirou. Tente de novo.');
     expect(errorText({ category: 'request', code: 'request.username_invalid', params: { min: 3, max: 24 } }, 'en')).toBe(
-      'Use 3 to 24 characters: letters a to z, digits, "_", "." and "-".',
+      'Use 3 to 24 characters: letters a to z in upper or lower case, digits, "_", "." and "-".',
     );
     // Without its limits the invalid-username text falls back to the category's text, never a placeholder.
     expect(errorText({ category: 'request', code: 'request.username_invalid' }, 'en')).toBe(en.errors.categories.request);

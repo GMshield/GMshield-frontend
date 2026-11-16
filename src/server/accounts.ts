@@ -30,14 +30,25 @@ export type CallOptions = {
   readonly baseUrl?: string;
 };
 
+/**
+ * The callback's own limit: the backend may spend up to 15 s on Google's token endpoint (5 s to connect,
+ * 10 s to read) after it has already used up the attempt, so the default 2 s would show "unavailable"
+ * for a sign-in that is still going through.
+ */
+export const GOOGLE_CALLBACK_TIMEOUT_MS = 16_000;
+
 /** The problem used when the backend does not answer: the frontend shows its "unavailable" text. */
 export const UNAVAILABLE = { status: 503, category: 'server', code: 'server.unavailable', params: {} } as const;
 
-async function backend(options: CallOptions) {
+async function backend(options: CallOptions, timeoutMs?: number) {
   const trace = traceFrom((await headers()).get('traceparent'));
   return {
     trace,
-    client: createBackendClient({ baseUrl: options.baseUrl ?? currentSettings().backendUrl, traceparent: outgoingTraceparent(trace) }),
+    client: createBackendClient({
+      baseUrl: options.baseUrl ?? currentSettings().backendUrl,
+      traceparent: outgoingTraceparent(trace),
+      timeoutMs,
+    }),
   };
 }
 
@@ -45,8 +56,9 @@ async function call<T>(
   event: string,
   options: CallOptions,
   send: (client: Awaited<ReturnType<typeof backend>>['client']) => Promise<{ data?: T; error?: unknown; response: Response }>,
+  timeoutMs?: number,
 ): Promise<Result<T>> {
-  const { trace, client } = await backend(options);
+  const { trace, client } = await backend(options, timeoutMs);
   try {
     const { data, error, response } = await send(client);
     if (response.ok) {
@@ -65,7 +77,12 @@ export function startGoogleSignIn(options: CallOptions = {}): Promise<Result<Sig
 }
 
 export function finishGoogleSignIn(body: Schemas['GoogleCallback'], options: CallOptions = {}): Promise<Result<SignInOutcome>> {
-  return call('sign_in.callback', options, (client) => client.POST('/api/v1/sign-in/google/callback', { body }));
+  return call(
+    'sign_in.callback',
+    options,
+    (client) => client.POST('/api/v1/sign-in/google/callback', { body }),
+    GOOGLE_CALLBACK_TIMEOUT_MS,
+  );
 }
 
 export function completeSignIn(body: Schemas['CompleteSignIn'], options: CallOptions = {}): Promise<Result<SessionGrant>> {
@@ -84,12 +101,13 @@ export function endSession(sessionToken: string, options: CallOptions = {}): Pro
   );
 }
 
-/** Where the browser may be sent after starting: Google's authorization endpoint, or test mode's own callback. */
+/** Where the browser may be sent after starting: Google's authorization endpoint, or the frontend's own callback path. */
 export function safeAuthorizationUrl(url: unknown): string | null {
   if (typeof url !== 'string') {
     return null;
   }
-  if (url.startsWith('/auth/google/callback?') && !url.startsWith('//')) {
+  // The frontend's own callback (the backend's test-mode stand-in): a same-origin path, harmless in any mode.
+  if (url.startsWith('/auth/google/callback?')) {
     return url;
   }
   try {

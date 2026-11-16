@@ -35,7 +35,7 @@ two weeks old that day. Every dependency is pinned exactly and `package-lock.jso
 | `src/app/globals.css` | base styles, the focus ring, reduced motion, the illustrated backdrop under its scrim |
 | `src/app/assets` | images bundled into `/_next/static`: `backdrop.webp`, the illustrated theme's backdrop |
 | `src/app/preferences-action.ts` | the Server Action that stores theme and language |
-| `src/app/sign-in` | the start of a sign-in (`google/route.ts`), the Server Actions of the username step and sign-out (`actions.ts`), the username page, and the allowlist of outcomes `/` may show (`notice.ts`) |
+| `src/app/sign-in` | the start of a sign-in (`google/route.ts`), the clearing of an ended session's cookie (`ended/route.ts`), the Server Actions of the username step and sign-out (`actions.ts`), the username page, and the allowlist of outcomes `/` may show (`notice.ts`) |
 | `src/app/auth/google/callback/route.ts` | the Route Handler Google redirects to; it relays the redirect to the backend |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
@@ -89,7 +89,9 @@ they sit in `src/`.
     (a Route Handler, so the browser always navigates in full): it asks the backend for an attempt
     (`POST /api/v1/sign-in/google`), keeps the attempt token in `__Host-gmshield-sign-in` (600 s)
     and answers 303 to the authorization URL, only when it is Google's
-    (`https://accounts.google.com`) or, in the backend's test mode, the frontend's own callback path.
+    (`https://accounts.google.com`) or the frontend's own callback path, `/auth/google/callback?…`.
+    That same-origin path is what the backend's test-mode stand-in sends; it is accepted in any mode
+    and is harmless, since it only leads back to this site.
   - `GET /auth/google/callback` (a top-level GET, so the `SameSite=Lax` cookie comes along and the
     proxy's same-origin rule, which covers state-changing methods only, lets it through) sends the
     cookie's token with `state`, `code` or `error` to `POST /api/v1/sign-in/google/callback`. A known
@@ -102,7 +104,9 @@ they sit in `src/`.
     the sign-in screen.
   - `/` signed in: `GET /api/v1/me` with the session token in `X-Session-Token` gives "Olá,
     <username>", the preferences form and "Sair", whose action calls `DELETE /api/v1/session` and
-    clears the cookie. An ended session shows the sign-in screen with "Sua sessão terminou.".
+    clears the cookie. An ended session (`session.required`) goes through `GET /sign-in/ended`,
+    which clears the stale session cookie and answers 303 to the sign-in screen with "Sua sessão
+    terminou.".
   - Both cookies are `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and are cleared by
     setting them again with the same attributes and `Max-Age=0`. Nothing logs a token, a code, an
     email address or a username.
@@ -170,6 +174,10 @@ npm test && npm run build
 
 When the frontend needs something the new version added, raise `MINIMUM_BACKEND_CONTRACT_VERSION`
 in `src/server/contract.ts` in the same change.
+
+Deploy order for public contract 1.1.0 (Story 1.9): first fill `GMSHIELD_GOOGLE_CLIENT_ID` and
+`GMSHIELD_GOOGLE_CLIENT_SECRET` in `~/gmshield-ci/secrets/backend.env`, then deploy the backend (it
+refuses to start without them), then the frontend (its health check fails against a 1.0.0 backend).
 
 ## Settings
 

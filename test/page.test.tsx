@@ -118,7 +118,8 @@ describe('page (GET /)', () => {
     expect(privacy.getByText('Rascunho / Draft')).toBeTruthy();
     expect(privacy.getByRole('heading', { level: 1 }).textContent).toBe(en.legal.privacy.title);
     const text = privacy.container.textContent ?? '';
-    for (const fact of ['username', 'email address', 'Google account', 'encrypted', 'Google learns', 'Azure OpenAI']) {
+    for (const fact of ['personal data', 'username', 'email address', 'Google account', 'encrypted', 'accepted the terms of use',
+      'which version', 'Google learns', 'Azure OpenAI', 'LGPD', 'delete the account', 'how long data is kept']) {
       expect(text).toContain(fact);
     }
   });

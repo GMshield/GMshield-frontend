@@ -60,7 +60,7 @@
         "sign_in_expired": "A tentativa de entrar expirou. Tente de novo.",
         "sign_in_refused": "O Google não confirmou a entrada. Tente de novo.",
         "username_taken": "Este nome de usuário já está em uso.",
-        "username_invalid": "Use de {min} a {max} caracteres: letras de a a z, números, \"_\", \".\" e \"-\".",
+        "username_invalid": "Use de {min} a {max} caracteres: letras de a a z, maiúsculas ou minúsculas, números, \"_\", \".\" e \"-\".",
         "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar."
       },
       "server": {
@@ -84,7 +84,7 @@
   },
   "username": {
     "title": "Escolha um nome de usuário",
-    "lead": "É assim que você aparece no GMshield. Use de 3 a 24 caracteres: letras de a a z, números, \"_\", \".\" e \"-\".",
+    "lead": "É assim que você aparece no GMshield. Use de 3 a 24 caracteres: letras de a a z, maiúsculas ou minúsculas, números, \"_\", \".\" e \"-\".",
     "label": "Nome de usuário",
     "terms": "Li e aceito os termos de uso e o aviso de privacidade.",
     "readTerms": "Ler os termos de uso",
@@ -105,11 +105,12 @@
     },
     "privacy": {
       "title": "Aviso de privacidade",
-      "p1": "Da sua conta, o GMshield guarda apenas o nome de usuário, o endereço de email e o identificador da sua conta Google. Os três são guardados criptografados.",
+      "p1": "Dos seus dados pessoais, o GMshield guarda apenas o nome de usuário, o endereço de email e o identificador da sua conta Google, os três criptografados. Guarda também quando você aceitou os termos de uso e este aviso, e em qual versão.",
       "p2": "O Google fica sabendo que você usa o GMshield, porque é ele quem confirma a sua identidade quando você entra.",
       "p3": "As perguntas que você faz ao assistente, com os trechos dos seus materiais usados para respondê-las, são processadas pelo Azure OpenAI, da Microsoft.",
       "p4": "Seus materiais e anotações são guardados criptografados, e só você os vê.",
-      "p5": "Tema, idioma e sessão ficam em cookies do seu navegador que só o servidor lê. Não há cookies de publicidade nem de rastreamento."
+      "p5": "Tema, idioma e sessão ficam em cookies do seu navegador que só o servidor lê. Não há cookies de publicidade nem de rastreamento.",
+      "p6": "Este rascunho ainda não descreve por quanto tempo os dados são guardados, como apagar a conta, como entrar em contato nem os seus direitos pela LGPD. A versão revisada descreverá."
     }
   }
 }
