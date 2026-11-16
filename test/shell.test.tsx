@@ -300,6 +300,25 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(area().dataset.wide).toBe('open');
   });
 
+  it('under 1280px, Esc in the open logo menu closes the menu only; the next Esc closes the sidebar', async () => {
+    const user = userEvent.setup();
+    atWidth(1000);
+    render(shell());
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(area().dataset.narrow).toBe('open');
+    const logo = screen.getByRole('button', { name: 'GMshield' });
+    await user.click(logo);
+    expect(logo.getAttribute('aria-expanded')).toBe('true');
+
+    await user.keyboard('{Escape}');
+    expect(logo.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(logo);
+    expect(area().dataset.narrow).toBe('open');
+
+    await user.keyboard('{Escape}');
+    expect(area().dataset.narrow).toBe('closed');
+  });
+
   it('the context bar reads "system › campaign", or says there is no campaign', () => {
     render(shell({ language: 'en' }));
     const context = screen.getByRole('navigation', { name: en.shell.context });
