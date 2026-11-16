@@ -84,7 +84,6 @@ describe('cookies and small rules', () => {
     expect(cookiesModule.SIGN_IN_COOKIE).toBe('__Host-gmshield-sign-in');
     expect(cookiesModule.SESSION_COOKIE).toBe('__Host-gmshield-session');
     expect(cookiesModule.SIGN_IN_COOKIE_OPTIONS).toEqual({ ...COOKIE, maxAge: 600 });
-    expect(cookiesModule.SESSION_COOKIE_OPTIONS).toEqual({ ...COOKIE, maxAge: 604800 });
     expect(cookiesModule.EXPIRED_COOKIE_OPTIONS).toEqual(EXPIRED);
   });
 
@@ -433,7 +432,8 @@ describe('sessions that rotate and end (Story 1.10)', () => {
     }
     for (const bad of ['//evil.example/x', '/\\evil.example', '\\\\evil.example', 'https://evil.example/', 'javascript:alert(1)', 'campaigns',
       '/sign-in', '/sign-in/ended?next=/x', '/auth/google/callback', '/api/health', '/api', '/session/renew?next=/', '/a/../sign-in',
-      '/%2e%2e/api/health', '/x\u0000y', '/x\ny', `/${'a'.repeat(2048)}`, 42, null, undefined]) {
+      '/%2e%2e/api/health', '/%73ign-in/ended', '/%53IGN-IN', '/%61uth/google/callback', '/%61pi/health',
+      '/session%2Frenew', '/%E0%A4%A', '/x\u0000y', '/x\ny', `/${'a'.repeat(2048)}`, 42, null, undefined]) {
       expect(cookiesModule.safeReturnPath(bad), String(bad)).toBe('/');
     }
   });

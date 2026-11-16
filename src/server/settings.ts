@@ -7,7 +7,8 @@ import 'server-only';
  *   stand-in backend at `http://stand-in-backend:8080` unless `GMSHIELD_BACKEND_URL` is set, and the
  *   service credential is the fixed, public {@link TEST_MODE_FRONTEND_CREDENTIAL} that the backend's
  *   test mode also uses. A `GMSHIELD_FRONTEND_CREDENTIAL` beside test mode is refused.
- * - No mode: `GMSHIELD_BACKEND_URL` and `GMSHIELD_FRONTEND_CREDENTIAL` are required.
+ * - No mode: `GMSHIELD_BACKEND_URL` and `GMSHIELD_FRONTEND_CREDENTIAL` are required; the credential may not
+ *   be the public test-mode value.
  *
  * A refusal names settings and never holds a value.
  */
@@ -89,7 +90,8 @@ export function checkSettings(environment: Environment): Settings {
     throw new SettingsRefused('setting.invalid', [BACKEND_URL]);
   }
   const frontendCredential = testMode ? TEST_MODE_FRONTEND_CREDENTIAL : (credential ?? '').trim();
-  if (!CREDENTIAL.test(frontendCredential)) {
+  // Outside test mode the public test-mode value would let anyone call the backend: never a real credential.
+  if (!CREDENTIAL.test(frontendCredential) || (!testMode && frontendCredential === TEST_MODE_FRONTEND_CREDENTIAL)) {
     throw new SettingsRefused('setting.invalid', [FRONTEND_CREDENTIAL]);
   }
   return { testMode, backendUrl: withoutTrailingSlashes(backendUrl), frontendCredential };

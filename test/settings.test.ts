@@ -57,6 +57,13 @@ describe('settings', () => {
     }
   });
 
+  it('refuses the public test-mode credential outside test mode, naming only the setting', () => {
+    const refused = refusal({ ...PRODUCTION, GMSHIELD_FRONTEND_CREDENTIAL: TEST_MODE_FRONTEND_CREDENTIAL });
+    expect(refused.reason).toBe('setting.invalid');
+    expect(refused.settings).toEqual(['GMSHIELD_FRONTEND_CREDENTIAL']);
+    expect(refused.message).not.toContain(TEST_MODE_FRONTEND_CREDENTIAL);
+  });
+
   it('in test mode, uses the fixed public credential and refuses a real one beside it', () => {
     expect(checkSettings({ GMSHIELD_MODE: 'test' }).frontendCredential).toBe(TEST_MODE_FRONTEND_CREDENTIAL);
     expect(TEST_MODE_FRONTEND_CREDENTIAL).toBe('gmshield-test-mode-frontend-credential-not-a-secret');

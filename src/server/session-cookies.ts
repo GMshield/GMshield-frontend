@@ -26,7 +26,6 @@ export const SIGN_IN_MAX_AGE = 600;
 export const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 export const RETURN_MAX_AGE = 60 * 60;
 export const SIGN_IN_COOKIE_OPTIONS = { ...BASE, maxAge: SIGN_IN_MAX_AGE } as const;
-export const SESSION_COOKIE_OPTIONS = { ...BASE, maxAge: SESSION_MAX_AGE } as const;
 export const RETURN_COOKIE_OPTIONS = { ...BASE, maxAge: RETURN_MAX_AGE } as const;
 /** Clears a cookie: the same attributes, expired. */
 export const EXPIRED_COOKIE_OPTIONS = { ...BASE, maxAge: 0 } as const;
@@ -105,7 +104,13 @@ export function safeReturnPath(value: unknown): string {
   if (url.origin !== 'http://return.invalid') {
     return '/';
   }
-  const path = url.pathname.toLowerCase();
+  // Compared decoded, as Next.js routes it: `/%73ign-in/ended` is `/sign-in/ended`.
+  let path: string;
+  try {
+    path = decodeURIComponent(url.pathname).toLowerCase();
+  } catch {
+    return '/';
+  }
   for (const blocked of ['/sign-in', '/auth', '/api', '/session/renew']) {
     if (path === blocked || path.startsWith(`${blocked}/`)) {
       return '/';

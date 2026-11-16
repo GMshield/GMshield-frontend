@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { NO_RENEWAL_PATHS, config, contentSecurityPolicy, isDocumentVisit, isServerAction, proxy, renewsFor, renewsOn, siteOrigin } from '@/proxy';
+import { NO_RENEWAL_PATHS, config, contentSecurityPolicy, isDocumentVisit, isServerAction, isSpeculative, proxy, renewsFor, renewsOn, siteOrigin } from '@/proxy';
 
 import { captureOutput } from './support/capture';
 import { closedAddress, startScripted, type Scripted } from './support/servers';
@@ -306,6 +306,22 @@ describe('proxy: session renewal (Story 1.10)', () => {
       expect(ended.status, method).toBe(303);
       expect(new URL(ended.headers.get('location')!).search, method).toBe('?next=%2Fterms%3Fx%3D1');
     }
+  });
+
+  it('a browser speculative load (Sec-Purpose or Purpose: prefetch) neither renews nor is redirected', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
+    captureOutput();
+    const purposes: Record<string, string>[] = [{ 'sec-purpose': 'prefetch' }, { 'sec-purpose': 'prefetch;prerender' }, { purpose: 'prefetch' }];
+    for (const purpose of purposes) {
+      const response = await proxy(withSession('/terms?x=1', `${OLD}.${now() - 1}`, { headers: { ...DOCUMENT, ...purpose } }));
+      expect(response.headers.get('x-middleware-next'), JSON.stringify(purpose)).toBe('1');
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(isDocumentVisit(withSession('/', OLD, { headers: { ...DOCUMENT, ...purpose } }))).toBe(false);
+      expect(isSpeculative(withSession('/', OLD, { headers: purpose }))).toBe(true);
+    }
+    expect(server.calls).toEqual([]);
+    expect(isSpeculative(withSession('/', OLD, { headers: { 'sec-purpose': 'prerender' } }))).toBe(false);
   });
 
   it('a Server Action with a due cookie renews, and with an ended session goes on to meet the answer itself', async () => {

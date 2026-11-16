@@ -99,16 +99,26 @@ type Renewal =
  */
 
 /**
- * A document visit: a GET or HEAD the browser loads as a page (`Sec-Fetch-Dest: document`). Without a
- * `Sec-Fetch-Dest` header (an older browser), every GET or HEAD counts as one. Router RSC fetches and
+ * A document visit: a GET or HEAD the browser loads as a page (`Sec-Fetch-Dest: document`), not a
+ * speculative load. Without a `Sec-Fetch-Dest` header (an older browser), every GET or HEAD counts as one. Router RSC fetches and
  * prefetches are `fetch` calls (`Sec-Fetch-Dest: empty`), so they are not.
  */
 export function isDocumentVisit(request: NextRequest): boolean {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
+  if ((request.method !== 'GET' && request.method !== 'HEAD') || isSpeculative(request)) {
     return false;
   }
   const destination = request.headers.get('sec-fetch-dest');
   return destination === null || destination === 'document';
+}
+
+/**
+ * A browser's speculative load (`Sec-Purpose: prefetch`, also `prefetch;prerender`, or the older
+ * `Purpose: prefetch`): it says `Sec-Fetch-Dest: document`, but the browser may drop its answer, so it is
+ * no document visit.
+ */
+export function isSpeculative(request: NextRequest): boolean {
+  const purpose = request.headers.get('sec-purpose') ?? request.headers.get('purpose') ?? '';
+  return purpose.split(';').some((part) => part.trim().toLowerCase() === 'prefetch');
 }
 
 /** A Server Action: a POST carrying Next.js's `Next-Action` header. */

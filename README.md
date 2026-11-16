@@ -129,7 +129,8 @@ they sit in `src/`.
     that does not answer: the request goes on with the token it has. `session.required` on a
     document visit: 303 to `/sign-in/ended?next=<path and query>`.
   - Every other request passes through unchanged: router RSC fetches, prefetches and any other
-    `fetch` (`Sec-Fetch-Dest: empty`). The router may drop such an answer, and a renewed cookie with
+    `fetch` (`Sec-Fetch-Dest: empty`), and the browser's speculative loads (`Sec-Purpose: prefetch`,
+    also `prefetch;prerender`, or `Purpose: prefetch`), which say `document` but may be dropped. The router may drop such an answer, and a renewed cookie with
     it, which would leave a token that turns stale once the overlap ends; its page, route or action
     meets the backend's answer itself. Next.js removes its own router headers (`rsc`,
     `next-router-prefetch`) before the proxy runs, so the proxy goes by `Sec-Fetch-Dest` and
