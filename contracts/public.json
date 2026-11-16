@@ -1,6 +1,25 @@
 {
   "components" : {
     "schemas" : {
+      "CompleteSignIn" : {
+        "properties" : {
+          "attemptToken" : {
+            "description" : "The attempt token of the visitor's cookie",
+            "type" : "string"
+          },
+          "termsAccepted" : {
+            "description" : "The visitor accepted the terms of use and the privacy notice",
+            "type" : "boolean"
+          },
+          "username" : {
+            "description" : "3 to 24 characters: letters a to z, digits, \"_\", \".\" and \"-\"; unique whatever the case",
+            "example" : "mestre_ana",
+            "type" : "string"
+          }
+        },
+        "required" : [ "attemptToken", "termsAccepted", "username" ],
+        "type" : "object"
+      },
       "ContractVersion" : {
         "properties" : {
           "version" : {
@@ -10,6 +29,39 @@
           }
         },
         "required" : [ "version" ],
+        "type" : "object"
+      },
+      "GoogleCallback" : {
+        "properties" : {
+          "attemptToken" : {
+            "description" : "The attempt token of the visitor's cookie",
+            "type" : "string"
+          },
+          "code" : {
+            "description" : "The code parameter of Google's redirect",
+            "type" : "string"
+          },
+          "error" : {
+            "description" : "The error parameter of Google's redirect, when Google refused",
+            "type" : "string"
+          },
+          "state" : {
+            "description" : "The state parameter of Google's redirect",
+            "type" : "string"
+          }
+        },
+        "required" : [ "attemptToken" ],
+        "type" : "object"
+      },
+      "Me" : {
+        "properties" : {
+          "username" : {
+            "description" : "The username, as typed",
+            "example" : "mestre_ana",
+            "type" : "string"
+          }
+        },
+        "required" : [ "username" ],
         "type" : "object"
       },
       "Problem" : {
@@ -43,15 +95,244 @@
         },
         "required" : [ "category", "code", "params", "status", "title", "traceId", "type" ],
         "type" : "object"
+      },
+      "SessionGrant" : {
+        "properties" : {
+          "expiresInSeconds" : {
+            "description" : "Lifetime of the session",
+            "example" : 604800,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sessionToken" : {
+            "description" : "The session token: the frontend keeps it in a cookie and sends it as X-Session-Token",
+            "example" : "example-session-token",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expiresInSeconds", "sessionToken" ],
+        "type" : "object"
+      },
+      "SignInOutcome" : {
+        "properties" : {
+          "outcome" : {
+            "description" : "signed_in: a known account, with its session; username_required: a first sign-in, whose username step comes next",
+            "enum" : [ "signed_in", "username_required" ],
+            "example" : "signed_in",
+            "type" : "string"
+          },
+          "session" : {
+            "$ref" : "#/components/schemas/SessionGrant",
+            "description" : "Present when signed in"
+          }
+        },
+        "required" : [ "outcome" ],
+        "type" : "object"
+      },
+      "SignInStarted" : {
+        "properties" : {
+          "attemptToken" : {
+            "description" : "The attempt token: the frontend keeps it in a cookie and sends it with the callback",
+            "example" : "example-attempt-token",
+            "type" : "string"
+          },
+          "authorizationUrl" : {
+            "description" : "Where the browser goes next: Google's authorization endpoint, or in test mode the frontend's own callback (a path)",
+            "example" : "/auth/google/callback?state=example&code=stand-in.1.gm%40example.test",
+            "type" : "string"
+          },
+          "expiresInSeconds" : {
+            "description" : "Lifetime of the attempt",
+            "example" : 600,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "attemptToken", "authorizationUrl", "expiresInSeconds" ],
+        "type" : "object"
       }
     }
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.0.0"
+    "version" : "1.1.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/me" : {
+      "get" : {
+        "operationId" : "getMe",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Me"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The signed-in account; session.required (401) without a session",
+        "tags" : [ "session" ]
+      }
+    },
+    "/api/v1/session" : {
+      "delete" : {
+        "operationId" : "endSession",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The session is over"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Sign out: ends the session of the token, if it exists",
+        "tags" : [ "session" ]
+      }
+    },
+    "/api/v1/sign-in/complete" : {
+      "post" : {
+        "operationId" : "completeSignIn",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompleteSignIn"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SessionGrant"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The username step of a first sign-in: creates the account and starts a session",
+        "tags" : [ "sign-in" ]
+      }
+    },
+    "/api/v1/sign-in/google" : {
+      "post" : {
+        "operationId" : "startGoogleSignIn",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInStarted"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Start a sign-in with Google: a 10-minute attempt",
+        "tags" : [ "sign-in" ]
+      }
+    },
+    "/api/v1/sign-in/google/callback" : {
+      "post" : {
+        "operationId" : "finishGoogleSignIn",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/GoogleCallback"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Google's redirect, relayed with the attempt token: a session, or the username step next",
+        "tags" : [ "sign-in" ]
+      }
+    },
     "/api/v1/version" : {
       "get" : {
         "operationId" : "getPublicContractVersion",

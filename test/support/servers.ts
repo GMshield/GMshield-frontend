@@ -60,3 +60,31 @@ export async function closedAddress(): Promise<string> {
   await running.close();
   return running.url;
 }
+
+export type Recorded = { method: string; url: string; headers: Record<string, unknown>; body: string };
+export type Scripted = Running & { calls: Recorded[] };
+export type Reply = { status: number; body?: unknown; contentType?: string };
+
+/** A backend that answers each `METHOD path` from a table, and records every request with its body. */
+export async function startScripted(routes: Readonly<Record<string, Reply>>): Promise<Scripted> {
+  const calls: Recorded[] = [];
+  const requests: Running['requests'] = [];
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      calls.push({ method: request.method ?? '', url: request.url ?? '', headers: { ...request.headers }, body: Buffer.concat(chunks).toString('utf8') });
+      requests.push({ headers: { ...request.headers } });
+      const reply = routes[`${request.method} ${request.url}`] ?? { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } };
+      if (reply.body === undefined) {
+        response.writeHead(reply.status);
+        response.end();
+        return;
+      }
+      const type = reply.contentType ?? (reply.status >= 400 ? 'application/problem+json' : 'application/json');
+      response.writeHead(reply.status, { 'Content-Type': type });
+      response.end(JSON.stringify(reply.body));
+    });
+  });
+  return { ...(await listen(server, requests)), calls };
+}

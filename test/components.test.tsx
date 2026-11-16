@@ -259,3 +259,50 @@ describe('PreferencesForm', () => {
     ]);
   });
 });
+
+describe('UsernameForm', () => {
+  it('labels its fields, links both drafts, and has one solid pill', async () => {
+    const { UsernameForm } = await import('@/components/UsernameForm');
+    const action = vi.fn(async () => ({ username: '', termsAccepted: false, error: null, field: null }));
+    const { container } = render(<UsernameForm language="pt-BR" action={action} />);
+    expect(screen.getByLabelText('Nome de usuário')).toHaveProperty('name', 'username');
+    expect(screen.getByRole('checkbox', { name: 'Li e aceito os termos de uso e o aviso de privacidade.' })).toHaveProperty('value', 'accepted');
+    expect(screen.getByRole('link', { name: 'Ler os termos de uso' }).getAttribute('href')).toBe('/terms');
+    expect(screen.getByRole('link', { name: 'Ler o aviso de privacidade' }).getAttribute('href')).toBe('/privacy');
+    expect(screen.getByRole('button', { name: 'Criar conta' }).dataset.variant).toBe('solid');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a refusal under its field and keeps what was typed', async () => {
+    const { UsernameForm } = await import('@/components/UsernameForm');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ username: 'Mestre', termsAccepted: true, error: 'Este nome de usuário já está em uso.', field: 'username' })
+      .mockResolvedValueOnce({ username: 'Outro', termsAccepted: false, error: 'Aceite os termos.', field: 'terms' });
+    render(<UsernameForm language="pt-BR" action={action} />);
+    await user.type(screen.getByLabelText('Nome de usuário'), 'Mestre');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Este nome de usuário já está em uso.');
+    const input = screen.getByLabelText('Nome de usuário') as HTMLInputElement;
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(input.value).toBe('Mestre');
+    const submitted = action.mock.calls[0]?.[1] as FormData;
+    expect(submitted.get('username')).toBe('Mestre');
+    expect(submitted.get('terms')).toBe('accepted');
+
+    await user.clear(input);
+    await user.type(input, 'Outro');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }));
+    await act(async () => {});
+    const termsAlert = await screen.findByRole('alert');
+    expect(termsAlert.textContent).toBe('Aceite os termos.');
+    expect(screen.getByRole('checkbox').getAttribute('aria-describedby')).toBe(termsAlert.id);
+    expect((screen.getByLabelText('Nome de usuário') as HTMLInputElement).getAttribute('aria-invalid')).toBe('false');
+  });
+});

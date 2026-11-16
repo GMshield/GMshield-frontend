@@ -5,7 +5,10 @@
   },
   "home": {
     "heading": "GMshield",
-    "lead": "Under construction. The screens arrive in the next releases."
+    "lead": "A rules assistant for tabletop RPG game masters.",
+    "greeting": "Hello, {username}",
+    "signedInLead": "You are signed in. The screens of your library arrive in the next releases.",
+    "signOut": "Sign out"
   },
   "notFound": {
     "title": "Not found.",
@@ -41,7 +44,8 @@
     "categories": {
       "request": "The request could not be completed.",
       "server": "Something went wrong on the server. Try again in a moment.",
-      "integrity": "This data failed its integrity check and is not shown."
+      "integrity": "This data failed its integrity check and is not shown.",
+      "session": "Your session has ended. Sign in again."
     },
     "codes": {
       "request": {
@@ -52,7 +56,12 @@
         "too_large": "The request is too large.",
         "unsupported_media_type": "This type of content is not accepted.",
         "rejected": "The request was refused.",
-        "cross_origin": "The request did not come from GMshield and was refused."
+        "cross_origin": "The request did not come from GMshield and was refused.",
+        "sign_in_expired": "The sign-in attempt expired. Try again.",
+        "sign_in_refused": "Google did not confirm the sign-in. Try again.",
+        "username_taken": "This username is already in use.",
+        "username_invalid": "Use {min} to {max} characters: letters a to z, digits, \"_\", \".\" and \"-\".",
+        "terms_required": "Accept the terms of use and the privacy notice to continue."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",
@@ -60,7 +69,47 @@
       },
       "integrity": {
         "failed": "This data failed its integrity check and is not shown."
+      },
+      "session": {
+        "required": "Your session has ended."
       }
+    }
+  },
+  "signIn": {
+    "title": "Sign in",
+    "google": "Continue with Google",
+    "legal": "If you continue, you read the terms of use and the privacy notice before the account is created.",
+    "terms": "Terms of use",
+    "privacy": "Privacy notice"
+  },
+  "username": {
+    "title": "Choose a username",
+    "lead": "This is how you appear in GMshield. Use 3 to 24 characters: letters a to z, digits, \"_\", \".\" and \"-\".",
+    "label": "Username",
+    "terms": "I have read and accept the terms of use and the privacy notice.",
+    "readTerms": "Read the terms of use",
+    "readPrivacy": "Read the privacy notice",
+    "submit": "Create account"
+  },
+  "legal": {
+    "draft": "Rascunho / Draft",
+    "draftNote": "This text is a draft. The reviewed version replaces it before the public launch.",
+    "home": "Back to the start",
+    "terms": {
+      "title": "Terms of use",
+      "p1": "GMshield is a rules assistant for tabletop RPG game masters. You sign in with your Google account and choose a username.",
+      "p2": "Only send GMshield material you have the right to use, such as books you own or openly licensed texts. Each library is seen only by the person who created it.",
+      "p3": "The assistant's answers can contain mistakes. Check the cited source before deciding a rule at the table.",
+      "p4": "The service is under construction: features may change or be unavailable, with no guarantee of availability.",
+      "p5": "You can stop using GMshield whenever you want. An account that abuses the service may be blocked."
+    },
+    "privacy": {
+      "title": "Privacy notice",
+      "p1": "Of your account, GMshield keeps only the username, the email address and the identifier of your Google account. All three are stored encrypted.",
+      "p2": "Google learns that you use GMshield, because Google confirms your identity when you sign in.",
+      "p3": "The questions you ask the assistant, with the passages of your material used to answer them, are processed by Microsoft's Azure OpenAI.",
+      "p4": "Your material and notes are stored encrypted, and only you see them.",
+      "p5": "Theme, language and session are kept in cookies of your browser that only the server reads. There are no advertising or tracking cookies."
     }
   }
 }

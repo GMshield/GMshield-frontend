@@ -10,12 +10,14 @@ const { notFoundFor } = await import('@/app/not-found');
 const en = (await import('@/messages/en.json')).default;
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 
-// The categories and codes the backend sends today (GMshield-backend ApiProblem.java), and
-// integrity.failed (Story 1.7).
+// The categories and codes the backend sends today (GMshield-backend ApiProblem.java), integrity.failed
+// (Story 1.7), and sign-in and sessions (Story 1.9, AccountProblems.java).
 const BACKEND_CODES = {
-  request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin'],
+  request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
+    'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
+  session: ['required'],
 } as const;
 
 function leaves(value: unknown): string[] {
@@ -35,7 +37,9 @@ describe('error texts', () => {
       for (const [category, reasons] of Object.entries(BACKEND_CODES)) {
         for (const reason of reasons) {
           expect(codes[category]?.[reason], `${language} ${category}.${reason}`).toBeTruthy();
-          expect(errorText({ category, code: `${category}.${reason}` }, language)).toBe(codes[category]?.[reason]);
+          const params = { min: 3, max: 24 };
+          const expected = (codes[category]?.[reason] ?? '').replace('{min}', '3').replace('{max}', '24');
+          expect(errorText({ category, code: `${category}.${reason}`, params }, language)).toBe(expected);
         }
       }
     }
@@ -89,6 +93,20 @@ describe('error texts', () => {
       expect(text.trim()).not.toBe('');
       expect(text).not.toContain('!');
     }
+  });
+});
+
+describe('sign-in texts (Story 1.9)', () => {
+  it('say what the I/O matrix says, in both languages', () => {
+    expect(errorText({ category: 'request', code: 'request.username_taken' }, 'pt-BR')).toBe('Este nome de usuário já está em uso.');
+    expect(errorText({ category: 'request', code: 'request.sign_in_expired' }, 'pt-BR')).toBe('A tentativa de entrar expirou. Tente de novo.');
+    expect(errorText({ category: 'request', code: 'request.username_invalid', params: { min: 3, max: 24 } }, 'en')).toBe(
+      'Use 3 to 24 characters: letters a to z, digits, "_", "." and "-".',
+    );
+    // Without its limits the invalid-username text falls back to the category's text, never a placeholder.
+    expect(errorText({ category: 'request', code: 'request.username_invalid' }, 'en')).toBe(en.errors.categories.request);
+    expect(errorText({ category: 'session', code: 'session.required' }, 'pt-BR')).toBe('Sua sessão terminou.');
+    expect(errorText({ category: 'session', code: 'session.other' }, 'en')).toBe(en.errors.categories.session);
   });
 });
 

@@ -22,9 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.0.0');
-    expect(meetsMinimum('1.0.0')).toBe(true);
-    expect(meetsMinimum('1.0.1')).toBe(true);
+    // Story 1.9 needs the sign-in and session routes of 1.1.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.1.0');
+    expect(meetsMinimum('1.1.0')).toBe(true);
+    expect(meetsMinimum('1.1.1')).toBe(true);
+    expect(meetsMinimum('1.0.0')).toBe(false);
     expect(meetsMinimum('2.0.0')).toBe(true);
     expect(meetsMinimum('0.9.0')).toBe(false);
     expect(meetsMinimum('0.99.99')).toBe(false);

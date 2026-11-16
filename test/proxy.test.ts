@@ -61,7 +61,8 @@ describe('proxy', () => {
     expect(map.get('object-src')).toEqual(["'none'"]);
     expect(map.get('frame-ancestors')).toEqual(["'none'"]);
     expect(map.get('base-uri')).toEqual(["'self'"]);
-    expect(map.get('form-action')).toEqual(["'self'"]);
+    // The sign-in form's post is answered with a redirect to Google (Story 1.9).
+    expect(map.get('form-action')).toEqual(["'self'", 'https://accounts.google.com']);
     expect([...map.keys()].sort()).toEqual([...fetchDirectives, 'object-src', 'frame-ancestors', 'base-uri', 'form-action'].sort());
   });
 

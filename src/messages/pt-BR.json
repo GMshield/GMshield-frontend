@@ -5,7 +5,10 @@
   },
   "home": {
     "heading": "GMshield",
-    "lead": "Em construção. As telas chegam nas próximas entregas."
+    "lead": "Assistente de regras para mestres de RPG de mesa.",
+    "greeting": "Olá, {username}",
+    "signedInLead": "Você entrou. As telas da sua biblioteca chegam nas próximas entregas.",
+    "signOut": "Sair"
   },
   "notFound": {
     "title": "Não encontrado.",
@@ -41,7 +44,8 @@
     "categories": {
       "request": "O pedido não pôde ser atendido.",
       "server": "Algo deu errado no servidor. Tente de novo em instantes.",
-      "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados."
+      "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados.",
+      "session": "Sua sessão terminou. Entre de novo."
     },
     "codes": {
       "request": {
@@ -52,7 +56,12 @@
         "too_large": "O pedido é grande demais.",
         "unsupported_media_type": "Este tipo de conteúdo não é aceito.",
         "rejected": "O pedido foi recusado.",
-        "cross_origin": "O pedido não veio do GMshield e foi recusado."
+        "cross_origin": "O pedido não veio do GMshield e foi recusado.",
+        "sign_in_expired": "A tentativa de entrar expirou. Tente de novo.",
+        "sign_in_refused": "O Google não confirmou a entrada. Tente de novo.",
+        "username_taken": "Este nome de usuário já está em uso.",
+        "username_invalid": "Use de {min} a {max} caracteres: letras de a a z, números, \"_\", \".\" e \"-\".",
+        "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
@@ -60,7 +69,47 @@
       },
       "integrity": {
         "failed": "Estes dados não passaram na verificação de integridade e não são mostrados."
+      },
+      "session": {
+        "required": "Sua sessão terminou."
       }
+    }
+  },
+  "signIn": {
+    "title": "Entrar",
+    "google": "Continuar com Google",
+    "legal": "Ao continuar, você lê os termos de uso e o aviso de privacidade antes de criar a conta.",
+    "terms": "Termos de uso",
+    "privacy": "Aviso de privacidade"
+  },
+  "username": {
+    "title": "Escolha um nome de usuário",
+    "lead": "É assim que você aparece no GMshield. Use de 3 a 24 caracteres: letras de a a z, números, \"_\", \".\" e \"-\".",
+    "label": "Nome de usuário",
+    "terms": "Li e aceito os termos de uso e o aviso de privacidade.",
+    "readTerms": "Ler os termos de uso",
+    "readPrivacy": "Ler o aviso de privacidade",
+    "submit": "Criar conta"
+  },
+  "legal": {
+    "draft": "Rascunho / Draft",
+    "draftNote": "Este texto é um rascunho. A versão revisada o substitui antes do lançamento público.",
+    "home": "Voltar ao início",
+    "terms": {
+      "title": "Termos de uso",
+      "p1": "O GMshield é um assistente de regras para mestres de RPG de mesa. Você entra com a sua conta Google e escolhe um nome de usuário.",
+      "p2": "Envie ao GMshield apenas materiais que você tem o direito de usar, como livros que possui ou textos de licença aberta. Cada biblioteca é vista só por quem a criou.",
+      "p3": "As respostas do assistente podem conter erros. Confira a fonte citada antes de decidir uma regra na mesa.",
+      "p4": "O serviço está em construção: funções podem mudar ou ficar fora do ar, sem garantia de disponibilidade.",
+      "p5": "Você pode deixar de usar o GMshield quando quiser. Uma conta que abuse do serviço pode ser bloqueada."
+    },
+    "privacy": {
+      "title": "Aviso de privacidade",
+      "p1": "Da sua conta, o GMshield guarda apenas o nome de usuário, o endereço de email e o identificador da sua conta Google. Os três são guardados criptografados.",
+      "p2": "O Google fica sabendo que você usa o GMshield, porque é ele quem confirma a sua identidade quando você entra.",
+      "p3": "As perguntas que você faz ao assistente, com os trechos dos seus materiais usados para respondê-las, são processadas pelo Azure OpenAI, da Microsoft.",
+      "p4": "Seus materiais e anotações são guardados criptografados, e só você os vê.",
+      "p5": "Tema, idioma e sessão ficam em cookies do seu navegador que só o servidor lê. Não há cookies de publicidade nem de rastreamento."
     }
   }
 }
