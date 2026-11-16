@@ -125,8 +125,10 @@ describe('notFoundFor(problem)', () => {
     }
   }
 
-  it('renders the not-found page for request.not_found and for any 403', () => {
+  it('renders the not-found page for request.not_found, any 404 and any 403', () => {
     expect(digestOf({ status: 404, category: 'request', code: 'request.not_found' })).toMatch(/404/);
+    expect(digestOf({ category: 'request', code: 'request.not_found' })).toMatch(/404/);
+    expect(digestOf({ status: 404, category: 'request', code: 'request.gone_elsewhere' })).toMatch(/404/);
     expect(digestOf({ status: 403, category: 'request', code: 'request.cross_origin' })).toMatch(/404/);
     expect(digestOf({ status: 403, category: 'request', code: 'request.rejected' })).toMatch(/404/);
   });

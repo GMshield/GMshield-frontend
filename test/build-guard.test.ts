@@ -62,6 +62,7 @@ describe('build guard', () => {
       for (const theme of ['illustrated', 'dark', 'light']) {
         const html = await (await fetch(`${origin}/`, { headers: { cookie: `__Host-gmshield-theme=${theme}; __Host-gmshield-lang=en` } })).text();
         expect(html).toMatch(new RegExp(`<html lang="en" data-theme="${theme}"`));
+        expect(html, theme).not.toMatch(/<[^>]+\sstyle=/);
         expectSameOriginStatic(html, origin);
       }
       const first = await fetch(`${origin}/`, { headers: { 'accept-language': 'en-US' } });

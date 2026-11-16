@@ -23,12 +23,13 @@ export default async function NotFound() {
 }
 
 /**
- * Renders the not-found page for a backend problem `request.not_found` or any 403, so a request for
- * another owner's item looks exactly like one for an item that does not exist. Otherwise returns.
+ * Renders the not-found page for a backend problem `request.not_found`, any 404 or any 403, so a
+ * request for another owner's item looks exactly like one for an item that does not exist.
+ * Otherwise returns.
  */
 export function notFoundFor(problem: unknown): void {
   const { status, code } = problemFields(problem);
-  if (code === 'request.not_found' || status === 403) {
+  if (code === 'request.not_found' || status === 404 || status === 403) {
     notFound();
   }
 }

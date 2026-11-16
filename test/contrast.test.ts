@@ -16,6 +16,8 @@ const BACKDROP = join(ROOT, 'src/app/assets/backdrop.webp');
 const THEMES = ['dark', 'light', 'illustrated'] as const;
 type Theme = (typeof THEMES)[number];
 const AA = 4.5;
+/** Non-text contrast (WCAG 1.4.11), for the focus ring the accent draws on the page. */
+const NON_TEXT = 3;
 
 type Rgb = readonly [number, number, number];
 type Rgba = readonly [number, number, number, number];
@@ -130,6 +132,8 @@ function expectAA(theme: Theme, page: Rgb) {
   for (const [name, foreground, background] of pairs(theme, page)) {
     expect(ratio(foreground, background), `${theme}: ${name}`).toBeGreaterThanOrEqual(AA);
   }
+  // The focus ring sits outside its control (outline-offset), on the canvas itself.
+  expect(ratio(opaque(role(theme, 'accent')), page), `${theme}: accent on canvas`).toBeGreaterThanOrEqual(NON_TEXT);
 }
 
 /** The canvas the illustrated theme shows: the scrim over one backdrop pixel (opaque). */
@@ -184,14 +188,15 @@ describe('contrast (WCAG 2.1 AA, 4.5:1)', () => {
     expect(GLOBALS).toMatch(/background-image: linear-gradient\(var\(--color-scrim\), var\(--color-scrim\)\), url\('\.\/assets\/backdrop\.webp'\);/);
     const { data, info } = await sharp(BACKDROP).flatten({ background: '#1a0a05' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
     expect(info.channels).toBe(3);
-    let brightest: Rgb = [0, 0, 0];
+    // The worst pixel is the brightest one after the scrim, the colour text actually sits on.
+    let worst = illustratedPage([0, 0, 0]);
     for (let i = 0; i + 2 < data.length; i += 3) {
-      const pixel: Rgb = [data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0];
-      if (luminance(pixel) > luminance(brightest)) {
-        brightest = pixel;
+      const page = illustratedPage([data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0]);
+      if (luminance(page) > luminance(worst)) {
+        worst = page;
       }
     }
-    expectAA('illustrated', illustratedPage(brightest));
+    expectAA('illustrated', worst);
   });
 
   it('sharp loads (it measures the backdrop)', async () => {

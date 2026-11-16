@@ -21,8 +21,10 @@ export type NoticeProps = {
  * the status alone), the message, an optional link, and a dismiss control. Announced politely.
  */
 export function Notice({ status, message, language, link, onDismiss }: NoticeProps) {
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed) {
+  // What was dismissed, so that a different notice passed to the same instance shows again.
+  const shown = `${status}\n${message}`;
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  if (dismissed === shown) {
     return null;
   }
   const t = translator(language);
@@ -40,7 +42,7 @@ export function Notice({ status, message, language, link, onDismiss }: NoticePro
         className={styles.dismiss}
         aria-label={t('notice.dismiss')}
         onClick={() => {
-          setDismissed(true);
+          setDismissed(shown);
           onDismiss?.();
         }}
       >

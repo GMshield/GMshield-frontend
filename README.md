@@ -7,8 +7,7 @@ under `src/server` calls the backend.
 ## Versions
 
 Checked on 2026-11-13 (Story 1.8's additions on 2026-11-16): each is the newest release at least
-two weeks old that day. Every
-dependency is pinned exactly and `package-lock.json` is committed.
+two weeks old that day. Every dependency is pinned exactly and `package-lock.json` is committed.
 
 | What | Version | Where it is set |
 |---|---|---|
@@ -78,6 +77,8 @@ they sit in `src/`.
   `illustrated` and the language to the browser's `Accept-Language` (Portuguese by default).
   `PreferencesForm` (two radio groups and "Aplicar") posts to the Server Action
   `savePreferences`, which sets both cookies. Nothing is stored in the backend yet (Epic 8).
+  Browsers keep `__Host-` (`Secure`) cookies only over HTTPS or on localhost: over plain HTTP on
+  another host the choice is silently dropped. Production is reached only through the HTTPS tunnel.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`), else the generic `server` text; a code is never

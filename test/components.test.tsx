@@ -149,6 +149,31 @@ describe('ConfirmationDialog', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
+  it('returns focus to the opener when unmounted while open', async () => {
+    const user = userEvent.setup();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      const [mounted, setMounted] = useState(true);
+      return (
+        <>
+          <PillButton onClick={() => setOpen(true)}>Abrir</PillButton>
+          <PillButton onClick={() => setMounted(false)}>Remover</PillButton>
+          {mounted ? (
+            <ConfirmationDialog open={open} title="t" consequence="c" confirmLabel="ok" language="pt-BR" onConfirm={() => {}} onCancel={() => setMounted(false)} />
+          ) : null}
+        </>
+      );
+    }
+    const { container } = render(<Host />);
+    const opener = screen.getByRole('button', { name: 'Abrir' });
+    await user.click(opener);
+    expect(document.activeElement).toBe(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    // The parent removes the dialog without closing it first (Cancelar unmounts it here).
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('says "Cancel" in English', async () => {
     render(<ConfirmationDialog open title="t" consequence="c" confirmLabel="Delete" language="en" onConfirm={() => {}} onCancel={() => {}} />);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
@@ -170,6 +195,19 @@ describe('Notice', () => {
     await user.click(within(notice).getByRole('button', { name: 'Dispensar aviso' }));
     expect(screen.queryByRole('status')).toBeNull();
     expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it('shows a different notice again after one was dismissed', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Notice status="danger" message="Primeiro." language="pt-BR" />);
+    await user.click(screen.getByRole('button', { name: 'Dispensar aviso' }));
+    expect(screen.queryByRole('status')).toBeNull();
+    rerender(<Notice status="danger" message="Primeiro." language="pt-BR" />);
+    expect(screen.queryByRole('status')).toBeNull();
+    rerender(<Notice status="danger" message="Segundo." language="pt-BR" />);
+    expect(screen.getByRole('status').textContent).toContain('Segundo.');
+    rerender(<Notice status="success" message="Primeiro." language="pt-BR" />);
+    expect(screen.getByRole('status').textContent).toContain('Pronto');
   });
 
   it('writes each status as a word, in both languages', () => {
