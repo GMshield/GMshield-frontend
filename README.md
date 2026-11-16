@@ -37,6 +37,7 @@ two weeks old that day. Every dependency is pinned exactly and `package-lock.jso
 | `src/app/preferences-action.ts` | the Server Action that stores theme and language |
 | `src/app/sign-in` | the start of a sign-in (`google/route.ts`), the clearing of an ended session's cookie (`ended/route.ts`), the Server Actions of the username step and sign-out (`actions.ts`), the username page, and the allowlist of outcomes `/` may show (`notice.ts`) |
 | `src/app/auth/google/callback/route.ts` | the Route Handler Google redirects to; it relays the redirect to the backend |
+| `src/app/session/renew/route.ts` | renews the session token when the backend asks for it (`session.renewal_required`) and goes back to the page |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
@@ -54,7 +55,10 @@ they sit in `src/`.
 
 - **Backend calls.** `src/server/backend/client.ts` builds a new client for every request, never
   caches (`cache: 'no-store'`), gives up after 2 seconds, and sends only `accept`,
-  `accept-language`, `content-type`, `traceparent` and `x-session-token`. It forwards the request's W3C `traceparent`
+  `accept-language`, `content-type`, `traceparent` and `x-session-token`, plus
+  `Authorization: Bearer <GMSHIELD_FRONTEND_CREDENTIAL>` (Story 1.10), which comes from the settings
+  and never from the incoming request: the backend refuses every `/api/v1` call without it
+  (`service.unauthenticated`). It forwards the request's W3C `traceparent`
   with a new span id, or starts a new trace. No browser code calls the backend, and no
   `NEXT_PUBLIC_` variable exists.
 - **Proxy.** Every answer except Next.js's static files (`/_next/static`, `/_next/image` and
@@ -67,7 +71,7 @@ they sit in `src/`.
   redirect to Google). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
   `request.cross_origin` unless `Origin` is the site's own origin, or, without `Origin`,
   `Sec-Fetch-Site` is `same-origin`. Behind a proxy that ends TLS, `X-Forwarded-Proto` gives the
-  scheme of the site's origin.
+  scheme of the site's origin. The proxy also renews the session token (below).
 - **Health.** `GET /api/health` answers 200 `{"status":"UP"}` only when the backend's
   `/api/v1/version` is at least `MINIMUM_BACKEND_CONTRACT_VERSION` (`src/server/contract.ts`), and
   503 `{"status":"DOWN"}` otherwise or when the backend does not answer within 2 seconds.
@@ -95,8 +99,8 @@ they sit in `src/`.
   - `GET /auth/google/callback` (a top-level GET, so the `SameSite=Lax` cookie comes along and the
     proxy's same-origin rule, which covers state-changing methods only, lets it through) sends the
     cookie's token with `state`, `code` or `error` to `POST /api/v1/sign-in/google/callback`. A known
-    account: the session token goes into `__Host-gmshield-session` (7 days) and the visitor lands on
-    `/`. A first sign-in: `/sign-in/username`. Anything else: `/?signIn=<code>`, the attempt cookie
+    account: the session token goes into `__Host-gmshield-session` and the visitor lands on `/`, or
+    on the page an ended session left (below). A first sign-in: `/sign-in/username`. Anything else: `/?signIn=<code>`, the attempt cookie
     cleared. `/` shows only the codes listed in `src/app/sign-in/notice.ts`.
   - `/sign-in/username`: the username and the acceptance of the terms and the privacy notice
     (`UsernameForm`, `useActionState`, which also works without JavaScript). A taken or invalid
@@ -107,14 +111,42 @@ they sit in `src/`.
     clears the cookie. An ended session (`session.required`) goes through `GET /sign-in/ended`,
     which clears the stale session cookie and answers 303 to the sign-in screen with "Sua sessão
     terminou.".
-  - Both cookies are `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and are cleared by
-    setting them again with the same attributes and `Max-Age=0`. Nothing logs a token, a code, an
+  - Every sign-in cookie is `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and is cleared
+    by setting it again with the same attributes and `Max-Age=0`. Nothing logs a token, a code, an
     email address or a username.
+- **Sessions that rotate and end (Story 1.10).**
+  - `__Host-gmshield-session` holds `<token>.<renew-after in epoch seconds>`, for `expiresInSeconds`
+    of the backend's grant (what is left of the session's 7 days). A value without the suffix (Story
+    1.9) is due for renewal at once. In the session's last renew-after window the backend grants a
+    renew-after equal to what is left, and the cookie never gets one beyond its own life, so the
+    last window does not renew on every request.
+  - `src/proxy.ts` renews a due token on a document visit (a GET or HEAD with
+    `Sec-Fetch-Dest: document`, or with no `Sec-Fetch-Dest` header at all, from an older browser) or
+    a Server Action (a POST with `Next-Action`), except on `/sign-in`, `/auth`, `/api/health` and
+    `/session/renew`: `POST /api/v1/session/renewal` with the old token. On success the new cookie
+    is set on the answer and the request goes on with the new token in its own cookie header, so
+    nothing visible changes. `session.already_renewed` (another request renewed first) or a backend
+    that does not answer: the request goes on with the token it has. `session.required` on a
+    document visit: 303 to `/sign-in/ended?next=<path and query>`.
+  - Every other request passes through unchanged: router RSC fetches, prefetches and any other
+    `fetch` (`Sec-Fetch-Dest: empty`), and the browser's speculative loads (`Sec-Purpose: prefetch`,
+    also `prefetch;prerender`, or `Purpose: prefetch`), which say `document` but may be dropped. The router may drop such an answer, and a renewed cookie with
+    it, which would leave a token that turns stale once the overlap ends; its page, route or action
+    meets the backend's answer itself. Next.js removes its own router headers (`rsc`,
+    `next-router-prefetch`) before the proxy runs, so the proxy goes by `Sec-Fetch-Dest` and
+    `Next-Action`, which reach it.
+  - Only sign-in and renewal replace a token. When the backend answers `session.renewal_required`
+    (the account's seal version rose), `/` sends the browser to `GET /session/renew?next=/`, which
+    renews, sets the cookie and goes back; any failure there ends at `/sign-in/ended`.
+  - `/sign-in/ended?next=` keeps a safe `next` for an hour in `__Host-gmshield-return`; the next
+    sign-in (Google's callback or the username step) lands there and clears it. A `next` that is not
+    a path of this site (`//host`, `\`, a scheme, control characters) or that names `/sign-in`,
+    `/auth`, `/api` or `/session/renew` becomes `/`.
   - `/terms` and `/privacy` are short drafts in both languages, headed "Rascunho / Draft"; Epic 10
     replaces them.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -179,6 +211,12 @@ Deploy order for public contract 1.1.0 (Story 1.9): first fill `GMSHIELD_GOOGLE_
 `GMSHIELD_GOOGLE_CLIENT_SECRET` in `~/gmshield-ci/secrets/backend.env`, then deploy the backend (it
 refuses to start without them), then the frontend (its health check fails against a 1.0.0 backend).
 
+Deploy order for public contract 1.2.0 (Story 1.10): first run GMshield-pipeline's
+`deploy/data-credentials.sh`, which writes the same `GMSHIELD_FRONTEND_CREDENTIAL` into `backend.env`
+and `frontend.env`, then deploy the backend (it refuses to start without the credential, and refuses
+every `/api/v1` call of an older frontend), then the frontend (its health check fails against a 1.1.0
+backend).
+
 ## Settings
 
 Read from the environment and checked when the server starts. A refused start writes one log line
@@ -187,10 +225,13 @@ that names the settings, never a value, and exits with status 78.
 | Setting | Meaning |
 |---|---|
 | `GMSHIELD_BACKEND_URL` | the backend's address, `http` or `https` (required outside test mode) |
+| `GMSHIELD_FRONTEND_CREDENTIAL` | the service credential sent as `Authorization: Bearer` on every backend call (required outside test mode, secret): 32 to 512 characters of `A-Z a-z 0-9 . _ ~ + / = -`, the same value as the backend's, written by GMshield-pipeline's `deploy/data-credentials.sh` into `frontend.env` |
 | `GMSHIELD_MODE` | unset, or `test` |
 
 `GMSHIELD_MODE=test` is set only by the pipeline, never in `.gmshield/pipeline.toml`. It needs no
-secret, and the backend is `http://stand-in-backend:8080` unless `GMSHIELD_BACKEND_URL` is set:
+secret: the service credential is the fixed, public `gmshield-test-mode-frontend-credential-not-a-secret`,
+the same as the backend's test mode, and a `GMSHIELD_FRONTEND_CREDENTIAL` beside test mode is refused
+(`mode.test_with_production_secret`). The backend is `http://stand-in-backend:8080` unless `GMSHIELD_BACKEND_URL` is set:
 the `stand-in-backend` image of this repository, which answers every path of
 `contracts/public.json` with a valid example and any other path with a 404 problem detail. For
 sign-in, its examples send the browser from "Continuar com Google" to `/auth/google/callback`,
@@ -219,7 +260,7 @@ frontend-only loop beside the stand-in backend:
 
 ```sh
 npm run stand-in-backend &                                   # http://127.0.0.1:8080
-GMSHIELD_BACKEND_URL=http://127.0.0.1:8080 npm run dev       # http://127.0.0.1:3000
+GMSHIELD_MODE=test GMSHIELD_BACKEND_URL=http://127.0.0.1:8080 npm run dev   # http://127.0.0.1:3000
 ```
 
 The images:
@@ -229,7 +270,7 @@ docker build --target test .
 docker build --target test-reports --output type=local,dest=out .   # out/junit/, out/lcov.info
 docker build --target stand-in-backend -t gmshield-stand-in-backend .
 docker build -t gmshield-frontend .
-docker run --rm --read-only --tmpfs /tmp -e GMSHIELD_BACKEND_URL=http://backend:8080 gmshield-frontend
+docker run --rm --read-only --tmpfs /tmp --env-file frontend.env gmshield-frontend   # a mode-600 file with GMSHIELD_BACKEND_URL and GMSHIELD_FRONTEND_CREDENTIAL
 ```
 
 The production image runs `node server.js` from the standalone output as UID 10001 and writes

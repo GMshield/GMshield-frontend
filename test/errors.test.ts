@@ -11,13 +11,15 @@ const en = (await import('@/messages/en.json')).default;
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 
 // The categories and codes the backend sends today (GMshield-backend ApiProblem.java), integrity.failed
-// (Story 1.7), and sign-in and sessions (Story 1.9, AccountProblems.java).
+// (Story 1.7), sign-in and sessions (Story 1.9, AccountProblems.java), and the renewal and the service
+// credential (Story 1.10, AccountProblems.java and ServiceCredentialFilter.java).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
     'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
-  session: ['required'],
+  session: ['required', 'renewal_required', 'already_renewed'],
+  service: ['unauthenticated'],
 } as const;
 
 function leaves(value: unknown): string[] {

@@ -5,11 +5,11 @@ import { problemFields } from '@/messages';
 import { finishGoogleSignIn } from '@/server/accounts';
 import {
   EXPIRED_COOKIE_OPTIONS,
+  RETURN_COOKIE,
   SESSION_COOKIE,
-  SESSION_COOKIE_OPTIONS,
-  SESSION_MAX_AGE,
   SIGN_IN_COOKIE,
-  maxAgeFrom,
+  safeReturnPath,
+  sessionCookieFor,
   tokenFrom,
 } from '@/server/session-cookies';
 
@@ -32,7 +32,8 @@ function parameter(request: NextRequest, name: string): string | undefined {
  * proxy refuses only state-changing methods from elsewhere). It relays the state, the code or Google's
  * error, with the attempt token of the cookie, to the backend, which alone talks to Google:
  *
- * - a known account: the session cookie is set and the visitor lands on `/` signed in;
+ * - a known account: the session cookie is set and the visitor lands signed in on `/`, or where an ended
+ *   session left off (`__Host-gmshield-return`, then cleared);
  * - a first sign-in: on to the username step, keeping the attempt cookie;
  * - anything else: back to the sign-in screen with its message, the attempt cookie cleared.
  */
@@ -54,11 +55,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   let response: NextResponse;
   if (result.ok && result.data.outcome === 'signed_in' && result.data.session !== undefined) {
-    response = seeOther('/');
-    response.cookies.set(SESSION_COOKIE, result.data.session.sessionToken, {
-      ...SESSION_COOKIE_OPTIONS,
-      maxAge: maxAgeFrom(result.data.session.expiresInSeconds, SESSION_MAX_AGE),
-    });
+    response = seeOther(safeReturnPath(request.cookies.get(RETURN_COOKIE)?.value));
+    const cookie = sessionCookieFor(result.data.session);
+    response.cookies.set(SESSION_COOKIE, cookie.value, cookie.options);
+    response.cookies.set(RETURN_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
   } else {
     response = seeOther(homeWithNotice(signInNoticeFor(result.ok ? null : problemFields(result.problem).code)));
   }

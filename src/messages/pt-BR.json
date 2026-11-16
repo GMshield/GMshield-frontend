@@ -45,7 +45,8 @@
       "request": "O pedido não pôde ser atendido.",
       "server": "Algo deu errado no servidor. Tente de novo em instantes.",
       "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados.",
-      "session": "Sua sessão terminou. Entre de novo."
+      "session": "Sua sessão terminou. Entre de novo.",
+      "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes."
     },
     "codes": {
       "request": {
@@ -71,7 +72,12 @@
         "failed": "Estes dados não passaram na verificação de integridade e não são mostrados."
       },
       "session": {
-        "required": "Sua sessão terminou."
+        "required": "Sua sessão terminou.",
+        "renewal_required": "Sua sessão precisa ser renovada. Tente de novo.",
+        "already_renewed": "Sua sessão acabou de ser renovada. Tente de novo."
+      },
+      "service": {
+        "unauthenticated": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes."
       }
     }
   },

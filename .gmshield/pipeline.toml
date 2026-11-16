@@ -17,8 +17,9 @@ openapi = ""                 # the frontend publishes no OpenAPI document
 host_port = 0                  # no host port: only the tunnel on gmshield-edge will reach it (launch)
 # Story 1.6 (AD-14): gmshield-edge first (the health probe joins it), gmshield-app to reach the backend
 # over HTTP at http://gmshield-backend:8080 (GMSHIELD_BACKEND_URL in ~/gmshield-ci/secrets/frontend.env).
-# Both are internal: the frontend has no internet. No certificate yet (HTTPS and the service credential
-# come with sign-in, Stories 1.9 and 1.10).
+# Both are internal: the frontend has no internet. Story 1.10: every backend call carries the service
+# credential GMSHIELD_FRONTEND_CREDENTIAL, also in frontend.env (deploy/data-credentials.sh writes the same
+# value into backend.env). No certificate yet: HTTPS comes with the public domain.
 networks = ["gmshield-edge", "gmshield-app"]
 read_only = true
 user = "10001:10001"

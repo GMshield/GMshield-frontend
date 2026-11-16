@@ -37,8 +37,17 @@ describe('stand-in backend', () => {
     expect(started.status).toBe(200);
     expect(started.body).toMatchObject({ authorizationUrl: expect.stringMatching(/^\/auth\/google\/callback\?/), expiresInSeconds: 600 });
     const outcome = answer(contract, 'POST', '/api/v1/sign-in/google/callback', 't');
-    expect(outcome.body).toEqual({ outcome: 'signed_in', session: { sessionToken: 'example-session-token', expiresInSeconds: 604800 } });
+    expect(outcome.body).toEqual({
+      outcome: 'signed_in',
+      session: { sessionToken: 'example-session-token', expiresInSeconds: 604800, renewAfterSeconds: 900 },
+    });
     expect(answer(contract, 'POST', '/api/v1/sign-in/complete', 't').body).toMatchObject({ sessionToken: 'example-session-token' });
+    // Story 1.10: the renewal answers the same example grant, so the proxy's renewal works in test mode.
+    expect(answer(contract, 'POST', '/api/v1/session/renewal', 't').body).toEqual({
+      sessionToken: 'example-session-token',
+      expiresInSeconds: 604800,
+      renewAfterSeconds: 900,
+    });
     expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ username: 'mestre_ana' });
     expect(answer(contract, 'DELETE', '/api/v1/session', 't')).toEqual({ status: 204, type: null, body: null });
   });
