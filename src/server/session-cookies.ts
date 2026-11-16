@@ -83,6 +83,9 @@ export function sessionCookieFor(
   return { value: `${grant.sessionToken}.${nowSeconds + renewAfter}`, options: { ...BASE, maxAge } };
 }
 
+/** A base that is never fetched: it only lets `URL` resolve a path, whose origin must then stay this one. */
+const RETURN_BASE = 'https://return.invalid';
+
 /**
  * Where to return after signing in: a path of this site with its query, else `/`. Refused: anything that
  * is not a single-slash path (`//host`, `/\host`, a scheme), control characters, and the sign-in, Google,
@@ -97,11 +100,11 @@ export function safeReturnPath(value: unknown): string {
   }
   let url: URL;
   try {
-    url = new URL(value, 'http://return.invalid');
+    url = new URL(value, RETURN_BASE);
   } catch {
     return '/';
   }
-  if (url.origin !== 'http://return.invalid') {
+  if (url.origin !== RETURN_BASE) {
     return '/';
   }
   // Compared decoded, as Next.js routes it: `/%73ign-in/ended` is `/sign-in/ended`.
