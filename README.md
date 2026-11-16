@@ -120,15 +120,20 @@ they sit in `src/`.
     1.9) is due for renewal at once. In the session's last renew-after window the backend grants a
     renew-after equal to what is left, and the cookie never gets one beyond its own life, so the
     last window does not renew on every request.
-  - `src/proxy.ts` renews a due token before any page, route or action runs, except on `/sign-in`,
-    `/auth`, `/api/health` and `/session/renew`: `POST /api/v1/session/renewal` with the old token.
-    On success the new cookie is set on the answer and the request goes on with the new token in
-    its own cookie header, so nothing visible changes. `session.already_renewed` (another request
-    renewed first) or a backend that does not answer: the request goes on with the token it has.
-    A Next.js prefetch (`next-router-prefetch`) never renews and is never redirected, since the
-    router may drop its answer and the renewed cookie with it. `session.required` on a document
-    visit (GET or HEAD without an `rsc` header): 303 to `/sign-in/ended?next=<path and query>`.
-    Any other request goes on, and its page, route or action meets the backend's answer itself.
+  - `src/proxy.ts` renews a due token on a document visit (a GET or HEAD with
+    `Sec-Fetch-Dest: document`, or with no `Sec-Fetch-Dest` header at all, from an older browser) or
+    a Server Action (a POST with `Next-Action`), except on `/sign-in`, `/auth`, `/api/health` and
+    `/session/renew`: `POST /api/v1/session/renewal` with the old token. On success the new cookie
+    is set on the answer and the request goes on with the new token in its own cookie header, so
+    nothing visible changes. `session.already_renewed` (another request renewed first) or a backend
+    that does not answer: the request goes on with the token it has. `session.required` on a
+    document visit: 303 to `/sign-in/ended?next=<path and query>`.
+  - Every other request passes through unchanged: router RSC fetches, prefetches and any other
+    `fetch` (`Sec-Fetch-Dest: empty`). The router may drop such an answer, and a renewed cookie with
+    it, which would leave a token that turns stale once the overlap ends; its page, route or action
+    meets the backend's answer itself. Next.js removes its own router headers (`rsc`,
+    `next-router-prefetch`) before the proxy runs, so the proxy goes by `Sec-Fetch-Dest` and
+    `Next-Action`, which reach it.
   - Only sign-in and renewal replace a token. When the backend answers `session.renewal_required`
     (the account's seal version rose), `/` sends the browser to `GET /session/renew?next=/`, which
     renews, sets the cookie and goes back; any failure there ends at `/sign-in/ended`.

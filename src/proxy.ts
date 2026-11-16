@@ -12,10 +12,11 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  * - refuses POST, PUT, PATCH and DELETE that do not come from the site's own origin (403); Google's
  *   redirect to `/auth/google/callback` is a GET, so it passes;
  * - renews the session token once its renew-after time has passed (Story 1.10), before the page, route
- *   or action runs, so that it sees the new token, and sets the new cookie on the answer. A prefetch
- *   never renews. Another renewal that came first, or a backend that does not answer, leaves the token
- *   as it is; an ended session sends a document visit to `/sign-in/ended` with the path to come back
- *   to, and lets any other request go on to meet the backend's answer itself;
+ *   or action runs, so that it sees the new token, and sets the new cookie on the answer. Only a
+ *   document visit or a Server Action renews (see {@link renewsFor}); router fetches and prefetches
+ *   pass through unchanged. Another renewal that came first, or a backend that does not answer, leaves
+ *   the token as it is; an ended session sends a document visit to `/sign-in/ended` with the path to
+ *   come back to, and lets any other request go on to meet the backend's answer itself;
  * - sets a Content-Security-Policy that allows the site's own origin only, with a new nonce per
  *   request for the inline scripts and styles Next.js writes (it reads the nonce from the request's
  *   `Content-Security-Policy` header), and lets a form's redirect reach Google's sign-in;
@@ -90,25 +91,43 @@ type Renewal =
   | { readonly kind: 'ended' }
   | { readonly kind: 'unchanged' };
 
-/**
- * A Next.js prefetch, whose answer the router may drop: a renewed cookie on it could be lost, leaving the
- * browser with a token that turns stale once the overlap ends. It never renews and is never redirected.
+/*
+ * Which requests renew or are redirected. Next.js removes its own router headers (`rsc`,
+ * `next-router-prefetch`, `next-router-state-tree`, ...) from the request before the proxy runs, so
+ * they cannot tell a router fetch from a page. The browser's `Sec-Fetch-Dest` and Next.js's
+ * `Next-Action` reach the proxy, so the kinds are told apart by those.
  */
-export function isPrefetch(request: NextRequest): boolean {
-  return request.headers.has('next-router-prefetch');
+
+/**
+ * A document visit: a GET or HEAD the browser loads as a page (`Sec-Fetch-Dest: document`). Without a
+ * `Sec-Fetch-Dest` header (an older browser), every GET or HEAD counts as one. Router RSC fetches and
+ * prefetches are `fetch` calls (`Sec-Fetch-Dest: empty`), so they are not.
+ */
+export function isDocumentVisit(request: NextRequest): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return false;
+  }
+  const destination = request.headers.get('sec-fetch-dest');
+  return destination === null || destination === 'document';
+}
+
+/** A Server Action: a POST carrying Next.js's `Next-Action` header. */
+export function isServerAction(request: NextRequest): boolean {
+  return request.method === 'POST' && request.headers.has('next-action');
 }
 
 /**
- * A document visit: a GET or HEAD the browser shows as a page, not an RSC fetch of the router (which
- * carries an `rsc` header). Only a document visit is sent to `/sign-in/ended` when the session has ended.
+ * Only a document visit or a Server Action renews: the answer of any other request (a router RSC fetch,
+ * a prefetch, another `fetch`) may be dropped, and a renewed cookie with it, leaving the browser with a
+ * token that turns stale once the overlap ends.
  */
-export function isDocumentVisit(request: NextRequest): boolean {
-  return (request.method === 'GET' || request.method === 'HEAD') && !request.headers.has('rsc') && !isPrefetch(request);
+export function renewsFor(request: NextRequest): boolean {
+  return (isDocumentVisit(request) || isServerAction(request)) && renewsOn(request.nextUrl.pathname);
 }
 
 async function renewIfDue(request: NextRequest, traceparent: string, traceId: string): Promise<Renewal> {
   const session = sessionFrom(request.cookies.get(SESSION_COOKIE)?.value);
-  if (session === null || isPrefetch(request) || !due(session) || !renewsOn(request.nextUrl.pathname)) {
+  if (session === null || !due(session) || !renewsFor(request)) {
     return { kind: 'unchanged' };
   }
   const result = await renewSession(session.token, { traceparent });

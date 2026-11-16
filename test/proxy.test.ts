@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { NO_RENEWAL_PATHS, config, contentSecurityPolicy, isDocumentVisit, isPrefetch, proxy, renewsOn, siteOrigin } from '@/proxy';
+import { NO_RENEWAL_PATHS, config, contentSecurityPolicy, isDocumentVisit, isServerAction, proxy, renewsFor, renewsOn, siteOrigin } from '@/proxy';
 
 import { captureOutput } from './support/capture';
 import { closedAddress, startScripted, type Scripted } from './support/servers';
@@ -268,42 +268,79 @@ describe('proxy: session renewal (Story 1.10)', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
     expectSecurityHeaders(response);
-    // A form post or Server Action goes on: its own call meets session.required and answers it.
+    // A plain form post goes on (no renewal): its own call meets session.required and answers it.
     const action = await proxy(withSession('/', `${OLD}.${now() - 1}`, { method: 'POST', headers: { origin: SITE } }));
     expect(action.headers.get('x-middleware-next')).toBe('1');
   });
 
-  it('a prefetch never renews and is never redirected, whatever the session', async () => {
+  // What a browser sends: Next.js removes rsc and next-router-prefetch before the proxy runs, so a
+  // router fetch or prefetch reaches it as a plain fetch (Sec-Fetch-Dest: empty).
+  const DOCUMENT = { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate' };
+  const FETCH = { 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors' };
+
+  it('a fetch (router RSC fetch, prefetch) with a due cookie neither renews nor is redirected', async () => {
     const server = await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
     captureOutput();
-    const prefetches: Record<string, string>[] = [{ 'next-router-prefetch': '1' }, { 'next-router-prefetch': '1', rsc: '1' }];
-    for (const headers of prefetches) {
-      const response = await proxy(withSession('/campaigns/1', `${OLD}.${now() - 1}`, { headers }));
-      expect(response.headers.get('x-middleware-next'), JSON.stringify(headers)).toBe('1');
-      expect(response.headers.getSetCookie()).toEqual([]);
-      expect(response.headers.get('x-middleware-request-cookie') ?? `__Host-gmshield-session=${OLD}.`).toContain(OLD);
+    for (const path of ['/', '/campaigns/1', '/terms?x=1']) {
+      const response = await proxy(withSession(path, `${OLD}.${now() - 1}`, { headers: FETCH }));
+      expect(response.headers.get('x-middleware-next'), path).toBe('1');
+      expect(response.status, path).not.toBe(303);
+      expect(response.headers.get('location'), path).toBeNull();
+      expect(response.headers.getSetCookie(), path).toEqual([]);
+      expect(response.headers.get('x-middleware-request-cookie') ?? '', path).not.toContain(NEW);
     }
     expect(server.calls).toEqual([]);
   });
 
-  it('an RSC fetch renews, but with an ended session it goes on instead of being redirected', async () => {
+  it('a document visit with a due cookie renews; with an ended session it is redirected, GET and HEAD alike', async () => {
     const renewing = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
     captureOutput();
-    const renewed = await proxy(withSession('/campaigns/1?_rsc=abc', `${OLD}.${now() - 1}`, { headers: { rsc: '1' } }));
+    const renewed = await proxy(withSession('/campaigns/1', `${OLD}.${now() - 1}`, { headers: DOCUMENT }));
     expect(renewing.calls).toHaveLength(1);
     expect(renewed.headers.getSetCookie()[0]).toMatch(new RegExp(`^__Host-gmshield-session=${NEW}\\.`));
     await renewing.close();
 
     await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
-    const ended = await proxy(withSession('/campaigns/1?_rsc=abc', `${OLD}.${now() - 1}`, { headers: { rsc: '1' } }));
-    expect(ended.status).not.toBe(303);
+    for (const method of ['GET', 'HEAD']) {
+      const ended = await proxy(withSession('/terms?x=1', `${OLD}.${now() - 1}`, { method, headers: DOCUMENT }));
+      expect(ended.status, method).toBe(303);
+      expect(new URL(ended.headers.get('location')!).search, method).toBe('?next=%2Fterms%3Fx%3D1');
+    }
+  });
+
+  it('a Server Action with a due cookie renews, and with an ended session goes on to meet the answer itself', async () => {
+    const renewing = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    captureOutput();
+    const action = { origin: SITE, 'next-action': 'a1b2c3', ...FETCH };
+    const renewed = await proxy(withSession('/', `${OLD}.${now() - 1}`, { method: 'POST', headers: action }));
+    expect(renewing.calls).toHaveLength(1);
+    expect(renewed.headers.getSetCookie()[0]).toMatch(new RegExp(`^__Host-gmshield-session=${NEW}\\.`));
+    expect(renewed.headers.get('x-middleware-request-cookie')).toContain(`__Host-gmshield-session=${NEW}.`);
+    await renewing.close();
+
+    const ending = await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
+    const ended = await proxy(withSession('/', `${OLD}.${now() - 1}`, { method: 'POST', headers: action }));
+    expect(ending.calls).toHaveLength(1);
     expect(ended.headers.get('x-middleware-next')).toBe('1');
     expect(ended.headers.get('location')).toBeNull();
-    // A HEAD document visit is redirected like a GET.
-    const head = await proxy(withSession('/terms', `${OLD}.${now() - 1}`, { method: 'HEAD' }));
-    expect(head.status).toBe(303);
+    // A POST without Next-Action (a plain form post) does not renew.
+    const plain = await proxy(withSession('/', `${OLD}.${now() - 1}`, { method: 'POST', headers: { origin: SITE } }));
+    expect(ending.calls).toHaveLength(1);
+    expect(plain.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('tells the request kinds apart by Sec-Fetch-Dest and Next-Action; without Sec-Fetch-Dest a GET is a document visit', () => {
+    expect(isDocumentVisit(withSession('/', OLD, { headers: DOCUMENT }))).toBe(true);
+    expect(isDocumentVisit(withSession('/', OLD, { method: 'HEAD' }))).toBe(true);
     expect(isDocumentVisit(withSession('/', OLD))).toBe(true);
-    expect(isDocumentVisit(withSession('/', OLD, { method: 'POST', headers: { origin: SITE } }))).toBe(false);
-    expect(isPrefetch(withSession('/', OLD, { headers: { 'next-router-prefetch': '1' } }))).toBe(true);
+    expect(isDocumentVisit(withSession('/', OLD, { headers: FETCH }))).toBe(false);
+    expect(isDocumentVisit(withSession('/', OLD, { headers: { 'sec-fetch-dest': 'image' } }))).toBe(false);
+    expect(isDocumentVisit(withSession('/', OLD, { method: 'POST', headers: { origin: SITE, ...DOCUMENT } }))).toBe(false);
+    expect(isServerAction(withSession('/', OLD, { method: 'POST', headers: { 'next-action': 'x' } }))).toBe(true);
+    expect(isServerAction(withSession('/', OLD, { method: 'POST' }))).toBe(false);
+    expect(isServerAction(withSession('/', OLD, { headers: { 'next-action': 'x' } }))).toBe(false);
+    expect(renewsFor(withSession('/campaigns/1', OLD, { headers: DOCUMENT }))).toBe(true);
+    expect(renewsFor(withSession('/sign-in/ended', OLD, { headers: DOCUMENT }))).toBe(false);
+    expect(renewsFor(withSession('/campaigns/1', OLD, { headers: FETCH }))).toBe(false);
   });
 });
