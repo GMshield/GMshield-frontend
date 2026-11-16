@@ -14,7 +14,7 @@ describe('backend client', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps only the headers of the fixed list', () => {
+  it('keeps only the headers of the fixed list, the session token included (Story 1.9)', () => {
     const headers = new Headers({
       accept: 'application/json',
       'accept-language': 'pt-BR',
@@ -24,11 +24,13 @@ describe('backend client', () => {
       authorization: 'Bearer secret',
       'x-forwarded-for': '203.0.113.9',
       host: 'evil.example',
-      'x-session-token': 'secret',
+      'x-session-token': 'session-token',
+      'x-sign-in-token': 'secret',
     });
     const allowed = allowedHeaders(headers);
-    expect([...allowed.keys()].sort()).toEqual(['accept', 'accept-language', 'content-type', 'traceparent']);
-    expect(FORWARDED_HEADERS).toEqual(['accept', 'accept-language', 'content-type', 'traceparent']);
+    expect([...allowed.keys()].sort()).toEqual(['accept', 'accept-language', 'content-type', 'traceparent', 'x-session-token']);
+    expect(allowed.get('x-session-token')).toBe('session-token');
+    expect(FORWARDED_HEADERS).toEqual(['accept', 'accept-language', 'content-type', 'traceparent', 'x-session-token']);
   });
 
   it('sends only allowed headers, the traceparent, and asks for no cache', async () => {
@@ -66,7 +68,7 @@ describe('backend client', () => {
     running = await startStandIn();
     const client = createBackendClient({ baseUrl: running.url, traceparent: TRACEPARENT });
     const { data } = await client.GET('/api/v1/version', { headers: { cookie: 'session=secret' } });
-    expect(data?.version).toBe('1.0.0');
+    expect(data?.version).toBe('1.1.0');
     const headers = running.requests[0]!.headers;
     expect(headers.traceparent).toBe(TRACEPARENT);
     expect(headers.cookie).toBeUndefined();

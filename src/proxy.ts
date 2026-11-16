@@ -6,10 +6,11 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
 /**
  * Runs before every request except Next.js's own static files:
  *
- * - refuses POST, PUT, PATCH and DELETE that do not come from the site's own origin (403);
+ * - refuses POST, PUT, PATCH and DELETE that do not come from the site's own origin (403); Google's
+ *   redirect to `/auth/google/callback` is a GET, so it passes;
  * - sets a Content-Security-Policy that allows the site's own origin only, with a new nonce per
  *   request for the inline scripts and styles Next.js writes (it reads the nonce from the request's
- *   `Content-Security-Policy` header);
+ *   `Content-Security-Policy` header), and lets a form's redirect reach Google's sign-in;
  * - marks every answer `Cache-Control: no-store`;
  * - gives the request a valid `traceparent`, so the page or route logs and forwards the same trace.
  */
@@ -38,7 +39,8 @@ export function contentSecurityPolicy(nonce: string, development: boolean): stri
     "child-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    // The sign-in form posts to /sign-in/google, which answers with a redirect to Google's sign-in.
+    "form-action 'self' https://accounts.google.com",
     "frame-ancestors 'none'",
   ].join('; ');
 }

@@ -1,0 +1,17 @@
+.draft {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+}
+
+.paragraph {
+  margin: 0 0 var(--space-4);
+  max-width: 72ch;
+}

@@ -32,6 +32,17 @@ describe('stand-in backend', () => {
     }
   });
 
+  it('answers the sign-in and session paths (Story 1.9) with examples that complete a sign-in without Google', () => {
+    const started = answer(contract, 'POST', '/api/v1/sign-in/google', 't');
+    expect(started.status).toBe(200);
+    expect(started.body).toMatchObject({ authorizationUrl: expect.stringMatching(/^\/auth\/google\/callback\?/), expiresInSeconds: 600 });
+    const outcome = answer(contract, 'POST', '/api/v1/sign-in/google/callback', 't');
+    expect(outcome.body).toEqual({ outcome: 'signed_in', session: { sessionToken: 'example-session-token', expiresInSeconds: 604800 } });
+    expect(answer(contract, 'POST', '/api/v1/sign-in/complete', 't').body).toMatchObject({ sessionToken: 'example-session-token' });
+    expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ username: 'mestre_ana' });
+    expect(answer(contract, 'DELETE', '/api/v1/session', 't')).toEqual({ status: 204, type: null, body: null });
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

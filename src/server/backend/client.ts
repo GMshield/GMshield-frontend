@@ -7,9 +7,10 @@ import type { paths } from './generated/public';
 /**
  * The only way to the backend. A new client is built for every request; nothing is cached, and
  * only the headers below leave the frontend. The request and response types are generated from
- * `contracts/public.json` (`npm run generate:types`) and never written by hand.
+ * `contracts/public.json` (`npm run generate:types`) and never written by hand. `x-session-token`
+ * carries the session token of the visitor's cookie (Story 1.9); the backend never reads a cookie.
  */
-export const FORWARDED_HEADERS: readonly string[] = ['accept', 'accept-language', 'content-type', 'traceparent'];
+export const FORWARDED_HEADERS: readonly string[] = ['accept', 'accept-language', 'content-type', 'traceparent', 'x-session-token'];
 
 /** A call that has not answered within this time fails. */
 export const BACKEND_TIMEOUT_MS = 2000;

@@ -35,7 +35,10 @@ two weeks old that day. Every dependency is pinned exactly and `package-lock.jso
 | `src/app/globals.css` | base styles, the focus ring, reduced motion, the illustrated backdrop under its scrim |
 | `src/app/assets` | images bundled into `/_next/static`: `backdrop.webp`, the illustrated theme's backdrop |
 | `src/app/preferences-action.ts` | the Server Action that stores theme and language |
-| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm` |
+| `src/app/sign-in` | the start of a sign-in (`google/route.ts`), the clearing of an ended session's cookie (`ended/route.ts`), the Server Actions of the username step and sign-out (`actions.ts`), the username page, and the allowlist of outcomes `/` may show (`notice.ts`) |
+| `src/app/auth/google/callback/route.ts` | the Route Handler Google redirects to; it relays the redirect to the backend |
+| `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
+| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
 | `src/server` | server-only code: settings, logs, trace context, the backend client, the contract check. Every module starts with `import 'server-only'`, so `next build` fails when a client component imports one |
 | `src/server/backend` | the typed backend client; `generated/` holds the generated types (not committed) |
@@ -51,7 +54,7 @@ they sit in `src/`.
 
 - **Backend calls.** `src/server/backend/client.ts` builds a new client for every request, never
   caches (`cache: 'no-store'`), gives up after 2 seconds, and sends only `accept`,
-  `accept-language`, `content-type` and `traceparent`. It forwards the request's W3C `traceparent`
+  `accept-language`, `content-type`, `traceparent` and `x-session-token`. It forwards the request's W3C `traceparent`
   with a new span id, or starts a new trace. No browser code calls the backend, and no
   `NEXT_PUBLIC_` variable exists.
 - **Proxy.** Every answer except Next.js's static files (`/_next/static`, `/_next/image` and
@@ -60,7 +63,8 @@ they sit in `src/`.
   turns off camera, microphone and geolocation, and a Content-Security-Policy that
   allows the site's own origin only, with a new nonce per request for the inline scripts and
   styles of Next.js (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`,
-  `form-action 'self'`). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
+  `form-action 'self' https://accounts.google.com`: the sign-in form's post is answered with a
+  redirect to Google). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
   `request.cross_origin` unless `Origin` is the site's own origin, or, without `Origin`,
   `Sec-Fetch-Site` is `same-origin`. Behind a proxy that ends TLS, `X-Forwarded-Proto` gives the
   scheme of the site's origin.
@@ -79,9 +83,38 @@ they sit in `src/`.
   `savePreferences`, which sets both cookies. Nothing is stored in the backend yet (Epic 8).
   Browsers keep `__Host-` (`Secure`) cookies only over HTTPS or on localhost: over plain HTTP on
   another host the choice is silently dropped. Production is reached only through the HTTPS tunnel.
+- **Sign-in with Google (Story 1.9).** The backend alone talks to Google; the frontend relays.
+  - `/` signed out is the sign-in screen: "Continuar com Google" (the one solid pill), links to the
+    two drafts, and the preferences form. The pill is a plain form post to `POST /sign-in/google`
+    (a Route Handler, so the browser always navigates in full): it asks the backend for an attempt
+    (`POST /api/v1/sign-in/google`), keeps the attempt token in `__Host-gmshield-sign-in` (600 s)
+    and answers 303 to the authorization URL, only when it is Google's
+    (`https://accounts.google.com`) or the frontend's own callback path, `/auth/google/callback?…`.
+    That same-origin path is what the backend's test-mode stand-in sends; it is accepted in any mode
+    and is harmless, since it only leads back to this site.
+  - `GET /auth/google/callback` (a top-level GET, so the `SameSite=Lax` cookie comes along and the
+    proxy's same-origin rule, which covers state-changing methods only, lets it through) sends the
+    cookie's token with `state`, `code` or `error` to `POST /api/v1/sign-in/google/callback`. A known
+    account: the session token goes into `__Host-gmshield-session` (7 days) and the visitor lands on
+    `/`. A first sign-in: `/sign-in/username`. Anything else: `/?signIn=<code>`, the attempt cookie
+    cleared. `/` shows only the codes listed in `src/app/sign-in/notice.ts`.
+  - `/sign-in/username`: the username and the acceptance of the terms and the privacy notice
+    (`UsernameForm`, `useActionState`, which also works without JavaScript). A taken or invalid
+    username, or unticked terms, come back under the field; an attempt that is over goes back to
+    the sign-in screen.
+  - `/` signed in: `GET /api/v1/me` with the session token in `X-Session-Token` gives "Olá,
+    <username>", the preferences form and "Sair", whose action calls `DELETE /api/v1/session` and
+    clears the cookie. An ended session (`session.required`) goes through `GET /sign-in/ended`,
+    which clears the stale session cookie and answers 303 to the sign-in screen with "Sua sessão
+    terminou.".
+  - Both cookies are `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and are cleared by
+    setting them again with the same attributes and `Max-Age=0`. Nothing logs a token, a code, an
+    email address or a username.
+  - `/terms` and `/privacy` are short drafts in both languages, headed "Rascunho / Draft"; Epic 10
+    replaces them.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -142,6 +175,10 @@ npm test && npm run build
 When the frontend needs something the new version added, raise `MINIMUM_BACKEND_CONTRACT_VERSION`
 in `src/server/contract.ts` in the same change.
 
+Deploy order for public contract 1.1.0 (Story 1.9): first fill `GMSHIELD_GOOGLE_CLIENT_ID` and
+`GMSHIELD_GOOGLE_CLIENT_SECRET` in `~/gmshield-ci/secrets/backend.env`, then deploy the backend (it
+refuses to start without them), then the frontend (its health check fails against a 1.0.0 backend).
+
 ## Settings
 
 Read from the environment and checked when the server starts. A refused start writes one log line
@@ -155,7 +192,10 @@ that names the settings, never a value, and exits with status 78.
 `GMSHIELD_MODE=test` is set only by the pipeline, never in `.gmshield/pipeline.toml`. It needs no
 secret, and the backend is `http://stand-in-backend:8080` unless `GMSHIELD_BACKEND_URL` is set:
 the `stand-in-backend` image of this repository, which answers every path of
-`contracts/public.json` with a valid example and any other path with a 404 problem detail. Until
+`contracts/public.json` with a valid example and any other path with a 404 problem detail. For
+sign-in, its examples send the browser from "Continuar com Google" to `/auth/google/callback`,
+whose relay gets the example `signed_in` answer, and `GET /api/v1/me` answers its example username:
+a sign-in that needs no Google and no state. Until
 Story 1.4 makes the pipeline start the frontend in test mode beside it, the pipeline starts the
 frontend without `GMSHIELD_MODE` or `GMSHIELD_BACKEND_URL`, so the start is refused (exit 78) and
 the staging stage fails, as the backend's does.

@@ -1,0 +1,67 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.label {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.input {
+  width: 100%;
+  max-width: 24rem;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch-target);
+  cursor: pointer;
+}
+
+/* A ticked box uses the text colour, never the accent. */
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--color-text);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-6);
+  margin: 0;
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  color: var(--color-text);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+}

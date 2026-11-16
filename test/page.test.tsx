@@ -1,4 +1,5 @@
 import { isValidElement, type ReactElement } from 'react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let acceptLanguage: string | null = null;
@@ -13,7 +14,8 @@ vi.mock('next/headers', () => ({
 const { default: RootLayout, generateMetadata } = await import('@/app/layout');
 const { default: HomePage } = await import('@/app/page');
 const { default: NotFound } = await import('@/app/not-found');
-const { PreferencesForm } = await import('@/components/PreferencesForm');
+const { default: TermsPage } = await import('@/app/terms/page');
+const { default: PrivacyPage } = await import('@/app/privacy/page');
 const { languageFor, messagesFor } = await import('@/messages');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
@@ -29,6 +31,7 @@ async function renderLayout() {
 
 describe('page (GET /)', () => {
   afterEach(() => {
+    cleanup();
     acceptLanguage = null;
     cookieJar = {};
   });
@@ -72,16 +75,53 @@ describe('page (GET /)', () => {
     expect(props.lang).toBe('en');
   });
 
-  it('shows the scaffold text and the preferences form in the chosen language', async () => {
+  it('signed out: the sign-in screen with "Continuar com Google" and the preferences form, in the chosen language', async () => {
     acceptLanguage = 'en';
     cookieJar = { '__Host-gmshield-theme': 'dark' };
-    const page = (await HomePage()) as ReactElement<Props>;
-    expect(JSON.stringify(page.props.children)).toContain(en.home.lead);
-    const form = (page.props.children as ReactElement[]).find((child) => isValidElement(child) && child.type === PreferencesForm);
-    expect(form?.props).toEqual({ theme: 'dark', language: 'en' });
+    const view = render(await HomePage());
+    expect(view.getByRole('heading', { level: 1 }).textContent).toBe(en.home.heading);
+    expect(view.getByText(en.home.lead)).toBeTruthy();
+    const google = view.getByRole('button', { name: en.signIn.google });
+    expect(google.dataset.variant).toBe('solid');
+    expect(view.getAllByRole('button').filter((button) => button.dataset.variant === 'solid')).toHaveLength(1);
+    const form = google.closest('form');
+    expect(form?.getAttribute('method')).toBe('post');
+    expect(form?.getAttribute('action')).toBe('/sign-in/google');
+    expect(view.getByRole('link', { name: en.signIn.terms }).getAttribute('href')).toBe('/terms');
+    expect(view.getByRole('link', { name: en.signIn.privacy }).getAttribute('href')).toBe('/privacy');
+    expect((view.getByRole('radio', { name: en.preferences.themes.dark }) as HTMLInputElement).checked).toBe(true);
+    expect(view.queryByRole('status')).toBeNull();
     expect((await generateMetadata()).title).toBe(en.app.title);
+    cleanup();
     acceptLanguage = null;
-    expect(JSON.stringify(((await HomePage()) as ReactElement<Props>).props.children)).toContain(ptBR.home.lead);
+    expect(render(await HomePage()).getByRole('button', { name: ptBR.signIn.google })).toBeTruthy();
+  });
+
+  it('shows a known sign-in outcome from the query, and nothing for anything else', async () => {
+    const view = render(await HomePage({ searchParams: Promise.resolve({ signIn: 'request.sign_in_expired' }) }));
+    expect(view.getByRole('status').textContent).toContain('A tentativa de entrar expirou. Tente de novo.');
+    cleanup();
+    for (const signIn of ['<script>', 'request.invalid', ['request.sign_in_expired'], undefined]) {
+      const other = render(await HomePage({ searchParams: Promise.resolve({ signIn }) }));
+      expect(other.queryByRole('status'), String(signIn)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('the draft terms and privacy notice are marked "Rascunho / Draft" and say what is stored', async () => {
+    const terms = render(await TermsPage());
+    expect(terms.getByText('Rascunho / Draft')).toBeTruthy();
+    expect(terms.getByRole('heading', { level: 1 }).textContent).toBe(ptBR.legal.terms.title);
+    cleanup();
+    acceptLanguage = 'en';
+    const privacy = render(await PrivacyPage());
+    expect(privacy.getByText('Rascunho / Draft')).toBeTruthy();
+    expect(privacy.getByRole('heading', { level: 1 }).textContent).toBe(en.legal.privacy.title);
+    const text = privacy.container.textContent ?? '';
+    for (const fact of ['personal data', 'username', 'email address', 'Google account', 'encrypted', 'accepted the terms of use',
+      'which version', 'Google learns', 'Azure OpenAI', 'LGPD', 'delete the account', 'how long data is kept']) {
+      expect(text).toContain(fact);
+    }
   });
 
   it('the not-found page says only "Não encontrado." / "Not found."', async () => {
