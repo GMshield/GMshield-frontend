@@ -10,7 +10,7 @@ import { currentSettings } from './settings';
 import { outgoingTraceparent, traceFrom } from './trace';
 
 /**
- * Sign-in, the signed-in account and sign-out, through the backend (Story 1.9). The backend alone talks
+ * Sign-in, the signed-in account, renewal and sign-out, through the backend (Stories 1.9 and 1.10). The backend alone talks
  * to Google; these calls only relay tokens and the visitor's choices. Nothing here logs a token, a code,
  * an email address or a username.
  */
@@ -28,6 +28,11 @@ export type Result<T> = { readonly ok: true; readonly data: T } | { readonly ok:
 export type CallOptions = {
   /** For tests only. */
   readonly baseUrl?: string;
+  /**
+   * The incoming `traceparent`, for callers outside a page, route or action (the proxy), where
+   * `next/headers` is not there to give it.
+   */
+  readonly traceparent?: string | null;
 };
 
 /**
@@ -41,7 +46,8 @@ export const GOOGLE_CALLBACK_TIMEOUT_MS = 16_000;
 export const UNAVAILABLE = { status: 503, category: 'server', code: 'server.unavailable', params: {} } as const;
 
 async function backend(options: CallOptions, timeoutMs?: number) {
-  const trace = traceFrom((await headers()).get('traceparent'));
+  const incoming = options.traceparent === undefined ? (await headers()).get('traceparent') : options.traceparent;
+  const trace = traceFrom(incoming);
   return {
     trace,
     client: createBackendClient({
@@ -92,6 +98,16 @@ export function completeSignIn(body: Schemas['CompleteSignIn'], options: CallOpt
 export function currentAccount(sessionToken: string, options: CallOptions = {}): Promise<Result<Me>> {
   return call('session.me', options, (client) =>
     client.GET('/api/v1/me', { params: { header: { 'X-Session-Token': sessionToken } } }),
+  );
+}
+
+/**
+ * Renews the session (Story 1.10): a new token, the presented one still served for the overlap. A refusal
+ * is `session.already_renewed` (another renewal came first; keep using the token), or `session.required`.
+ */
+export function renewSession(sessionToken: string, options: CallOptions = {}): Promise<Result<SessionGrant>> {
+  return call('session.renew', options, (client) =>
+    client.POST('/api/v1/session/renewal', { params: { header: { 'X-Session-Token': sessionToken } } }),
   );
 }
 

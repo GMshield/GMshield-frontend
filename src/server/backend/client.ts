@@ -2,13 +2,18 @@ import 'server-only';
 
 import createClient, { type Client } from 'openapi-fetch';
 
+import { currentSettings } from '../settings';
+
 import type { paths } from './generated/public';
 
 /**
  * The only way to the backend. A new client is built for every request; nothing is cached, and
- * only the headers below leave the frontend. The request and response types are generated from
- * `contracts/public.json` (`npm run generate:types`) and never written by hand. `x-session-token`
- * carries the session token of the visitor's cookie (Story 1.9); the backend never reads a cookie.
+ * only the headers below leave the frontend, plus `Authorization: Bearer <service credential>`
+ * (Story 1.10), which comes from the settings and never from the incoming request: a browser's own
+ * `authorization` is dropped like any other header not on the list. The request and response types
+ * are generated from `contracts/public.json` (`npm run generate:types`) and never written by hand.
+ * `x-session-token` carries the session token of the visitor's cookie (Story 1.9); the backend never
+ * reads a cookie.
  */
 export const FORWARDED_HEADERS: readonly string[] = ['accept', 'accept-language', 'content-type', 'traceparent', 'x-session-token'];
 
@@ -38,16 +43,25 @@ export function allowedHeaders(headers: Headers): Headers {
   return allowed;
 }
 
+/** The headers a call sends: the allowed ones, then the service credential of the settings. */
+export function outgoingHeaders(headers: Headers, credential: string): Headers {
+  const outgoing = allowedHeaders(headers);
+  outgoing.set('authorization', `Bearer ${credential}`);
+  return outgoing;
+}
+
 export function createBackendClient(options: BackendClientOptions): BackendClient {
   const send = options.fetch ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? BACKEND_TIMEOUT_MS;
+  // Read when the client is built: the start-up check has already refused a start without it.
+  const credential = currentSettings().frontendCredential;
   return createClient<paths>({
     baseUrl: options.baseUrl,
     headers: { traceparent: options.traceparent },
     fetch: async (request: Request) => {
       const init: RequestInit & { duplex?: 'half' } = {
         method: request.method,
-        headers: allowedHeaders(request.headers),
+        headers: outgoingHeaders(request.headers, credential),
         cache: 'no-store',
         redirect: 'error',
         signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]),

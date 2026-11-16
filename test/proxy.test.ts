@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { config, contentSecurityPolicy, proxy, siteOrigin } from '@/proxy';
+import { NO_RENEWAL_PATHS, config, contentSecurityPolicy, isDocumentVisit, isPrefetch, proxy, renewsOn, siteOrigin } from '@/proxy';
 
 import { captureOutput } from './support/capture';
+import { closedAddress, startScripted, type Scripted } from './support/servers';
 
 const SITE = 'http://127.0.0.1:3000';
 
@@ -35,8 +36,8 @@ describe('proxy', () => {
     vi.unstubAllEnvs();
   });
 
-  it('Page: GET / passes with a nonce CSP and no-store', () => {
-    const response = proxy(request('/'));
+  it('Page: GET / passes with a nonce CSP and no-store', async () => {
+    const response = await proxy(request('/'));
     expect(response.status).toBe(200);
     expect(response.headers.get('x-middleware-next')).toBe('1');
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -66,21 +67,21 @@ describe('proxy', () => {
     expect([...map.keys()].sort()).toEqual([...fetchDirectives, 'object-src', 'frame-ancestors', 'base-uri', 'form-action'].sort());
   });
 
-  it('uses a new nonce for every request', () => {
-    const a = proxy(request('/')).headers.get('content-security-policy');
-    const b = proxy(request('/')).headers.get('content-security-policy');
+  it('uses a new nonce for every request', async () => {
+    const a = (await proxy(request('/'))).headers.get('content-security-policy');
+    const b = (await proxy(request('/'))).headers.get('content-security-policy');
     expect(a).not.toBe(b);
   });
 
-  it('marks API answers no-store too', () => {
-    const response = proxy(request('/api/health'));
+  it('marks API answers no-store too', async () => {
+    const response = await proxy(request('/api/health'));
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
   });
 
   it('Cross-origin POST: 403 problem detail request.cross_origin', async () => {
     const output = captureOutput();
-    const response = proxy(request('/api/health', { method: 'POST', headers: { origin: 'https://evil.example' } }));
+    const response = await proxy(request('/api/health', { method: 'POST', headers: { origin: 'https://evil.example' } }));
     expect(response.status).toBe(403);
     expect(response.headers.get('content-type')).toBe('application/problem+json');
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -99,7 +100,7 @@ describe('proxy', () => {
     expect(output.raw()).not.toContain('evil.example');
   });
 
-  it('refuses every state-changing method without the same origin', () => {
+  it('refuses every state-changing method without the same origin', async () => {
     captureOutput();
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
       const variants: Record<string, string>[] = [
@@ -115,33 +116,33 @@ describe('proxy', () => {
         { origin: 'https://evil.example', 'sec-fetch-site': 'same-origin' },
       ];
       for (const headers of variants) {
-        expect(proxy(request('/', { method, headers })).status, `${method} ${JSON.stringify(headers)}`).toBe(403);
+        expect((await proxy(request('/', { method, headers }))).status, `${method} ${JSON.stringify(headers)}`).toBe(403);
       }
     }
   });
 
-  it('lets same-origin state changes through', () => {
+  it('lets same-origin state changes through', async () => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
-      expect(proxy(request('/', { method, headers: { origin: SITE } })).headers.get('x-middleware-next')).toBe('1');
-      expect(proxy(request('/', { method, headers: { 'sec-fetch-site': 'same-origin' } })).headers.get('x-middleware-next')).toBe('1');
+      expect((await proxy(request('/', { method, headers: { origin: SITE } }))).headers.get('x-middleware-next')).toBe('1');
+      expect((await proxy(request('/', { method, headers: { 'sec-fetch-site': 'same-origin' } }))).headers.get('x-middleware-next')).toBe('1');
     }
   });
 
-  it('takes the scheme from X-Forwarded-Proto behind a TLS proxy', () => {
+  it('takes the scheme from X-Forwarded-Proto behind a TLS proxy', async () => {
     const behindTunnel = request('/', { method: 'POST', headers: { host: 'gmshield.example', 'x-forwarded-proto': 'https', origin: 'https://gmshield.example' } });
     expect(siteOrigin(behindTunnel)).toBe('https://gmshield.example');
-    expect(proxy(behindTunnel).headers.get('x-middleware-next')).toBe('1');
+    expect((await proxy(behindTunnel)).headers.get('x-middleware-next')).toBe('1');
   });
 
-  it('does not refuse safe methods from elsewhere', () => {
-    expect(proxy(request('/', { headers: { origin: 'https://evil.example' } })).headers.get('x-middleware-next')).toBe('1');
+  it('does not refuse safe methods from elsewhere', async () => {
+    expect((await proxy(request('/', { headers: { origin: 'https://evil.example' } }))).headers.get('x-middleware-next')).toBe('1');
   });
 
-  it('gives the request a traceparent when it has no valid one, and keeps a valid one', () => {
-    const created = proxy(request('/')).headers.get('x-middleware-request-traceparent');
+  it('gives the request a traceparent when it has no valid one, and keeps a valid one', async () => {
+    const created = (await proxy(request('/'))).headers.get('x-middleware-request-traceparent');
     expect(created).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
     const valid = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
-    const kept = proxy(request('/', { headers: { traceparent: valid } }));
+    const kept = await proxy(request('/', { headers: { traceparent: valid } }));
     expect(kept.headers.get('x-middleware-request-traceparent')).toBe(valid);
   });
 
@@ -159,5 +160,150 @@ describe('proxy', () => {
     for (const path of ['/_next/static/chunks/a.js', '/_next/image', '/favicon.ico']) {
       expect(pattern.test(path), path).toBe(false);
     }
+  });
+});
+
+describe('proxy: session renewal (Story 1.10)', () => {
+  const OLD = 'oldSessionTokenAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+  const NEW = 'newSessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+  const CREDENTIAL = 'configured-service-credential-0123456789';
+  const TRACEPARENT = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+  let backend: Scripted | undefined;
+
+  async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
+    backend = await startScripted(routes);
+    vi.stubEnv('GMSHIELD_MODE', '');
+    vi.stubEnv('GMSHIELD_BACKEND_URL', backend.url);
+    vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+    return backend;
+  }
+
+  function withSession(path: string, cookie: string, init: { method?: string; headers?: Record<string, string> } = {}): NextRequest {
+    return request(path, { ...init, headers: { cookie: `__Host-gmshield-session=${cookie}; __Host-gmshield-lang=en`, traceparent: TRACEPARENT, ...init.headers } });
+  }
+
+  const now = () => Math.floor(Date.now() / 1000);
+  const GRANT = { status: 200, body: { sessionToken: NEW, expiresInSeconds: 600_000, renewAfterSeconds: 900 } };
+  const problem = (status: number, code: string) => ({ status, body: { status, category: code.split('.')[0], code, params: {}, traceId: 't' } });
+
+  afterEach(async () => {
+    await backend?.close();
+    backend = undefined;
+    vi.unstubAllEnvs();
+  });
+
+  it('renews a token past its renew-after time: the new cookie on the answer, and the page sees the new token', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    const output = captureOutput();
+    const response = await proxy(withSession('/', `${OLD}.${now() - 1}`));
+
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(server.calls).toHaveLength(1);
+    const [call] = server.calls;
+    expect(call!.headers['x-session-token']).toBe(OLD);
+    expect(call!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    expect(call!.headers.cookie).toBeUndefined();
+    expect(String(call!.headers.traceparent)).toMatch(/^00-4bf92f3577b34da6a3ce929d0e0e4736-/);
+    const [setCookie] = response.headers.getSetCookie();
+    const match = new RegExp(`^__Host-gmshield-session=${NEW}\\.(\\d+); Path=/; (Expires=[^;]+; )?Max-Age=600000; Secure; HttpOnly; SameSite=lax$`, 'i').exec(setCookie ?? '');
+    expect(match, setCookie).not.toBeNull();
+    expect(Math.abs(Number(match![1]) - (now() + 900))).toBeLessThanOrEqual(2);
+    // The request goes on with the new token and the other cookies as they were.
+    const forwarded = response.headers.get('x-middleware-request-cookie') ?? '';
+    expect(forwarded).toContain(`__Host-gmshield-session=${NEW}.`);
+    expect(forwarded).not.toContain(OLD);
+    expect(forwarded).toContain('__Host-gmshield-lang=en');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(output.raw()).toContain('session.renewed');
+    expect(output.raw()).not.toContain(OLD);
+    expect(output.raw()).not.toContain(NEW);
+  });
+
+  it('renews a cookie of Story 1.9, which has no renew-after time, at once', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    captureOutput();
+    const response = await proxy(withSession('/terms', OLD));
+    expect(server.calls).toHaveLength(1);
+    expect(response.headers.getSetCookie()[0]).toMatch(new RegExp(`^__Host-gmshield-session=${NEW}\\.`));
+  });
+
+  it('leaves a token alone before its renew-after time, and never renews on sign-in, Google, health or renewal paths', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    const early = await proxy(withSession('/', `${OLD}.${now() + 60}`));
+    expect(early.headers.getSetCookie()).toEqual([]);
+    for (const path of ['/sign-in/ended', '/sign-in/username', '/auth/google/callback', '/api/health', '/session/renew']) {
+      const response = await proxy(withSession(path, `${OLD}.${now() - 1}`));
+      expect(response.headers.getSetCookie(), path).toEqual([]);
+    }
+    expect(server.calls).toEqual([]);
+    expect(NO_RENEWAL_PATHS).toEqual(['/sign-in', '/auth', '/api/health', '/session/renew']);
+    expect(renewsOn('/sign-input')).toBe(true);
+    expect(renewsOn('/campaigns/1')).toBe(true);
+  });
+
+  it('another renewal came first, or the backend does not answer: the request goes on with the token it has', async () => {
+    await useBackend({ 'POST /api/v1/session/renewal': problem(409, 'session.already_renewed') });
+    captureOutput();
+    const raced = await proxy(withSession('/', `${OLD}.${now() - 1}`));
+    expect(raced.headers.get('x-middleware-next')).toBe('1');
+    expect(raced.headers.getSetCookie()).toEqual([]);
+    expect(raced.headers.get('x-middleware-request-cookie')).toContain(`__Host-gmshield-session=${OLD}.`);
+
+    vi.stubEnv('GMSHIELD_BACKEND_URL', await closedAddress());
+    const down = await proxy(withSession('/', `${OLD}.${now() - 1}`));
+    expect(down.headers.get('x-middleware-next')).toBe('1');
+    expect(down.headers.getSetCookie()).toEqual([]);
+  });
+
+  it('an ended session: a page visit goes to /sign-in/ended with the path and query to come back to', async () => {
+    await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
+    captureOutput();
+    const response = await proxy(withSession('/campaigns/1?tab=notes', `${OLD}.${now() - 1}`));
+    expect(response.status).toBe(303);
+    // Absolute, as Next.js requires of a proxy answer, on the request's own origin (Next.js then makes it relative).
+    const location = new URL(response.headers.get('location')!);
+    expect(location.origin).toBe(new NextRequest(new URL('/', SITE)).nextUrl.origin);
+    expect(`${location.pathname}${location.search}`).toBe('/sign-in/ended?next=%2Fcampaigns%2F1%3Ftab%3Dnotes');
+    expect(response.headers.get('x-middleware-next')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+    expectSecurityHeaders(response);
+    // A form post or Server Action goes on: its own call meets session.required and answers it.
+    const action = await proxy(withSession('/', `${OLD}.${now() - 1}`, { method: 'POST', headers: { origin: SITE } }));
+    expect(action.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('a prefetch never renews and is never redirected, whatever the session', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
+    captureOutput();
+    const prefetches: Record<string, string>[] = [{ 'next-router-prefetch': '1' }, { 'next-router-prefetch': '1', rsc: '1' }];
+    for (const headers of prefetches) {
+      const response = await proxy(withSession('/campaigns/1', `${OLD}.${now() - 1}`, { headers }));
+      expect(response.headers.get('x-middleware-next'), JSON.stringify(headers)).toBe('1');
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(response.headers.get('x-middleware-request-cookie') ?? `__Host-gmshield-session=${OLD}.`).toContain(OLD);
+    }
+    expect(server.calls).toEqual([]);
+  });
+
+  it('an RSC fetch renews, but with an ended session it goes on instead of being redirected', async () => {
+    const renewing = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    captureOutput();
+    const renewed = await proxy(withSession('/campaigns/1?_rsc=abc', `${OLD}.${now() - 1}`, { headers: { rsc: '1' } }));
+    expect(renewing.calls).toHaveLength(1);
+    expect(renewed.headers.getSetCookie()[0]).toMatch(new RegExp(`^__Host-gmshield-session=${NEW}\\.`));
+    await renewing.close();
+
+    await useBackend({ 'POST /api/v1/session/renewal': problem(401, 'session.required') });
+    const ended = await proxy(withSession('/campaigns/1?_rsc=abc', `${OLD}.${now() - 1}`, { headers: { rsc: '1' } }));
+    expect(ended.status).not.toBe(303);
+    expect(ended.headers.get('x-middleware-next')).toBe('1');
+    expect(ended.headers.get('location')).toBeNull();
+    // A HEAD document visit is redirected like a GET.
+    const head = await proxy(withSession('/terms', `${OLD}.${now() - 1}`, { method: 'HEAD' }));
+    expect(head.status).toBe(303);
+    expect(isDocumentVisit(withSession('/', OLD))).toBe(true);
+    expect(isDocumentVisit(withSession('/', OLD, { method: 'POST', headers: { origin: SITE } }))).toBe(false);
+    expect(isPrefetch(withSession('/', OLD, { headers: { 'next-router-prefetch': '1' } }))).toBe(true);
   });
 });

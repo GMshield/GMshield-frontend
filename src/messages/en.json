@@ -45,7 +45,8 @@
       "request": "The request could not be completed.",
       "server": "Something went wrong on the server. Try again in a moment.",
       "integrity": "This data failed its integrity check and is not shown.",
-      "session": "Your session has ended. Sign in again."
+      "session": "Your session has ended. Sign in again.",
+      "service": "GMshield did not recognise this call to the server. Try again in a moment."
     },
     "codes": {
       "request": {
@@ -71,7 +72,12 @@
         "failed": "This data failed its integrity check and is not shown."
       },
       "session": {
-        "required": "Your session has ended."
+        "required": "Your session has ended.",
+        "renewal_required": "Your session needs to be renewed. Try again.",
+        "already_renewed": "Your session was just renewed. Try again."
+      },
+      "service": {
+        "unauthenticated": "GMshield did not recognise this call to the server. Try again in a moment."
       }
     }
   },

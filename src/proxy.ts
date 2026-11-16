@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { problemFields } from '@/messages';
+import { renewSession } from '@/server/accounts';
 import { logEvent } from '@/server/log';
+import { SESSION_COOKIE, due, endedPath, sessionCookieFor, sessionFrom } from '@/server/session-cookies';
 import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace';
 
 /**
@@ -8,6 +11,11 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  *
  * - refuses POST, PUT, PATCH and DELETE that do not come from the site's own origin (403); Google's
  *   redirect to `/auth/google/callback` is a GET, so it passes;
+ * - renews the session token once its renew-after time has passed (Story 1.10), before the page, route
+ *   or action runs, so that it sees the new token, and sets the new cookie on the answer. A prefetch
+ *   never renews. Another renewal that came first, or a backend that does not answer, leaves the token
+ *   as it is; an ended session sends a document visit to `/sign-in/ended` with the path to come back
+ *   to, and lets any other request go on to meet the backend's answer itself;
  * - sets a Content-Security-Policy that allows the site's own origin only, with a new nonce per
  *   request for the inline scripts and styles Next.js writes (it reads the nonce from the request's
  *   `Content-Security-Policy` header), and lets a form's redirect reach Google's sign-in;
@@ -69,7 +77,60 @@ function newNonce(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('base64');
 }
 
-export function proxy(request: NextRequest): NextResponse {
+/** Where the proxy never renews: sign-in and Google's return, the health check, and the renewal route itself. */
+export const NO_RENEWAL_PATHS: readonly string[] = ['/sign-in', '/auth', '/api/health', '/session/renew'];
+
+export function renewsOn(pathname: string): boolean {
+  return !NO_RENEWAL_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+/** What the renewal decided: a new cookie value with its options, an ended session, or nothing to do. */
+type Renewal =
+  | { readonly kind: 'renewed'; readonly cookie: ReturnType<typeof sessionCookieFor> }
+  | { readonly kind: 'ended' }
+  | { readonly kind: 'unchanged' };
+
+/**
+ * A Next.js prefetch, whose answer the router may drop: a renewed cookie on it could be lost, leaving the
+ * browser with a token that turns stale once the overlap ends. It never renews and is never redirected.
+ */
+export function isPrefetch(request: NextRequest): boolean {
+  return request.headers.has('next-router-prefetch');
+}
+
+/**
+ * A document visit: a GET or HEAD the browser shows as a page, not an RSC fetch of the router (which
+ * carries an `rsc` header). Only a document visit is sent to `/sign-in/ended` when the session has ended.
+ */
+export function isDocumentVisit(request: NextRequest): boolean {
+  return (request.method === 'GET' || request.method === 'HEAD') && !request.headers.has('rsc') && !isPrefetch(request);
+}
+
+async function renewIfDue(request: NextRequest, traceparent: string, traceId: string): Promise<Renewal> {
+  const session = sessionFrom(request.cookies.get(SESSION_COOKIE)?.value);
+  if (session === null || isPrefetch(request) || !due(session) || !renewsOn(request.nextUrl.pathname)) {
+    return { kind: 'unchanged' };
+  }
+  const result = await renewSession(session.token, { traceparent });
+  if (result.ok) {
+    logEvent('INFO', 'proxy', 'session.renewed', traceId);
+    return { kind: 'renewed', cookie: sessionCookieFor(result.data) };
+  }
+  // session.already_renewed: another request renewed first and its answer carries the new cookie;
+  // unavailable or anything else: the token stays, and the page itself meets whatever the backend says.
+  return problemFields(result.problem).code === 'session.required' ? { kind: 'ended' } : { kind: 'unchanged' };
+}
+
+function withCommonHeaders<T extends NextResponse>(response: T, policy: string): T {
+  response.headers.set('Content-Security-Policy', policy);
+  response.headers.set('Cache-Control', 'no-store');
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(name, value);
+  }
+  return response;
+}
+
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const incoming = request.headers.get('traceparent');
   const trace = traceFrom(incoming);
   const nonce = newNonce();
@@ -99,19 +160,27 @@ export function proxy(request: NextRequest): NextResponse {
     );
   }
 
+  const traceparent = parseTraceparent(incoming) === null ? outgoingTraceparent(trace) : incoming!;
+  const renewal = await renewIfDue(request, traceparent, trace.traceId);
+  if (renewal.kind === 'ended' && isDocumentVisit(request)) {
+    const back = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+    // Next.js needs an absolute Location on a proxy answer: the same origin as the request, then the path.
+    return withCommonHeaders(NextResponse.redirect(new URL(endedPath(back), request.nextUrl), 303), policy);
+  }
+  if (renewal.kind === 'renewed') {
+    // The page, route or action of this request reads the new token from its own cookie header.
+    request.cookies.set(SESSION_COOKIE, renewal.cookie.value);
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('content-security-policy', policy);
   requestHeaders.set('x-nonce', nonce);
-  if (parseTraceparent(incoming) === null) {
-    requestHeaders.set('traceparent', outgoingTraceparent(trace));
-  }
+  requestHeaders.set('traceparent', traceparent);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set('Content-Security-Policy', policy);
-  response.headers.set('Cache-Control', 'no-store');
-  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
-    response.headers.set(name, value);
+  if (renewal.kind === 'renewed') {
+    response.cookies.set(SESSION_COOKIE, renewal.cookie.value, renewal.cookie.options);
   }
-  return response;
+  return withCommonHeaders(response, policy);
 }
 
 export const config = {

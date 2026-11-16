@@ -11,6 +11,7 @@ const TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736';
 async function health(backendUrl: string, traceparent?: string): Promise<Response> {
   vi.stubEnv('GMSHIELD_MODE', '');
   vi.stubEnv('GMSHIELD_BACKEND_URL', backendUrl);
+  vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', 'configured-service-credential-0123456789');
   const headers = traceparent === undefined ? undefined : { traceparent };
   return GET(new Request('http://frontend:3000/api/health', { headers }));
 }
@@ -26,7 +27,7 @@ describe('GET /api/health', () => {
 
   it('Healthy: 200 UP when the backend reports the minimum version or newer', async () => {
     const output = captureOutput();
-    for (const version of ['1.1.0', '1.4.2', '2.0.0']) {
+    for (const version of ['1.2.0', '1.4.2', '2.0.0']) {
       running = await startStandIn(version);
       const response = await health(running.url, `00-${TRACE_ID}-00f067aa0ba902b7-01`);
       expect(response.status).toBe(200);
@@ -42,7 +43,7 @@ describe('GET /api/health', () => {
 
   it('Old backend: 503 DOWN and one log line naming both versions', async () => {
     const output = captureOutput();
-    running = await startStandIn('1.0.0');
+    running = await startStandIn('1.1.0');
     const response = await health(running.url, `00-${TRACE_ID}-00f067aa0ba902b7-01`);
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ status: 'DOWN' });
@@ -53,8 +54,8 @@ describe('GET /api/health', () => {
       traceId: TRACE_ID,
       unit: 'server.health',
       event: 'health.backend_outdated',
-      backendVersion: '1.0.0',
-      minimumVersion: '1.1.0',
+      backendVersion: '1.1.0',
+      minimumVersion: '1.2.0',
     });
   });
 

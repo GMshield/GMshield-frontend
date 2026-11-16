@@ -7,13 +7,16 @@ import { PreferencesForm } from '@/components/PreferencesForm';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences, type Preferences } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
-import { currentSessionToken } from '@/server/session-cookies';
+import { currentSessionToken, endedPath, renewPath } from '@/server/session-cookies';
 
 import styles from './page.module.css';
 import { signOutAction } from './sign-in/actions';
 import { signInNoticeFor, signInNoticeFrom, type SignInNotice } from './sign-in/notice';
 
 type SearchParams = Promise<Readonly<Record<string, string | string[] | undefined>>>;
+
+/** This page's path, where an ended or renewed session comes back to. */
+const HOME = '/';
 
 /**
  * `/` until Story 1.11 replaces it. Signed out, the sign-in screen: "Continuar com Google" and the
@@ -32,8 +35,12 @@ export default async function HomePage({ searchParams }: { readonly searchParams
     }
     const { code } = problemFields(account.problem);
     if (code === 'session.required') {
-      // An ended session: the stale cookie goes, then the sign-in screen says so once.
-      redirect('/sign-in/ended');
+      // An ended session: the stale cookie goes, then the sign-in screen says so once, and comes back here.
+      redirect(endedPath(HOME));
+    }
+    if (code === 'session.renewal_required') {
+      // The account's seal version rose (Story 1.10): renew the token, then load this page again.
+      redirect(renewPath(HOME));
     }
     // Any other failure says what happened.
     notice = signInNoticeFor(code);

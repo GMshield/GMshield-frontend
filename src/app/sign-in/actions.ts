@@ -8,13 +8,13 @@ import { currentPreferences } from '@/preferences';
 import { completeSignIn, endSession } from '@/server/accounts';
 import {
   EXPIRED_COOKIE_OPTIONS,
+  RETURN_COOKIE,
   SESSION_COOKIE,
-  SESSION_COOKIE_OPTIONS,
-  SESSION_MAX_AGE,
   SIGN_IN_COOKIE,
   currentSessionToken,
   currentSignInToken,
-  maxAgeFrom,
+  safeReturnPath,
+  sessionCookieFor,
 } from '@/server/session-cookies';
 
 import type { UsernameFormState } from './form-state';
@@ -27,7 +27,8 @@ import { homeWithNotice } from './notice';
  */
 
 /**
- * The username step: the backend creates the account and a session. A taken or invalid username, or
+ * The username step: the backend creates the account and a session, and the visitor lands on `/`, or where
+ * an ended session left off (`__Host-gmshield-return`, then cleared). A taken or invalid username, or
  * unticked terms, come back to the form; an attempt that is over goes back to the sign-in screen.
  */
 export async function completeSignInAction(_previous: UsernameFormState, form: FormData): Promise<UsernameFormState> {
@@ -41,12 +42,12 @@ export async function completeSignInAction(_previous: UsernameFormState, form: F
   const termsAccepted = form.get('terms') === 'accepted';
   const result = await completeSignIn({ attemptToken, username, termsAccepted });
   if (result.ok) {
-    jar.set(SESSION_COOKIE, result.data.sessionToken, {
-      ...SESSION_COOKIE_OPTIONS,
-      maxAge: maxAgeFrom(result.data.expiresInSeconds, SESSION_MAX_AGE),
-    });
+    const cookie = sessionCookieFor(result.data);
+    const destination = safeReturnPath(jar.get(RETURN_COOKIE)?.value);
+    jar.set(SESSION_COOKIE, cookie.value, cookie.options);
     jar.set(SIGN_IN_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
-    redirect('/');
+    jar.set(RETURN_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
+    redirect(destination);
   }
   const { code } = problemFields(result.problem);
   if (code === 'request.sign_in_expired') {
@@ -70,6 +71,10 @@ export async function signOutAction(): Promise<void> {
     // Whatever the backend answers, this browser forgets the session.
     await endSession(token);
   }
-  (await cookies()).set(SESSION_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
+  if (jar.get(RETURN_COOKIE) !== undefined) {
+    jar.set(RETURN_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
+  }
   redirect('/');
 }

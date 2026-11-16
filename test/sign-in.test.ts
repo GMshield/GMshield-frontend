@@ -21,6 +21,7 @@ const { GET: callback } = await import('@/app/auth/google/callback/route');
 const { completeSignInAction, signOutAction } = await import('@/app/sign-in/actions');
 const { POST: start } = await import('@/app/sign-in/google/route');
 const { GET: ended } = await import('@/app/sign-in/ended/route');
+const { GET: renewRoute } = await import('@/app/session/renew/route');
 const { INITIAL_USERNAME_FORM } = await import('@/app/sign-in/form-state');
 const { signInNoticeFrom } = await import('@/app/sign-in/notice');
 const { default: HomePage } = await import('@/app/page');
@@ -32,6 +33,10 @@ type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
 const ATTEMPT = 'attemptTokenAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+const RENEWED = 'renewedTokenCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+const CREDENTIAL = 'configured-service-credential-0123456789';
+/** A session cookie value as Story 1.10 writes it: the token, then its renew-after time. */
+const SESSION_VALUE = new RegExp(`^${SESSION}\\.\\d+$`);
 const COOKIE = { secure: true, httpOnly: true, sameSite: 'lax', path: '/' };
 const EXPIRED = { ...COOKIE, maxAge: 0 };
 
@@ -54,6 +59,7 @@ async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<
   backend = await startScripted(routes);
   vi.stubEnv('GMSHIELD_MODE', '');
   vi.stubEnv('GMSHIELD_BACKEND_URL', backend.url);
+  vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
   return backend;
 }
 
@@ -118,6 +124,7 @@ describe('the backend calls', () => {
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
       expect(call.headers.cookie).toBeUndefined();
+      expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
       expect(String(call.headers.traceparent)).toMatch(/^00-4bf92f3577b34da6a3ce929d0e0e4736-[0-9a-f]{16}-01$/);
     }
   });
@@ -173,15 +180,20 @@ describe('Google redirect (GET /auth/google/callback)', () => {
 
   it('a known account: the session cookie, the attempt cookie cleared, and / signed in', async () => {
     const server = await useBackend({
-      'POST /api/v1/sign-in/google/callback': { status: 200, body: { outcome: 'signed_in', session: { sessionToken: SESSION, expiresInSeconds: 604800 } } },
+      'POST /api/v1/sign-in/google/callback': {
+        status: 200,
+        body: { outcome: 'signed_in', session: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } },
+      },
     });
     const response = await relay('?state=the-state&code=the-code');
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/');
     const cookies = setCookies(response);
-    expect(cookies.find((c) => c.startsWith('__Host-gmshield-session='))).toMatch(
-      new RegExp(`^__Host-gmshield-session=${SESSION}; Path=/; (Expires=[^;]+; )?Max-Age=604800; Secure; HttpOnly; SameSite=lax$`, 'i'),
+    const session = /^__Host-gmshield-session=([^;]+)\.(\d+); Path=\/; (Expires=[^;]+; )?Max-Age=604800; Secure; HttpOnly; SameSite=lax$/i.exec(
+      cookies.find((c) => c.startsWith('__Host-gmshield-session=')) ?? '',
     );
+    expect(session?.[1]).toBe(SESSION);
+    expect(Math.abs(Number(session?.[2]) - (Math.floor(Date.now() / 1000) + 900))).toBeLessThanOrEqual(2);
     expect(cookies.find((c) => c.startsWith('__Host-gmshield-sign-in='))).toMatch(/^__Host-gmshield-sign-in=; Path=\/; (Expires=[^;]+; )?Max-Age=0; Secure; HttpOnly; SameSite=lax$/i);
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ attemptToken: ATTEMPT, state: 'the-state', code: 'the-code' });
   });
@@ -250,13 +262,28 @@ describe('the username step (completeSignInAction)', () => {
 
   it('creates the account: the session cookie, the attempt cookie cleared, and /', async () => {
     cookieJar = { '__Host-gmshield-sign-in': ATTEMPT };
-    const server = await useBackend({ 'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800 } } });
+    const server = await useBackend({
+      'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } },
+    });
     expect(await redirectOf(() => completeSignInAction(INITIAL_USERNAME_FORM, form('  Mestre_Ana ', true)))).toBe('/');
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ attemptToken: ATTEMPT, username: 'Mestre_Ana', termsAccepted: true });
     expect(setCalls).toEqual([
-      { name: '__Host-gmshield-session', value: SESSION, options: { ...COOKIE, maxAge: 604800 } },
+      { name: '__Host-gmshield-session', value: expect.stringMatching(SESSION_VALUE), options: { ...COOKIE, maxAge: 604800 } },
       { name: '__Host-gmshield-sign-in', value: '', options: EXPIRED },
+      { name: '__Host-gmshield-return', value: '', options: EXPIRED },
     ]);
+  });
+
+  it('clears the return cookie after sign-in even when it leads to / (an unsafe or plain path)', async () => {
+    await useBackend({
+      'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } },
+    });
+    for (const stored of ['/', '//evil.example/x']) {
+      cookieJar = { '__Host-gmshield-sign-in': ATTEMPT, '__Host-gmshield-return': stored };
+      setCalls.length = 0;
+      expect(await redirectOf(() => completeSignInAction(INITIAL_USERNAME_FORM, form('Mestre_Ana', true))), stored).toBe('/');
+      expect(setCalls.find((call) => call.name === '__Host-gmshield-return'), stored).toEqual({ name: '__Host-gmshield-return', value: '', options: EXPIRED });
+    }
   });
 
   it('a taken or invalid username, or unticked terms: the form again with the message under its field', async () => {
@@ -302,6 +329,7 @@ describe('"Sair" (signOutAction)', () => {
     cookieJar = { '__Host-gmshield-session': SESSION };
     vi.stubEnv('GMSHIELD_MODE', '');
     vi.stubEnv('GMSHIELD_BACKEND_URL', await closedAddress());
+    vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
     const output = captureOutput();
     expect(await redirectOf(() => signOutAction())).toBe('/');
     expect(setCalls).toEqual([{ name: '__Host-gmshield-session', value: '', options: EXPIRED }]);
@@ -325,13 +353,14 @@ describe('the home page (/) and the username page', () => {
   it('an ended session: through GET /sign-in/ended, which clears the stale cookie, to "Sua sessão terminou." once', async () => {
     await useBackend({ 'GET /api/v1/me': problem(401, 'session.required') });
     cookieJar = { '__Host-gmshield-session': SESSION };
-    expect(await redirectOf(() => HomePage())).toBe('/sign-in/ended');
+    expect(await redirectOf(() => HomePage())).toBe('/sign-in/ended?next=%2F');
 
-    const response = ended();
+    const response = ended(new NextRequest('http://localhost:3000/sign-in/ended?next=%2F'));
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/?signIn=session.required');
     expect(response.headers.getSetCookie()).toEqual([
       expect.stringMatching(/^__Host-gmshield-session=; Path=\/; (Expires=[^;]+; )?Max-Age=0; Secure; HttpOnly; SameSite=lax$/i),
+      expect.stringMatching(/^__Host-gmshield-return=; Path=\/; (Expires=[^;]+; )?Max-Age=0; Secure; HttpOnly; SameSite=lax$/i),
     ]);
     // Back on / without the cookie: the sign-in screen with the message, and no backend call.
     cookieJar = {};
@@ -363,5 +392,125 @@ describe('the home page (/) and the username page', () => {
     expect(html).toContain('href="/terms"');
     expect(html).toContain('href="/privacy"');
     expect(html).toContain('Criar conta');
+  });
+});
+
+describe('sessions that rotate and end (Story 1.10)', () => {
+  const RETURN_SET = /^__Host-gmshield-return=([^;]*); Path=\/; (Expires=[^;]+; )?Max-Age=3600; Secure; HttpOnly; SameSite=lax$/i;
+  const GRANT = { status: 200, body: { sessionToken: RENEWED, expiresInSeconds: 500_000, renewAfterSeconds: 900 } };
+
+  it('reads the session cookie: <token>.<renew-after>, a bare token of Story 1.9 (due at once), or nothing', () => {
+    expect(cookiesModule.sessionFrom(`${SESSION}.1800000000`)).toEqual({ token: SESSION, renewAfter: 1_800_000_000 });
+    expect(cookiesModule.sessionFrom(SESSION)).toEqual({ token: SESSION, renewAfter: null });
+    for (const bad of [`${SESSION}.`, `${SESSION}.x`, `${SESSION}.-1`, `${SESSION}.1.2`, 'short.1', `.${'1'.repeat(10)}`, `${SESSION}.${'9'.repeat(13)}`, '', null, undefined]) {
+      expect(cookiesModule.sessionFrom(bad), String(bad)).toBeNull();
+    }
+    expect(cookiesModule.due({ token: SESSION, renewAfter: null }, 100)).toBe(true);
+    expect(cookiesModule.due({ token: SESSION, renewAfter: 100 }, 99)).toBe(false);
+    expect(cookiesModule.due({ token: SESSION, renewAfter: 100 }, 100)).toBe(true);
+  });
+
+  it('writes the session cookie of a grant: renew-after from now, living what is left of the session', () => {
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 3600, renewAfterSeconds: 900 }, 1000)).toEqual({
+      value: `${SESSION}.1900`,
+      options: { ...COOKIE, maxAge: 3600 },
+    });
+    // An odd renew-after makes the token due at once; an odd lifetime falls back to 7 days.
+    for (const odd of [undefined, -1, 1.5, '900']) {
+      expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 3600, renewAfterSeconds: odd }, 1000).value, String(odd)).toBe(`${SESSION}.1000`);
+    }
+    // A renew-after beyond the cookie's life (the last window) is clamped to it, never due at once.
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 600, renewAfterSeconds: 900 }, 1000)).toEqual({
+      value: `${SESSION}.1600`,
+      options: { ...COOKIE, maxAge: 600 },
+    });
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 0, renewAfterSeconds: 900 }, 0).options.maxAge).toBe(604800);
+  });
+
+  it('returns only to a path of this site, never to sign-in, Google, the API or the renewal route', () => {
+    for (const good of ['/', '/campaigns/1?tab=notes', '/terms', '/sign-input']) {
+      expect(cookiesModule.safeReturnPath(good), good).toBe(good);
+    }
+    for (const bad of ['//evil.example/x', '/\\evil.example', '\\\\evil.example', 'https://evil.example/', 'javascript:alert(1)', 'campaigns',
+      '/sign-in', '/sign-in/ended?next=/x', '/auth/google/callback', '/api/health', '/api', '/session/renew?next=/', '/a/../sign-in',
+      '/%2e%2e/api/health', '/x\u0000y', '/x\ny', `/${'a'.repeat(2048)}`, 42, null, undefined]) {
+      expect(cookiesModule.safeReturnPath(bad), String(bad)).toBe('/');
+    }
+  });
+
+  it('renews through the backend: the token in X-Session-Token, the service credential in Authorization', async () => {
+    const server = await useBackend({ 'POST /api/v1/session/renewal': GRANT });
+    expect(await accounts.renewSession(SESSION)).toEqual({ ok: true, data: GRANT.body });
+    const [call] = server.calls;
+    expect([call!.method, call!.url]).toEqual(['POST', '/api/v1/session/renewal']);
+    expect(call!.headers['x-session-token']).toBe(SESSION);
+    expect(call!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+  });
+
+  it('a risen seal version: / goes to /session/renew, which renews and comes back with the new cookie', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': problem(401, 'session.renewal_required'),
+      'POST /api/v1/session/renewal': GRANT,
+    });
+    cookieJar = { '__Host-gmshield-session': `${SESSION}.1` };
+    expect(await redirectOf(() => HomePage())).toBe('/session/renew?next=%2F');
+
+    const response = await renewRoute(new NextRequest('http://localhost:3000/session/renew?next=%2F', { headers: { cookie: `__Host-gmshield-session=${SESSION}.1` } }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/');
+    expect(response.headers.getSetCookie()[0]).toMatch(new RegExp(`^__Host-gmshield-session=${RENEWED}\\.\\d+; Path=/; (Expires=[^;]+; )?Max-Age=500000; Secure; HttpOnly; SameSite=lax$`, 'i'));
+    expect(server.calls.at(-1)!.headers['x-session-token']).toBe(SESSION);
+  });
+
+  it('/session/renew without a session, or when the renewal fails, ends at /sign-in/ended keeping a safe next', async () => {
+    await useBackend({ 'POST /api/v1/session/renewal': problem(409, 'session.already_renewed') });
+    const raced = await renewRoute(new NextRequest('http://localhost:3000/session/renew?next=%2Fcampaigns%2F1', { headers: { cookie: `__Host-gmshield-session=${SESSION}.1` } }));
+    expect(raced.headers.get('location')).toBe('/sign-in/ended?next=%2Fcampaigns%2F1');
+    expect(raced.headers.getSetCookie()).toEqual([]);
+    const none = await renewRoute(new NextRequest('http://localhost:3000/session/renew?next=https%3A%2F%2Fevil.example'));
+    expect(none.headers.get('location')).toBe('/sign-in/ended?next=%2F');
+  });
+
+  it('an ended session on /x?y: "Sua sessão terminou.", then signing in again lands on /x?y and forgets it', async () => {
+    const ending = ended(new NextRequest('http://localhost:3000/sign-in/ended?next=%2Fcampaigns%2F1%3Ftab%3Dnotes'));
+    expect(ending.headers.get('location')).toBe('/?signIn=session.required');
+    const stored = ending.headers.getSetCookie().map((cookie) => RETURN_SET.exec(cookie)?.[1]).find((value) => value !== undefined);
+    expect(decodeURIComponent(stored ?? '')).toBe('/campaigns/1?tab=notes');
+
+    // A returning account through Google's redirect.
+    await useBackend({
+      'POST /api/v1/sign-in/google/callback': { status: 200, body: { outcome: 'signed_in', session: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } } },
+    });
+    const back = await callback(new NextRequest('http://localhost:3000/auth/google/callback?state=s&code=c', {
+      headers: { cookie: `__Host-gmshield-sign-in=${ATTEMPT}; __Host-gmshield-return=${stored}` },
+    }));
+    expect(back.headers.get('location')).toBe('/campaigns/1?tab=notes');
+    expect(back.headers.getSetCookie().find((c) => c.startsWith('__Host-gmshield-return='))).toMatch(/Max-Age=0/);
+
+    // A first sign-in through the username step.
+    await backend?.close();
+    await useBackend({ 'POST /api/v1/sign-in/complete': { status: 200, body: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } } });
+    cookieJar = { '__Host-gmshield-sign-in': ATTEMPT, '__Host-gmshield-return': '/campaigns/1?tab=notes' };
+    const data = new FormData();
+    data.set('username', 'Mestre_Ana');
+    data.set('terms', 'accepted');
+    expect(await redirectOf(() => completeSignInAction(INITIAL_USERNAME_FORM, data))).toBe('/campaigns/1?tab=notes');
+    expect(setCalls.map((call) => [call.name, call.value === '' ? 'cleared' : 'set'])).toEqual([
+      ['__Host-gmshield-session', 'set'],
+      ['__Host-gmshield-sign-in', 'cleared'],
+      ['__Host-gmshield-return', 'cleared'],
+    ]);
+  });
+
+  it('an unsafe next or return cookie lands on /', async () => {
+    const ending = ended(new NextRequest('http://localhost:3000/sign-in/ended?next=%2F%2Fevil.example'));
+    expect(ending.headers.getSetCookie().find((c) => c.startsWith('__Host-gmshield-return='))).toMatch(/Max-Age=0/);
+    await useBackend({
+      'POST /api/v1/sign-in/google/callback': { status: 200, body: { outcome: 'signed_in', session: { sessionToken: SESSION, expiresInSeconds: 604800, renewAfterSeconds: 900 } } },
+    });
+    const back = await callback(new NextRequest('http://localhost:3000/auth/google/callback?state=s&code=c', {
+      headers: { cookie: `__Host-gmshield-sign-in=${ATTEMPT}; __Host-gmshield-return=${encodeURIComponent('https://evil.example/')}` },
+    }));
+    expect(back.headers.get('location')).toBe('/');
   });
 });
