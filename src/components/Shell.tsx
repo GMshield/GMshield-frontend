@@ -59,14 +59,18 @@ export function Shell({ preferences, username, current, sidebar, notice, panel, 
           </>
         }
       />
-      <div className={styles.column}>
+      <div className={styles.column} data-behind-sidebar="">
         <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} />
         <main className={styles.main}>
           {notice}
           {children}
         </main>
       </div>
-      {panel === undefined ? null : <aside className={styles.panel}>{panel}</aside>}
+      {panel === undefined ? null : (
+        <aside className={styles.panel} data-behind-sidebar="">
+          {panel}
+        </aside>
+      )}
     </div>
   );
 }

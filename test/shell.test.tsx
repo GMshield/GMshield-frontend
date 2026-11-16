@@ -25,14 +25,32 @@ const CURRENT = { system: 'Untitled system', campaign: 'First campaign' };
 const COOKIE_CLOSED = '__Host-gmshield-sidebar=closed; Path=/; Max-Age=31536000; Secure; SameSite=Lax';
 const COOKIE_OPEN = '__Host-gmshield-sidebar=open; Path=/; Max-Age=31536000; Secure; SameSite=Lax';
 
+let mediaListeners: (() => void)[] = [];
+let currentWidth = 1440;
+
 /** The width the page is at: CSS decides the layout, the sidebar asks only whether it is 1280px or more. */
 function atWidth(width: number): void {
+  currentWidth = width;
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query === '(min-width: 1280px)' ? width >= 1280 : false,
+    get matches() {
+      return query === '(min-width: 1280px)' ? currentWidth >= 1280 : false;
+    },
     media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
+    addEventListener: (_type: string, listener: () => void) => mediaListeners.push(listener),
+    removeEventListener: (_type: string, listener: () => void) => {
+      mediaListeners = mediaListeners.filter((other) => other !== listener);
+    },
   }));
+}
+
+/** The window is resized: the media queries' listeners hear of it. */
+function resizeTo(width: number): void {
+  currentWidth = width;
+  act(() => {
+    for (const listener of [...mediaListeners]) {
+      listener();
+    }
+  });
 }
 
 function shell(options: { language?: Language; sidebar?: 'open' | 'closed'; current?: typeof CURRENT | null; children?: ReactNode } = {}) {
@@ -52,6 +70,7 @@ function shell(options: { language?: Language; sidebar?: 'open' | 'closed'; curr
 let cookieLines: string[] = [];
 
 beforeEach(() => {
+  mediaListeners = [];
   pathname = '/questions';
   cookieLines = [];
   vi.spyOn(document, 'cookie', 'set').mockImplementation((line: string) => {
@@ -180,6 +199,46 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir menu' }));
   });
 
+  it('under 1280px the open sidebar makes the page behind it inert until it closes', async () => {
+    const user = userEvent.setup();
+    atWidth(1000);
+    render(
+      <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="u" current={CURRENT} sidebar="open" panel={<a href="/x">painel</a>}>
+        <a href="/questions#start">início</a>
+      </Shell>,
+    );
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    const column = context.parentElement!;
+    const panel = screen.getByRole('complementary');
+    expect(column.hasAttribute('inert')).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(column.hasAttribute('inert')).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    expect(column.contains(screen.getByRole('link', { name: 'início', hidden: true }))).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Fechar menu' }));
+    expect(column.hasAttribute('inert')).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
+
+    // Widened to 1280px while open over the page: the narrow state ends and the page is no longer inert.
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(column.hasAttribute('inert')).toBe(true);
+    resizeTo(1440);
+    expect(area().dataset.narrow).toBe('closed');
+    expect(column.hasAttribute('inert')).toBe(false);
+  });
+
+  it('at 1280px and more the page beside the sidebar is never inert', async () => {
+    const user = userEvent.setup();
+    render(shell());
+    const column = screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+    await user.keyboard('{Control>}b{/Control}');
+    await user.keyboard('{Control>}b{/Control}');
+    expect(column.hasAttribute('inert')).toBe(false);
+  });
+
   it('under 768px the sheet works the same way (CSS makes it full-screen)', async () => {
     const user = userEvent.setup();
     atWidth(600);
@@ -187,10 +246,12 @@ describe('the signed-in shell (Story 1.11)', () => {
     await user.keyboard('{Control>}b{/Control}');
     expect(area().dataset.narrow).toBe('open');
     expect(area().dataset.wide).toBe('closed');
+    expect(screen.getByRole('main', { hidden: true }).parentElement!.hasAttribute('inert')).toBe(true);
     await user.click(screen.getByRole('link', { name: 'Adicionar Arquivo' }));
     pathname = '/files/add';
     view.rerender(shell({ sidebar: 'closed' }));
     expect(area().dataset.narrow).toBe('closed');
+    expect(screen.getByRole('main').parentElement!.hasAttribute('inert')).toBe(false);
     expect(cookieLines).toEqual([]);
   });
 

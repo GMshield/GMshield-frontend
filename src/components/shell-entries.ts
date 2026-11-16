@@ -15,3 +15,9 @@ export const SIDEBAR_ENTRIES = [
 export const ADD_FILE = { key: 'addFile', href: '/files/add' } as const;
 
 export type EntryKey = (typeof SIDEBAR_ENTRIES)[number]['key'] | typeof ADD_FILE.key;
+
+/**
+ * Marks the shell's parts behind the sidebar (the context bar and main column, a right panel): the sidebar makes
+ * them inert while it is open over them, under 1280px.
+ */
+export const BEHIND_SIDEBAR = 'data-behind-sidebar';

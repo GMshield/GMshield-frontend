@@ -9,7 +9,7 @@ import { sidebarCookieLine, type SidebarState } from '@/sidebar-cookie';
 import { ChevronLeftIcon, ChevronRightIcon, UploadIcon } from './Icons';
 import { LogoMark } from './Logo';
 import { LogoMenu } from './LogoMenu';
-import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
+import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
 import styles from './Sidebar.module.css';
 
 /** At this width and above the sidebar sits beside the main column, and its state is remembered. */
@@ -75,6 +75,35 @@ export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) 
     focusNext.current = null;
     target?.focus();
   }, [wideState, narrowOpen]);
+
+  // Under 1280px the open sidebar covers the page: what is behind it leaves the Tab order and the pointer
+  // until it closes. The shell renders those parts on the server, so they are found by their attribute.
+  useEffect(() => {
+    const behind = document.querySelectorAll(`[${BEHIND_SIDEBAR}]`);
+    for (const element of behind) {
+      element.toggleAttribute('inert', narrowOpen);
+    }
+    return () => {
+      for (const element of behind) {
+        element.removeAttribute('inert');
+      }
+    };
+  }, [narrowOpen]);
+
+  // Widened to 1280px or more while open over the page: that state ends (the wide state takes over).
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+    const wide = window.matchMedia(WIDE_QUERY);
+    const onChange = () => {
+      if (wide.matches) {
+        setOpenedOn(null);
+      }
+    };
+    wide.addEventListener('change', onChange);
+    return () => wide.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
