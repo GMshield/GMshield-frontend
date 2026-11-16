@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { Logo } from './Logo';
 import styles from './LogoMenu.module.css';
@@ -16,24 +16,33 @@ export type LogoMenuProps = {
 
 /**
  * The logo and name at the top of the sidebar: a disclosure button that shows and hides the menu under it.
- * Esc closes the open menu and gives focus back to the button.
+ * Esc, with focus in the button or the open menu, closes it and gives focus back to the button. The key is
+ * heard on the document while the menu is open (no handler on a non-interactive element, SonarQube S6848); it
+ * is marked handled, so the sidebar does not also close on it.
  */
 export function LogoMenu({ name, label, children }: LogoMenuProps) {
   const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const id = useId();
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'Escape' && open) {
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      button.current?.focus();
+  useEffect(() => {
+    if (!open) {
+      return undefined;
     }
-  }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && container.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        setOpen(false);
+        button.current?.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   return (
-    <div className={styles.menu} onKeyDown={onKeyDown}>
+    <div ref={container} className={styles.menu}>
       <button
         ref={button}
         type="button"
