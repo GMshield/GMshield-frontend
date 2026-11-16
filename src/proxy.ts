@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { problemFields } from '@/messages';
 import { renewSession } from '@/server/accounts';
 import { logEvent } from '@/server/log';
-import { SESSION_COOKIE, due, endedPath, sessionCookieFor, sessionFrom } from '@/server/session-cookies';
+import { PATH_HEADER, SESSION_COOKIE, due, endedPath, sessionCookieFor, sessionFrom } from '@/server/session-cookies';
 import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace';
 
 /**
@@ -21,7 +21,9 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  *   request for the inline scripts and styles Next.js writes (it reads the nonce from the request's
  *   `Content-Security-Policy` header), and lets a form's redirect reach Google's sign-in;
  * - marks every answer `Cache-Control: no-store`;
- * - gives the request a valid `traceparent`, so the page or route logs and forwards the same trace.
+ * - gives the request a valid `traceparent`, so the page or route logs and forwards the same trace;
+ * - names the requested path and query in `x-gmshield-path`, replacing any value the browser sent, so the
+ *   signed-in layout knows where to come back to after an ended or renewed session (Story 1.11).
  */
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -205,6 +207,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   requestHeaders.set('content-security-policy', policy);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('traceparent', traceparent);
+  requestHeaders.set(PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   if (renewal.kind === 'renewed') {
     response.cookies.set(SESSION_COOKIE, renewal.cookie.value, renewal.cookie.options);

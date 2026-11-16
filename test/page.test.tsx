@@ -1,5 +1,8 @@
 import { isValidElement, type ReactElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let acceptLanguage: string | null = null;
@@ -97,6 +100,31 @@ describe('page (GET /)', () => {
     expect(render(await HomePage()).getByRole('button', { name: ptBR.signIn.google })).toBeTruthy();
   });
 
+  it('signed in: / sends the visitor to the shell\'s first page, /questions (Story 1.11)', async () => {
+    const calls: string[] = [];
+    const backend = createServer((request, response) => {
+      calls.push(`${request.method} ${request.url}`);
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ username: 'Mestre_Ana' }));
+    });
+    await new Promise<void>((resolve) => backend.listen(0, '127.0.0.1', resolve));
+    vi.stubEnv('GMSHIELD_MODE', '');
+    vi.stubEnv('GMSHIELD_BACKEND_URL', `http://127.0.0.1:${(backend.address() as AddressInfo).port}`);
+    vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', 'configured-service-credential-0123456789');
+    cookieJar = { '__Host-gmshield-session': 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.9999999999' };
+    try {
+      await HomePage();
+      expect.unreachable('a signed-in visitor is redirected');
+    } catch (error) {
+      expect(String((error as { digest?: unknown }).digest)).toContain(';/questions;');
+    } finally {
+      backend.closeAllConnections();
+      await new Promise((resolve) => backend.close(resolve));
+      vi.unstubAllEnvs();
+    }
+    expect(calls).toEqual(['GET /api/v1/me']);
+  });
+
   it('shows a known sign-in outcome from the query, and nothing for anything else', async () => {
     const view = render(await HomePage({ searchParams: Promise.resolve({ signIn: 'request.sign_in_expired' }) }));
     expect(view.getByRole('status').textContent).toContain('A tentativa de entrar expirou. Tente de novo.');
@@ -137,6 +165,11 @@ describe('page (GET /)', () => {
         ? Object.entries(value).flatMap(([key, inner]) => keys(inner, `${prefix}${key}.`))
         : [prefix];
     expect(keys(en).sort()).toEqual(keys(ptBR).sort());
+    // Story 1.11: the shell's and the placeholders' strings exist in both languages.
+    expect(keys(ptBR)).toEqual(expect.arrayContaining(['shell.openMenu.', 'shell.closeMenu.', 'placeholder.addFile.']));
+    for (const messages of [ptBR, en]) {
+      expect(JSON.stringify(messages.shell) + JSON.stringify(messages.placeholder)).not.toMatch(/!|\p{Extended_Pictographic}/u);
+    }
     expect(messagesFor('en')).toBe(en);
     expect(languageFor(undefined)).toBe('pt-BR');
   });

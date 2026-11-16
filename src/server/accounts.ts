@@ -58,7 +58,8 @@ async function backend(options: CallOptions, timeoutMs?: number) {
   };
 }
 
-async function call<T>(
+/** One backend call: its data, or the problem it answered, with a log line that names the event and status only. */
+export async function call<T>(
   event: string,
   options: CallOptions,
   send: (client: Awaited<ReturnType<typeof backend>>['client']) => Promise<{ data?: T; error?: unknown; response: Response }>,

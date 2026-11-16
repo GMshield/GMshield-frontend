@@ -5,10 +5,37 @@
   },
   "home": {
     "heading": "GMshield",
-    "lead": "A rules assistant for tabletop RPG game masters.",
-    "greeting": "Hello, {username}",
-    "signedInLead": "You are signed in. The screens of your library arrive in the next releases.",
-    "signOut": "Sign out"
+    "lead": "A rules assistant for tabletop RPG game masters."
+  },
+  "shell": {
+    "name": "GMshield",
+    "menu": "GMshield menu",
+    "signedInAs": "Signed in as {username}",
+    "signOut": "Sign out",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "navigation": "Main navigation",
+    "currentCampaign": "Current campaign",
+    "noCampaign": "No campaign",
+    "context": "System and campaign",
+    "entries": {
+      "questions": "Questions",
+      "rules": "Rule Creation",
+      "campaigns": "My Tables",
+      "systems": "Systems",
+      "characters": "Characters",
+      "files": "My Files",
+      "addFile": "Add File"
+    }
+  },
+  "placeholder": {
+    "questions": "Here you will ask questions about your books and read the answers with their sources.",
+    "rules": "Here you will write your own rules and content, by hand or with an agent.",
+    "campaigns": "Here you will see and organise your campaigns.",
+    "systems": "Here you will see and organise your game systems.",
+    "characters": "Here you will keep the characters of your campaigns.",
+    "files": "Here you will see the files you have sent and the state of each one.",
+    "addFile": "Here you will send a book or file to your library."
   },
   "notFound": {
     "title": "Not found.",

@@ -4,7 +4,7 @@ import 'server-only';
  * The oldest backend public contract (`info.version` of `contracts/public.json`) this frontend
  * works with. `GET /api/health` reports unhealthy against an older backend.
  */
-export const MINIMUM_BACKEND_CONTRACT_VERSION = '1.2.0';
+export const MINIMUM_BACKEND_CONTRACT_VERSION = '1.3.0';
 
 const VERSION = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
 

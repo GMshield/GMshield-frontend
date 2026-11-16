@@ -1,0 +1,266 @@
+import { act, cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+let pathname = '/questions';
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+  redirect: (url: string) => {
+    throw new Error(`redirect ${url}`);
+  },
+}));
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
+  cookies: async () => ({ get: () => undefined, set: () => undefined }),
+}));
+
+const { Shell } = await import('@/components/Shell');
+const { SIDEBAR_ENTRIES } = await import('@/components/shell-entries');
+const ptBR = (await import('@/messages/pt-BR.json')).default;
+const en = (await import('@/messages/en.json')).default;
+
+type Language = 'pt-BR' | 'en';
+const CURRENT = { system: 'Untitled system', campaign: 'First campaign' };
+const COOKIE_CLOSED = '__Host-gmshield-sidebar=closed; Path=/; Max-Age=31536000; Secure; SameSite=Lax';
+const COOKIE_OPEN = '__Host-gmshield-sidebar=open; Path=/; Max-Age=31536000; Secure; SameSite=Lax';
+
+/** The width the page is at: CSS decides the layout, the sidebar asks only whether it is 1280px or more. */
+function atWidth(width: number): void {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(min-width: 1280px)' ? width >= 1280 : false,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+}
+
+function shell(options: { language?: Language; sidebar?: 'open' | 'closed'; current?: typeof CURRENT | null; children?: ReactNode } = {}) {
+  const language = options.language ?? 'pt-BR';
+  return (
+    <Shell
+      preferences={{ theme: 'dark', language }}
+      username="Mestre_Ana"
+      current={options.current === undefined ? CURRENT : options.current}
+      sidebar={options.sidebar ?? 'open'}
+    >
+      {options.children ?? <h1>Página</h1>}
+    </Shell>
+  );
+}
+
+let cookieLines: string[] = [];
+
+beforeEach(() => {
+  pathname = '/questions';
+  cookieLines = [];
+  vi.spyOn(document, 'cookie', 'set').mockImplementation((line: string) => {
+    cookieLines.push(line);
+  });
+  atWidth(1440);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+const area = () => screen.getByTestId('sidebar').parentElement!;
+
+describe('the signed-in shell (Story 1.11)', () => {
+  it('lists the logo, the current campaign, the six entries in order and "Adicionar Arquivo" last', () => {
+    const { container } = render(shell());
+    const sidebar = screen.getByTestId('sidebar');
+    const nav = within(sidebar).getByRole('navigation', { name: ptBR.shell.navigation });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Consultas', 'Criação de Regras', 'Minhas Mesas', 'Sistemas', 'Personagens', 'Meus Arquivos']);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(SIDEBAR_ENTRIES.map((entry) => entry.href));
+    const add = within(sidebar).getByRole('link', { name: 'Adicionar Arquivo' });
+    expect(add.getAttribute('href')).toBe('/files/add');
+    expect(add.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(nav.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The logo and name come first, then the current campaign.
+    const logo = within(sidebar).getByRole('button', { name: 'GMshield' });
+    expect(logo.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(sidebar).getByText('First campaign')).toBeTruthy();
+    expect(within(sidebar).getByText(ptBR.shell.currentCampaign)).toBeTruthy();
+    expect(container.querySelectorAll('[style]')).toHaveLength(0);
+  });
+
+  it('marks the current entry, and only it', () => {
+    pathname = '/systems';
+    render(shell());
+    const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page');
+    expect(current.map((link) => link.textContent)).toEqual(['Sistemas']);
+  });
+
+  it('puts the sidebar, the context bar and the main column in that order, in the page and in Tab order', async () => {
+    const user = userEvent.setup();
+    render(shell({ children: <a href="/questions#start">início</a> }));
+    const sidebar = screen.getByTestId('sidebar');
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    const main = screen.getByRole('main');
+    expect(sidebar.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(context.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(context.textContent).toBe('Untitled system›First campaign');
+
+    // Tab from the top of the page until focus leaves the last control: every stop, by region.
+    const visited: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      await user.tab();
+      const focused = document.activeElement;
+      if (focused === null || focused === document.body) {
+        break;
+      }
+      visited.push(area().contains(focused) ? 'sidebar' : context.contains(focused) ? 'context' : main.contains(focused) ? 'main' : 'other');
+    }
+    const regions = visited.filter((place, index) => index === 0 || visited[index - 1] !== place);
+    expect(regions).toEqual(['sidebar', 'context', 'main']);
+    expect(visited.filter((place) => place === 'sidebar').length).toBeGreaterThanOrEqual(9);
+  });
+
+  it('at 1280px and more, Ctrl+B closes the sidebar to "Abrir menu" and the cookie remembers it; ⌘B opens it again', async () => {
+    const user = userEvent.setup();
+    render(shell());
+    expect(area().dataset.wide).toBe('open');
+
+    await user.keyboard('{Control>}b{/Control}');
+    expect(area().dataset.wide).toBe('closed');
+    expect(cookieLines).toEqual([COOKIE_CLOSED]);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir menu' }));
+
+    await user.keyboard('{Meta>}b{/Meta}');
+    expect(area().dataset.wide).toBe('open');
+    expect(cookieLines).toEqual([COOKIE_CLOSED, COOKIE_OPEN]);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar menu' }));
+    // Ctrl+Shift+B is another shortcut (none yet), not this one.
+    await user.keyboard('{Control>}{Shift>}b{/Shift}{/Control}');
+    expect(area().dataset.wide).toBe('open');
+  });
+
+  it('starts closed when the cookie says so, and the collapse control and the handle toggle it', async () => {
+    const user = userEvent.setup();
+    render(shell({ sidebar: 'closed' }));
+    expect(area().dataset.wide).toBe('closed');
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(area().dataset.wide).toBe('open');
+    expect(cookieLines).toEqual([COOKIE_OPEN]);
+    await user.click(screen.getByRole('button', { name: 'Fechar menu' }));
+    expect(area().dataset.wide).toBe('closed');
+  });
+
+  it('under 1280px it starts closed whatever the cookie, the handle opens it, and choosing an entry closes it', async () => {
+    const user = userEvent.setup();
+    atWidth(1000);
+    const view = render(shell({ sidebar: 'open' }));
+    expect(area().dataset.narrow).toBe('closed');
+
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(area().dataset.narrow).toBe('open');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar menu' }));
+    // The narrow state is never remembered.
+    expect(cookieLines).toEqual([]);
+
+    // A choice: the link closes the sheet, and the new page (another path) finds it closed.
+    await user.click(screen.getByRole('link', { name: 'Personagens' }));
+    pathname = '/characters';
+    view.rerender(shell({ sidebar: 'open' }));
+    expect(area().dataset.narrow).toBe('closed');
+
+    // Opened again, it also closes when the path changes some other way, and on Esc.
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(area().dataset.narrow).toBe('open');
+    pathname = '/files';
+    view.rerender(shell({ sidebar: 'open' }));
+    expect(area().dataset.narrow).toBe('closed');
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    await user.keyboard('{Escape}');
+    expect(area().dataset.narrow).toBe('closed');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir menu' }));
+  });
+
+  it('under 768px the sheet works the same way (CSS makes it full-screen)', async () => {
+    const user = userEvent.setup();
+    atWidth(600);
+    const view = render(shell({ sidebar: 'closed' }));
+    await user.keyboard('{Control>}b{/Control}');
+    expect(area().dataset.narrow).toBe('open');
+    expect(area().dataset.wide).toBe('closed');
+    await user.click(screen.getByRole('link', { name: 'Adicionar Arquivo' }));
+    pathname = '/files/add';
+    view.rerender(shell({ sidebar: 'closed' }));
+    expect(area().dataset.narrow).toBe('closed');
+    expect(cookieLines).toEqual([]);
+  });
+
+  it('names every icon-only control and landmark in both languages', () => {
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      render(shell({ language }));
+      for (const name of [messages.shell.openMenu, messages.shell.closeMenu]) {
+        const button = screen.getByRole('button', { name });
+        expect(button.getAttribute('aria-label')).toBe(name);
+        expect(button.textContent).toBe('');
+      }
+      expect(screen.getByRole('navigation', { name: messages.shell.navigation })).toBeTruthy();
+      expect(screen.getByRole('navigation', { name: messages.shell.context })).toBeTruthy();
+      for (const key of ['questions', 'rules', 'campaigns', 'systems', 'characters', 'files', 'addFile'] as const) {
+        expect(screen.getByRole('link', { name: messages.shell.entries[key] })).toBeTruthy();
+      }
+      cleanup();
+    }
+    expect(en.shell.openMenu).toBe('Open menu');
+    expect(ptBR.shell.openMenu).toBe('Abrir menu');
+  });
+
+  it('the logo menu holds the preferences and "Sair"; Esc closes it and gives focus back to the logo', async () => {
+    const user = userEvent.setup();
+    render(shell());
+    const logo = screen.getByRole('button', { name: 'GMshield' });
+    expect(logo.getAttribute('aria-expanded')).toBe('false');
+    const menu = document.getElementById(logo.getAttribute('aria-controls')!)!;
+    expect(menu.hidden).toBe(true);
+
+    await user.click(logo);
+    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    expect(menu.hidden).toBe(false);
+    const group = screen.getByRole('group', { name: ptBR.shell.menu });
+    expect(within(group).getByRole('button', { name: 'Sair' })).toBeTruthy();
+    expect(within(group).getByRole('radio', { name: ptBR.preferences.themes.dark })).toBeTruthy();
+    expect(within(group).getByText('Conectado como Mestre_Ana')).toBeTruthy();
+    // No Account or Administration entry yet.
+    expect(within(group).queryByRole('link')).toBeNull();
+
+    await user.click(within(group).getByRole('radio', { name: ptBR.preferences.themes.light }));
+    await user.keyboard('{Escape}');
+    expect(menu.hidden).toBe(true);
+    expect(document.activeElement).toBe(logo);
+    // Esc in the menu is the menu's: the sidebar stays as it was.
+    expect(area().dataset.wide).toBe('open');
+  });
+
+  it('the context bar reads "system › campaign", or says there is no campaign', () => {
+    render(shell({ language: 'en' }));
+    const context = screen.getByRole('navigation', { name: en.shell.context });
+    expect(within(context).getByRole('link', { name: 'Untitled system' }).getAttribute('href')).toBe('/systems');
+    expect(within(context).getByRole('link', { name: 'First campaign' }).getAttribute('href')).toBe('/campaigns');
+    cleanup();
+    render(shell({ current: null }));
+    expect(screen.getByRole('navigation', { name: ptBR.shell.context }).textContent).toBe(ptBR.shell.noCampaign);
+    expect(screen.getByTestId('sidebar').textContent).toContain(ptBR.shell.noCampaign);
+  });
+
+  it('renders the page in the main column, and a right panel only when there is one', () => {
+    render(shell({ children: <p>conteúdo</p> }));
+    expect(within(screen.getByRole('main')).getByText('conteúdo')).toBeTruthy();
+    expect(screen.queryByRole('complementary')).toBeNull();
+    cleanup();
+    render(
+      <Shell preferences={{ theme: 'light', language: 'en' }} username="u" current={CURRENT} sidebar="open" panel={<p>panel</p>}>
+        <p>x</p>
+      </Shell>,
+    );
+    expect(within(screen.getByRole('complementary')).getByText('panel')).toBeTruthy();
+    act(() => undefined);
+  });
+});

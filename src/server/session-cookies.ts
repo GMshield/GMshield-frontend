@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 /**
  * The sign-in cookies, all `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`:
@@ -130,6 +130,18 @@ export function endedPath(next: string): string {
 /** `/session/renew`, which renews the token and goes back to `next`. */
 export function renewPath(next: string): string {
   return `/session/renew?next=${encodeURIComponent(safeReturnPath(next))}`;
+}
+
+/**
+ * The path (and query) of the page being rendered, set on the request by the proxy (`src/proxy.ts`), which
+ * replaces any value a browser sent. A layout has no other way to know it, and needs it to come back to the
+ * same place after an ended or renewed session.
+ */
+export const PATH_HEADER = 'x-gmshield-path';
+
+/** The page being rendered, as a safe return path (`/` when unknown). */
+export async function currentPath(): Promise<string> {
+  return safeReturnPath((await headers()).get(PATH_HEADER));
 }
 
 export async function currentSessionToken(): Promise<string | null> {

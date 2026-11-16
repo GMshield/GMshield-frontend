@@ -27,7 +27,8 @@ import { homeWithNotice } from './notice';
  */
 
 /**
- * The username step: the backend creates the account and a session, and the visitor lands on `/`, or where
+ * The username step: the backend creates the account, its first system and campaign named in the interface's
+ * language, and a session, and the visitor lands on `/` (which leads on to the shell), or where
  * an ended session left off (`__Host-gmshield-return`, then cleared). A taken or invalid username, or
  * unticked terms, come back to the form; an attempt that is over goes back to the sign-in screen.
  */
@@ -40,7 +41,9 @@ export async function completeSignInAction(_previous: UsernameFormState, form: F
   const typed = form.get('username');
   const username = typeof typed === 'string' ? typed.trim().slice(0, 64) : '';
   const termsAccepted = form.get('terms') === 'accepted';
-  const result = await completeSignIn({ attemptToken, username, termsAccepted });
+  // The account's first system and campaign are named in the interface's language (Story 1.11).
+  const { language } = await currentPreferences();
+  const result = await completeSignIn({ attemptToken, username, termsAccepted, language });
   if (result.ok) {
     const cookie = sessionCookieFor(result.data);
     const destination = safeReturnPath(jar.get(RETURN_COOKIE)?.value);
@@ -54,7 +57,6 @@ export async function completeSignInAction(_previous: UsernameFormState, form: F
     jar.set(SIGN_IN_COOKIE, '', EXPIRED_COOKIE_OPTIONS);
     redirect(homeWithNotice('request.sign_in_expired'));
   }
-  const { language } = await currentPreferences();
   let field: UsernameFormState['field'] = null;
   if (code === 'request.terms_required') {
     field = 'terms';

@@ -267,6 +267,12 @@ describe('stylesheets', () => {
       ['components/Notice.module.css', '.link'],
       ['components/PreferencesForm.module.css', '.option'],
       ['app/page.module.css', '.link'],
+      // Story 1.11: the shell's controls.
+      ['components/Sidebar.module.css', '.entry'],
+      ['components/Sidebar.module.css', '.add'],
+      ['components/LogoMenu.module.css', '.trigger'],
+      ['components/ContextBar.module.css', '.link'],
+      ['components/ContextBar.module.css', '.bar'],
     ] as const) {
       const body = hitArea(rules(file), selector);
       expect(body, `${file} ${selector}`).toMatch(/min-height: var\(--space-touch-target\)/);
@@ -274,6 +280,10 @@ describe('stylesheets', () => {
     const dismiss = hitArea(rules('components/Notice.module.css'), '.dismiss');
     expect(dismiss).toMatch(/width: var\(--space-touch-target\)/);
     expect(dismiss).toMatch(/height: var\(--space-touch-target\)/);
+    // The sidebar's collapse control and handle (icon only): 44px both ways at least.
+    const iconControls = /^\.collapse,\n\.handle \{([^}]*)\}/m.exec(rules('components/Sidebar.module.css'))?.[1] ?? '';
+    expect(iconControls).toMatch(/width: var\(--space-touch-target\)/);
+    expect(iconControls).toMatch(/height: var\(--space-touch-target\)/);
     expect(PRIMITIVES.get('--space-touch-target')).toBe('44px');
   });
 });

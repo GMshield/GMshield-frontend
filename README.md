@@ -71,7 +71,9 @@ they sit in `src/`.
   redirect to Google). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
   `request.cross_origin` unless `Origin` is the site's own origin, or, without `Origin`,
   `Sec-Fetch-Site` is `same-origin`. Behind a proxy that ends TLS, `X-Forwarded-Proto` gives the
-  scheme of the site's origin. The proxy also renews the session token (below).
+  scheme of the site's origin. The proxy also renews the session token (below), and names the
+  requested path in the request header `x-gmshield-path` (replacing any value the browser sent),
+  which the signed-in layout reads to come back to the same page after a session ends.
 - **Health.** `GET /api/health` answers 200 `{"status":"UP"}` only when the backend's
   `/api/v1/version` is at least `MINIMUM_BACKEND_CONTRACT_VERSION` (`src/server/contract.ts`), and
   503 `{"status":"DOWN"}` otherwise or when the backend does not answer within 2 seconds.
@@ -144,6 +146,25 @@ they sit in `src/`.
     `/auth`, `/api` or `/session/renew` becomes `/`.
   - `/terms` and `/privacy` are short drafts in both languages, headed "Rascunho / Draft"; Epic 10
     replaces them.
+- **The signed-in shell (Story 1.11).** `/` shows the sign-in screen to a signed-out visitor and
+  sends a signed-in one to `/questions`. Every signed-in page lives in the route group
+  `src/app/(signed-in)`, whose layout loads the account (`GET /api/v1/me`) and its current campaign
+  (`src/server/library.ts`, `GET /api/v1/campaigns/current`) and handles `session.required` and
+  `session.renewal_required` as `/` does. The shell (`src/components/Shell.tsx`) is, in page and Tab
+  order, the sidebar, the context bar ("system › campaign"; the campaign only under 768px) and the
+  main column (centred, at most `--width-reading`), with a slot for one right panel.
+  - The sidebar (`Sidebar.tsx`, a client component; its texts come translated from the server): the
+    logo and name opening a disclosure menu with the preferences form and "Sair", the current
+    campaign, the entries Consultas `/questions`, Criação de Regras `/rules`, Minhas Mesas
+    `/campaigns`, Sistemas `/systems`, Personagens `/characters`, Meus Arquivos `/files`, and
+    "Adicionar Arquivo" `/files/add` at the bottom. Each entry's page says what will be there.
+  - From 1280px its collapse control or Ctrl+B / ⌘B closes it to the handle "Abrir menu" and the
+    logo mark; the state is kept in `__Host-gmshield-sidebar` (`open` | `closed`, a year, not
+    `HttpOnly`: the sidebar writes it, the server reads it so nothing flashes). Under 1280px it always
+    starts closed and opens over the main column, as a full-screen sheet under 768px, and closes
+    after a choice or on Esc. CSS decides the layout; the component keeps the two states.
+  - The sign-in's username step sends the interface's language, which names the new account's first
+    system and campaign.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`), else the generic `server` text; a code is never
@@ -216,6 +237,9 @@ Deploy order for public contract 1.2.0 (Story 1.10): first run GMshield-pipeline
 and `frontend.env`, then deploy the backend (it refuses to start without the credential, and refuses
 every `/api/v1` call of an older frontend), then the frontend (its health check fails against a 1.1.0
 backend).
+
+Deploy order for public contract 1.3.0 (Story 1.11): the backend first (its migration `V4__library.sql`
+adds the library tables), then the frontend (its health check fails against a 1.2.0 backend).
 
 ## Settings
 
