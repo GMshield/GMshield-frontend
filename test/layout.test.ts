@@ -253,7 +253,8 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     };
     await useBackend(routes);
 
-    answer({ state: 'processing', pages: { done: 0, total: 320 } });
+    const unsorted = { text: { done: 0, total: 0 }, image: { done: 0, total: 0 }, readDirectly: 0, readByOcr: 0, unreadable: 0 };
+    answer({ state: 'processing', pages: { done: 0, total: 320, ...unsorted } });
     expect(await page()).toContain('processando · 0 de 320 páginas');
     expect(await page('en')).toContain('processing · 0 of 320 pages');
 
@@ -278,6 +279,63 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     // A material that is not failed shows no reason.
     answer({ state: 'waiting', failure: 'ingestion.password_required' });
     expect(await page()).not.toContain('senha');
+  });
+
+  it('a processing or reviewed material names what is read and lists its pages by outcome (Story 1.17)', async () => {
+    const key = `GET /api/v1/materials/${MATERIAL_ID}`;
+    const routes: Record<string, { status: number; body: unknown }> = {};
+    const answer = (body: Record<string, unknown>) => {
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+    };
+    const page = async (language?: 'en') => {
+      if (language === undefined) {
+        delete cookieJar['__Host-gmshield-lang'];
+      } else {
+        cookieJar['__Host-gmshield-lang'] = language;
+      }
+      return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    };
+    const count = (html: string, name: string) => new RegExp(`data-count="${name}"><dt>[^<]*</dt><dd>(\\d+)</dd>`).exec(html)?.[1];
+    await useBackend(routes);
+
+    // A mixed book: its text pages being read, its scanned pages waiting for OCR.
+    answer({
+      state: 'processing',
+      pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0 },
+    });
+    let html = await page();
+    expect(html).toContain('lendo texto · 40 de 364 páginas');
+    expect(html).toContain('Lidas diretamente');
+    expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting')]).toEqual(['40', '0', '404']);
+    // No unreadable page yet: not listed.
+    expect(html).not.toContain('data-count="unreadable"');
+    html = await page('en');
+    expect(html).toContain('reading text · 40 of 364 pages');
+    expect(html).toContain('Read by OCR');
+
+    answer({
+      state: 'processing',
+      pages: { done: 376, total: 444, text: { done: 364, total: 364 }, image: { done: 12, total: 80 }, readDirectly: 364, readByOcr: 11, unreadable: 1 },
+    });
+    html = await page();
+    expect(html).toContain('lendo por OCR · 12 de 80 páginas');
+    expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting'), count(html, 'unreadable')]).toEqual(['364', '11', '68', '1']);
+    expect(html).toContain('Ilegíveis');
+
+    answer({
+      state: 'needs_review',
+      pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1 },
+    });
+    html = await page();
+    expect(html).toContain('precisa de revisão');
+    expect(html).not.toContain(' · ');
+    expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting'), count(html, 'unreadable')]).toEqual(['364', '79', '0', '1']);
+
+    // Waiting, ready or failed: no list.
+    for (const state of ['waiting', 'ready', 'failed']) {
+      answer({ state, pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 80, unreadable: 0 } });
+      expect(await page()).not.toContain('data-count=');
+    }
   });
 
   it('an unknown, malformed or other owner\'s material is the single not-found page', async () => {

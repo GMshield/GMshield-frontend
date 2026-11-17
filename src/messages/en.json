@@ -176,6 +176,18 @@
       "discarded": "discarded"
     },
     "pages": "{done} of {total} pages",
+    "phase": {
+      "text": "reading text",
+      "ocr": "reading by OCR"
+    },
+    "percent": "{percent}%",
+    "counts": {
+      "label": "Pages",
+      "readDirectly": "Read directly",
+      "readByOcr": "Read by OCR",
+      "waiting": "Waiting",
+      "unreadable": "Unreadable"
+    },
     "stateLabel": "State"
   },
   "upload": {

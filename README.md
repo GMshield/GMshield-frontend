@@ -315,6 +315,10 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
+Deploy order for public contract 1.7.0 (Story 1.17): the backend first (a material's `pages` gains the counts by
+layer, `text` and `image`, and by outcome, `readDirectly`, `readByOcr` and `unreadable`; no migration), then the
+frontend (its health check fails against a 1.6.0 backend, and its tray and material page read the new counts).
+
 ## Settings
 
 Read from the environment and checked when the server starts. A refused start writes one log line

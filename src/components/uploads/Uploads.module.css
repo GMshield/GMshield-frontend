@@ -86,6 +86,23 @@
   background-color: var(--color-text);
 }
 
+/* Pages while processing (Story 1.17): the same line, dashed, so the end of the upload never looks like it starting over. */
+.line[data-phase='processing'] {
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-text) 20%, transparent) 0 6px, transparent 6px 10px);
+}
+
+.line[data-phase='processing']::-webkit-progress-bar {
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-text) 20%, transparent) 0 6px, transparent 6px 10px);
+}
+
+.line[data-phase='processing']::-webkit-progress-value {
+  background: repeating-linear-gradient(90deg, var(--color-text) 0 6px, transparent 6px 10px);
+}
+
+.line[data-phase='processing']::-moz-progress-bar {
+  background: repeating-linear-gradient(90deg, var(--color-text) 0 6px, transparent 6px 10px);
+}
+
 .note {
   margin: 0;
   color: var(--color-text);

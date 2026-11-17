@@ -111,6 +111,17 @@ function fileOf(name: string, head: string | Uint8Array, size = 6000): File {
 }
 
 const pdf = (name = 'Livro do Jogador.pdf', size = 6000) => fileOf(name, '%PDF-1.7\n', size);
+/** A material's pages: `done` of `total`, with no layer sorted and no outcome unless `counts` gives them (Story 1.17). */
+const pagesOf = (done: number, total: number, counts: Partial<NonNullable<Material['pages']>> = {}): NonNullable<Material['pages']> => ({
+  done,
+  total,
+  text: { done: 0, total: 0 },
+  image: { done: 0, total: 0 },
+  readDirectly: 0,
+  readByOcr: 0,
+  unreadable: 0,
+  ...counts,
+});
 const polite = () => screen.getByTestId('uploads-polite').textContent ?? '';
 const urgent = () => screen.getByTestId('uploads-urgent').textContent ?? '';
 const dialog = () => screen.getByRole('dialog', { hidden: true }) as HTMLDialogElement;
@@ -250,8 +261,10 @@ describe('the guided upload (Story 1.14)', () => {
     // The tray shows it moving, then waiting once the server has verified it.
     const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
     expect(within(tray).getByText('Livro do Jogador.pdf')).toBeTruthy();
-    expect(within(tray).getByText('enviando')).toBeTruthy();
+    // Story 1.17: the pill names the upload with its own measure, on a solid line.
+    expect(tray.querySelector('[data-state="uploading"]')!.textContent).toBe('enviando · 50%');
     expect((within(tray).getByRole('progressbar') as HTMLProgressElement).value).toBe(3000);
+    expect(within(tray).getByRole('progressbar').getAttribute('data-phase')).toBe('upload');
     await act(async () => uploads[0]!.finish('0190a0b0-0000-7000-8000-000000000003'));
     expect(within(tray).getByText('aguardando')).toBeTruthy();
     expect(within(tray).getByRole('link', { name: 'Livro do Jogador.pdf' }).getAttribute('href')).toBe('/files/0190a0b0-0000-7000-8000-000000000003');
@@ -500,7 +513,7 @@ describe('the upload tray (Story 1.14)', () => {
       view({
         language,
         rows: [
-          { id: ID, name: 'Livro.pdf', state: 'processing', pages: { done: 0, total: 320 } },
+          { id: ID, name: 'Livro.pdf', state: 'processing', pages: pagesOf(0, 320) },
           { id: 'w', name: 'Espera.pdf', state: 'processing' },
         ],
       });
@@ -516,8 +529,8 @@ describe('the upload tray (Story 1.14)', () => {
     // Pages show only while processing: a failed or a reviewed material keeps a full line.
     view({
       rows: [
-        { id: ID, name: 'Livro.pdf', state: 'failed', pages: { done: 0, total: 320 } },
-        { id: 'r', name: 'Revisar.pdf', state: 'needs_review', pages: { done: 0, total: 320 } },
+        { id: ID, name: 'Livro.pdf', state: 'failed', pages: pagesOf(0, 320) },
+        { id: 'r', name: 'Revisar.pdf', state: 'needs_review', pages: pagesOf(0, 320) },
       ],
     });
     const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
@@ -525,7 +538,34 @@ describe('the upload tray (Story 1.14)', () => {
     expect(tray.querySelector('[data-state="needs_review"]')!.textContent).toBe('precisa de revisão');
     for (const line of tray.querySelectorAll('progress')) {
       expect([line.getAttribute('value'), line.getAttribute('max')]).toEqual(['1', '1']);
+      expect(line.getAttribute('data-phase')).toBeNull();
     }
+  });
+
+  it('a processing material names what is being read, text first, then OCR, on a dashed line (Story 1.17)', () => {
+    const reading = { text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40 };
+    const ocr = { text: { done: 364, total: 364 }, image: { done: 12, total: 80 }, readDirectly: 364, readByOcr: 12 };
+    const last = { text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1 };
+    const cases = [
+      ['pt-BR', pagesOf(40, 444, reading), 'lendo texto · 40 de 364 páginas', ['40', '364']],
+      ['en', pagesOf(40, 444, reading), 'reading text · 40 of 364 pages', ['40', '364']],
+      ['pt-BR', pagesOf(376, 444, ocr), 'lendo por OCR · 12 de 80 páginas', ['12', '80']],
+      ['en', pagesOf(376, 444, ocr), 'reading by OCR · 12 of 80 pages', ['12', '80']],
+      // Every page sorted and read, the chain not yet ended: the plain word and every page.
+      ['pt-BR', pagesOf(444, 444, last), 'processando · 444 de 444 páginas', ['444', '444']],
+    ] as const;
+    for (const [language, pages, words, measure] of cases) {
+      view({ language, rows: [{ id: ID, name: 'Livro.pdf', state: 'processing', pages }] });
+      const tray = screen.getByRole('region', { name: language === 'en' ? en.upload.tray.label : ptBR.upload.tray.label });
+      expect(tray.querySelector('[data-state="processing"]')!.textContent).toBe(words);
+      const line = tray.querySelector('progress')!;
+      expect([line.getAttribute('value'), line.getAttribute('max')]).toEqual(measure);
+      expect(line.getAttribute('data-phase')).toBe('processing');
+      cleanup();
+    }
+    expect(trayRows([{ id: ID, name: 'Livro.pdf', state: 'processing', pages: pagesOf(40, 444, reading) }], [], [], new Set(), null)).toEqual([
+      { kind: 'material', key: ID, materialId: ID, name: 'Livro.pdf', state: 'processing', sent: 40, total: 364, pages: pagesOf(40, 444, reading) },
+    ]);
   });
 
   it("a material's page refreshes itself every 5 s while its state moves and the tab is visible (Story 1.15)", () => {
