@@ -184,8 +184,7 @@
             "type" : "integer"
           },
           "reading" : {
-            "description" : "The layer of the pages being read now, by the step whose job is offered or running; null when none is, when those pages have no layer yet, or when their layers differ",
-            "enum" : [ "text", "image" ],
+            "description" : "The layer of the pages being read now, by the step whose job is offered or running: \"text\" or \"image\"; null when none is, when those pages have no layer yet, or when their layers differ",
             "example" : "text",
             "type" : [ "string", "null" ]
           },
