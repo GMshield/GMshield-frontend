@@ -16,7 +16,8 @@ import { sha256OfFile } from './file-hash';
  * - meanwhile the whole file's SHA-256 is computed slice by slice ({@link sha256OfFile}); once the last part is
  *   stored, `POST <upload>/completion` sends it, and the version moves to `waiting`.
  *
- * Story 1.14 puts the dialog and the tray on top of it. Nothing here reads the file other than in slices.
+ * Story 1.14 puts the dialog and the tray on top of it, and adds {@link UploadOptions.resumeUrl}: "Retomar" in the tray
+ * goes on with a known upload and never creates another one. Nothing here reads the file other than in slices.
  */
 export const UPLOADS_ENDPOINT = '/api/v1/uploads';
 /** The size of a part: under the tunnel's 100 MB request limit and the backend's 90 MiB. */
@@ -56,6 +57,14 @@ export type UploadOptions = {
   readonly retryDelays?: readonly number[];
   /** Further tus metadata (Story 1.14); `filename` is always the file's name. */
   readonly metadata?: Readonly<Record<string, string>>;
+  /**
+   * Resume only (Story 1.14): the address of an upload the server already has, such as `/api/v1/uploads/<id>`. The
+   * upload goes on from the server's offset; when the server no longer has it (404, 410), `done` rejects and no new
+   * upload is created.
+   */
+  readonly resumeUrl?: string;
+  /** Once the server has given the upload's address (created or resumed), absolute. */
+  readonly onUploadUrl?: (uploadUrl: string) => void;
   readonly onProgress?: (bytesSent: number, bytesTotal: number) => void;
   /** After each part the server has verified and stored. */
   readonly onPartStored?: (bytesStored: number, bytesTotal: number) => void;
@@ -90,11 +99,14 @@ export async function fingerprintOf(file: UploadFile, endpoint: string): Promise
   return `gmshield-upload-${Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** Forgets the stored URL of a verified upload; a failure only leaves an entry that a later run resumes and completes. */
-async function forget(storage: UrlStorage, fingerprint: string, uploadUrl: string): Promise<void> {
+/**
+ * Forgets every stored entry of an upload, whatever fingerprint it was kept under (a resume through `uploadUrl` keeps a
+ * second one). A failure only leaves an entry that a later run resumes and completes, or the tray offers to dismiss.
+ */
+async function forget(storage: UrlStorage, uploadUrl: string): Promise<void> {
   try {
-    for (const stored of await storage.findUploadsByFingerprint(fingerprint)) {
-      if (stored.uploadUrl === uploadUrl) {
+    for (const stored of await storage.findAllUploads()) {
+      if (stored.uploadUrl === uploadUrl && typeof stored.urlStorageKey === 'string') {
         await storage.removeUpload(stored.urlStorageKey);
       }
     }
@@ -102,6 +114,9 @@ async function forget(storage: UrlStorage, fingerprint: string, uploadUrl: strin
     // Nothing to do: the entry stays, and resuming it completes again (the backend answers the same).
   }
 }
+
+/** Statuses after which an upload is over for good: its stored entry can never be resumed (Story 1.14). */
+const TERMINAL_STATUSES = new Set([400, 404, 410, 413, 415, 422]);
 
 function isOnline(): boolean {
   const navigatorOnLine = (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine;
@@ -172,7 +187,9 @@ async function complete(stack: HttpStack, uploadUrl: string, sha256: string, ret
 
 /** Starts (or resumes) the upload of `file`. */
 export function startUpload(file: UploadFile, options: UploadOptions = {}): UploadHandle {
-  const endpoint = absoluteEndpoint(options.endpoint);
+  const resumeUrl = options.resumeUrl === undefined ? null : absoluteEndpoint(options.resumeUrl);
+  // Resuming, the endpoint is the upload's parent: the fingerprint is the one its first run kept the URL under.
+  const endpoint = resumeUrl === null ? absoluteEndpoint(options.endpoint) : resumeUrl.replace(/\/[^/]*$/, '');
   const retryDelays = options.retryDelays ?? RETRY_DELAYS;
   const stack = new ChecksumHttpStack(options.httpStack ?? new DefaultHttpStack({}));
   const storage = options.urlStorage ?? defaultOptions.urlStorage;
@@ -183,11 +200,22 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
 
   const done = new Promise<UploadResult>((resolve, reject) => {
     stop = reject;
+    // A refusal ends the upload for good: its stored entries go too. An abort, a network failure or a retried status
+    // keeps them, so the upload can still be resumed.
+    const end = (error: UploadError) => {
+      const url = upload?.url ?? resumeUrl;
+      if (error.status !== null && TERMINAL_STATUSES.has(error.status) && url !== null && url !== undefined) {
+        void forget(storage, url).then(() => reject(error));
+      } else {
+        reject(error);
+      }
+    };
     const hashing = sha256OfFile(file, options.hashSliceBytes);
     // A failed hash is reported once the upload asks for it, never as an unhandled rejection meanwhile.
     hashing.catch(() => undefined);
     const tus = new Upload(file, {
-      endpoint,
+      // Resume only: without an endpoint tus-js-client cannot fall back to creating a new upload.
+      ...(resumeUrl === null ? { endpoint } : { uploadUrl: resumeUrl }),
       chunkSize: options.partBytes ?? PART_BYTES,
       retryDelays: [...retryDelays],
       metadata: { ...options.metadata, filename: file.name },
@@ -200,8 +228,13 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
       ...(options.fileReader ? { fileReader: options.fileReader } : {}),
       urlStorage: storage,
       onProgress: options.onProgress ?? null,
+      onUploadUrlAvailable: () => {
+        if (tus.url !== null) {
+          options.onUploadUrl?.(tus.url);
+        }
+      },
       onChunkComplete: (_size, accepted, total) => options.onPartStored?.(accepted, total),
-      onError: (error) => reject(failure(error)),
+      onError: (error) => end(failure(error)),
       onSuccess: () => {
         const url = tus.url;
         if (url === null) {
@@ -211,12 +244,16 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
         hashing
           .then((sha256) => complete(stack, url, sha256, retryDelays))
           .then(async (result) => {
-            await forget(storage, await fingerprint, url);
+            await forget(storage, url);
             resolve(result);
-          }, (error: unknown) => reject(failure(error)));
+          }, (error: unknown) => end(failure(error)));
       },
     });
     upload = tus;
+    if (resumeUrl !== null) {
+      tus.start();
+      return;
+    }
     tus
       .findPreviousUploads()
       .then((previous) => {

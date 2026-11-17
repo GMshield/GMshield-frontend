@@ -82,6 +82,14 @@ describe('stand-in backend', () => {
     expect(head.headers.get('upload-length')).toMatch(/^\d+$/);
   });
 
+  it('answers the materials paths (Story 1.14) with an empty tray and a waiting material', () => {
+    expect(answer(contract, 'GET', '/api/v1/materials', 't')).toMatchObject({ status: 200, body: { items: [] } });
+    expect(answer(contract, 'GET', '/api/v1/materials/0190a0b0-0000-7000-8000-000000000003', 't')).toMatchObject({
+      status: 200,
+      body: { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'waiting' },
+    });
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

@@ -9,12 +9,18 @@ vi.mock('next/headers', () => ({
     set: () => undefined,
   }),
 }));
+// The shell's client parts ask for the router (the tray refreshes through it); outside Next.js there is none.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
+}));
 
 const { createElement } = await import('react');
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
 const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
-const { default: FilesAddPage } = await import('@/app/(signed-in)/files/add/page');
+const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
+const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
@@ -25,6 +31,9 @@ const CAMPAIGN = {
   status: 200,
   body: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system' } },
 };
+
+const MATERIALS = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50';
+const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -84,7 +93,7 @@ describe('the signed-in layout (Story 1.11)', () => {
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
-    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(['GET /api/v1/campaigns/current', 'GET /api/v1/me']);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(['GET /api/v1/campaigns/current', MATERIALS, 'GET /api/v1/me']);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
       expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
@@ -115,9 +124,9 @@ describe('the signed-in layout (Story 1.11)', () => {
   });
 
   it('a seal version that rose goes through /session/renew and comes back to the same page', async () => {
-    requestHeaders = { 'x-gmshield-path': '/files/add' };
+    requestHeaders = { 'x-gmshield-path': '/files' };
     await useBackend({ 'GET /api/v1/me': problem(401, 'session.renewal_required'), 'GET /api/v1/campaigns/current': CAMPAIGN });
-    expect(await redirectOf(() => layoutHtml())).toBe('/session/renew?next=%2Ffiles%2Fadd');
+    expect(await redirectOf(() => layoutHtml())).toBe('/session/renew?next=%2Ffiles');
   });
 
   it('any other failure of the account: the sign-in screen at /, which says what happened', async () => {
@@ -127,10 +136,10 @@ describe('the signed-in layout (Story 1.11)', () => {
 
   it('no campaign: the shell says so; a campaign that cannot be loaded: a notice in the main column', async () => {
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
-    let html = await layoutHtml(await FilesAddPage());
+    let html = await layoutHtml(await FilesPage());
     expect(html).toContain('Nenhuma campanha');
     expect(html).not.toContain('role="status"');
-    expect(html).toContain('Aqui você vai enviar um livro ou arquivo para a sua biblioteca.');
+    expect(html).toContain('Aqui você vai ver os arquivos que enviou e o estado de cada um.');
     await backend!.close();
 
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(503, 'server.unavailable') });
@@ -147,8 +156,7 @@ describe('the signed-in layout (Story 1.11)', () => {
       campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
       systems: SystemsPage,
       characters: (await import('@/app/(signed-in)/characters/page')).default,
-      files: (await import('@/app/(signed-in)/files/page')).default,
-      addFile: FilesAddPage,
+      files: FilesPage,
     } as const;
     const ptBR = (await import('@/messages/pt-BR.json')).default;
     const en = (await import('@/messages/en.json')).default;
@@ -163,5 +171,88 @@ describe('the signed-in layout (Story 1.11)', () => {
       }
     }
     expect(ptBR.placeholder.questions).toBe('Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.');
+  });
+});
+
+describe('the upload tray and the material page (Story 1.14)', () => {
+  const uploading = {
+    id: MATERIAL_ID,
+    name: 'Livro do Jogador.pdf',
+    state: 'uploading',
+    kind: 'rulebook',
+    upload: { id: '0190a0b0-0000-7000-8000-000000000005', offset: 1024, length: 4096, expiresAt: '2099-01-01T06:00:00Z' },
+  };
+
+  it('asks for the tray states with the session and shows each row with its pill and a link to its page', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: { status: 200, body: { items: [uploading, { id: '0190a0b0-0000-7000-8000-000000000006', name: 'Bestiário.pdf', state: 'needs_review' }] } },
+    });
+    const html = await layoutHtml();
+
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === MATERIALS)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toContain('aria-label="Arquivos em andamento"');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
+    expect(html).toContain('Livro do Jogador.pdf');
+    // No live upload in this tab: the row is interrupted, and offers Retomar.
+    expect(html).toContain('Envio interrompido.');
+    expect(html).toContain('Retomar');
+    expect(html).toContain('precisa de revisão');
+    expect(html).toContain('data-state="needs_review"');
+    // "Adicionar Arquivo" is a button now, with the tray just before it; the dialog is in the page, closed.
+    expect(html.indexOf('Arquivos em andamento')).toBeLessThan(html.indexOf('Adicionar Arquivo'));
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>.*Adicionar Arquivo<\/button>/);
+    expect(html).not.toContain('href="/files/add"');
+    expect(html).toContain('<dialog');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+
+  it('a tray that cannot be loaded shows no row and leaves the page as it is', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [MATERIALS]: problem(503, 'server.unavailable') });
+    const html = await layoutHtml();
+    expect(html).not.toContain('Arquivos em andamento');
+    expect(html).toContain('Adicionar Arquivo');
+    expect(html).not.toContain('role="status"');
+  });
+
+  it('an ended session met by the tray goes through /sign-in/ended', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [MATERIALS]: problem(401, 'session.required') });
+    expect(await redirectOf(() => layoutHtml())).toBe('/sign-in/ended?next=%2Fsystems');
+  });
+
+  it('the material page shows the name and the state pill, in both languages', async () => {
+    const server = await useBackend({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'waiting' } },
+    });
+    let html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('<h1');
+    expect(html).toContain('Livro do Jogador.pdf');
+    expect(html).toContain('aguardando');
+    expect(html).toContain('data-state="waiting"');
+    expect(server.calls[0]?.headers['x-session-token']).toBe(SESSION);
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('waiting');
+    expect(html).toContain('State');
+  });
+
+  it('an unknown, malformed or other owner\'s material is the single not-found page', async () => {
+    await useBackend({});
+    for (const id of [MATERIAL_ID, 'not-a-uuid', '../me']) {
+      const thrown = await MaterialPage({ params: Promise.resolve({ id }) }).then(
+        () => null,
+        (error: unknown) => String((error as { digest?: unknown }).digest ?? ''),
+      );
+      expect(thrown, id).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    }
+  });
+
+  it('another failure on the material page is a notice, never a code', async () => {
+    await useBackend({ [`GET /api/v1/materials/${MATERIAL_ID}`]: problem(503, 'server.unavailable') });
+    const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+    expect(html).not.toContain('server.unavailable');
   });
 });

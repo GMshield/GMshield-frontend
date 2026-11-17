@@ -41,7 +41,9 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/app/auth/google/callback/route.ts` | the Route Handler Google redirects to; it relays the redirect to the backend |
 | `src/app/session/renew/route.ts` | renews the session token when the backend asks for it (`session.renewal_required`) and goes back to the page |
 | `src/app/api/v1/uploads/[[...path]]/route.ts` | the upload relay (Story 1.13): `/api/v1/uploads/**` streamed to the backend (`src/server/backend/upload-relay.ts`) |
-| `src/client/upload` | the browser's upload module (Story 1.13): tus-js-client with a checksum per part, the whole-file hash and the completion |
+| `src/client/upload` | the browser's upload module (Story 1.13): tus-js-client with a checksum per part, the whole-file hash and the completion; `sniff.ts`, the browser's format check (Story 1.14) |
+| `src/components/uploads` | the guided upload and the upload tray (Story 1.14): `UploadsProvider`, `UploadDialog`, `UploadTray`, their texts built on the server (`upload-texts.ts`) |
+| `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
@@ -70,7 +72,8 @@ they sit in `src/`.
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, a `Permissions-Policy` that
   turns off camera, microphone and geolocation, and a Content-Security-Policy that
   allows the site's own origin only, with a new nonce per request for the inline scripts and
-  styles of Next.js (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`,
+  styles of Next.js and `'wasm-unsafe-eval'` on scripts, which allows compiling WebAssembly (the upload's
+  whole-file hash, hash-wasm) and no JavaScript eval (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`,
   `form-action 'self' https://accounts.google.com`: the sign-in form's post is answered with a
   redirect to Google). POST, PUT, PATCH and DELETE are refused with the 403 problem detail
   `request.cross_origin` unless `Origin` is the site's own origin, or, without `Origin`,
@@ -163,7 +166,8 @@ they sit in `src/`.
     logo and name opening a disclosure menu with the preferences form and "Sair", the current
     campaign, the entries Consultas `/questions`, Criação de Regras `/rules`, Minhas Mesas
     `/campaigns`, Sistemas `/systems`, Personagens `/characters`, Meus Arquivos `/files`, and
-    "Adicionar Arquivo" `/files/add` at the bottom. Each entry's page says what will be there.
+    "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page says
+    what will be there.
   - From 1280px its collapse control or Ctrl+B / ⌘B closes it to the handle "Abrir menu" and the
     logo mark; the state is kept in `__Host-gmshield-sidebar` (`open` | `closed`, a year, not
     `HttpOnly`: the sidebar writes it, the server reads it so nothing flashes). Under 1280px it always
@@ -196,6 +200,37 @@ they sit in `src/`.
     the hash to `<upload>/completion` (tried again after a 5xx or 423) and resolves with `{materialId, versionId, state}`. A failure is
     an `UploadError` with the status and the problem detail, for `errorText`. Story 1.14 adds the
     dialog and the tray.
+- **The guided upload and the upload tray (Story 1.14).** Public contract 1.5.0.
+  - "Adicionar Arquivo" opens `UploadDialog`: a 560px native `<dialog>` (`--width-upload-dialog`) built like
+    `ConfirmationDialog` (`showModal()`, Tab kept inside, Esc closes and is marked handled, focus back to
+    "Adicionar Arquivo", or to the handle when the sidebar is closed). Under 1280px it closes the sidebar
+    sheet first; it never opens another dialog. "Passo N de 4": the files, what they are (`kind`), where
+    they belong (the current campaign, or its system; nothing without a campaign), their language
+    (`pt-BR`, `en`, `detect`); then the progress. Each choice is a full-width radio row with its
+    explanation. Each file becomes its own material with the same answers, sent one after another as tus
+    metadata (`kind`, `language`, `campaign` or `system`).
+  - A chosen file is checked in the browser at once (`src/client/upload/sniff.ts`): the backend
+    `FormatSniffer`'s rules over the first 4 KiB, and the 2 GiB limit. A refused file is named with its
+    reason and the accepted formats, announced at once, and never sent; the server's 415 still counts
+    and shows in the progress step.
+  - `UploadsProvider` (in the shell, so uploads go on while the GM moves inside the app; a reload loses
+    them) runs the uploads and announces through two live regions: each state change and every 10 %
+    politely, a refusal at once.
+  - `UploadTray`, just above "Adicionar Arquivo": the signed-in layout reads `GET
+    /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50`
+    (`src/server/materials.ts`) and the tray merges those rows with this tab's live uploads. Each row: the
+    name, a link to `/files/{id}` once there is one, a state pill (enviando, aguardando, processando,
+    precisa de revisão, pronto, falhou; the colour in a mark beside the word) and a 2px `<progress>` of
+    bytes. A row `uploading` with no live upload here reads "Envio interrompido." with its expiry and
+    "Retomar", which asks for the same file (another name or size is refused in the row) and resumes
+    `/api/v1/uploads/{id}` with `startUpload(file, {resumeUrl})`, which never creates an upload. Past
+    `expiresAt`, or for a stored resume entry older than 6 h with no server row, the row says the
+    unfinished upload is gone and "Dispensar" clears it.
+  - While a row is uploading, waiting or processing and the tab is visible, the tray calls
+    `router.refresh()` every 5 s: an RSC fetch, which the proxy never renews a session on, so a forgotten
+    tab still reaches the idle end.
+  - `/files/[id]`: the material's name and its state pill (`GET /api/v1/materials/{id}`); anything not
+    found is the single "Não encontrado." page.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`), else the generic `server` text; a code is never
@@ -275,6 +310,10 @@ adds the library tables), then the frontend (its health check fails against a 1.
 Deploy order for public contract 1.4.0 (Story 1.13): the backend first (its migration `V6__materials.sql`
 adds the materials tables, and it answers the upload routes), then the frontend (its health check fails
 against a 1.3.0 backend).
+
+Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
+adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
+health check fails against a 1.4.0 backend).
 
 ## Settings
 

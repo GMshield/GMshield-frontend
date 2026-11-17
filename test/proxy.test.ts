@@ -61,7 +61,12 @@ describe('proxy', () => {
     for (const name of fetchDirectives) {
       const values = map.get(name);
       expect(values, name).toBeDefined();
-      const expected = name === 'script-src' || name === 'style-src' ? ["'self'", "'nonce-abc123=='"] : ["'self'"];
+      const expected =
+        name === 'script-src'
+          ? ["'self'", "'nonce-abc123=='", "'wasm-unsafe-eval'"]
+          : name === 'style-src'
+            ? ["'self'", "'nonce-abc123=='"]
+            : ["'self'"];
       expect(values, name).toEqual(expected);
     }
     expect(map.get('object-src')).toEqual(["'none'"]);
@@ -153,7 +158,9 @@ describe('proxy', () => {
 
   it('adds unsafe-eval in development only', () => {
     expect(contentSecurityPolicy('n', true)).toContain("'unsafe-eval'");
-    expect(contentSecurityPolicy('n', false)).not.toContain('unsafe');
+    expect(contentSecurityPolicy('n', false)).not.toContain("'unsafe-eval'");
+    // WebAssembly only (the upload's whole-file hash, Story 1.14): never JavaScript eval.
+    expect(contentSecurityPolicy('n', false)).toContain("'wasm-unsafe-eval'");
   });
 
   it('runs on everything except Next.js static files and the upload relay (Story 1.13)', () => {

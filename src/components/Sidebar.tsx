@@ -11,6 +11,9 @@ import { LogoMark } from './Logo';
 import { LogoMenu } from './LogoMenu';
 import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
 import styles from './Sidebar.module.css';
+import type { Material } from './uploads/types';
+import { UploadDialog } from './uploads/UploadDialog';
+import { UploadTray } from './uploads/UploadTray';
 
 /** At this width and above the sidebar sits beside the main column, and its state is remembered. */
 export const WIDE_QUERY = '(min-width: 1280px)';
@@ -34,6 +37,8 @@ export type SidebarProps = {
   readonly initialState: SidebarState;
   /** The logo menu's content. */
   readonly menu: ReactNode;
+  /** The tray's rows from the server (Story 1.14), merged in the tray with this tab's live uploads. */
+  readonly trayRows?: readonly Material[];
 };
 
 function isWide(): boolean {
@@ -47,7 +52,7 @@ function isWide(): boolean {
  * sheet (under 768px), and it closes again after an entry is chosen. Which layout applies is CSS's decision;
  * this component only keeps the two states.
  */
-export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) {
+export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }: SidebarProps) {
   const pathname = usePathname();
   const [wideState, setWideState] = useState<SidebarState>(initialState);
   // Under 1280px: the path the sidebar was opened on. Navigating elsewhere closes it, with no effect to run.
@@ -56,6 +61,9 @@ export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) 
   const handle = useRef<HTMLButtonElement>(null);
   const collapse = useRef<HTMLButtonElement>(null);
   const focusNext = useRef<'handle' | 'collapse' | null>(null);
+  const addFile = useRef<HTMLButtonElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const focusAfterDialog = useRef(false);
 
   const toggle = useCallback(() => {
     if (isWide()) {
@@ -105,6 +113,17 @@ export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) 
     return () => wide.removeEventListener('change', onChange);
   }, []);
 
+  // The dialog closed: focus goes back to "Adicionar Arquivo", or to the handle when the sidebar is closed and hides it.
+  useEffect(() => {
+    if (uploading || !focusAfterDialog.current) {
+      return;
+    }
+    focusAfterDialog.current = false;
+    const add = addFile.current;
+    const shown = add !== null && add.isConnected && (typeof add.checkVisibility !== 'function' || add.checkVisibility());
+    (shown ? add : handle.current)?.focus();
+  }, [uploading]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'b') {
@@ -119,14 +138,13 @@ export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) 
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [toggle, narrowOpen]);
 
-  const entry = (key: EntryKey, href: string, className: string, icon?: ReactNode) => (
+  const entry = (key: EntryKey, href: string, className: string) => (
     <Link
       href={href}
       className={className}
       aria-current={pathname === href ? 'page' : undefined}
       onClick={() => setOpenedOn(null)}
     >
-      {icon}
       {labels.entries[key]}
     </Link>
   );
@@ -161,8 +179,29 @@ export function Sidebar({ labels, campaign, initialState, menu }: SidebarProps) 
             ))}
           </ul>
         </nav>
-        {entry(ADD_FILE.key, ADD_FILE.href, styles.add ?? '', <UploadIcon />)}
+        <UploadTray rows={trayRows} />
+        <button
+          ref={addFile}
+          type="button"
+          className={styles.add}
+          aria-haspopup="dialog"
+          onClick={() => {
+            // Under 1280px the sheet closes first: the dialog never stacks on it.
+            setOpenedOn(null);
+            setUploading(true);
+          }}
+        >
+          <UploadIcon />
+          {labels.entries[ADD_FILE.key]}
+        </button>
       </div>
+      <UploadDialog
+        open={uploading}
+        onClose={() => {
+          focusAfterDialog.current = true;
+          setUploading(false);
+        }}
+      />
       <LogoMark className={styles.mark} />
       <button
         ref={handle}

@@ -166,9 +166,24 @@ describe('page (GET /)', () => {
         : [prefix];
     expect(keys(en).sort()).toEqual(keys(ptBR).sort());
     // Story 1.11: the shell's and the placeholders' strings exist in both languages.
-    expect(keys(ptBR)).toEqual(expect.arrayContaining(['shell.openMenu.', 'shell.closeMenu.', 'placeholder.addFile.']));
+    expect(keys(ptBR)).toEqual(expect.arrayContaining(['shell.openMenu.', 'shell.closeMenu.', 'placeholder.files.']));
+    // Story 1.14: the dialog's, the tray's and the states' strings exist in both languages.
+    expect(keys(ptBR)).toEqual(
+      expect.arrayContaining(['upload.dialog.step.', 'upload.tray.interrupted.', 'upload.tray.resume.', 'material.state.needs_review.']),
+    );
+    expect(ptBR.material.state).toMatchObject({
+      uploading: 'enviando',
+      waiting: 'aguardando',
+      processing: 'processando',
+      needs_review: 'precisa de revisão',
+      ready: 'pronto',
+      failed: 'falhou',
+    });
+    expect(ptBR.upload.tray.interrupted).toBe('Envio interrompido.');
+    expect(ptBR.upload.tray.resume).toBe('Retomar');
     for (const messages of [ptBR, en]) {
-      expect(JSON.stringify(messages.shell) + JSON.stringify(messages.placeholder)).not.toMatch(/!|\p{Extended_Pictographic}/u);
+      const shown = JSON.stringify(messages.shell) + JSON.stringify(messages.placeholder) + JSON.stringify(messages.upload) + JSON.stringify(messages.material);
+      expect(shown).not.toMatch(/!|\p{Extended_Pictographic}/u);
     }
     expect(messagesFor('en')).toBe(en);
     expect(languageFor(undefined)).toBe('pt-BR');
