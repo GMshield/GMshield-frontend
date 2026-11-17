@@ -106,7 +106,7 @@
   background-color: var(--color-surface-active);
 }
 
-/* "Adicionar Arquivo": a grey control pill with an upload icon. */
+/* "Adicionar Arquivo": a grey control pill with an upload icon, which opens the guided upload (Story 1.14). */
 .add {
   display: inline-flex;
   align-items: center;
@@ -120,15 +120,12 @@
   border-radius: var(--radius-full);
   background-color: var(--color-control);
   color: var(--color-text);
+  font-family: inherit;
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
   text-decoration: none;
-}
-
-.add[aria-current='page'] {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  cursor: pointer;
 }
 
 /* Closed: the logo mark at the top left and the handle at mid-height on the left edge. */

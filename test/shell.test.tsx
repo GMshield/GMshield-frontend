@@ -4,8 +4,10 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/questions';
+const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
+  useRouter: () => ({ refresh }),
   redirect: (url: string) => {
     throw new Error(`redirect ${url}`);
   },
@@ -95,8 +97,10 @@ describe('the signed-in shell (Story 1.11)', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((link) => link.textContent)).toEqual(['Consultas', 'Criação de Regras', 'Minhas Mesas', 'Sistemas', 'Personagens', 'Meus Arquivos']);
     expect(links.map((link) => link.getAttribute('href'))).toEqual(SIDEBAR_ENTRIES.map((entry) => entry.href));
-    const add = within(sidebar).getByRole('link', { name: 'Adicionar Arquivo' });
-    expect(add.getAttribute('href')).toBe('/files/add');
+    // Story 1.14: "Adicionar Arquivo" opens the guided upload; it is no longer a page.
+    expect(within(sidebar).queryByRole('link', { name: 'Adicionar Arquivo' })).toBeNull();
+    const add = within(sidebar).getByRole('button', { name: 'Adicionar Arquivo' });
+    expect(add.getAttribute('aria-haspopup')).toBe('dialog');
     expect(add.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(nav.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The logo and name come first, then the current campaign.
@@ -247,8 +251,8 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(area().dataset.narrow).toBe('open');
     expect(area().dataset.wide).toBe('closed');
     expect(screen.getByRole('main', { hidden: true }).parentElement!.hasAttribute('inert')).toBe(true);
-    await user.click(screen.getByRole('link', { name: 'Adicionar Arquivo' }));
-    pathname = '/files/add';
+    await user.click(screen.getByRole('link', { name: 'Meus Arquivos' }));
+    pathname = '/files';
     view.rerender(shell({ sidebar: 'closed' }));
     expect(area().dataset.narrow).toBe('closed');
     expect(screen.getByRole('main').parentElement!.hasAttribute('inert')).toBe(false);
@@ -265,9 +269,10 @@ describe('the signed-in shell (Story 1.11)', () => {
       }
       expect(screen.getByRole('navigation', { name: messages.shell.navigation })).toBeTruthy();
       expect(screen.getByRole('navigation', { name: messages.shell.context })).toBeTruthy();
-      for (const key of ['questions', 'rules', 'campaigns', 'systems', 'characters', 'files', 'addFile'] as const) {
+      for (const key of ['questions', 'rules', 'campaigns', 'systems', 'characters', 'files'] as const) {
         expect(screen.getByRole('link', { name: messages.shell.entries[key] })).toBeTruthy();
       }
+      expect(screen.getByRole('button', { name: messages.shell.entries.addFile })).toBeTruthy();
       cleanup();
     }
     expect(en.shell.openMenu).toBe('Open menu');

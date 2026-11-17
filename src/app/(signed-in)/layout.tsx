@@ -7,6 +7,7 @@ import { errorText, problemFields } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
 import { currentCampaign } from '@/server/library';
+import { listMaterials, TRAY_STATES } from '@/server/materials';
 import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server/session-cookies';
 
 /**
@@ -14,6 +15,10 @@ import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server
  * the sign-in screen at `/`. An ended session goes through `/sign-in/ended` and a seal version that rose through
  * `/session/renew`, both coming back to this page, as `/` does. Any other failure of the account shows on the
  * sign-in screen; a current campaign that cannot be loaded shows a notice in the main column.
+ *
+ * Story 1.14: the upload tray's rows are read here too, so that `router.refresh()` brings fresh ones; when they cannot
+ * be loaded the tray shows this tab's uploads only. The current campaign and its system go to the guided upload with
+ * their ids.
  */
 export default async function SignedInLayout({ children }: { readonly children: ReactNode }) {
   const token = await currentSessionToken();
@@ -21,8 +26,12 @@ export default async function SignedInLayout({ children }: { readonly children: 
     redirect('/');
   }
   const [preferences, sidebar, here] = await Promise.all([currentPreferences(), currentSidebar(), currentPath()]);
-  const [account, campaign] = await Promise.all([currentAccount(token), currentCampaign(token)]);
-  for (const result of [account, campaign]) {
+  const [account, campaign, materials] = await Promise.all([
+    currentAccount(token),
+    currentCampaign(token),
+    listMaterials(token, TRAY_STATES, { limit: 50 }),
+  ]);
+  for (const result of [account, campaign, materials]) {
     if (result.ok) {
       continue;
     }
@@ -43,8 +52,19 @@ export default async function SignedInLayout({ children }: { readonly children: 
     notice = <Notice status="danger" language={preferences.language} message={errorText(campaign.problem, preferences.language)} />;
   }
   const current = campaign.ok ? { system: campaign.data.system.name, campaign: campaign.data.name } : null;
+  const belonging = campaign.ok
+    ? { campaign: { id: campaign.data.id, name: campaign.data.name }, system: { id: campaign.data.system.id, name: campaign.data.system.name } }
+    : null;
   return (
-    <Shell preferences={preferences} username={account.data.username} current={current} sidebar={sidebar} notice={notice}>
+    <Shell
+      preferences={preferences}
+      username={account.data.username}
+      current={current}
+      sidebar={sidebar}
+      notice={notice}
+      belonging={belonging}
+      trayRows={materials.ok ? materials.data.items : []}
+    >
       {children}
     </Shell>
   );

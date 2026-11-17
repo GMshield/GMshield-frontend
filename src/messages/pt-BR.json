@@ -34,8 +34,7 @@
     "campaigns": "Aqui você vai ver e organizar suas campanhas.",
     "systems": "Aqui você vai ver e organizar seus sistemas de jogo.",
     "characters": "Aqui você vai guardar os personagens das suas campanhas.",
-    "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um.",
-    "addFile": "Aqui você vai enviar um livro ou arquivo para a sua biblioteca."
+    "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um."
   },
   "notFound": {
     "title": "Não encontrado.",
@@ -117,7 +116,7 @@
         "incomplete": "O arquivo ainda não foi enviado por inteiro.",
         "file_checksum_mismatch": "O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.",
         "expired": "Este envio ficou 6 horas sem terminar e expirou. Envie o arquivo de novo.",
-        "metadata_invalid": "O arquivo precisa de um nome de 1 a 255 caracteres."
+        "metadata_invalid": "O nome do arquivo ou as respostas dadas sobre ele não são válidos. O nome precisa ter de 1 a 255 caracteres."
       }
     }
   },
@@ -157,6 +156,118 @@
       "p4": "Seus materiais e anotações são guardados criptografados, e só você os vê.",
       "p5": "Tema, idioma e sessão ficam em cookies do seu navegador que só o servidor lê. Não há cookies de publicidade nem de rastreamento.",
       "p6": "Este rascunho ainda não descreve por quanto tempo os dados são guardados, como apagar a conta, como entrar em contato nem os seus direitos pela LGPD. A versão revisada descreverá."
+    }
+  },
+  "material": {
+    "state": {
+      "uploading": "enviando",
+      "waiting": "aguardando",
+      "processing": "processando",
+      "needs_review": "precisa de revisão",
+      "ready": "pronto",
+      "failed": "falhou",
+      "superseded": "substituído",
+      "discarded": "descartado"
+    },
+    "stateLabel": "Estado"
+  },
+  "upload": {
+    "dialog": {
+      "title": "Adicionar arquivos",
+      "step": "Passo {step} de {total}",
+      "close": "Fechar",
+      "back": "Voltar",
+      "next": "Próximo",
+      "send": "Enviar",
+      "files": {
+        "question": "Quais arquivos você quer adicionar?",
+        "lead": "Cada arquivo vira um material próprio. PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC, até 2 GB cada.",
+        "choose": "Escolher arquivos",
+        "checking": "Verificando {name}.",
+        "none": "Nenhum arquivo escolhido ainda.",
+        "accepted": "Pronto para enviar",
+        "refusedWord": "Não enviado:",
+        "remove": "Remover {name}",
+        "removeShort": "Remover",
+        "refused": {
+          "empty": "{name} está vazio, então não será enviado.",
+          "too_large": "{name} tem mais de 2 GB, o máximo que o GMshield aceita, então não será enviado.",
+          "format": "{name} está num formato que o GMshield não aceita, então não será enviado. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC."
+        }
+      },
+      "kind": {
+        "question": "O que é?",
+        "rulebook": {
+          "label": "Livro de regras",
+          "description": "As regras centrais de um sistema de jogo, como o livro do jogador ou do mestre."
+        },
+        "supplement": {
+          "label": "Suplemento",
+          "description": "Mais regras e conteúdo para um sistema: monstros, classes, cenários ou aventuras prontas."
+        },
+        "homebrew": {
+          "label": "Material caseiro",
+          "description": "Regras e conteúdo que você ou a sua mesa criaram."
+        },
+        "campaign_notes": {
+          "label": "Notas de campanha",
+          "description": "O que aconteceu e o que foi decidido nas suas sessões."
+        },
+        "other": {
+          "label": "Outra coisa",
+          "description": "Qualquer outro texto em que você queira consultar algo."
+        }
+      },
+      "belonging": {
+        "question": "Onde ele fica?",
+        "campaign": {
+          "label": "Só em {campaign}",
+          "description": "As respostas desta campanha usam o arquivo; as outras campanhas não."
+        },
+        "system": {
+          "label": "Em todas as campanhas de {system}",
+          "description": "As respostas de qualquer campanha deste sistema usam o arquivo."
+        },
+        "none": {
+          "label": "Em nenhum lugar por enquanto",
+          "description": "Você ainda não tem campanha, então o arquivo fica guardado sem uma."
+        }
+      },
+      "language": {
+        "question": "Em que idioma ele está?",
+        "pt-BR": {
+          "label": "Português",
+          "description": "O texto está em português."
+        },
+        "en": {
+          "label": "Inglês",
+          "description": "O texto está em inglês."
+        },
+        "detect": {
+          "label": "Descobrir para mim",
+          "description": "O GMshield descobre o idioma quando lê o arquivo."
+        }
+      },
+      "progress": {
+        "title": "Enviando",
+        "lead": "Você pode fechar esta janela: os arquivos continuam indo, e a lista acima de \"Adicionar Arquivo\" mostra cada um."
+      }
+    },
+    "tray": {
+      "label": "Arquivos em andamento",
+      "sent": "{percent}% enviado",
+      "interrupted": "Envio interrompido.",
+      "expires": "Dá para retomar até {time}.",
+      "resume": "Retomar",
+      "resumeName": "Retomar {name}",
+      "wrongFile": "Este não é o mesmo arquivo. Escolha {name}, de {size}.",
+      "gone": "O envio inacabado deste arquivo expirou depois de 6 horas e foi descartado. Envie de novo.",
+      "dismiss": "Dispensar",
+      "dismissName": "Dispensar {name}",
+      "announce": {
+        "state": "{name}: {state}.",
+        "percent": "{name}: {percent}% enviado."
+      }
     }
   }
 }

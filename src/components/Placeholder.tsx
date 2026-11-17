@@ -2,10 +2,10 @@ import { translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
 
 import styles from './Placeholder.module.css';
-import type { EntryKey } from './shell-entries';
+import type { PageEntryKey } from './shell-entries';
 
 /** The page of an entry built in a later story: its name, and one sentence saying what will be there. */
-export function Placeholder({ entry, language }: { readonly entry: EntryKey; readonly language: Language }) {
+export function Placeholder({ entry, language }: { readonly entry: PageEntryKey; readonly language: Language }) {
   const t = translator(language);
   return (
     <>
@@ -16,7 +16,7 @@ export function Placeholder({ entry, language }: { readonly entry: EntryKey; rea
 }
 
 /** An entry page built in a later story, in the interface's language. */
-export async function placeholderPage(entry: EntryKey) {
+export async function placeholderPage(entry: PageEntryKey) {
   const { language } = await currentPreferences();
   return <Placeholder entry={entry} language={language} />;
 }

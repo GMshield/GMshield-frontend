@@ -1,5 +1,6 @@
 /**
- * The sidebar's entries in their order, each with its page, and "Adicionar Arquivo" at the bottom. In a module
+ * The sidebar's entries in their order, each with its page, and "Adicionar Arquivo" at the bottom, which opens the
+ * guided upload rather than a page (Story 1.14). In a module
  * of its own: the server (the shell, the pages) and the client sidebar both read it, and a value exported from
  * a client module would reach the server only as a reference.
  */
@@ -12,9 +13,12 @@ export const SIDEBAR_ENTRIES = [
   { key: 'files', href: '/files' },
 ] as const;
 
-export const ADD_FILE = { key: 'addFile', href: '/files/add' } as const;
+export const ADD_FILE = { key: 'addFile' } as const;
 
-export type EntryKey = (typeof SIDEBAR_ENTRIES)[number]['key'] | typeof ADD_FILE.key;
+/** An entry with a page of its own. */
+export type PageEntryKey = (typeof SIDEBAR_ENTRIES)[number]['key'];
+
+export type EntryKey = PageEntryKey | typeof ADD_FILE.key;
 
 /**
  * Marks the shell's parts behind the sidebar (the context bar and main column, a right panel): the sidebar makes

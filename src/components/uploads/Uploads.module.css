@@ -1,0 +1,267 @@
+/* The guided upload and the upload tray (Story 1.14). No style attribute: the CSP blocks them. */
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- the tray, above "Adicionar Arquivo" --- */
+
+.tray {
+  margin: 0;
+  padding: 0;
+}
+
+.trayLabel {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  text-align: center;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--space-touch-target);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The 2px line: bytes while uploading, in the text colour on a faint track. */
+.line {
+  display: block;
+  width: 100%;
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+  background-color: color-mix(in srgb, var(--color-text) 20%, transparent);
+  color: var(--color-text);
+  appearance: none;
+}
+
+.line::-webkit-progress-bar {
+  background-color: color-mix(in srgb, var(--color-text) 20%, transparent);
+}
+
+.line::-webkit-progress-value {
+  background-color: var(--color-text);
+}
+
+.line::-moz-progress-bar {
+  background-color: var(--color-text);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-meta-size);
+  font-weight: 400;
+  line-height: var(--font-meta-line-height);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --- the dialog --- */
+
+.dialog {
+  width: min(var(--width-upload-dialog), calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: var(--space-6);
+  overflow-y: auto;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  backdrop-filter: var(--glass-blur);
+}
+
+.dialog::backdrop {
+  background-color: var(--color-dim);
+}
+
+.dialogHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
+}
+
+.step {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.question {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+/* Each choice: a full-width row with its explanation, a hairline between rows. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choices > li + li {
+  border-top: 1px solid var(--color-rule);
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--space-touch-target);
+  padding: var(--space-3) var(--space-2);
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  background-color: var(--color-surface-active);
+}
+
+.choice input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--color-text);
+}
+
+.choiceText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.choiceLabel {
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.choiceDescription {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: 400;
+  line-height: var(--font-body-line-height);
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.refused {
+  margin: 0;
+  font-size: var(--font-label-size);
+  line-height: var(--font-body-line-height);
+}
+
+.refusedWord {
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}

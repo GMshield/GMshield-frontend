@@ -16,7 +16,8 @@ import { sha256OfFile } from './file-hash';
  * - meanwhile the whole file's SHA-256 is computed slice by slice ({@link sha256OfFile}); once the last part is
  *   stored, `POST <upload>/completion` sends it, and the version moves to `waiting`.
  *
- * Story 1.14 puts the dialog and the tray on top of it. Nothing here reads the file other than in slices.
+ * Story 1.14 puts the dialog and the tray on top of it, and adds {@link UploadOptions.resumeUrl}: "Retomar" in the tray
+ * goes on with a known upload and never creates another one. Nothing here reads the file other than in slices.
  */
 export const UPLOADS_ENDPOINT = '/api/v1/uploads';
 /** The size of a part: under the tunnel's 100 MB request limit and the backend's 90 MiB. */
@@ -56,6 +57,14 @@ export type UploadOptions = {
   readonly retryDelays?: readonly number[];
   /** Further tus metadata (Story 1.14); `filename` is always the file's name. */
   readonly metadata?: Readonly<Record<string, string>>;
+  /**
+   * Resume only (Story 1.14): the address of an upload the server already has, such as `/api/v1/uploads/<id>`. The
+   * upload goes on from the server's offset; when the server no longer has it (404, 410), `done` rejects and no new
+   * upload is created.
+   */
+  readonly resumeUrl?: string;
+  /** Once the server has given the upload's address (created or resumed), absolute. */
+  readonly onUploadUrl?: (uploadUrl: string) => void;
   readonly onProgress?: (bytesSent: number, bytesTotal: number) => void;
   /** After each part the server has verified and stored. */
   readonly onPartStored?: (bytesStored: number, bytesTotal: number) => void;
@@ -172,7 +181,9 @@ async function complete(stack: HttpStack, uploadUrl: string, sha256: string, ret
 
 /** Starts (or resumes) the upload of `file`. */
 export function startUpload(file: UploadFile, options: UploadOptions = {}): UploadHandle {
-  const endpoint = absoluteEndpoint(options.endpoint);
+  const resumeUrl = options.resumeUrl === undefined ? null : absoluteEndpoint(options.resumeUrl);
+  // Resuming, the endpoint is the upload's parent: the fingerprint is the one its first run kept the URL under.
+  const endpoint = resumeUrl === null ? absoluteEndpoint(options.endpoint) : resumeUrl.replace(/\/[^/]*$/, '');
   const retryDelays = options.retryDelays ?? RETRY_DELAYS;
   const stack = new ChecksumHttpStack(options.httpStack ?? new DefaultHttpStack({}));
   const storage = options.urlStorage ?? defaultOptions.urlStorage;
@@ -187,7 +198,8 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
     // A failed hash is reported once the upload asks for it, never as an unhandled rejection meanwhile.
     hashing.catch(() => undefined);
     const tus = new Upload(file, {
-      endpoint,
+      // Resume only: without an endpoint tus-js-client cannot fall back to creating a new upload.
+      ...(resumeUrl === null ? { endpoint } : { uploadUrl: resumeUrl }),
       chunkSize: options.partBytes ?? PART_BYTES,
       retryDelays: [...retryDelays],
       metadata: { ...options.metadata, filename: file.name },
@@ -200,6 +212,11 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
       ...(options.fileReader ? { fileReader: options.fileReader } : {}),
       urlStorage: storage,
       onProgress: options.onProgress ?? null,
+      onUploadUrlAvailable: () => {
+        if (tus.url !== null) {
+          options.onUploadUrl?.(tus.url);
+        }
+      },
       onChunkComplete: (_size, accepted, total) => options.onPartStored?.(accepted, total),
       onError: (error) => reject(failure(error)),
       onSuccess: () => {
@@ -217,6 +234,10 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
       },
     });
     upload = tus;
+    if (resumeUrl !== null) {
+      tus.start();
+      return;
+    }
     tus
       .findPreviousUploads()
       .then((previous) => {

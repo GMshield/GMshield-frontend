@@ -268,6 +268,86 @@ describe('browser upload module (Story 1.13)', () => {
     expect(storage.entries.size).toBe(0);
   });
 
+  it('Story 1.14: names the upload once the server has it, and sends the dialog\'s answers as metadata', async () => {
+    server = await startTusServer();
+    const file = fileOf(20 * KIB);
+    const urls: string[] = [];
+    await startUpload(file, {
+      endpoint: server.endpoint,
+      fileReader: blobReader,
+      urlStorage: memoryStorage(),
+      metadata: { kind: 'rulebook', language: 'detect', campaign: '0190a0b0-0000-7000-8000-000000000002' },
+      onUploadUrl: (url) => urls.push(url),
+    }).done;
+    expect(urls).toEqual([`${server.endpoint}/0190a0b0-0000-7000-8000-000000000001`]);
+    const metadata = String(server.calls[0]!.headers['upload-metadata']).split(',');
+    expect(metadata).toEqual(
+      expect.arrayContaining([
+        `filename ${Buffer.from(file.name).toString('base64')}`,
+        `kind ${Buffer.from('rulebook').toString('base64')}`,
+        `language ${Buffer.from('detect').toString('base64')}`,
+        `campaign ${Buffer.from('0190a0b0-0000-7000-8000-000000000002').toString('base64')}`,
+      ]),
+    );
+  });
+
+  it('Story 1.14: resume only goes on with a known upload from its offset, with no stored entry, and never creates one', async () => {
+    server = await startTusServer();
+    const file = fileOf(300 * KIB);
+    const first = startUpload(file, {
+      endpoint: server.endpoint,
+      partBytes: 100 * KIB,
+      fileReader: blobReader,
+      urlStorage: memoryStorage(),
+      retryDelays: [],
+      onPartStored: (bytes: number) => {
+        if (bytes === 100 * KIB) {
+          void first.abort();
+        }
+      },
+    });
+    await expect(first.done).rejects.toBeInstanceOf(UploadError);
+    const uploadUrl = `${server.endpoint}/0190a0b0-0000-7000-8000-000000000001`;
+    const before = server.calls.length;
+
+    // A reloaded page: this browser's storage no longer helps; the tray knows the upload's id from the server.
+    const resumedUrls: string[] = [];
+    const result = await startUpload(file, {
+      resumeUrl: uploadUrl,
+      partBytes: 100 * KIB,
+      fileReader: blobReader,
+      urlStorage: memoryStorage(),
+      retryDelays: [],
+      onUploadUrl: (url) => resumedUrls.push(url),
+    }).done;
+
+    expect(result).toMatchObject({ state: 'waiting', uploadUrl });
+    expect(resumedUrls).toEqual([uploadUrl]);
+    const second = server.calls.slice(before);
+    expect(second.filter((call) => call.method === 'POST' && call.url === '/api/v1/uploads')).toHaveLength(0);
+    expect(second[0]!.method).toBe('HEAD');
+    expect(second.filter((call) => call.method === 'PATCH').map((call) => call.headers['upload-offset'])).toEqual([
+      String(100 * KIB),
+      String(200 * KIB),
+    ]);
+    expect(server.uploads.size).toBe(1);
+  });
+
+  it('Story 1.14: resume only of an upload the server no longer has fails with its problem and creates nothing', async () => {
+    server = await startTusServer();
+    const failed = await startUpload(fileOf(10 * KIB), {
+      resumeUrl: `${server.endpoint}/0190a0b0-0000-7000-8000-00000000dead`,
+      fileReader: blobReader,
+      urlStorage: memoryStorage(),
+      retryDelays: [],
+    }).done.catch((error: unknown) => error);
+
+    expect(failed).toBeInstanceOf(UploadError);
+    expect((failed as UploadError).status).toBe(404);
+    expect(server.calls.map((call) => call.method)).toEqual(['HEAD']);
+    expect(server.uploads.size).toBe(0);
+  });
+
   it('sends a part again after a checksum mismatch, and reports a refusal with its problem', async () => {
     server = await startTusServer({ failFirstPatchWith: 460 });
     const file = fileOf(50 * KIB);

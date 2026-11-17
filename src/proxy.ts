@@ -17,7 +17,7 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  *   pass through unchanged. Another renewal that came first, or a backend that does not answer, leaves
  *   the token as it is; an ended session sends a document visit to `/sign-in/ended` with the path to
  *   come back to, and lets any other request go on to meet the backend's answer itself;
- * - sets a Content-Security-Policy that allows the site's own origin only, with a new nonce per
+ * - sets a Content-Security-Policy that allows the site's own origin only (and WebAssembly, for the upload's hash), with a new nonce per
  *   request for the inline scripts and styles Next.js writes (it reads the nonce from the request's
  *   `Content-Security-Policy` header), and lets a form's redirect reach Google's sign-in;
  * - marks every answer `Cache-Control: no-store`;
@@ -39,7 +39,10 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 };
 
 export function contentSecurityPolicy(nonce: string, development: boolean): string {
-  const scripts = `'self' 'nonce-${nonce}'${development ? " 'unsafe-eval'" : ''}`;
+  // 'wasm-unsafe-eval' lets the page compile WebAssembly, and nothing else: the whole-file SHA-256 of an upload
+  // runs in hash-wasm (Story 1.13), which a real browser refuses without it (found in Story 1.14). JavaScript eval
+  // stays blocked outside development.
+  const scripts = `'self' 'nonce-${nonce}' 'wasm-unsafe-eval'${development ? " 'unsafe-eval'" : ''}`;
   return [
     "default-src 'self'",
     `script-src ${scripts}`,
