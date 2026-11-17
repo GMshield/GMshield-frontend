@@ -53,7 +53,9 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const [step, setStep] = useState(1);
   const [chosen, setChosen] = useState<readonly Chosen[]>([]);
   const [kind, setKind] = useState<Kind>('rulebook');
-  const [place, setPlace] = useState<BelongingChoice>(belonging === null ? 'none' : 'campaign');
+  const [chosenPlace, setPlace] = useState<BelongingChoice>(belonging === null ? 'none' : 'campaign');
+  // The campaign can come or go while the dialog stays mounted: the choice follows what there is to choose.
+  const place: BelongingChoice = belonging === null ? 'none' : chosenPlace === 'none' ? 'campaign' : chosenPlace;
   const [language, setLanguage] = useState<UploadLanguage>('detect');
   const [batch, setBatch] = useState<number | null>(null);
   const nextId = useRef(0);

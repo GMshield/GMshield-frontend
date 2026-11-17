@@ -1,7 +1,7 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/questions';
 const refresh = vi.fn();
@@ -16,6 +16,11 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers(),
   cookies: async () => ({ get: () => undefined, set: () => undefined }),
 }));
+
+// Story 1.14: the browser upload module, reduced to what the shell hands it.
+type StartUpload = (file: File, options: { metadata?: Record<string, string> }) => { done: Promise<never>; abort: () => Promise<void> };
+const startUpload = vi.fn<StartUpload>(() => ({ done: new Promise<never>(() => undefined), abort: async () => undefined }));
+vi.mock('@/client/upload', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/client/upload')>()), startUpload }));
 
 const { Shell } = await import('@/components/Shell');
 const { SIDEBAR_ENTRIES } = await import('@/components/shell-entries');
@@ -348,4 +353,50 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(within(screen.getByRole('complementary')).getByText('panel')).toBeTruthy();
     act(() => undefined);
   });
+});
+
+describe('the shell hands the guided upload its campaign and system (Story 1.14)', () => {
+  // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
+  beforeAll(() => {
+    if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+      HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      };
+      HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute('open');
+      };
+    }
+  });
+  const BELONGING = {
+    campaign: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign' },
+    system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system' },
+  };
+
+  for (const [choice, expected] of [
+    [/Só em First campaign/, { campaign: BELONGING.campaign.id }],
+    [/Em todas as campanhas de Untitled system/, { system: BELONGING.system.id }],
+  ] as const) {
+    it(`sends ${Object.keys(expected)[0]}'s id for that choice`, async () => {
+      startUpload.mockClear();
+      const user = userEvent.setup();
+      render(
+        <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="Mestre_Ana" current={CURRENT} sidebar="open" belonging={BELONGING}>
+          <h1>Página</h1>
+        </Shell>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+      const modal = screen.getByRole('dialog', { hidden: true });
+      const bytes = new Uint8Array(6000);
+      bytes.set(new TextEncoder().encode('%PDF-1.7\n'));
+      fireEvent.change(within(modal).getByTestId('upload-files'), { target: { files: [new File([bytes], 'Livro.pdf')] } });
+      await within(modal).findByText(/Pronto para enviar/);
+      await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+      await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+      await user.click(within(modal).getByRole('radio', { name: choice }));
+      await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+      await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+      expect(startUpload).toHaveBeenCalledOnce();
+      expect(startUpload.mock.calls[0]![1].metadata).toEqual({ kind: 'rulebook', language: 'detect', ...expected });
+    });
+  }
 });

@@ -46,12 +46,17 @@ export function trayRows(
     if (dismissed.has(row.id)) {
       continue;
     }
-    const mine = live.find((upload) => (upload.uploadId !== null && upload.uploadId === row.upload?.id) || upload.materialId === row.id);
-    if (mine !== undefined) {
-      matched.add(mine.key);
+    // Every live upload of this material is shown by this row; the newest (first) decides its state.
+    const mine = live.filter((upload) => (upload.uploadId !== null && upload.uploadId === row.upload?.id) || upload.materialId === row.id);
+    for (const upload of mine) {
+      matched.add(upload.key);
     }
-    if (mine !== undefined && ACTIVE.has(mine.phase)) {
-      server.push({ kind: 'live', key: row.id, materialId: row.id, name: row.name, state: 'uploading', sent: mine.sent, total: mine.size, problem: null });
+    const newest = mine[0];
+    if (newest !== undefined && ACTIVE.has(newest.phase)) {
+      server.push({ kind: 'live', key: row.id, materialId: row.id, name: row.name, state: 'uploading', sent: newest.sent, total: newest.size, problem: null });
+    } else if (newest?.phase === 'waiting' && row.state === 'uploading') {
+      // Verified here before the server's rows caught up: waiting, not interrupted.
+      server.push({ kind: 'live', key: row.id, materialId: row.id, name: row.name, state: 'waiting', sent: newest.size, total: newest.size, problem: null });
     } else if (row.state === 'uploading' && row.upload !== undefined) {
       const expired = now !== null && Date.parse(row.upload.expiresAt) <= now;
       server.push(
@@ -66,7 +71,7 @@ export function trayRows(
               sent: row.upload.offset,
               total: row.upload.length,
               expiresAt: row.upload.expiresAt,
-              problem: mine?.phase === 'failed' ? mine.problem : null,
+              problem: newest?.phase === 'failed' ? newest.problem : null,
             },
       );
     } else {
@@ -92,10 +97,14 @@ export function trayRows(
   if (now !== null) {
     const known = new Set(rows.flatMap((row) => (row.upload === undefined ? [] : [row.upload.id])));
     const liveIds = new Set(live.flatMap((upload) => (upload.uploadId === null ? [] : [upload.uploadId])));
+    // One row per upload, however many entries this browser kept for it; Dispensar forgets them all by its id.
+    const shownIds = new Set<string>();
     for (const entry of stored) {
       const old = !Number.isNaN(entry.createdAt) && now - entry.createdAt > UPLOAD_LIFETIME_MS;
-      if (old && !known.has(entry.uploadId) && !liveIds.has(entry.uploadId) && !dismissed.has(entry.storageKey)) {
-        result.push({ kind: 'gone', key: entry.storageKey, materialId: null, name: entry.name, dismissKeys: [entry.storageKey] });
+      const hidden = dismissed.has(entry.storageKey) || dismissed.has(entry.uploadId) || shownIds.has(entry.uploadId);
+      if (old && !known.has(entry.uploadId) && !liveIds.has(entry.uploadId) && !hidden) {
+        shownIds.add(entry.uploadId);
+        result.push({ kind: 'gone', key: entry.storageKey, materialId: null, name: entry.name, dismissKeys: [entry.storageKey, entry.uploadId] });
       }
     }
   }

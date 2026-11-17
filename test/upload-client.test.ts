@@ -348,6 +348,55 @@ describe('browser upload module (Story 1.13)', () => {
     expect(server.uploads.size).toBe(0);
   });
 
+  it('Story 1.14: a verified upload forgets every stored entry of its URL, whatever fingerprint it was kept under', async () => {
+    server = await startTusServer();
+    const storage = memoryStorage();
+    const file = fileOf(200 * KIB);
+    const first = startUpload(file, {
+      endpoint: server.endpoint,
+      partBytes: 100 * KIB,
+      fileReader: blobReader,
+      urlStorage: storage,
+      retryDelays: [],
+      onPartStored: () => void first.abort(),
+    });
+    await expect(first.done).rejects.toBeInstanceOf(UploadError);
+    const uploadUrl = `${server.endpoint}/0190a0b0-0000-7000-8000-000000000001`;
+    // Another tab or an older run kept the same upload under another key.
+    await storage.addUpload('another-fingerprint', { size: file.size, metadata: {}, creationTime: 'x', uploadUrl, parallelUploadUrls: null, urlStorageKey: '' });
+    expect(storage.entries.size).toBe(2);
+
+    await startUpload(file, { resumeUrl: uploadUrl, partBytes: 100 * KIB, fileReader: blobReader, urlStorage: storage, retryDelays: [] }).done;
+
+    expect([...storage.entries.values()].filter((entry) => entry.uploadUrl === uploadUrl)).toEqual([]);
+  });
+
+  it('Story 1.14: a refusal (415) or an upload the server no longer has (404) forgets its stored entries; an abort keeps them', async () => {
+    server = await startTusServer({ refuseFirstPatch: true });
+    const storage = memoryStorage();
+    const refused = await startUpload(fileOf(10 * KIB, 'archive.zip'), { endpoint: server.endpoint, fileReader: blobReader, urlStorage: storage, retryDelays: [] }).done.catch((error: unknown) => error);
+    expect((refused as UploadError).status).toBe(415);
+    expect(storage.entries.size).toBe(0);
+    await server.close();
+
+    server = await startTusServer();
+    const gone = `${server.endpoint}/0190a0b0-0000-7000-8000-00000000dead`;
+    await storage.addUpload('f1', { size: 10, metadata: {}, creationTime: 'x', uploadUrl: gone, parallelUploadUrls: null, urlStorageKey: '' });
+    await storage.addUpload('f2', { size: 10, metadata: {}, creationTime: 'x', uploadUrl: gone, parallelUploadUrls: null, urlStorageKey: '' });
+    const missing = await startUpload(fileOf(10 * KIB), { resumeUrl: gone, fileReader: blobReader, urlStorage: storage, retryDelays: [] }).done.catch((error: unknown) => error);
+    expect((missing as UploadError).status).toBe(404);
+    expect(storage.entries.size).toBe(0);
+
+    // A network failure (nothing answers) is not a refusal: the entry stays for a later resume.
+    const kept = `${server.endpoint}/0190a0b0-0000-7000-8000-000000000001`;
+    await storage.addUpload('f3', { size: 10, metadata: {}, creationTime: 'x', uploadUrl: kept, parallelUploadUrls: null, urlStorageKey: '' });
+    await server.close();
+    server = undefined;
+    const offline = await startUpload(fileOf(10 * KIB), { resumeUrl: kept, fileReader: blobReader, urlStorage: storage, retryDelays: [] }).done.catch((error: unknown) => error);
+    expect((offline as UploadError).status).toBeNull();
+    expect(storage.entries.size).toBe(1);
+  });
+
   it('sends a part again after a checksum mismatch, and reports a refusal with its problem', async () => {
     server = await startTusServer({ failFirstPatchWith: 460 });
     const file = fileOf(50 * KIB);

@@ -319,12 +319,36 @@ describe('the guided upload (Story 1.14)', () => {
       expect(dialog().open).toBe(true);
       // The dialog is outside the sheet, which hides itself when closed.
       expect(screen.getByTestId('sidebar').contains(dialog())).toBe(false);
+      // The closed sheet hides "Adicionar Arquivo": focus goes to the handle that opens it.
+      const add = screen.getByRole('button', { name: 'Adicionar Arquivo', hidden: true });
+      Object.defineProperty(add, 'checkVisibility', { configurable: true, value: () => false });
       await user.keyboard('{Escape}');
       expect(dialog().open).toBe(false);
       expect(area.dataset.narrow).toBe('closed');
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir menu' }));
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('follows a campaign that arrives while it stays mounted, and sends it', async () => {
+    const user = userEvent.setup();
+    const tree = (belonging: typeof BELONGING | null) => (
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={belonging} urlStorage={memoryStorage()}>
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
+      </UploadsProvider>
+    );
+    const { rerender } = render(tree(null));
+    rerender(tree(BELONGING));
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    const modal = dialog();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect((within(modal).getByRole('radio', { name: /Só em Primeira campanha/ }) as HTMLInputElement).checked).toBe(true);
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: BELONGING.campaign.id });
   });
 
   it('speaks English', async () => {
@@ -484,6 +508,53 @@ describe('the upload tray (Story 1.14)', () => {
       }
       cleanup();
     }
+  });
+
+  it('pairs a live upload with its server row by the material once verified: one row', async () => {
+    const user = userEvent.setup();
+    const { rerenderRows } = view();
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    for (let step = 0; step < 3; step++) {
+      await user.click(within(dialog()).getByRole('button', { name: 'Próximo' }));
+    }
+    await user.click(within(dialog()).getByRole('button', { name: 'Enviar' }));
+    uploads[0]!.created(UPLOAD);
+    await act(async () => uploads[0]!.finish(ID));
+    rerenderRows([{ id: ID, name: 'Livro do Jogador.pdf', state: 'waiting' }]);
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(within(tray).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(tray).getByText('aguardando')).toBeTruthy();
+  });
+
+  it('a verified live upload whose server row still says uploading is waiting, not interrupted', () => {
+    const live = [{ key: 'live-1', batch: 1, name: 'Livro do Jogador.pdf', size: 6000, sent: 6000, phase: 'waiting' as const, uploadId: UPLOAD, materialId: ID, problem: null }];
+    const rows = trayRows([interrupted()], live, [], new Set(), Date.now());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'live', state: 'waiting', materialId: ID });
+  });
+
+  it('every live upload of one material is that material\'s row; the newest decides its state', () => {
+    const base = { batch: 0, name: 'Livro do Jogador.pdf', size: 6000, sent: 2000, uploadId: UPLOAD, materialId: null, problem: { category: 'server' } };
+    const live = [
+      { ...base, key: 'live-3', phase: 'failed' as const },
+      { ...base, key: 'live-2', phase: 'failed' as const },
+    ];
+    const rows = trayRows([interrupted()], live, [], new Set(), Date.now());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'interrupted', problem: { category: 'server' } });
+  });
+
+  it('several stored entries of one gone upload are one row, and its Dispensar names the upload', () => {
+    const old = Date.now() - UPLOAD_LIFETIME_MS - 60_000;
+    const stored = [
+      { storageKey: 'tus::a::1', uploadId: 'u-1', name: 'Antigo.pdf', createdAt: old },
+      { storageKey: 'tus::b::2', uploadId: 'u-1', name: 'Antigo.pdf', createdAt: old },
+    ];
+    const rows = trayRows([], [], stored, new Set(), Date.now());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'gone', dismissKeys: ['tus::a::1', 'u-1'] });
+    expect(trayRows([], [], stored, new Set(['u-1']), Date.now())).toEqual([]);
   });
 
   it('builds no row for a dismissed material, and keeps the server order after this tab\'s new uploads', () => {

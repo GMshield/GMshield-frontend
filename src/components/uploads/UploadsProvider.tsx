@@ -278,7 +278,10 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, childr
   // Leaving the signed-in shell (signing out) stops sending; the server keeps what it has for its 6 hours.
   useEffect(() => {
     const all = handles.current;
+    const waiting = queue.current;
     return () => {
+      // Nothing queued starts once the shell is gone.
+      waiting.length = 0;
       for (const handle of all.values()) {
         handle.abort().catch(() => undefined);
       }
