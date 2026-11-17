@@ -68,7 +68,7 @@ export function problemText(problem: unknown, errors: UploadTexts['errors']): st
 
 /** The last segment of an upload's address: its id. */
 export function uploadIdOf(uploadUrl: string): string {
-  return uploadUrl.replace(/\/+$/, '').split('/').pop() ?? '';
+  return uploadUrl.split('/').filter((part) => part !== '').pop() ?? '';
 }
 
 /** A size in bytes, in the interface's language: "12,3 MB". */

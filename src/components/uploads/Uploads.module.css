@@ -190,10 +190,13 @@
   border-top: 1px solid var(--color-rule);
 }
 
+/* The radio in the first column, beside its label and, below the label, its explanation. */
 .choice {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
   width: 100%;
   min-height: var(--space-touch-target);
   padding: var(--space-3) var(--space-2);
@@ -205,17 +208,11 @@
 }
 
 .choice input {
-  flex: none;
+  grid-row: 1 / span 2;
   width: 18px;
   height: 18px;
   margin: 3px 0 0;
   accent-color: var(--color-text);
-}
-
-.choiceText {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 
 .choiceLabel {
