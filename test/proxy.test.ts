@@ -156,13 +156,15 @@ describe('proxy', () => {
     expect(contentSecurityPolicy('n', false)).not.toContain('unsafe');
   });
 
-  it('runs on everything except Next.js static files', () => {
+  it('runs on everything except Next.js static files and the upload relay (Story 1.13)', () => {
     const [source] = config.matcher;
     const pattern = new RegExp(`^${source!}$`);
-    for (const path of ['/', '/api/health', '/campaigns/1']) {
+    for (const path of ['/', '/api/health', '/campaigns/1', '/api/v1/other', '/files/add']) {
       expect(pattern.test(path), path).toBe(true);
     }
-    for (const path of ['/_next/static/chunks/a.js', '/_next/image', '/favicon.ico']) {
+    // When the proxy runs, Next.js holds up to 10 MB of the body in memory: an upload part must stream past it.
+    for (const path of ['/_next/static/chunks/a.js', '/_next/image', '/favicon.ico', '/api/v1/uploads', '/api/v1/uploads/abc',
+      '/api/v1/uploads/abc/completion']) {
       expect(pattern.test(path), path).toBe(false);
     }
   });

@@ -73,7 +73,8 @@
       "server": "Algo deu errado no servidor. Tente de novo em instantes.",
       "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados.",
       "session": "Sua sessão terminou. Entre de novo.",
-      "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes."
+      "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes.",
+      "upload": "O envio não pôde continuar."
     },
     "codes": {
       "request": {
@@ -105,6 +106,18 @@
       },
       "service": {
         "unauthenticated": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes."
+      },
+      "upload": {
+        "tus_version": "Este cliente de envio não é compatível. Recarregue a página e tente de novo.",
+        "too_large": "Este arquivo tem mais de 2 GB, o máximo que o GMshield aceita.",
+        "format_refused": "Este formato não é aceito. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC.",
+        "busy": "Outra parte deste arquivo está sendo enviada. Tente de novo em instantes.",
+        "part_checksum_mismatch": "Uma parte do arquivo chegou danificada. Ela será enviada de novo.",
+        "offset_conflict": "O envio ficou fora de sincronia com o servidor. Retome-o para continuar.",
+        "incomplete": "O arquivo ainda não foi enviado por inteiro.",
+        "file_checksum_mismatch": "O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.",
+        "expired": "Este envio ficou 6 horas sem terminar e expirou. Envie o arquivo de novo.",
+        "metadata_invalid": "O arquivo precisa de um nome de 1 a 255 caracteres."
       }
     }
   },

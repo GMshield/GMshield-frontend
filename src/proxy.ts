@@ -24,6 +24,10 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  * - gives the request a valid `traceparent`, so the page or route logs and forwards the same trace;
  * - names the requested path and query in `x-gmshield-path`, replacing any value the browser sent, so the
  *   signed-in layout knows where to come back to after an ended or renewed session (Story 1.11).
+ *
+ * It does not run on `/api/v1/uploads/**` (Story 1.13, see {@link config}): when a proxy runs, Next.js keeps a copy of
+ * up to 10 MB of the request body in memory, and an upload part is 64 MiB. That route checks the origin itself with
+ * {@link isSameOrigin}, and sets `no-store` on its answers.
  */
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -216,5 +220,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Everything but Next.js's static files and the upload relay, whose bodies must stream (see above).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/v1/uploads).*)'],
 };
