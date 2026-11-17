@@ -134,10 +134,8 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     <li key={value}>
       <label className={styles.choice}>
         <input type="radio" name={name} value={value} checked={current === value} onChange={() => set(value)} />
-        <span className={styles.choiceText}>
-          <span className={styles.choiceLabel}>{label}</span>
-          <span className={styles.choiceDescription}>{description}</span>
-        </span>
+        <span className={styles.choiceLabel}>{label}</span>
+        <span className={styles.choiceDescription}>{description}</span>
       </label>
     </li>
   );

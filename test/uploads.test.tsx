@@ -595,3 +595,13 @@ describe('the announcements (Story 1.14)', () => {
     expect(urgent()).toContain('x.zip está num formato que o GMshield não aceita');
   });
 });
+
+describe('the upload id of an address (Story 1.14)', () => {
+  it('is the last non-empty segment, with or without trailing slashes', async () => {
+    const { uploadIdOf } = await import('@/components/uploads/types');
+    expect(uploadIdOf('http://localhost/api/v1/uploads/0190a0b0-0000-7000-8000-000000000005')).toBe('0190a0b0-0000-7000-8000-000000000005');
+    expect(uploadIdOf('/api/v1/uploads/abc//')).toBe('abc');
+    expect(uploadIdOf('')).toBe('');
+    expect(uploadIdOf('/'.repeat(50_000))).toBe('');
+  });
+});
