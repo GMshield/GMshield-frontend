@@ -96,6 +96,9 @@ describe('cookies and small rules', () => {
     for (const bad of [0, -1, 601, 1.5, '300', null]) {
       expect(cookiesModule.maxAgeFrom(bad, 600), String(bad)).toBe(600);
     }
+    // With a limit apart from the fallback: within the limit it is kept, beyond it the fallback.
+    expect(cookiesModule.maxAgeFrom(900, 600, 1000)).toBe(900);
+    expect(cookiesModule.maxAgeFrom(1001, 600, 1000)).toBe(600);
   });
 
   it('sends the browser only to Google or to its own callback', () => {
@@ -429,6 +432,14 @@ describe('sessions that rotate and end (Story 1.10)', () => {
       options: { ...COOKIE, maxAge: 600 },
     });
     expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 0, renewAfterSeconds: 900 }, 0).options.maxAge).toBe(604800);
+  });
+
+  it('lets the backend set a session longer than its 7-day default, up to the browsers\' 400-day cap', () => {
+    // GMSHIELD_SESSION_ABSOLUTE_TIMEOUT=30d on the backend: the cookie lives the 30 days it grants.
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 2_592_000, renewAfterSeconds: 900 }, 0).options.maxAge).toBe(2_592_000);
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 34_560_000, renewAfterSeconds: 900 }, 0).options.maxAge).toBe(34_560_000);
+    // Beyond what a browser keeps, the lifetime is out of range and falls back to 7 days.
+    expect(cookiesModule.sessionCookieFor({ sessionToken: SESSION, expiresInSeconds: 34_560_001, renewAfterSeconds: 900 }, 0).options.maxAge).toBe(604800);
   });
 
   it('returns only to a path of this site, never to sign-in, Google, the API or the renewal route', () => {
