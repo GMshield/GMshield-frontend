@@ -76,11 +76,6 @@ export default async function MaterialPage({ params }: { readonly params: Promis
         </section>
       )}
       {state === 'failed' ? <p className={styles.failure}>{failureText(failure, language)}</p> : null}
-      {report === null ? null : report.ok ? (
-        <QualityReport materialId={material.data.id} pages={pages} report={report.data} language={language} />
-      ) : (
-        <p className={styles.failure}>{errorText(report.problem, language)}</p>
-      )}
       <MaterialActions
         id={material.data.id}
         name={material.data.name}
@@ -96,6 +91,11 @@ export default async function MaterialPage({ params }: { readonly params: Promis
           </Link>
         </p>
       ) : null}
+      {report === null ? null : report.ok ? (
+        <QualityReport materialId={material.data.id} pages={pages} report={report.data} language={language} />
+      ) : (
+        <p className={styles.failure}>{errorText(report.problem, language)}</p>
+      )}
       <MaterialRefresher state={state} />
     </>
   );
