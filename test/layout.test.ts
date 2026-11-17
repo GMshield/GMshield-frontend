@@ -21,6 +21,7 @@ const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
 const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
+const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
@@ -363,6 +364,111 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
     expect(html).toContain('role="status"');
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+    expect(html).not.toContain('server.unavailable');
+  });
+});
+
+describe('a page of a material (Story 1.19)', () => {
+  const PAGE_13 = `GET /api/v1/materials/${MATERIAL_ID}/pages/13?ground=review`;
+  const MATERIAL = `GET /api/v1/materials/${MATERIAL_ID}`;
+  const picturePage = {
+    page: 13,
+    pageTotal: 364,
+    picture: { width: 1545, height: 2000 },
+    lines: [{ text: 'Plate | 1,500 gp | 18', box: [0.1, 0.2, 0.5, 0.215] }],
+    text: null,
+    passages: [{ id: '0190a0b0-0000-7000-8000-000000000009', boxes: [[0.1, 0.2, 0.5, 0.215]] }],
+  };
+  const route = async (page: string, language?: 'en') => {
+    if (language === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = language;
+    }
+    return renderToStaticMarkup(await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page }) }));
+  };
+
+  it('the material page links "Ver páginas" to page 1 once it needs review or is ready, and not before', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {};
+    await useBackend(routes);
+    for (const state of ['needs_review', 'ready']) {
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+      expect(html, state).toContain(`href="/files/${MATERIAL_ID}/pages/1"`);
+      expect(html).toContain('Ver páginas');
+    }
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }))).toContain('View pages');
+    delete cookieJar['__Host-gmshield-lang'];
+    for (const state of ['uploading', 'waiting', 'processing', 'failed']) {
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+      expect(html, state).not.toContain('/pages/');
+    }
+  });
+
+  it('shows the page with its number, its name back to the material, and both page links in the middle', async () => {
+    const server = await useBackend({
+      [PAGE_13]: { status: 200, body: picturePage },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review' } },
+    });
+    let html = await route('13');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === PAGE_13)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toContain('Página 13 de 364');
+    expect(html).toMatch(/<h1[^>]*><a[^>]*href="\/files\/0190a0b0-0000-7000-8000-000000000003"[^>]*>Livro do Jogador.pdf<\/a><\/h1>/);
+    expect(html).toContain(`href="/api/v1/materials/${MATERIAL_ID}/pages/13/picture?ground=review"`);
+    expect(html).toContain('Plate | 1,500 gp | 18');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/12"`);
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/14"`);
+    expect(html).toContain('Página anterior');
+    expect(html).toContain('Próxima página');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    html = await route('13', 'en');
+    expect(html).toContain('Page 13 of 364');
+    expect(html).toContain('Previous page');
+    expect(html).toContain('Next page');
+  });
+
+  it('hides the previous link on the first page and the next link on the last', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready' } },
+      [`GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`]: { status: 200, body: { ...picturePage, page: 1 } },
+      [`GET /api/v1/materials/${MATERIAL_ID}/pages/364?ground=review`]: { status: 200, body: { ...picturePage, page: 364 } },
+      [`GET /api/v1/materials/${MATERIAL_ID}/pages/2?ground=review`]: {
+        status: 200,
+        body: { page: 2, pageTotal: 2, picture: null, lines: [], text: '# Regras\n\nTexto.', passages: [] },
+      },
+    };
+    await useBackend(routes);
+    let html = await route('1');
+    expect(html).not.toContain('Página anterior');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/2"`);
+    html = await route('364');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/363"`);
+    expect(html).not.toContain('Próxima página');
+    // A text page of two: its text, no picture, only the previous link.
+    html = await route('2');
+    expect(html).toContain('Página 2 de 2');
+    expect(html).toContain('# Regras\n\nTexto.');
+    expect(html).not.toContain('/picture');
+    expect(html).not.toContain('Próxima página');
+  });
+
+  it("a page the backend does not serve, another owner's, or a malformed number is the single not-found page", async () => {
+    await useBackend({ [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'processing' } } });
+    for (const page of ['13', '0', '013', 'x', '-1', '99999999']) {
+      const thrown = await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page }) }).then(
+        () => null,
+        (error: unknown) => String((error as { digest?: unknown }).digest ?? ''),
+      );
+      expect(thrown, page).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    }
+  });
+
+  it('another failure on the page route is a notice, never a code', async () => {
+    await useBackend({ [PAGE_13]: problem(503, 'server.unavailable') });
+    const html = await route('13');
+    expect(html).toContain('role="status"');
     expect(html).not.toContain('server.unavailable');
   });
 });

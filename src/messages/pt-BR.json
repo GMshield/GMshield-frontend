@@ -74,7 +74,8 @@
       "session": "Sua sessão terminou. Entre de novo.",
       "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes.",
       "upload": "O envio não pôde continuar.",
-      "ingestion": "Este arquivo não pôde ser processado."
+      "ingestion": "Este arquivo não pôde ser processado.",
+      "page": "Esta página não pôde ser mostrada."
     },
     "codes": {
       "request": {
@@ -123,6 +124,9 @@
         "password_required": "Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.",
         "file_unreadable": "Não foi possível ler este arquivo como PDF. Confira se ele abre e envie-o de novo.",
         "too_many_steps": "O processamento deste arquivo precisou de mais etapas do que suas páginas permitem e parou."
+      },
+      "page": {
+        "ground_unknown": "Esta página não pode ser aberta a partir daqui."
       }
     }
   },
@@ -188,7 +192,8 @@
       "waiting": "Aguardando",
       "unreadable": "Ilegíveis"
     },
-    "stateLabel": "Estado"
+    "stateLabel": "Estado",
+    "viewPages": "Ver páginas"
   },
   "upload": {
     "dialog": {
@@ -288,5 +293,11 @@
         "percent": "{name}: {percent}% enviado."
       }
     }
+  },
+  "pageView": {
+    "position": "Página {page} de {total}",
+    "previous": "Página anterior",
+    "next": "Próxima página",
+    "navigation": "Páginas"
   }
 }

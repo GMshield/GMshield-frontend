@@ -74,7 +74,8 @@
       "session": "Your session has ended. Sign in again.",
       "service": "GMshield did not recognise this call to the server. Try again in a moment.",
       "upload": "The upload could not continue.",
-      "ingestion": "This file could not be processed."
+      "ingestion": "This file could not be processed.",
+      "page": "This page could not be shown."
     },
     "codes": {
       "request": {
@@ -123,6 +124,9 @@
         "password_required": "This PDF is protected by a password. Remove the password and send the file again.",
         "file_unreadable": "This file could not be read as a PDF. Check that it opens, then send it again.",
         "too_many_steps": "Processing this file needed more steps than its pages allow, so it stopped."
+      },
+      "page": {
+        "ground_unknown": "This page cannot be opened from here."
       }
     }
   },
@@ -188,7 +192,8 @@
       "waiting": "Waiting",
       "unreadable": "Unreadable"
     },
-    "stateLabel": "State"
+    "stateLabel": "State",
+    "viewPages": "View pages"
   },
   "upload": {
     "dialog": {
@@ -288,5 +293,11 @@
         "percent": "{name}: {percent}% sent."
       }
     }
+  },
+  "pageView": {
+    "position": "Page {page} of {total}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "navigation": "Pages"
   }
 }
