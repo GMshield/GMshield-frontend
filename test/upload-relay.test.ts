@@ -174,6 +174,21 @@ describe('upload relay (Story 1.13)', () => {
     expect(output.lines()[0]).toMatchObject({ level: 'WARN', event: 'request.refused', reason: 'request.cross_origin' });
   });
 
+  it("checks the origin of state-changing requests only: a same-origin HEAD carries no Origin over plain HTTP", async () => {
+    const backend = await startScripted({ 'HEAD /api/v1/uploads/abc': { status: 200 } });
+    running = backend;
+    const output = captureOutput();
+    const head = await relayUpload(incoming('HEAD', { 'tus-resumable': '1.0.0' }, null, { sameOrigin: false }), ['abc'], { baseUrl: backend.url });
+    expect(head.status).toBe(200);
+    expect(backend.calls).toHaveLength(1);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const refused = await relayUpload(incoming(method, { 'tus-resumable': '1.0.0' }, null, { sameOrigin: false }), ['abc'], { baseUrl: backend.url });
+      expect(refused.status, method).toBe(403);
+    }
+    expect(backend.calls).toHaveLength(1);
+    expect(output.lines().filter((line) => line.event === 'request.refused')).toHaveLength(4);
+  });
+
   it('answers a path outside the upload routes as not found, without reaching the backend', async () => {
     const fake = vi.fn();
     const answer = await relayUpload(incoming('POST', {}), ['..', 'me'], { fetch: fake as unknown as typeof fetch });

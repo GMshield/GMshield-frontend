@@ -179,16 +179,19 @@ they sit in `src/`.
     `Location`, `Tus-*`, `Upload-*` and `Content-Type` come back, always `no-store`. Only the three upload
     shapes (`/api/v1/uploads`, `/{id}`, `/{id}/completion`) are relayed; anything else is
     `request.not_found`. The proxy's matcher skips these paths, because when the proxy runs Next.js
-    holds up to 10 MB of every body in memory; the relay refuses another origin itself with the proxy's
-    `isSameOrigin` (403 `request.cross_origin`). Spike (2026-11-16): bodies of 256 MiB, 2 GiB and 6 GiB
+    holds up to 10 MB of every body in memory; the relay refuses a POST, PUT, PATCH or DELETE from another
+    origin itself with the proxy's `isSameOrigin` (403 `request.cross_origin`); a HEAD is not checked, as
+    browsers send no `Origin` on a same-origin HEAD and `Sec-Fetch-Site` only to secure origins. Spike (2026-11-16): bodies of 256 MiB, 2 GiB and 6 GiB
     through the relay kept the server's RSS at 180 to 193 MB.
   - The browser module (`src/client/upload`, `startUpload(file, options)`) uses tus-js-client 4.3.1:
-    64 MiB parts, `metadata.filename`, the upload URL kept under the file's fingerprint
-    (`findPreviousUploads`, `resumeFromPreviousUpload`) and removed once verified, and `retryDelays`
+    64 MiB parts, `metadata.filename`, the upload URL kept under the file's fingerprint (the hex SHA-256 of
+    its name, type, size and date with the endpoint, so the stored key names nothing) for
+    `findPreviousUploads` and `resumeFromPreviousUpload`, removed only after the completion answered 201
+    (an upload already whole on resume goes straight to its completion), and `retryDelays`
     (a part refused with 409, 423 or 460, or a server failure, is tried again). Its HTTP stack adds
     `Upload-Checksum: sha256 <Base64>` of each part's own bytes (`crypto.subtle.digest`). Meanwhile
     hash-wasm hashes the whole file 16 MiB at a time; once the last part is stored the module posts
-    the hash to `<upload>/completion` and resolves with `{materialId, versionId, state}`. A failure is
+    the hash to `<upload>/completion` (tried again after a 5xx or 423) and resolves with `{materialId, versionId, state}`. A failure is
     an `UploadError` with the status and the problem detail, for `errorText`. Story 1.14 adds the
     dialog and the tray.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.

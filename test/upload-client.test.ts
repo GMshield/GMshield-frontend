@@ -70,11 +70,20 @@ type Call = { method: string; url: string; headers: IncomingMessage['headers']; 
  * A tus 1.0.0 backend in miniature, as the relay presents it: it checks each part's `Upload-Checksum` against the
  * bytes it received and the completion's hash against the whole file, like the real one.
  */
-async function startTusServer(options: { failFirstPatchWith?: number; refuseFirstPatch?: unknown } = {}) {
+/** The problem code a stand-in completion answers with, by status. */
+const COMPLETION_PROBLEMS: Readonly<Record<number, string>> = {
+  422: 'upload.file_checksum_mismatch',
+  423: 'upload.busy',
+  500: 'server.unexpected',
+  503: 'server.unavailable',
+};
+
+async function startTusServer(options: { failFirstPatchWith?: number; refuseFirstPatch?: unknown; failFirstCompletionWith?: number } = {}) {
   const calls: Call[] = [];
   const uploads = new Map<string, { length: number; data: Buffer[]; offset: number }>();
   let failures = options.failFirstPatchWith === undefined ? 0 : 1;
   let refusal = options.refuseFirstPatch;
+  let completionFailure = options.failFirstCompletionWith;
   let created = 0;
   const server = createServer((request, response) => {
     const chunks: Buffer[] = [];
@@ -134,6 +143,11 @@ async function startTusServer(options: { failFirstPatchWith?: number; refuseFirs
       if (upload.offset !== upload.length) {
         return problem(response, 409, 'upload.incomplete');
       }
+      if (completionFailure !== undefined) {
+        const status = completionFailure;
+        completionFailure = undefined;
+        return problem(response, status, COMPLETION_PROBLEMS[status] ?? 'server.unexpected');
+      }
       if (sha256(Buffer.concat(upload.data)).toString('hex') !== expected) {
         return problem(response, 422, 'upload.file_checksum_mismatch');
       }
@@ -173,9 +187,16 @@ describe('browser upload module (Story 1.13)', () => {
     } finally {
       vi.unstubAllGlobals();
     }
-    const file = fileOf(10);
-    expect(fingerprintOf(file, 'e')).toBe(fingerprintOf(fileOf(10), 'e'));
-    expect(fingerprintOf(file, 'e')).not.toBe(fingerprintOf(fileOf(11), 'e'));
+  });
+
+  it('keeps the upload URL under a hash that names nothing of the file', async () => {
+    const file = fileOf(10, 'Segredo da campanha.pdf');
+    const key = await fingerprintOf(file, 'e');
+    expect(key).toMatch(/^gmshield-upload-[0-9a-f]{64}$/);
+    expect(key).not.toContain('Segredo');
+    expect(await fingerprintOf(fileOf(10, 'Segredo da campanha.pdf'), 'e')).toBe(key);
+    expect(await fingerprintOf(fileOf(11, 'Segredo da campanha.pdf'), 'e')).not.toBe(key);
+    expect(await fingerprintOf(fileOf(10, 'Outro.pdf'), 'e')).not.toBe(key);
   });
 
   it('gives each part the SHA-256 of its own bytes, hashes the file in slices and completes the upload', async () => {
@@ -262,6 +283,49 @@ describe('browser upload module (Story 1.13)', () => {
     expect((error as UploadError).status).toBe(415);
     expect((error as UploadError).problem).toMatchObject({ code: 'upload.format_refused' });
     expect(server.calls.filter((call) => call.method === 'PATCH')).toHaveLength(1);
+  });
+
+  it('keeps the URL when the completion fails, and a later run resumes with every byte stored and completes', async () => {
+    server = await startTusServer({ failFirstCompletionWith: 500 });
+    const storage = memoryStorage();
+    const file = fileOf(150 * KIB);
+    const options = { endpoint: server.endpoint, partBytes: 100 * KIB, fileReader: blobReader, urlStorage: storage, retryDelays: [] };
+
+    const failed = await startUpload(file, options).done.catch((error: unknown) => error);
+
+    expect(failed).toBeInstanceOf(UploadError);
+    expect((failed as UploadError).status).toBe(500);
+    expect([...storage.entries.values()].map((entry) => entry.uploadUrl)).toEqual([expect.stringMatching(/\/api\/v1\/uploads\/[0-9a-f-]+$/)]);
+    expect([...storage.entries.values()][0]!.fingerprint).not.toContain('Livro');
+    const before = server.calls.length;
+
+    const result = await startUpload(file, options).done;
+
+    expect(result.state).toBe('waiting');
+    const second = server.calls.slice(before);
+    expect(second.map((call) => call.method)).toEqual(['HEAD', 'POST']);
+    expect(second[1]!.url).toMatch(/\/completion$/);
+    expect(storage.entries.size).toBe(0);
+  });
+
+  it('tries the completion again after an unavailable server or a lock, and reports a refused file', async () => {
+    for (const status of [503, 423]) {
+      server = await startTusServer({ failFirstCompletionWith: status });
+      const storage = memoryStorage();
+      const result = await startUpload(fileOf(20 * KIB), { endpoint: server.endpoint, fileReader: blobReader, urlStorage: storage, retryDelays: [0] }).done;
+      expect(result.state, String(status)).toBe('waiting');
+      expect(server.calls.filter((call) => call.url.endsWith('/completion')), String(status)).toHaveLength(2);
+      expect(storage.entries.size).toBe(0);
+      await server.close();
+    }
+
+    server = await startTusServer({ failFirstCompletionWith: 422 });
+    const error = await startUpload(fileOf(20 * KIB), { endpoint: server.endpoint, fileReader: blobReader, urlStorage: memoryStorage(), retryDelays: [0, 0] })
+      .done.catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(UploadError);
+    expect((error as UploadError).status).toBe(422);
+    expect((error as UploadError).problem).toMatchObject({ status: 422, code: 'upload.file_checksum_mismatch' });
+    expect(server.calls.filter((call) => call.url.endsWith('/completion'))).toHaveLength(1);
   });
 
   it('retries a server failure, a conflict, a lock and a damaged part, but not a refusal', () => {

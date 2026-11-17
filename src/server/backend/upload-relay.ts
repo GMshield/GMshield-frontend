@@ -17,7 +17,9 @@ import { outgoingTraceparent, traceFrom } from '../trace';
  *   session of the visitor's cookie as `X-Session-Token` and a `traceparent`. Only `Location`, the `Upload-*` and
  *   `Tus-*` headers and `Content-Type` come back, always with `Cache-Control: no-store`.
  * - `src/proxy.ts` does not run on these routes (it would hold up to 10 MB of each body in memory), so the relay
- *   refuses a request from another origin itself, with the proxy's own `isSameOrigin`.
+ *   refuses a state-changing request (POST, PUT, PATCH, DELETE) from another origin itself, with the proxy's own
+ *   `isSameOrigin`, as the proxy does. A HEAD is not checked: browsers send no `Origin` on a same-origin HEAD, and
+ *   `Sec-Fetch-Site` only to secure origins.
  *
  * Nothing here reads, logs or keeps any of the file.
  */
@@ -45,6 +47,9 @@ export const UPLOAD_RESPONSE_HEADERS: readonly string[] = [
   'content-type',
 ];
 
+/** The methods whose origin is checked, as in `src/proxy.ts`. */
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 /** The relayed path of the backend. */
 export const UPLOADS_PATH = '/api/v1/uploads';
 
@@ -59,7 +64,7 @@ export type RelayedRequest = {
   readonly signal: AbortSignal;
   /** The visitor's session cookie value, if any. */
   readonly sessionCookie: string | undefined;
-  /** Whether the request comes from this site (the proxy's `isSameOrigin`). */
+  /** Whether the request comes from this site (the proxy's `isSameOrigin`); read for state-changing methods only. */
   readonly sameOrigin: boolean;
 };
 
@@ -128,7 +133,7 @@ export function returnedHeaders(answer: Headers): Headers {
 /** Relays one upload request to the backend and its answer back, both as streams. */
 export async function relayUpload(request: RelayedRequest, segments: readonly string[] | undefined, options: RelayOptions = {}): Promise<Response> {
   const trace = traceFrom(request.headers.get('traceparent'));
-  if (!request.sameOrigin) {
+  if (STATE_CHANGING_METHODS.has(request.method) && !request.sameOrigin) {
     logEvent('WARN', UNIT, 'request.refused', trace.traceId, { method: request.method, reason: 'request.cross_origin' });
     return problem(403, 'request', 'request.cross_origin', 'Cross-origin request refused', trace.traceId, request.method);
   }

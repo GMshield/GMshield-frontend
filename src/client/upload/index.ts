@@ -1,4 +1,4 @@
-import { DefaultHttpStack, Upload, type DetailedError, type FileReader, type HttpStack, type UrlStorage } from 'tus-js-client';
+import { DefaultHttpStack, Upload, defaultOptions, type DetailedError, type FileReader, type HttpStack, type UrlStorage } from 'tus-js-client';
 
 import { ChecksumHttpStack } from './checksum-stack';
 import { sha256OfFile } from './file-hash';
@@ -8,9 +8,10 @@ import { sha256OfFile } from './file-hash';
  * (`/api/v1/uploads`, `src/app/api/v1/uploads`), never the backend:
  *
  * - parts of 64 MiB, each with `Upload-Checksum: sha256 …` of its own bytes ({@link ChecksumHttpStack});
- * - the upload URL is kept under the file's fingerprint, so a page opened again within the 6 hours finds it
- *   (`findPreviousUploads`), asks the server's offset and goes on from the last verified part
- *   (`resumeFromPreviousUpload`); nothing already stored is sent again;
+ * - the upload URL is kept under the file's fingerprint (a SHA-256 that names nothing of the file), so a page opened
+ *   again within the 6 hours finds it (`findPreviousUploads`), asks the server's offset and goes on from the last
+ *   verified part (`resumeFromPreviousUpload`); nothing already stored is sent again, and an upload whose every byte
+ *   is stored goes straight to its completion. The URL is forgotten only once the completion has answered 201;
  * - a failed part is retried after each of the `retryDelays` (a part whose checksum failed too);
  * - meanwhile the whole file's SHA-256 is computed slice by slice ({@link sha256OfFile}); once the last part is
  *   stored, `POST <upload>/completion` sends it, and the version moves to `waiting`.
@@ -79,9 +80,27 @@ export function absoluteEndpoint(endpoint: string = UPLOADS_ENDPOINT): string {
   return new URL(endpoint, base).toString();
 }
 
-/** The key the upload URL is kept under: the same file, chosen again, finds its upload. */
-export function fingerprintOf(file: UploadFile, endpoint: string): string {
-  return ['gmshield-upload', file.name, file.type, file.size, file.lastModified ?? 0, endpoint].join('/');
+/**
+ * The key the upload URL is kept under: the same file, chosen again, finds its upload. It is the hexadecimal SHA-256 of
+ * the file's name, type, size and date with the endpoint, so the browser's storage shows no file name.
+ */
+export async function fingerprintOf(file: UploadFile, endpoint: string): Promise<string> {
+  const text = ['gmshield-upload', file.name, file.type, file.size, file.lastModified ?? 0, endpoint].join('/');
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return `gmshield-upload-${Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Forgets the stored URL of a verified upload; a failure only leaves an entry that a later run resumes and completes. */
+async function forget(storage: UrlStorage, fingerprint: string, uploadUrl: string): Promise<void> {
+  try {
+    for (const stored of await storage.findUploadsByFingerprint(fingerprint)) {
+      if (stored.uploadUrl === uploadUrl) {
+        await storage.removeUpload(stored.urlStorageKey);
+      }
+    }
+  } catch {
+    // Nothing to do: the entry stays, and resuming it completes again (the backend answers the same).
+  }
 }
 
 function isOnline(): boolean {
@@ -156,6 +175,8 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
   const endpoint = absoluteEndpoint(options.endpoint);
   const retryDelays = options.retryDelays ?? RETRY_DELAYS;
   const stack = new ChecksumHttpStack(options.httpStack ?? new DefaultHttpStack({}));
+  const storage = options.urlStorage ?? defaultOptions.urlStorage;
+  const fingerprint = fingerprintOf(file, endpoint);
   let upload: Upload | null = null;
   let aborted = false;
   let stop: (error: UploadError) => void = () => undefined;
@@ -171,12 +192,13 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
       retryDelays: [...retryDelays],
       metadata: { ...options.metadata, filename: file.name },
       storeFingerprintForResuming: true,
-      removeFingerprintOnSuccess: true,
-      fingerprint: async () => fingerprintOf(file, endpoint),
+      // Removed only after the completion (below): a closed tab or a failed completion can still resume.
+      removeFingerprintOnSuccess: false,
+      fingerprint: () => fingerprint,
       onShouldRetry: (error) => shouldRetry(error),
       httpStack: stack,
       ...(options.fileReader ? { fileReader: options.fileReader } : {}),
-      ...(options.urlStorage ? { urlStorage: options.urlStorage } : {}),
+      urlStorage: storage,
       onProgress: options.onProgress ?? null,
       onChunkComplete: (_size, accepted, total) => options.onPartStored?.(accepted, total),
       onError: (error) => reject(failure(error)),
@@ -188,7 +210,10 @@ export function startUpload(file: UploadFile, options: UploadOptions = {}): Uplo
         }
         hashing
           .then((sha256) => complete(stack, url, sha256, retryDelays))
-          .then(resolve, (error: unknown) => reject(failure(error)));
+          .then(async (result) => {
+            await forget(storage, await fingerprint, url);
+            resolve(result);
+          }, (error: unknown) => reject(failure(error)));
       },
     });
     upload = tus;
