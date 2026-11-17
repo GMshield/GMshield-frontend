@@ -5,7 +5,7 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: () => undefined }),
 }));
 
-const { LANGUAGES, errorText, interpolate, messagesFor, problemFields, translator } = await import('@/messages');
+const { LANGUAGES, errorText, failureText, interpolate, messagesFor, problemFields, translator } = await import('@/messages');
 const { notFoundFor } = await import('@/app/not-found');
 const en = (await import('@/messages/en.json')).default;
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -23,6 +23,7 @@ const BACKEND_CODES = {
   service: ['unauthenticated'],
   upload: ['tus_version', 'too_large', 'format_refused', 'busy', 'part_checksum_mismatch', 'offset_conflict', 'incomplete',
     'file_checksum_mismatch', 'expired', 'metadata_invalid'],
+  ingestion: ['password_required', 'file_unreadable', 'too_many_steps'],
 } as const;
 
 function leaves(value: unknown): string[] {
@@ -123,6 +124,24 @@ describe('upload texts (Story 1.13)', () => {
     expect(errorText({ category: 'upload', code: 'upload.too_large', params: { limit: 2147483648 } }, 'en')).toContain('2 GB');
     expect(errorText({ category: 'upload', code: 'upload.expired' }, 'pt-BR')).toContain('6 horas');
     expect(errorText({ category: 'upload', code: 'upload.something_new' }, 'en')).toBe(en.errors.categories.upload);
+  });
+});
+
+describe('ingestion texts (Story 1.15)', () => {
+  it("a failed material's code has its text, else the category's, in both languages, never the code", () => {
+    expect(failureText('ingestion.password_required', 'pt-BR')).toBe('Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.');
+    expect(failureText('ingestion.password_required', 'en')).toBe(en.errors.codes.ingestion.password_required);
+    expect(failureText('ingestion.file_unreadable', 'pt-BR')).toBe(ptBR.errors.codes.ingestion.file_unreadable);
+    expect(failureText('ingestion.too_many_steps', 'en')).toBe(en.errors.codes.ingestion.too_many_steps);
+    for (const code of ['ingestion.step_failed', 'ingestion.pipeline_changed', 'ingestion.stage_unknown']) {
+      expect(failureText(code, 'pt-BR')).toBe('Este arquivo não pôde ser processado.');
+      expect(failureText(code, 'en')).toBe('This file could not be processed.');
+    }
+    for (const code of [undefined, '', 'job.attempts_exhausted', 'nonsense']) {
+      expect(failureText(code, 'en')).toBe(en.errors.categories.server);
+    }
+    expect(ptBR.material.pages).toBe('{done} de {total} páginas');
+    expect(en.material.pages).toBe('{done} of {total} pages');
   });
 });
 

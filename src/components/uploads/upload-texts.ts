@@ -17,5 +17,5 @@ export function uploadTexts(language: Language): UploadTexts {
       errors[code] = errorText({ category, code }, language);
     }
   }
-  return { language, upload: messages.upload, states: messages.material.state, errors };
+  return { language, upload: messages.upload, states: messages.material.state, pages: messages.material.pages, errors };
 }

@@ -31,6 +31,8 @@ export type UploadTexts = {
   readonly language: Language;
   readonly upload: Messages['upload'];
   readonly states: Messages['material']['state'];
+  /** "{done} de {total} páginas": the pages of a material being processed (Story 1.15). */
+  readonly pages: Messages['material']['pages'];
   /** Problem texts by code (`upload.too_large`) and by category (`upload`); `server` is the fallback. */
   readonly errors: Readonly<Record<string, string>>;
 };

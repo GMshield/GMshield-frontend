@@ -153,3 +153,12 @@ export function errorText(body: unknown, language: Language): string {
   // A text whose placeholder the problem did not fill falls back to its category's text.
   return UNFILLED.test(text) || text === '' ? categoryText : text;
 }
+
+/**
+ * The text for a failed material's code (Story 1.15: `material.failure`, such as `ingestion.password_required`): the
+ * code's own text, else its category's, else the generic one. The code itself is never shown.
+ */
+export function failureText(code: string | undefined, language: Language): string {
+  const category = code?.split('.')[0] ?? '';
+  return errorText({ category, code }, language);
+}
