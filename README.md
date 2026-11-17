@@ -245,6 +245,8 @@ adds the library tables), then the frontend (its health check fails against a 1.
 
 Read from the environment and checked when the server starts. A refused start writes one log line
 that names the settings, never a value, and exits with status 78.
+[`.env.example`](.env.example) lists them with an empty secret, for a start by hand (copied to the
+git-ignored `.env.local`).
 
 | Setting | Meaning |
 |---|---|
