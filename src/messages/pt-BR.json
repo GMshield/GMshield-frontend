@@ -73,7 +73,8 @@
       "integrity": "Estes dados não passaram na verificação de integridade e não são mostrados.",
       "session": "Sua sessão terminou. Entre de novo.",
       "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes.",
-      "upload": "O envio não pôde continuar."
+      "upload": "O envio não pôde continuar.",
+      "ingestion": "Este arquivo não pôde ser processado."
     },
     "codes": {
       "request": {
@@ -117,6 +118,11 @@
         "file_checksum_mismatch": "O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.",
         "expired": "Este envio ficou 6 horas sem terminar e expirou. Envie o arquivo de novo.",
         "metadata_invalid": "O nome do arquivo ou as respostas dadas sobre ele não são válidos. O nome precisa ter de 1 a 255 caracteres."
+      },
+      "ingestion": {
+        "password_required": "Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.",
+        "file_unreadable": "Não foi possível ler este arquivo como PDF. Confira se ele abre e envie-o de novo.",
+        "too_many_steps": "O processamento deste arquivo precisou de mais etapas do que suas páginas permitem e parou."
       }
     }
   },
@@ -169,6 +175,7 @@
       "superseded": "substituído",
       "discarded": "descartado"
     },
+    "pages": "{done} de {total} páginas",
     "stateLabel": "Estado"
   },
   "upload": {

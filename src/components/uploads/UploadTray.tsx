@@ -1,22 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
+import { useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
 
 import { PillButton } from '../PillButton';
 import { StatePill } from '../StatePill';
+import { useRefreshWhileMoving } from '../useRefreshWhileMoving';
 
 import { fill, formatSize, MOVING_STATES, problemText, type Material, type MaterialState, type UploadTexts } from './types';
 import styles from './Uploads.module.css';
 import { UPLOAD_LIFETIME_MS, useUploads, type LiveUpload, type StoredUpload } from './UploadsProvider';
 
 /** How often the tray asks for fresh rows while one of them is moving and the tab is visible. */
-export const REFRESH_MS = 5000;
+export { REFRESH_MS } from '../useRefreshWhileMoving';
+
+/** Pages done of the total, once the backend knows the total (Story 1.15). */
+type Pages = { readonly done: number; readonly total: number };
 
 /** One row of the tray, from the server, from this tab, or from a stored resume entry. */
 export type TrayRow =
-  | { readonly kind: 'material'; readonly key: string; readonly materialId: string; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number }
+  | { readonly kind: 'material'; readonly key: string; readonly materialId: string; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly pages?: Pages }
   | { readonly kind: 'live'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly problem: unknown }
   | { readonly kind: 'interrupted'; readonly key: string; readonly materialId: string; readonly name: string; readonly uploadId: string; readonly sent: number; readonly total: number; readonly expiresAt: string; readonly problem: unknown }
   | { readonly kind: 'gone'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly dismissKeys: readonly string[] };
@@ -75,7 +78,11 @@ export function trayRows(
             },
       );
     } else {
-      server.push({ kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: 1, total: 1 });
+      server.push(
+        row.pages === undefined
+          ? { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: 1, total: 1 }
+          : { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: row.pages.done, total: row.pages.total, pages: row.pages },
+      );
     }
   }
   for (const upload of live) {
@@ -136,41 +143,21 @@ function useClock(): number | null {
   );
 }
 
-/** Whether the tab is visible, kept up to date. */
-function useVisible(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      document.addEventListener('visibilitychange', onChange);
-      return () => document.removeEventListener('visibilitychange', onChange);
-    },
-    () => document.visibilityState === 'visible',
-    () => false,
-  );
-}
-
 /**
  * The upload tray (Story 1.14), just above "Adicionar Arquivo": uploads and ingestions in progress, each with its
- * name (a link to its page once it has one), its state pill and a 2px line of bytes sent. Its server rows come from the
- * signed-in layout; while a row is uploading, waiting or processing and the tab is visible, it asks the router for
- * fresh ones every 5 s (`router.refresh()`: an RSC fetch, which never renews the session).
+ * name (a link to its page once it has one), its state pill and a 2px line: of bytes sent while uploading, of pages
+ * done while processing ("processando · 0 de 320 páginas", Story 1.15). Its server rows come from the signed-in layout;
+ * while a row is uploading, waiting or processing and the tab is visible, it asks the router for fresh ones every 5 s
+ * (`router.refresh()`: an RSC fetch, which never renews the session).
  */
 export function UploadTray({ rows }: { readonly rows: readonly Material[] }) {
   const { texts, live, stored, dismissed } = useUploads();
-  const router = useRouter();
   const inBrowser = useInBrowser();
-  const visible = useVisible();
   const now = useClock();
 
   const shown = trayRows(rows, live, stored, dismissed, inBrowser ? now : null);
   const moving = shown.some((row) => row.kind !== 'gone' && (row.kind === 'interrupted' || MOVING_STATES.includes(row.state)));
-
-  useEffect(() => {
-    if (!moving || !visible) {
-      return undefined;
-    }
-    const timer = setInterval(() => router.refresh(), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [moving, visible, router]);
+  useRefreshWhileMoving(moving);
 
   if (shown.length === 0) {
     return null;
@@ -222,7 +209,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
             {row.name}
           </Link>
         )}
-        <StatePill state={state} word={texts.states[state]} />
+        <StatePill state={state} word={texts.states[state]} detail={pagesDetail(row, state, texts)} />
       </div>
       <progress
         className={styles.line}
@@ -273,6 +260,14 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
       ) : null}
     </li>
   );
+}
+
+/** "0 de 320 páginas" beside a processing material whose page total is known; nothing otherwise. */
+function pagesDetail(row: TrayRow, state: MaterialState, texts: UploadTexts): string | undefined {
+  if (row.kind !== 'material' || row.pages === undefined || state !== 'processing') {
+    return undefined;
+  }
+  return fill(texts.pages, { done: row.pages.done, total: row.pages.total });
 }
 
 /** The expiry as the GM reads it: the time, with the day when it is not today. */

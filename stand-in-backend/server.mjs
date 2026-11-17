@@ -6,7 +6,7 @@
 // Story 1.13: Location, Upload-Offset, Tus-Resumable...); a tus part (PATCH /api/v1/uploads/{id}) is read
 // to its end and answers the offset it would reach.
 // A few answers are set in EXAMPLES instead (Story 1.14): the materials list is empty, so the tray of a test-mode
-// shell stays still, and a material reads as one waiting for its first ingestion step.
+// shell stays still, and a material reads as one being processed, its pages known (Story 1.15).
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { randomBytes } from 'node:crypto';
@@ -117,7 +117,13 @@ function templateToPattern(template) {
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
   'GET /api/v1/materials': { items: [] },
-  'GET /api/v1/materials/{id}': { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'waiting', kind: 'rulebook' },
+  'GET /api/v1/materials/{id}': {
+    id: '0190a0b0-0000-7000-8000-000000000003',
+    name: 'Livro do Jogador.pdf',
+    state: 'processing',
+    kind: 'rulebook',
+    pages: { done: 0, total: 320 },
+  },
 };
 
 /** The answer to a request: status, content type and body. */

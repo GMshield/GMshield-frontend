@@ -19,3 +19,9 @@
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
 }
+
+/* Why a material failed (Story 1.15): plain text under the pill, never a code. */
+.failure {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+}

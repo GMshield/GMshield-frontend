@@ -237,6 +237,49 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     expect(html).toContain('State');
   });
 
+  it('a processing material shows its pages in the pill, and a failed one says why, never with a code (Story 1.15)', async () => {
+    const key = `GET /api/v1/materials/${MATERIAL_ID}`;
+    const routes: Record<string, { status: number; body: unknown }> = {};
+    const answer = (body: Record<string, unknown>) => {
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+    };
+    const page = async (language?: 'en') => {
+      if (language === undefined) {
+        delete cookieJar['__Host-gmshield-lang'];
+      } else {
+        cookieJar['__Host-gmshield-lang'] = language;
+      }
+      return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    };
+    await useBackend(routes);
+
+    answer({ state: 'processing', pages: { done: 0, total: 320 } });
+    expect(await page()).toContain('processando · 0 de 320 páginas');
+    expect(await page('en')).toContain('processing · 0 of 320 pages');
+
+    const failures: [string | undefined, string, string][] = [
+      ['ingestion.password_required', 'Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.', 'This PDF is protected by a password.'],
+      ['ingestion.file_unreadable', 'Não foi possível ler este arquivo como PDF.', 'This file could not be read as a PDF.'],
+      ['ingestion.too_many_steps', 'precisou de mais etapas do que suas páginas permitem', 'needed more steps than its pages allow'],
+      ['ingestion.step_failed', 'Este arquivo não pôde ser processado.', 'This file could not be processed.'],
+      ['job.attempts_exhausted', 'Algo deu errado no servidor.', 'Something went wrong on the server.'],
+      [undefined, 'Algo deu errado no servidor.', 'Something went wrong on the server.'],
+    ];
+    for (const [failure, portuguese, english] of failures) {
+      answer(failure === undefined ? { state: 'failed' } : { state: 'failed', failure });
+      const html = await page();
+      expect(html).toContain('falhou');
+      expect(html).toContain(portuguese);
+      if (failure !== undefined) {
+        expect(html).not.toContain(failure);
+      }
+      expect(await page('en')).toContain(english);
+    }
+    // A material that is not failed shows no reason.
+    answer({ state: 'waiting', failure: 'ingestion.password_required' });
+    expect(await page()).not.toContain('senha');
+  });
+
   it('an unknown, malformed or other owner\'s material is the single not-found page', async () => {
     await useBackend({});
     for (const id of [MATERIAL_ID, 'not-a-uuid', '../me']) {

@@ -60,6 +60,7 @@ const { Sidebar } = await import('@/components/Sidebar');
 const { UploadsProvider, UPLOAD_LIFETIME_MS } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { trayRows, REFRESH_MS } = await import('@/components/uploads/UploadTray');
+const { MaterialRefresher } = await import('@/components/MaterialRefresher');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -492,6 +493,56 @@ describe('the upload tray (Story 1.14)', () => {
     rerenderRows([{ id: ID, name: 'Livro.pdf', state: 'waiting' }]);
     act(() => vi.advanceTimersByTime(REFRESH_MS));
     expect(refresh).toHaveBeenCalledTimes(4);
+  });
+
+  it('a processing material shows its pages done of the total in the pill and the line (Story 1.15)', () => {
+    for (const [language, words] of [['pt-BR', 'processando · 0 de 320 páginas'], ['en', 'processing · 0 of 320 pages']] as const) {
+      view({
+        language,
+        rows: [
+          { id: ID, name: 'Livro.pdf', state: 'processing', pages: { done: 0, total: 320 } },
+          { id: 'w', name: 'Espera.pdf', state: 'processing' },
+        ],
+      });
+      const tray = screen.getByRole('region', { name: language === 'en' ? en.upload.tray.label : ptBR.upload.tray.label });
+      const [paged, unknown] = within(tray).getAllByRole('listitem');
+      expect(paged!.querySelector('[data-state="processing"]')!.textContent).toBe(words);
+      const line = paged!.querySelector('progress')!;
+      expect([line.getAttribute('value'), line.getAttribute('max')]).toEqual(['0', '320']);
+      // Without a page total yet, the pill is the word alone.
+      expect(unknown!.querySelector('[data-state="processing"]')!.textContent).toBe(language === 'en' ? 'processing' : 'processando');
+      cleanup();
+    }
+    // Pages show only while processing.
+    view({ rows: [{ id: ID, name: 'Livro.pdf', state: 'failed', pages: { done: 0, total: 320 } }] });
+    expect(screen.getByRole('region', { name: 'Arquivos em andamento' }).querySelector('[data-state="failed"]')!.textContent).toBe('falhou');
+  });
+
+  it("a material's page refreshes itself every 5 s while its state moves and the tab is visible (Story 1.15)", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<MaterialRefresher state="waiting" />);
+    act(() => vi.advanceTimersByTime(REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    rerender(<MaterialRefresher state="processing" />);
+    act(() => vi.advanceTimersByTime(REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    act(() => vi.advanceTimersByTime(3 * REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(2);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    for (const still of ['failed', 'needs_review', 'ready'] as const) {
+      rerender(<MaterialRefresher state={still} />);
+      act(() => vi.advanceTimersByTime(3 * REFRESH_MS));
+    }
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('every state has its word in both languages, with its colour beside it', () => {
