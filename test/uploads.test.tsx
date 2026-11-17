@@ -513,9 +513,19 @@ describe('the upload tray (Story 1.14)', () => {
       expect(unknown!.querySelector('[data-state="processing"]')!.textContent).toBe(language === 'en' ? 'processing' : 'processando');
       cleanup();
     }
-    // Pages show only while processing.
-    view({ rows: [{ id: ID, name: 'Livro.pdf', state: 'failed', pages: { done: 0, total: 320 } }] });
-    expect(screen.getByRole('region', { name: 'Arquivos em andamento' }).querySelector('[data-state="failed"]')!.textContent).toBe('falhou');
+    // Pages show only while processing: a failed or a reviewed material keeps a full line.
+    view({
+      rows: [
+        { id: ID, name: 'Livro.pdf', state: 'failed', pages: { done: 0, total: 320 } },
+        { id: 'r', name: 'Revisar.pdf', state: 'needs_review', pages: { done: 0, total: 320 } },
+      ],
+    });
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(tray.querySelector('[data-state="failed"]')!.textContent).toBe('falhou');
+    expect(tray.querySelector('[data-state="needs_review"]')!.textContent).toBe('precisa de revisão');
+    for (const line of tray.querySelectorAll('progress')) {
+      expect([line.getAttribute('value'), line.getAttribute('max')]).toEqual(['1', '1']);
+    }
   });
 
   it("a material's page refreshes itself every 5 s while its state moves and the tab is visible (Story 1.15)", () => {

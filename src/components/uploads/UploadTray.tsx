@@ -78,8 +78,9 @@ export function trayRows(
             },
       );
     } else {
+      // Pages fill the line only while processing; any other state keeps a full line.
       server.push(
-        row.pages === undefined
+        row.pages === undefined || row.state !== 'processing'
           ? { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: 1, total: 1 }
           : { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: row.pages.done, total: row.pages.total, pages: row.pages },
       );
