@@ -17,6 +17,7 @@ const { PillButton, SolidPillButton } = await import('@/components/PillButton');
 const { ConfirmationDialog } = await import('@/components/ConfirmationDialog');
 const { Notice } = await import('@/components/Notice');
 const { PreferencesForm } = await import('@/components/PreferencesForm');
+const { PageView, pictureUrl } = await import('@/components/PageView');
 
 // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
 beforeAll(() => {
@@ -304,5 +305,74 @@ describe('UsernameForm', () => {
     expect(termsAlert.textContent).toBe('Aceite os termos.');
     expect(screen.getByRole('checkbox').getAttribute('aria-describedby')).toBe(termsAlert.id);
     expect((screen.getByLabelText('Nome de usuário') as HTMLInputElement).getAttribute('aria-invalid')).toBe('false');
+  });
+});
+
+describe('PageView (Story 1.19)', () => {
+  const MATERIAL = '0190a0b0-0000-7000-8000-000000000003';
+  const picturePage = {
+    page: 13,
+    pageTotal: 364,
+    picture: { width: 1545, height: 2000 },
+    lines: [
+      { text: 'Armor', box: [0.1, 0.1, 0.3, 0.125] },
+      { text: 'Plate | 1,500 gp | 18', box: [0.1372, 0.18, 0.5281, 0.1975] },
+      { text: '<img src=x onerror=alert(1)>', box: [0, 0.9, 0.2, 0.92] },
+    ],
+    text: null,
+    passages: [],
+  };
+
+  it('draws a picture page as one SVG in its pixels: frame, picture, then one transparent text per line fitted to its box', () => {
+    const { container } = render(<PageView page={picturePage} materialId={MATERIAL} language="pt-BR" />);
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('viewBox')).toBe('0 0 1545 2000');
+    expect(svg.getAttribute('role')).toBe('group');
+    expect(svg.getAttribute('aria-label')).toBe('Página 13 de 364');
+    // The frame comes first, so it shows (with the page number) before the picture arrives.
+    const children = [...svg.children].map((child) => child.tagName.toLowerCase());
+    expect(children).toEqual(['rect', 'image', 'text', 'text', 'text']);
+    const image = svg.querySelector('image')!;
+    expect(image.getAttribute('href')).toBe(`/api/v1/materials/${MATERIAL}/pages/13/picture?ground=review`);
+    expect(image.getAttribute('aria-hidden')).toBe('true');
+    const texts = [...svg.querySelectorAll('text')];
+    expect(texts.map((text) => text.textContent)).toEqual(picturePage.lines.map((line) => line.text));
+    const plate = texts[1]!;
+    // Left at 0.1372 x 1545, the box 0.0175 x 2000 = 35 px high: the baseline at 80% of it, glyphs at 90%.
+    expect(plate.getAttribute('x')).toBe('212');
+    expect(plate.getAttribute('y')).toBe('388');
+    expect(plate.getAttribute('font-size')).toBe('31.5');
+    expect(plate.getAttribute('textLength')).toBe('603.9');
+    expect(plate.getAttribute('lengthAdjust')).toBe('spacingAndGlyphs');
+    for (const text of texts) {
+      expect(text.getAttribute('class')).toMatch(/line/);
+    }
+    // Line text is text, never HTML.
+    expect(svg.querySelector('img')).toBeNull();
+    expect(texts[2]!.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(screen.getByText('Página 13 de 364', { selector: 'figcaption' })).toBeTruthy();
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a text page as its text with its line breaks, never as HTML, and no picture', () => {
+    const page = { page: 2, pageTotal: 9, picture: null, lines: [], text: '# Regras\n\n<b>negrito</b>', passages: [] };
+    const { container } = render(<PageView page={page} materialId={MATERIAL} language="en" />);
+    expect(container.querySelector('svg')).toBeNull();
+    expect(container.querySelector('b')).toBeNull();
+    const text = container.querySelector('figure > div')!;
+    expect(text.textContent).toBe('# Regras\n\n<b>negrito</b>');
+    expect(text.getAttribute('class')).toMatch(/text/);
+    expect(container.querySelector('figure')!.getAttribute('data-kind')).toBe('text');
+    expect(screen.getByText('Page 2 of 9')).toBeTruthy();
+    expectNoStyleAttribute(container);
+  });
+
+  it('builds the relayed picture URL, and draws a line with no width without stretching it', () => {
+    expect(pictureUrl(MATERIAL, 7)).toBe(`/api/v1/materials/${MATERIAL}/pages/7/picture?ground=review`);
+    const page = { ...picturePage, lines: [{ text: 'x', box: [0.5, 0.5, 0.5, 0.5] }] };
+    const { container } = render(<PageView page={page} materialId={MATERIAL} language="pt-BR" />);
+    const text = container.querySelector('text')!;
+    expect(text.getAttribute('textLength')).toBeNull();
+    expect(text.getAttribute('font-size')).toBe('0.9');
   });
 });

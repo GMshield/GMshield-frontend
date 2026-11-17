@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { notFoundFor } from '@/app/not-found';
 import { MaterialRefresher } from '@/components/MaterialRefresher';
 import { Notice } from '@/components/Notice';
@@ -16,8 +18,9 @@ import styles from './page.module.css';
  * done of the total while processing, a failed material says why under it, and the page refreshes itself every 5 s
  * while its state is moving and the tab is visible. Since Story 1.17 the pill names what is being read ("lendo texto ·
  * 40 de 364 páginas", "lendo por OCR · 12 de 80 páginas"), and while processing or needing review the page lists the
- * pages read directly, read by OCR and still waiting, and the unreadable ones when there are any. The quality report and
- * its actions come with Story 1.20.
+ * pages read directly, read by OCR and still waiting, and the unreadable ones when there are any. Since Story 1.19 a
+ * material that needs review or is ready links to its first page ("Ver páginas"). The quality report and its actions
+ * come with Story 1.20.
  */
 export default async function MaterialPage({ params }: { readonly params: Promise<{ readonly id: string }> }) {
   const [{ id }, { language }, token] = await Promise.all([params, currentPreferences(), currentSessionToken()]);
@@ -64,6 +67,13 @@ export default async function MaterialPage({ params }: { readonly params: Promis
         </section>
       )}
       {state === 'failed' ? <p className={styles.failure}>{failureText(failure, language)}</p> : null}
+      {state === 'needs_review' || state === 'ready' ? (
+        <p className={styles.pages}>
+          <Link className={styles.pagesLink} href={`/files/${encodeURIComponent(material.data.id)}/pages/1`}>
+            {t('material.viewPages')}
+          </Link>
+        </p>
+      ) : null}
       <MaterialRefresher state={state} />
     </>
   );

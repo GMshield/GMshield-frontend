@@ -59,3 +59,23 @@
 .counts > h2 {
   margin: 0;
 }
+
+/* The link to the material's first page (Story 1.19), once it needs review or is ready: a pill, never the solid one. */
+.pages {
+  margin: var(--space-4) 0 0;
+}
+
+.pagesLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}

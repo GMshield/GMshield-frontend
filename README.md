@@ -43,7 +43,9 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/app/api/v1/uploads/[[...path]]/route.ts` | the upload relay (Story 1.13): `/api/v1/uploads/**` streamed to the backend (`src/server/backend/upload-relay.ts`) |
 | `src/client/upload` | the browser's upload module (Story 1.13): tus-js-client with a checksum per part, the whole-file hash and the completion; `sniff.ts`, the browser's format check (Story 1.14) |
 | `src/components/uploads` | the guided upload and the upload tray (Story 1.14): `UploadsProvider`, `UploadDialog`, `UploadTray`, their texts built on the server (`upload-texts.ts`) |
-| `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state |
+| `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state; `pages/[page]`, one page of it under review (Story 1.19) |
+| `src/app/api/v1/materials/[id]/pages/[page]/picture/route.ts` | the picture relay (Story 1.19): a page's WebP streamed from the backend (`src/server/backend/picture-relay.ts`) |
+| `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
@@ -231,9 +233,27 @@ they sit in `src/`.
     tab still reaches the idle end.
   - `/files/[id]`: the material's name and its state pill (`GET /api/v1/materials/{id}`); anything not
     found is the single "Não encontrado." page.
+- **Page pictures with a text layer (Story 1.19).** Public contract 1.8.0.
+  - The material page links "Ver páginas" to `/files/{id}/pages/1` once the material needs review or is ready.
+    `/files/[id]/pages/[page]` reads `GET /api/v1/materials/{id}/pages/{page}?ground=review` (`getPage` in
+    `src/server/materials.ts`) and the material's name; it shows the name (back to the material), `PageView` with
+    "Página 13 de 364", and "Página anterior" and "Próxima página", hidden at the first and the last page. A page the
+    backend does not serve, or a page number that is not one, is the single "Não encontrado." page.
+  - `PageView` draws a PDF page as one `<svg viewBox="0 0 width height">` in the picture's pixels: a frame, the
+    `<image>`, and one `<text>` per line, placed with SVG attributes only (the Content-Security-Policy allows no style
+    attribute): `x` at the box's left, the baseline at 80 % of its height, `font-size` 90 % of it, and `textLength`
+    with `lengthAdjust="spacingAndGlyphs"` fitted to its width. The text is transparent by class, so it can be
+    selected and copied, a screen reader reads it, and it stays over its words at any zoom. The frame and the page
+    number show before the picture arrives. A text page is its text in a `pre-wrap` block. Line and page text are React
+    text, never HTML.
+  - The picture comes through this site: `GET /api/v1/materials/{id}/pages/{page}/picture?ground=review` is relayed
+    by `relayPicture` like the upload relay: the id must be a UUID, the page a number from 1 and the ground a plain
+    word, or it answers "not found" without the backend; only the service credential, the session and a
+    `traceparent` go to the backend, and the WebP streams back as `image/webp` with `Cache-Control: no-store` and
+    `X-Content-Type-Options: nosniff` (`img-src 'self'` allows it). The proxy runs on this GET as on any page.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -314,6 +334,10 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.8.0 (Story 1.19): the backend first (its migration `V12__page_views.sql`, and the
+page routes), then the frontend (its health check fails against a 1.7.0 backend, and its page route reads the new
+routes).
 
 Deploy order for public contract 1.7.0 (Story 1.17): the backend first (a material's `pages` gains the counts by
 layer, `text` and `image`, and by outcome, `readDirectly`, `readByOcr` and `unreadable`; no migration), then the

@@ -12,8 +12,8 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 
 // The categories and codes the backend sends today (GMshield-backend ApiProblem.java), integrity.failed
 // (Story 1.7), sign-in and sessions (Story 1.9, AccountProblems.java), and the renewal and the service
-// credential (Story 1.10, AccountProblems.java and ServiceCredentialFilter.java), and the upload (Story 1.13,
-// UploadProblems.java).
+// credential (Story 1.10, AccountProblems.java and ServiceCredentialFilter.java), the upload (Story 1.13,
+// UploadProblems.java), and the page routes (Story 1.19, PageProblems.java).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
     'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required'],
@@ -24,6 +24,7 @@ const BACKEND_CODES = {
   upload: ['tus_version', 'too_large', 'format_refused', 'busy', 'part_checksum_mismatch', 'offset_conflict', 'incomplete',
     'file_checksum_mismatch', 'expired', 'metadata_invalid'],
   ingestion: ['password_required', 'file_unreadable', 'too_many_steps'],
+  page: ['ground_unknown'],
 } as const;
 
 function leaves(value: unknown): string[] {

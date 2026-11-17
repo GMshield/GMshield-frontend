@@ -6,9 +6,11 @@
 // Story 1.13: Location, Upload-Offset, Tus-Resumable...); a tus part (PATCH /api/v1/uploads/{id}) is read
 // to its end and answers the offset it would reach.
 // A few answers are set in EXAMPLES instead (Story 1.14): the materials list is empty, so the tray of a test-mode
-// shell stays still, and a material reads as one being processed, its pages known (Story 1.15).
+// shell stays still, and a material reads as one being processed, its pages known (Story 1.15). A page reads as a
+// picture page with two lines (Story 1.19), and a binary answer (a page's picture, image/webp) is a 1 x 1 WebP.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
+import { Buffer } from 'node:buffer';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -125,7 +127,22 @@ export const EXAMPLES = {
     // Story 1.17: a mixed book whose text pages are being read, its scanned pages waiting for OCR.
     pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
   },
+  // Story 1.19: page 13 of a book under review, a picture page with two lines and one passage.
+  'GET /api/v1/materials/{id}/pages/{page}': {
+    page: 13,
+    pageTotal: 444,
+    picture: { width: 1545, height: 2000 },
+    lines: [
+      { text: 'Armor', box: [0.1, 0.1, 0.3, 0.125] },
+      { text: 'Plate | 1,500 gp | 18', box: [0.1, 0.15, 0.6, 0.17] },
+    ],
+    text: null,
+    passages: [{ id: '0190a0b0-0000-7000-8000-000000000009', boxes: [[0.1, 0.1, 0.6, 0.17]] }],
+  },
 };
+
+/** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
+export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
 
 /** The answer to a request: status, content type and body. */
 export function answer(contract, method, pathname, traceId) {
@@ -150,6 +167,9 @@ export function answer(contract, method, pathname, traceId) {
     const [type, media] = Object.entries(content)[0] ?? [];
     if (type === undefined || status === 204) {
       return { status, type: null, body: null, ...headers };
+    }
+    if (!type.includes('json')) {
+      return { status, type, body: PICTURE, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});
@@ -216,7 +236,8 @@ export function createStandInServer(contract, { quiet = false } = {}) {
       }
       if (result.type !== null) {
         response.setHeader('Content-Type', result.type);
-        response.end(request.method === 'HEAD' ? undefined : JSON.stringify(result.body));
+        const body = Buffer.isBuffer(result.body) ? result.body : JSON.stringify(result.body);
+        response.end(request.method === 'HEAD' ? undefined : body);
       } else {
         response.end();
       }

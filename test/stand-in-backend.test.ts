@@ -90,6 +90,22 @@ describe('stand-in backend', () => {
     });
   });
 
+  it('answers a page (Story 1.19) as a picture page with lines, and its picture as a WebP', async () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/pages/13`, 't')).toMatchObject({
+      status: 200,
+      type: 'application/json',
+      body: { page: 13, pageTotal: 444, picture: { width: 1545, height: 2000 }, text: null },
+    });
+    running = await startStandIn();
+    const picture = await fetch(`${running.url}/api/v1/materials/${id}/pages/13/picture?ground=review`);
+    expect(picture.status).toBe(200);
+    expect(picture.headers.get('content-type')).toBe('image/webp');
+    const bytes = Buffer.from(await picture.arrayBuffer());
+    expect(bytes.subarray(0, 4).toString('ascii')).toBe('RIFF');
+    expect(bytes.subarray(8, 12).toString('ascii')).toBe('WEBP');
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

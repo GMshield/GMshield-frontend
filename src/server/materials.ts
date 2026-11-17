@@ -12,6 +12,7 @@ type Schemas = components['schemas'];
 export type Material = Schemas['Material'];
 export type MaterialPage = Schemas['MaterialPage'];
 export type MaterialState = Material['state'];
+export type MaterialPageView = Schemas['MaterialPageView'];
 type ListQuery = NonNullable<operations['listMaterials']['parameters']['query']>;
 
 /** The states the tray lists: everything not yet ready, and what needs the GM. */
@@ -35,5 +36,23 @@ export function listMaterials(
 export function getMaterial(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<Material>> {
   return call('materials.get', options, (client) =>
     client.GET('/api/v1/materials/{id}', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } }),
+  );
+}
+
+/**
+ * Page `page` of one of the account's materials, on the ground `review`: its picture's size and lines, or its text,
+ * and its passages' places. `request.not_found` for another owner's material, a version that is not reviewable, a page
+ * outside the material or one with no view.
+ */
+export function getPage(
+  sessionToken: string,
+  id: string,
+  page: number,
+  options: CallOptions = {},
+): Promise<Result<MaterialPageView>> {
+  return call('materials.page', options, (client) =>
+    client.GET('/api/v1/materials/{id}/pages/{page}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { id, page }, query: { ground: 'review' } },
+    }),
   );
 }

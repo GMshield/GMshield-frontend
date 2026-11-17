@@ -5,6 +5,7 @@ export type Contract = { info: { version: string }; paths?: Record<string, Recor
 export type Answer = { status: number; type: string | null; body: unknown; headers?: Record<string, string> };
 
 export const EXAMPLES: Readonly<Record<string, unknown>>;
+export const PICTURE: Buffer;
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
 export function answer(contract: unknown, method: string, pathname: string, traceId: string): Answer;
