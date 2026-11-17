@@ -118,7 +118,9 @@ they sit in `src/`.
     email address or a username.
 - **Sessions that rotate and end (Story 1.10).**
   - `__Host-gmshield-session` holds `<token>.<renew-after in epoch seconds>`, for `expiresInSeconds`
-    of the backend's grant (what is left of the session's 7 days). A value without the suffix (Story
+    of the backend's grant: what is left of the session's absolute lifetime, which only the backend
+    sets (`GMSHIELD_SESSION_ABSOLUTE_TIMEOUT`, 7 days by default; the cookie follows it up to the
+    browsers' 400-day cap, and falls back to 7 days for a grant without a lifetime). A value without the suffix (Story
     1.9) is due for renewal at once. In the session's last renew-after window the backend grants a
     renew-after equal to what is left, and the cookie never gets one beyond its own life, so the
     last window does not renew on every request.

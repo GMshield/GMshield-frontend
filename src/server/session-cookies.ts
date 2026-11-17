@@ -22,8 +22,14 @@ export const RETURN_COOKIE = '__Host-gmshield-return';
 
 const BASE = { secure: true, httpOnly: true, sameSite: 'lax', path: '/' } as const;
 export const SIGN_IN_MAX_AGE = 600;
-/** The longest a session lives (the backend's default absolute timeout); a grant may give less. */
-export const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
+/**
+ * The longest a session cookie lives: the browsers' own cap on a cookie (RFC 6265bis, 400 days). Within it
+ * the backend's grant decides, so the session's lifetime stays the backend's setting alone
+ * (`GMSHIELD_SESSION_ABSOLUTE_TIMEOUT`), with no copy here to keep in step.
+ */
+export const SESSION_MAX_AGE = 400 * 24 * 60 * 60;
+/** A grant without a usable lifetime: the backend's default absolute timeout. The backend still ends the session. */
+export const SESSION_FALLBACK_AGE = 7 * 24 * 60 * 60;
 export const RETURN_MAX_AGE = 60 * 60;
 export const SIGN_IN_COOKIE_OPTIONS = { ...BASE, maxAge: SIGN_IN_MAX_AGE } as const;
 export const RETURN_COOKIE_OPTIONS = { ...BASE, maxAge: RETURN_MAX_AGE } as const;
@@ -38,9 +44,9 @@ export function tokenFrom(value: string | undefined | null): string | null {
   return typeof value === 'string' && TOKEN.test(value) ? value : null;
 }
 
-/** A lifetime from the backend, within (0, fallback], else the fallback. */
-export function maxAgeFrom(seconds: unknown, fallback: number): number {
-  return typeof seconds === 'number' && Number.isInteger(seconds) && seconds > 0 && seconds <= fallback ? seconds : fallback;
+/** A lifetime from the backend, within (0, limit], else the fallback (by default the limit itself). */
+export function maxAgeFrom(seconds: unknown, fallback: number, limit: number = fallback): number {
+  return typeof seconds === 'number' && Number.isInteger(seconds) && seconds > 0 && seconds <= limit ? seconds : fallback;
 }
 
 /** The session cookie read: the token, and when it is due for renewal (null: due at once). */
@@ -70,14 +76,14 @@ export type CookieOptions = typeof BASE & { readonly maxAge: number };
 
 /**
  * The session cookie for a backend grant: `<token>.<now + renewAfterSeconds>`, living `expiresInSeconds`
- * (at most {@link SESSION_MAX_AGE}). A renew-after beyond the cookie's life is clamped to it, so the last
+ * (at most {@link SESSION_MAX_AGE}; {@link SESSION_FALLBACK_AGE} when it is missing or out of range). A renew-after beyond the cookie's life is clamped to it, so the last
  * window renews only when the session ends; a missing or odd renew-after makes the token due at once.
  */
 export function sessionCookieFor(
   grant: { readonly sessionToken: string; readonly expiresInSeconds?: unknown; readonly renewAfterSeconds?: unknown },
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): { readonly value: string; readonly options: CookieOptions } {
-  const maxAge = maxAgeFrom(grant.expiresInSeconds, SESSION_MAX_AGE);
+  const maxAge = maxAgeFrom(grant.expiresInSeconds, SESSION_FALLBACK_AGE, SESSION_MAX_AGE);
   const renewIn = grant.renewAfterSeconds;
   const renewAfter = typeof renewIn === 'number' && Number.isInteger(renewIn) && renewIn >= 0 ? Math.min(renewIn, maxAge) : 0;
   return { value: `${grant.sessionToken}.${nowSeconds + renewAfter}`, options: { ...BASE, maxAge } };
