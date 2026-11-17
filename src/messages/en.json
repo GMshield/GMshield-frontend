@@ -73,7 +73,8 @@
       "server": "Something went wrong on the server. Try again in a moment.",
       "integrity": "This data failed its integrity check and is not shown.",
       "session": "Your session has ended. Sign in again.",
-      "service": "GMshield did not recognise this call to the server. Try again in a moment."
+      "service": "GMshield did not recognise this call to the server. Try again in a moment.",
+      "upload": "The upload could not continue."
     },
     "codes": {
       "request": {
@@ -105,6 +106,18 @@
       },
       "service": {
         "unauthenticated": "GMshield did not recognise this call to the server. Try again in a moment."
+      },
+      "upload": {
+        "tus_version": "This upload client is not supported. Reload the page and try again.",
+        "too_large": "This file is larger than 2 GB, the most GMshield accepts.",
+        "format_refused": "This format is not accepted. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC.",
+        "busy": "Another part of this file is being sent. Try again in a moment.",
+        "part_checksum_mismatch": "A part of the file arrived damaged. It will be sent again.",
+        "offset_conflict": "The upload is out of step with the server. Resume it to continue.",
+        "incomplete": "The file has not been sent in full yet.",
+        "file_checksum_mismatch": "The file that arrived differs from the one you chose, so it was discarded. Send it again.",
+        "expired": "This upload was left unfinished for 6 hours and expired. Send the file again.",
+        "metadata_invalid": "The file needs a name of 1 to 255 characters."
       }
     }
   },

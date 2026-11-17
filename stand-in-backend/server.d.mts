@@ -2,7 +2,7 @@
 import type { Server } from 'node:http';
 
 export type Contract = { info: { version: string }; paths?: Record<string, Record<string, unknown>>; [key: string]: unknown };
-export type Answer = { status: number; type: string | null; body: unknown };
+export type Answer = { status: number; type: string | null; body: unknown; headers?: Record<string, string> };
 
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;

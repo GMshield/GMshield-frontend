@@ -6,8 +6,8 @@ under `src/server` calls the backend.
 
 ## Versions
 
-Checked on 2026-11-13 (Story 1.8's additions on 2026-11-16): each is the newest release at least
-two weeks old that day. Every dependency is pinned exactly and `package-lock.json` is committed.
+Checked on 2026-11-13 (Story 1.8's and Story 1.13's additions on 2026-11-16): each is the newest release
+at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0). Every dependency is pinned exactly and `package-lock.json` is committed.
 
 | What | Version | Where it is set |
 |---|---|---|
@@ -24,6 +24,8 @@ two weeks old that day. Every dependency is pinned exactly and `package-lock.jso
 | jsdom (component tests) | 30.1.3 | `package.json` |
 | Testing Library: react, dom, user-event | 16.3.3, 10.4.2, 14.6.8 | `package.json` |
 | sharp (measures the backdrop in `test/contrast.test.ts` only) | 0.35.5 | `package.json` |
+| tus-js-client (the browser's tus client, Story 1.13) | 4.3.1 | `package.json` |
+| hash-wasm (the whole-file SHA-256, Story 1.13) | 4.12.0 | `package.json` |
 | Build and runtime image | `node:26.13.0-alpine3.24`, pinned by digest | `Dockerfile` |
 
 ## Structure
@@ -38,6 +40,8 @@ two weeks old that day. Every dependency is pinned exactly and `package-lock.jso
 | `src/app/sign-in` | the start of a sign-in (`google/route.ts`), the clearing of an ended session's cookie (`ended/route.ts`), the Server Actions of the username step and sign-out (`actions.ts`), the username page, and the allowlist of outcomes `/` may show (`notice.ts`) |
 | `src/app/auth/google/callback/route.ts` | the Route Handler Google redirects to; it relays the redirect to the backend |
 | `src/app/session/renew/route.ts` | renews the session token when the backend asks for it (`session.renewal_required`) and goes back to the page |
+| `src/app/api/v1/uploads/[[...path]]/route.ts` | the upload relay (Story 1.13): `/api/v1/uploads/**` streamed to the backend (`src/server/backend/upload-relay.ts`) |
+| `src/client/upload` | the browser's upload module (Story 1.13): tus-js-client with a checksum per part, the whole-file hash and the completion |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
@@ -62,7 +66,7 @@ they sit in `src/`.
   with a new span id, or starts a new trace. No browser code calls the backend, and no
   `NEXT_PUBLIC_` variable exists.
 - **Proxy.** Every answer except Next.js's static files (`/_next/static`, `/_next/image` and
-  `/favicon.ico`, which the proxy's matcher skips) carries `Cache-Control: no-store`,
+  `/favicon.ico`) and the upload relay (`/api/v1/uploads`, below), which the proxy's matcher skips, carries `Cache-Control: no-store`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, a `Permissions-Policy` that
   turns off camera, microphone and geolocation, and a Content-Security-Policy that
   allows the site's own origin only, with a new nonce per request for the inline scripts and
@@ -167,9 +171,34 @@ they sit in `src/`.
     after a choice or on Esc. CSS decides the layout; the component keeps the two states.
   - The sign-in's username step sends the interface's language, which names the new account's first
     system and campaign.
+- **Resumable upload (Story 1.13, AD-16).** The browser talks tus 1.0.0 to this site's
+  `/api/v1/uploads/**`, never to the backend:
+  - The relay (`src/app/api/v1/uploads/[[...path]]/route.ts`, Node runtime, `force-dynamic`) sends the
+    request to the same backend path as a stream (`duplex: 'half'`, no timeout on the body; a browser that
+    leaves aborts the call) and streams the answer back. Only `Tus-Resumable`, `Upload-Length`,
+    `Upload-Metadata`, `Upload-Offset`, `Upload-Checksum`, `Content-Type` and `Content-Length` go out, with
+    the service credential, the session cookie's token as `X-Session-Token` and a `traceparent`; only
+    `Location`, `Tus-*`, `Upload-*` and `Content-Type` come back, always `no-store`. Only the three upload
+    shapes (`/api/v1/uploads`, `/{id}`, `/{id}/completion`) are relayed; anything else is
+    `request.not_found`. The proxy's matcher skips these paths, because when the proxy runs Next.js
+    holds up to 10 MB of every body in memory; the relay refuses a POST, PUT, PATCH or DELETE from another
+    origin itself with the proxy's `isSameOrigin` (403 `request.cross_origin`); a HEAD is not checked, as
+    browsers send no `Origin` on a same-origin HEAD and `Sec-Fetch-Site` only to secure origins. Spike (2026-11-16): bodies of 256 MiB, 2 GiB and 6 GiB
+    through the relay kept the server's RSS at 180 to 193 MB.
+  - The browser module (`src/client/upload`, `startUpload(file, options)`) uses tus-js-client 4.3.1:
+    64 MiB parts, `metadata.filename`, the upload URL kept under the file's fingerprint (the hex SHA-256 of
+    its name, type, size and date with the endpoint, so the stored key names nothing) for
+    `findPreviousUploads` and `resumeFromPreviousUpload`, removed only after the completion answered 201
+    (an upload already whole on resume goes straight to its completion), and `retryDelays`
+    (a part refused with 409, 423 or 460, or a server failure, is tried again). Its HTTP stack adds
+    `Upload-Checksum: sha256 <Base64>` of each part's own bytes (`crypto.subtle.digest`). Meanwhile
+    hash-wasm hashes the whole file 16 MiB at a time; once the last part is stored the module posts
+    the hash to `<upload>/completion` (tried again after a 5xx or 423) and resolves with `{materialId, versionId, state}`. A failure is
+    an `UploadError` with the status and the problem detail, for `errorText`. Story 1.14 adds the
+    dialog and the tray.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`, `service`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -242,6 +271,10 @@ backend).
 
 Deploy order for public contract 1.3.0 (Story 1.11): the backend first (its migration `V4__library.sql`
 adds the library tables), then the frontend (its health check fails against a 1.2.0 backend).
+
+Deploy order for public contract 1.4.0 (Story 1.13): the backend first (its migration `V6__materials.sql`
+adds the materials tables, and it answers the upload routes), then the frontend (its health check fails
+against a 1.3.0 backend).
 
 ## Settings
 

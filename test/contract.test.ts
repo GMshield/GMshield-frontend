@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 1.11 needs the current campaign and the sign-in language of 1.3.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.3.0');
-    expect(meetsMinimum('1.3.0')).toBe(true);
-    expect(meetsMinimum('1.3.1')).toBe(true);
+    // Story 1.13 needs the upload routes of 1.4.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.4.0');
+    expect(meetsMinimum('1.4.0')).toBe(true);
+    expect(meetsMinimum('1.4.1')).toBe(true);
+    expect(meetsMinimum('1.3.0')).toBe(false);
     expect(meetsMinimum('1.2.0')).toBe(false);
     expect(meetsMinimum('1.1.0')).toBe(false);
     expect(meetsMinimum('1.0.0')).toBe(false);

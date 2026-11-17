@@ -2,6 +2,9 @@
 // contracts/public.json with a valid example and every other path with a 404 problem detail.
 // GET /api/v1/version reports the contract's info.version. The frontend uses it in
 // GMSHIELD_MODE=test, where the real backend is not there (Dockerfile stage `stand-in-backend`).
+// An answer also carries the example of each header its response declares (the tus upload headers of
+// Story 1.13: Location, Upload-Offset, Tus-Resumable...); a tus part (PATCH /api/v1/uploads/{id}) is read
+// to its end and answers the offset it would reach.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { randomBytes } from 'node:crypto';
@@ -126,16 +129,31 @@ export function answer(contract, method, pathname, traceId) {
       .filter((code) => /^2\d\d$/.test(code))
       .sort((a, b) => a.localeCompare(b));
     const status = Number(statuses[0] ?? 204);
-    const content = operation.responses?.[String(status)]?.content ?? {};
+    const declared = operation.responses?.[String(status)] ?? {};
+    const headers = headersOf(contract, declared.headers);
+    const content = declared.content ?? {};
     const [type, media] = Object.entries(content)[0] ?? [];
     if (type === undefined || status === 204) {
-      return { status, type: null, body: null };
+      return { status, type: null, body: null, ...headers };
     }
     const body = media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});
-    return { status, type, body };
+    return { status, type, body, ...headers };
   }
   return problem(404, 'not_found', 'Not found', traceId);
 }
+
+/** `{ headers }` with the example of each declared response header, or nothing when none is declared. */
+function headersOf(contract, declared) {
+  const entries = Object.entries(declared ?? {}).map(([name, header]) => {
+    const resolved = resolve(contract, header);
+    const value = resolved.example ?? exampleOf(contract, resolved.schema ?? {});
+    return [name, String(value)];
+  });
+  return entries.length === 0 ? {} : { headers: Object.fromEntries(entries) };
+}
+
+/** A tus part: PATCH /api/v1/uploads/{id}. */
+const UPLOAD_PART = /^\/api\/v1\/uploads\/[^/]+$/;
 
 function problem(status, reason, title, traceId) {
   return {
@@ -165,19 +183,31 @@ export function createStandInServer(contract, { quiet = false } = {}) {
     // A base only to parse the request's path; nothing connects to it.
     const pathname = new URL(request.url ?? '/', 'http://stand-in').pathname; // NOSONAR: not a connection
     const result = answer(contract, request.method ?? 'GET', pathname, traceId);
-    // The request body is never read: drain it so that the connection can be reused.
-    request.resume();
-    response.statusCode = result.status;
-    response.setHeader('Cache-Control', 'no-store');
-    if (result.type !== null) {
-      response.setHeader('Content-Type', result.type);
-      response.end(request.method === 'HEAD' ? undefined : JSON.stringify(result.body));
-    } else {
-      response.end();
-    }
-    if (!quiet) {
-      log(traceId, 'request.completed', { method: request.method ?? 'GET', status: result.status });
-    }
+    // The request body is only counted, never kept: read to its end, the connection can be reused.
+    let received = 0;
+    request.on('data', (chunk) => {
+      received += chunk.length;
+    });
+    request.on('end', () => {
+      response.statusCode = result.status;
+      response.setHeader('Cache-Control', 'no-store');
+      for (const [name, value] of Object.entries(result.headers ?? {})) {
+        response.setHeader(name, value);
+      }
+      if (request.method === 'PATCH' && UPLOAD_PART.test(pathname) && result.status < 300) {
+        const start = Number(request.headers['upload-offset'] ?? 0);
+        response.setHeader('Upload-Offset', String((Number.isSafeInteger(start) ? start : 0) + received));
+      }
+      if (result.type !== null) {
+        response.setHeader('Content-Type', result.type);
+        response.end(request.method === 'HEAD' ? undefined : JSON.stringify(result.body));
+      } else {
+        response.end();
+      }
+      if (!quiet) {
+        log(traceId, 'request.completed', { method: request.method ?? 'GET', status: result.status });
+      }
+    });
   });
 }
 

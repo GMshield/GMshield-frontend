@@ -60,6 +60,28 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
   });
 
+  it('answers the upload paths (Story 1.13) with their tus headers, and a part with the offset it reaches', async () => {
+    const created = answer(contract, 'POST', '/api/v1/uploads', 't');
+    expect(created.status).toBe(201);
+    expect(created.headers).toMatchObject({ Location: expect.stringMatching(/^\/api\/v1\/uploads\/[0-9a-f-]{36}$/), 'Tus-Resumable': '1.0.0' });
+    expect(answer(contract, 'HEAD', '/api/v1/uploads/x', 't').headers).toMatchObject({ 'Upload-Offset': expect.any(String), 'Tus-Resumable': '1.0.0' });
+    expect(answer(contract, 'POST', '/api/v1/uploads/x/completion', 't')).toMatchObject({ status: 201, body: { state: 'waiting' } });
+
+    running = await startStandIn();
+    const location = (await fetch(`${running.url}/api/v1/uploads`, { method: 'POST' })).headers.get('location')!;
+    const part = await fetch(`${running.url}${location}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '1000' },
+      body: new Uint8Array(500),
+    });
+    expect(part.status).toBe(204);
+    expect(part.headers.get('upload-offset')).toBe('1500');
+    expect(part.headers.get('tus-resumable')).toBe('1.0.0');
+    const head = await fetch(`${running.url}${location}`, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('upload-length')).toMatch(/^\d+$/);
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
