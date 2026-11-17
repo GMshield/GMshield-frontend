@@ -7,19 +7,26 @@ import { PillButton } from '../PillButton';
 import { StatePill } from '../StatePill';
 import { useRefreshWhileMoving } from '../useRefreshWhileMoving';
 
-import { fill, formatSize, MOVING_STATES, problemText, type Material, type MaterialState, type UploadTexts } from './types';
+import {
+  fill,
+  formatSize,
+  MOVING_STATES,
+  problemText,
+  progressOf,
+  type Material,
+  type MaterialPages,
+  type MaterialState,
+  type UploadTexts,
+} from './types';
 import styles from './Uploads.module.css';
 import { UPLOAD_LIFETIME_MS, useUploads, type LiveUpload, type StoredUpload } from './UploadsProvider';
 
 /** How often the tray asks for fresh rows while one of them is moving and the tab is visible. */
 export { REFRESH_MS } from '../useRefreshWhileMoving';
 
-/** Pages done of the total, once the backend knows the total (Story 1.15). */
-type Pages = { readonly done: number; readonly total: number };
-
 /** One row of the tray, from the server, from this tab, or from a stored resume entry. */
 export type TrayRow =
-  | { readonly kind: 'material'; readonly key: string; readonly materialId: string; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly pages?: Pages }
+  | { readonly kind: 'material'; readonly key: string; readonly materialId: string; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly pages?: MaterialPages }
   | { readonly kind: 'live'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly problem: unknown }
   | { readonly kind: 'interrupted'; readonly key: string; readonly materialId: string; readonly name: string; readonly uploadId: string; readonly sent: number; readonly total: number; readonly expiresAt: string; readonly problem: unknown }
   | { readonly kind: 'gone'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly dismissKeys: readonly string[] };
@@ -78,11 +85,12 @@ export function trayRows(
             },
       );
     } else {
-      // Pages fill the line only while processing; any other state keeps a full line.
+      // Pages fill the line only while processing, with the pill's measure (Story 1.17); any other state keeps a full line.
+      const progress = row.pages === undefined || row.state !== 'processing' ? null : progressOf(row.pages);
       server.push(
-        row.pages === undefined || row.state !== 'processing'
+        progress === null || row.pages === undefined
           ? { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: 1, total: 1 }
-          : { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: row.pages.done, total: row.pages.total, pages: row.pages },
+          : { kind: 'material', key: row.id, materialId: row.id, name: row.name, state: row.state, sent: progress.done, total: progress.total, pages: row.pages },
       );
     }
   }
@@ -146,8 +154,10 @@ function useClock(): number | null {
 
 /**
  * The upload tray (Story 1.14), just above "Adicionar Arquivo": uploads and ingestions in progress, each with its
- * name (a link to its page once it has one), its state pill and a 2px line: of bytes sent while uploading, of pages
- * done while processing ("processando · 0 de 320 páginas", Story 1.15). Its server rows come from the signed-in layout;
+ * name (a link to its page once it has one), its state pill and a 2px line: of bytes sent while uploading ("enviando ·
+ * 45%", a solid line), of pages done while processing ("processando · 0 de 320 páginas", Story 1.15), and since Story
+ * 1.17 of the pages being read, named ("lendo texto · 40 de 364 páginas", "lendo por OCR · 12 de 80 páginas"), on a
+ * dashed line (`data-phase="processing"`), so the end of the upload never looks like it starting over. Its server rows come from the signed-in layout;
  * while a row is uploading, waiting or processing and the tab is visible, it asks the router for fresh ones every 5 s
  * (`router.refresh()`: an RSC fetch, which never renews the session).
  */
@@ -184,6 +194,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
   const sent = row.kind === 'gone' ? 0 : row.sent;
   const total = row.kind === 'gone' ? 1 : Math.max(row.total, 1);
   const percent = Math.floor((sent / total) * 100);
+  const pill = pillOf(row, state, percent, texts);
 
   function onFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -210,7 +221,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
             {row.name}
           </Link>
         )}
-        <StatePill state={state} word={texts.states[state]} detail={pagesDetail(row, state, texts)} />
+        <StatePill state={state} word={pill.word} detail={pill.detail} />
       </div>
       <progress
         className={styles.line}
@@ -218,6 +229,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
         max={total}
         aria-label={fill(t.sent, { percent })}
         aria-hidden={state === 'uploading' ? undefined : true}
+        data-phase={state === 'processing' ? 'processing' : state === 'uploading' ? 'upload' : undefined}
       />
       {row.kind === 'interrupted' ? (
         <>
@@ -263,12 +275,23 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
   );
 }
 
-/** "0 de 320 páginas" beside a processing material whose page total is known; nothing otherwise. */
-function pagesDetail(row: TrayRow, state: MaterialState, texts: UploadTexts): string | undefined {
-  if (row.kind !== 'material' || row.pages === undefined || state !== 'processing') {
-    return undefined;
+/**
+ * The pill's word and its measure: "enviando · 45%" for a live upload; for a processing material whose page total is
+ * known, what is being read and how far ("lendo texto · 40 de 364 páginas", "lendo por OCR · 12 de 80 páginas",
+ * "processando · 3 de 3 páginas"); the state's word alone otherwise.
+ */
+export function pillOf(row: TrayRow, state: MaterialState, percent: number, texts: UploadTexts): { readonly word: string; readonly detail?: string } {
+  if (row.kind === 'live' && state === 'uploading') {
+    return { word: texts.states.uploading, detail: fill(texts.percent, { percent }) };
   }
-  return fill(texts.pages, { done: row.pages.done, total: row.pages.total });
+  if (row.kind !== 'material' || row.pages === undefined || state !== 'processing') {
+    return { word: texts.states[state] };
+  }
+  const progress = progressOf(row.pages);
+  return {
+    word: progress.phase === null ? texts.states.processing : texts.phases[progress.phase],
+    detail: fill(texts.pages, { done: progress.done, total: progress.total }),
+  };
 }
 
 /** The expiry as the GM reads it: the time, with the day when it is not today. */

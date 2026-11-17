@@ -7,6 +7,8 @@ import type { components } from '@/server/backend/generated/public';
  */
 export type Material = components['schemas']['Material'];
 export type MaterialState = Material['state'];
+/** A material's pages once its page total is known: done of the total, by layer and by outcome (Story 1.17). */
+export type MaterialPages = NonNullable<Material['pages']>;
 export type Kind = NonNullable<Material['kind']>;
 export const KINDS: readonly Kind[] = ['rulebook', 'supplement', 'homebrew', 'campaign_notes', 'other'];
 export type UploadLanguage = 'pt-BR' | 'en' | 'detect';
@@ -33,9 +35,38 @@ export type UploadTexts = {
   readonly states: Messages['material']['state'];
   /** "{done} de {total} páginas": the pages of a material being processed (Story 1.15). */
   readonly pages: Messages['material']['pages'];
+  /** "lendo texto", "lendo por OCR": the word of a processing material while pages of that kind wait (Story 1.17). */
+  readonly phases: Messages['material']['phase'];
+  /** "{percent}%": the bytes of a live upload sent so far (Story 1.17). */
+  readonly percent: Messages['material']['percent'];
   /** Problem texts by code (`upload.too_large`) and by category (`upload`); `server` is the fallback. */
   readonly errors: Readonly<Record<string, string>>;
 };
+
+/** What is being read, and its measure: text pages while any wait, then image pages, else every page. */
+export type Progress = { readonly phase: keyof Messages['material']['phase'] | null; readonly done: number; readonly total: number };
+
+/**
+ * A processing material's measure (Story 1.17), from what the backend reports (it names no phase): the layer of the
+ * pages the step in progress reads (`reading`), so OCR between two batches of text pages reads "lendo por OCR"; when
+ * it is null, its text pages while any of them wait, then its image pages (read by OCR) while any of them wait, else
+ * all its pages.
+ */
+export function progressOf(pages: MaterialPages): Progress {
+  if (pages.reading === 'text') {
+    return { phase: 'text', done: pages.text.done, total: pages.text.total };
+  }
+  if (pages.reading === 'image') {
+    return { phase: 'ocr', done: pages.image.done, total: pages.image.total };
+  }
+  if (pages.text.done < pages.text.total) {
+    return { phase: 'text', done: pages.text.done, total: pages.text.total };
+  }
+  if (pages.image.done < pages.image.total) {
+    return { phase: 'ocr', done: pages.image.done, total: pages.image.total };
+  }
+  return { phase: null, done: pages.done, total: pages.total };
+}
 
 /** States in which a material is still moving: the tray refreshes while one of its rows is in one. */
 export const MOVING_STATES: readonly MaterialState[] = ['uploading', 'waiting', 'processing'];

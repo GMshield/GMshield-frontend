@@ -25,3 +25,37 @@
   max-width: 60ch;
   margin: var(--space-3) 0 0;
 }
+
+/* The pages read directly, read by OCR, still waiting and unreadable (Story 1.17): a plain list of word and number. */
+.counts {
+  margin: var(--space-4) 0 0;
+}
+
+.countList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-2) 0 0;
+}
+
+.count {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.count dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.count dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts > h2 {
+  margin: 0;
+}

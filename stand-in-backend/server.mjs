@@ -122,7 +122,8 @@ export const EXAMPLES = {
     name: 'Livro do Jogador.pdf',
     state: 'processing',
     kind: 'rulebook',
-    pages: { done: 0, total: 320 },
+    // Story 1.17: a mixed book whose text pages are being read, its scanned pages waiting for OCR.
+    pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
   },
 };
 

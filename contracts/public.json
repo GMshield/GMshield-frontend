@@ -141,6 +141,24 @@
         "required" : [ "items" ],
         "type" : "object"
       },
+      "MaterialPageCount" : {
+        "properties" : {
+          "done" : {
+            "description" : "Pages of this kind that have an outcome",
+            "example" : 40,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "description" : "All the pages of this kind",
+            "example" : 364,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "done", "total" ],
+        "type" : "object"
+      },
       "MaterialPages" : {
         "properties" : {
           "done" : {
@@ -149,14 +167,45 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "image" : {
+            "$ref" : "#/components/schemas/MaterialPageCount",
+            "description" : "The pages found to be images only, read by OCR, and those of them with an outcome"
+          },
+          "readByOcr" : {
+            "description" : "Pages read by OCR",
+            "example" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "readDirectly" : {
+            "description" : "Pages read from their text layer",
+            "example" : 40,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reading" : {
+            "description" : "The layer of the pages being read now, by the step whose job is offered or running: \"text\" or \"image\"; null when none is, when those pages have no layer yet, or when their layers differ",
+            "example" : "text",
+            "type" : [ "string", "null" ]
+          },
+          "text" : {
+            "$ref" : "#/components/schemas/MaterialPageCount",
+            "description" : "The pages found to have a text layer, and those of them with an outcome (0 of 0 until the pages are sorted, and for a text upload)"
+          },
           "total" : {
             "description" : "The version's page total",
             "example" : 320,
             "format" : "int32",
             "type" : "integer"
+          },
+          "unreadable" : {
+            "description" : "Pages that could not be read",
+            "example" : 0,
+            "format" : "int32",
+            "type" : "integer"
           }
         },
-        "required" : [ "done", "total" ],
+        "required" : [ "done", "image", "readByOcr", "readDirectly", "reading", "text", "total", "unreadable" ],
         "type" : "object"
       },
       "MaterialUpload" : {
@@ -356,7 +405,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.6.0"
+    "version" : "1.7.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
