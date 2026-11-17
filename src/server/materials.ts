@@ -13,7 +13,12 @@ export type Material = Schemas['Material'];
 export type MaterialPage = Schemas['MaterialPage'];
 export type MaterialState = Material['state'];
 export type MaterialPageView = Schemas['MaterialPageView'];
+export type MaterialReport = Schemas['MaterialReport'];
+export type MaterialAction = Material['actions'][number];
 type ListQuery = NonNullable<operations['listMaterials']['parameters']['query']>;
+
+/** The GM's actions on a material's newest version (Story 1.20), in the order the page shows them. */
+export const MATERIAL_ACTIONS: readonly MaterialAction[] = ['accept', 'reprocess', 'retry', 'discard'];
 
 /** The states the tray lists: everything not yet ready, and what needs the GM. */
 export const TRAY_STATES: readonly MaterialState[] = ['uploading', 'waiting', 'processing', 'needs_review', 'failed'];
@@ -55,4 +60,41 @@ export function getPage(
       params: { header: { 'X-Session-Token': sessionToken }, path: { id, page }, query: { ground: 'review' } },
     }),
   );
+}
+
+/**
+ * The quality report of one of the account's materials (Story 1.20): its newest version's outline, unreadable pages
+ * as runs, and warnings, while that version needs review or is ready. `request.not_found` in any other state, for
+ * another owner's material and for an unknown one.
+ */
+export function getReport(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<MaterialReport>> {
+  return call('materials.report', options, (client) =>
+    client.GET('/api/v1/materials/{id}/report', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } }),
+  );
+}
+
+/**
+ * One of the GM's actions on a material's newest version (Story 1.20): the material as it is after it. A state that
+ * does not allow it is `material.action_unavailable`; too many steps for a reprocess or a retry is
+ * `ingestion.too_many_steps`; another owner's material is `request.not_found`.
+ */
+export function actOnMaterial(
+  sessionToken: string,
+  id: string,
+  action: MaterialAction,
+  options: CallOptions = {},
+): Promise<Result<Material>> {
+  const params = { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } };
+  return call(`materials.${action}`, options, (client) => {
+    switch (action) {
+      case 'accept':
+        return client.POST('/api/v1/materials/{id}/accept', params);
+      case 'reprocess':
+        return client.POST('/api/v1/materials/{id}/reprocess', params);
+      case 'retry':
+        return client.POST('/api/v1/materials/{id}/retry', params);
+      case 'discard':
+        return client.POST('/api/v1/materials/{id}/discard', params);
+    }
+  });
 }

@@ -1,0 +1,112 @@
+/* The quality report (Story 1.20): numerals, then plain lists. No chart, no shadow. */
+.report {
+  margin: var(--space-6) 0 0;
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+}
+
+/* Three large numerals, each under its label. */
+.numerals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-12);
+  margin: var(--space-3) 0 0;
+}
+
+.numeral {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-1);
+}
+
+.value {
+  margin: 0;
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
+  font-variant-numeric: tabular-nums;
+}
+
+.part {
+  margin: var(--space-6) 0 0;
+}
+
+.warnings,
+.runs,
+.outline {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.warnings li {
+  max-width: 60ch;
+}
+
+.runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.run,
+.section {
+  color: var(--color-text);
+}
+
+/* The outline: one line per section, indented by its level, its page after it. */
+.outline li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  max-width: 60ch;
+  padding-block: var(--space-1);
+}
+
+.sectionPage {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.level0 {
+  padding-left: 0;
+}
+
+.level1 {
+  padding-left: var(--space-4);
+}
+
+.level2 {
+  padding-left: var(--space-8);
+}
+
+.level3 {
+  padding-left: var(--space-12);
+}
+
+.level4 {
+  padding-left: var(--space-16);
+}
+
+.level5 {
+  padding-left: calc(var(--space-16) + var(--space-4));
+}
+
+.level6 {
+  padding-left: calc(var(--space-16) + var(--space-8));
+}

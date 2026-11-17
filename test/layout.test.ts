@@ -262,7 +262,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const failures: [string | undefined, string, string][] = [
       ['ingestion.password_required', 'Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.', 'This PDF is protected by a password.'],
       ['ingestion.file_unreadable', 'Não foi possível ler este arquivo como PDF.', 'This file could not be read as a PDF.'],
-      ['ingestion.too_many_steps', 'precisou de mais etapas do que suas páginas permitem', 'needed more steps than its pages allow'],
+      ['ingestion.too_many_steps', 'precisa de mais etapas do que suas páginas permitem', 'needs more steps than its pages allow'],
       ['ingestion.step_failed', 'Este arquivo não pôde ser processado.', 'This file could not be processed.'],
       ['job.attempts_exhausted', 'Algo deu errado no servidor.', 'Something went wrong on the server.'],
       [undefined, 'Algo deu errado no servidor.', 'Something went wrong on the server.'],
@@ -332,14 +332,16 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     expect(html).toContain('lendo por OCR · 0 de 12 páginas');
     expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting')]).toEqual(['8', '0', '22']);
 
+    // Needs review: no list; the quality report counts the pages from Story 1.20.
     answer({
       state: 'needs_review',
+      actions: [],
       pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1, reading: null },
     });
     html = await page();
     expect(html).toContain('precisa de revisão');
     expect(html).not.toContain(' · ');
-    expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting'), count(html, 'unreadable')]).toEqual(['364', '79', '0', '1']);
+    expect(html).not.toContain('data-count=');
 
     // Waiting, ready or failed: no list.
     for (const state of ['waiting', 'ready', 'failed']) {
@@ -470,5 +472,238 @@ describe('a page of a material (Story 1.19)', () => {
     const html = await route('13');
     expect(html).toContain('role="status"');
     expect(html).not.toContain('server.unavailable');
+  });
+});
+
+describe('the quality report, the actions and the needs-review notice (Story 1.20)', () => {
+  const MATERIAL = `GET /api/v1/materials/${MATERIAL_ID}`;
+  const REPORT = `GET /api/v1/materials/${MATERIAL_ID}/report`;
+  const reviewPages = {
+    done: 444,
+    total: 444,
+    text: { done: 364, total: 364 },
+    image: { done: 80, total: 80 },
+    readDirectly: 364,
+    readByOcr: 77,
+    unreadable: 3,
+    reading: null,
+  };
+  const report = {
+    outline: [
+      { level: 1, title: 'Equipamento', page: 92 },
+      { level: 2, title: 'Armaduras <b>pesadas</b>', page: 93 },
+      { level: 9, title: 'Muito fundo', page: 94 },
+    ],
+    unreadable: [
+      { firstPage: 9, lastPage: 9 },
+      { firstPage: 40, lastPage: 41 },
+    ],
+    warnings: [
+      { code: 'report.pages_unreadable', count: 3 },
+      { code: 'report.pages_unopened', count: 1 },
+      { code: 'report.something_new', count: 7 },
+    ],
+  };
+  const page = async (language?: 'en') => {
+    if (language === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = language;
+    }
+    return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+  };
+  const numeral = (html: string, name: string) => new RegExp(`data-numeral="${name}"><dt[^>]*>[^<]*</dt><dd[^>]*>(\\d+)</dd>`).exec(html)?.[1];
+  // The page's pills, before the (closed) confirmation dialog and its own pills.
+  const buttons = (html: string) =>
+    [...(html.split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
+
+  it('a material that needs review shows its report: numerals, warnings as facts, unreadable pages as links, the outline by level', async () => {
+    const server = await useBackend({
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review', actions: ['accept', 'reprocess', 'discard'], pages: reviewPages } },
+      [REPORT]: { status: 200, body: report },
+    });
+    let html = await page();
+
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === REPORT)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toContain('Relatório de qualidade');
+    expect([numeral(html, 'done'), numeral(html, 'readByOcr'), numeral(html, 'unreadable')]).toEqual(['444', '77', '3']);
+    expect(html).toContain('Páginas processadas');
+    expect(html).toContain('3 páginas não puderam ser lidas.');
+    expect(html).toContain('1 página não pôde ser aberta para leitura.');
+    // A warning this release does not know is left out, never shown as its code.
+    expect(html).not.toContain('something_new');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/9">Página 9</a>`);
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/40">Páginas 40 a 41</a>`);
+    // The outline: a plain list indented by level through classes, titles as text, never HTML.
+    expect(html).toMatch(/<li class="[^"]*level0[^"]*" data-level="1"><a[^>]*href="\/files\/[^"]+\/pages\/92"[^>]*>Equipamento<\/a>/);
+    expect(html).toMatch(/<li class="[^"]*level1[^"]*" data-level="2">/);
+    expect(html).toMatch(/<li class="[^"]*level6[^"]*" data-level="9">/);
+    expect(html).toContain('Armaduras &lt;b&gt;pesadas&lt;/b&gt;');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    // The actions it allows: Aceitar the one solid pill.
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Reprocessar páginas com falha:default', 'Descartar:default']);
+    expect(html).toContain('name="id" value="0190a0b0-0000-7000-8000-000000000003"');
+    expect(html).toContain('<dialog');
+    expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000003/pages/1"');
+
+    html = await page('en');
+    expect(html).toContain('Quality report');
+    expect(html).toContain('3 pages could not be read.');
+    expect(html).toContain('Pages 40 to 41');
+    expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:default']);
+  });
+
+  it('shows only the actions the material allows: read-only when ready, retry and discard when failed, none while processing', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [REPORT]: { status: 200, body: { outline: [], unreadable: [], warnings: [{ code: 'report.outline_empty', count: 0 }] } } };
+    const server = await useBackend(routes);
+    const answer = (body: Record<string, unknown>) => {
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...body } };
+    };
+
+    // Nothing to reprocess.
+    answer({ state: 'needs_review', actions: ['accept', 'discard'], pages: { ...reviewPages, unreadable: 0 } });
+    let html = await page();
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+    expect(html).toContain('Nenhuma seção foi encontrada no texto.');
+    expect(html).not.toContain('Páginas ilegíveis');
+
+    // Accepted: the report, read-only, and the pill "pronto".
+    answer({ state: 'ready', actions: [], pages: reviewPages });
+    html = await page();
+    expect(html).toContain('pronto');
+    expect(html).toContain('Relatório de qualidade');
+    expect(buttons(html)).toEqual([]);
+    expect(html).not.toContain('<dialog');
+
+    // Failed: why, then Tentar de novo and Descartar.
+    answer({ state: 'failed', failure: 'ingestion.step_failed', actions: ['retry', 'discard'] });
+    server.calls.length = 0;
+    html = await page();
+    expect(html).toContain('Este arquivo não pôde ser processado.');
+    expect(html.indexOf('Este arquivo não pôde ser processado.')).toBeLessThan(html.indexOf('Tentar de novo'));
+    expect(buttons(html)).toEqual(['Tentar de novo:solid', 'Descartar:default']);
+    expect(html).not.toContain('Relatório de qualidade');
+    expect(server.calls.map((call) => call.url)).not.toContain(`/api/v1/materials/${MATERIAL_ID}/report`);
+
+    // Retry impossible: only Descartar.
+    answer({ state: 'failed', failure: 'ingestion.password_required', actions: ['discard'] });
+    expect(buttons(await page())).toEqual(['Descartar:default']);
+
+    // Processing (after reprocess or retry) and discarded: no action, no report.
+    for (const state of ['processing', 'discarded']) {
+      answer({ state, actions: [] });
+      html = await page();
+      expect(buttons(html), state).toEqual([]);
+      expect(html).not.toContain('Relatório de qualidade');
+    }
+    expect(await page()).toContain('descartado');
+  });
+
+  it('a report that cannot be loaded is a sentence, never a code', async () => {
+    await useBackend({
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: ['accept', 'discard'], pages: reviewPages } },
+      [REPORT]: problem(503, 'server.unavailable'),
+    });
+    const html = await page();
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+    expect(html).not.toContain('server.unavailable');
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+  });
+
+  it('the signed-in layout names the newest material that needs review in a warning notice that links to it', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: {
+        status: 200,
+        body: {
+          items: [
+            { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] },
+            { id: '0190a0b0-0000-7000-8000-000000000006', name: 'Bestiário.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
+            { id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
+          ],
+        },
+      },
+    };
+    await useBackend(routes);
+    let html = await layoutHtml();
+    expect(html).toMatch(/<div role="status"[^>]*data-status="warning"/);
+    expect(html).toContain('Bestiário.pdf precisa de revisão.');
+    expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000006">Revisar</a>');
+    expect(html).not.toContain('Antigo.pdf precisa de revisão.');
+    expect(html).toContain('aria-label="Dispensar aviso"');
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(html).toContain('Bestiário.pdf needs review.');
+    expect(html).toContain('>Review</a>');
+
+    // Accepted (no longer in the tray's states): the notice is gone.
+    routes[MATERIALS] = { status: 200, body: { items: [{ id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] }] } };
+    expect(await layoutHtml()).not.toContain('role="status"');
+
+    // A campaign notice already shown: no second notice.
+    routes['GET /api/v1/campaigns/current'] = problem(503, 'server.unavailable');
+    routes[MATERIALS] = { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: [] }] } };
+    html = await layoutHtml();
+    expect(html).toContain('data-status="danger"');
+    expect(html).not.toContain('needs review.');
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+  });
+});
+
+describe('a page beside its extracted text (Story 1.20)', () => {
+  const MATERIAL = `GET /api/v1/materials/${MATERIAL_ID}`;
+  const at = (page: number) => `GET /api/v1/materials/${MATERIAL_ID}/pages/${page}?ground=review`;
+  const route = async (page: string) =>
+    renderToStaticMarkup(await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page }) }));
+
+  it('a picture page sits beside "Texto extraído", which holds its lines, or says none was extracted', async () => {
+    await useBackend({
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [at(13)]: {
+        status: 200,
+        body: {
+          page: 13,
+          pageTotal: 30,
+          picture: { width: 1545, height: 2000 },
+          lines: [
+            { text: 'Armor', box: [0.1, 0.1, 0.3, 0.125] },
+            { text: '<i>Plate</i> | 1,500 gp', box: [0.1, 0.15, 0.6, 0.17] },
+          ],
+          text: null,
+          passages: [],
+          outcome: 'read_directly',
+        },
+      },
+      [at(7)]: { status: 200, body: { page: 7, pageTotal: 30, picture: { width: 1545, height: 2000 }, lines: [], text: null, passages: [], outcome: 'unreadable' } },
+    });
+    let html = await route('13');
+    expect(html).toContain('Texto extraído');
+    expect(html).toContain('Armor\n&lt;i&gt;Plate&lt;/i&gt; | 1,500 gp</div>');
+    expect(html.indexOf('<svg')).toBeLessThan(html.indexOf('Texto extraído'));
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    // A blank scan: its picture, and no text beside it.
+    html = await route('7');
+    expect(html).toContain('<svg');
+    expect(html).toContain('Nenhum texto foi extraído desta página.');
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await route('7');
+    expect(html).toContain('Extracted text');
+    expect(html).toContain('No text was extracted from this page.');
+  });
+
+  it('an unreadable page whose reading crashed says it could not be opened, with its number and both links', async () => {
+    await useBackend({
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [at(9)]: { status: 200, body: { page: 9, pageTotal: 30, picture: null, lines: [], text: null, passages: [], outcome: 'unreadable' } },
+    });
+    const html = await route('9');
+    expect(html).toContain('Esta página não pôde ser aberta.');
+    expect(html).toContain('Página 9 de 30');
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('/picture');
+    expect(html).not.toContain('Texto extraído');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/8"`);
+    expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/10"`);
   });
 });

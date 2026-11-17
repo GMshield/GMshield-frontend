@@ -75,7 +75,8 @@
       "service": "O GMshield não reconheceu este acesso ao servidor. Tente de novo em instantes.",
       "upload": "O envio não pôde continuar.",
       "ingestion": "Este arquivo não pôde ser processado.",
-      "page": "Esta página não pôde ser mostrada."
+      "page": "Esta página não pôde ser mostrada.",
+      "material": "A ação no material não pôde ser feita."
     },
     "codes": {
       "request": {
@@ -123,10 +124,13 @@
       "ingestion": {
         "password_required": "Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.",
         "file_unreadable": "Não foi possível ler este arquivo como PDF. Confira se ele abre e envie-o de novo.",
-        "too_many_steps": "O processamento deste arquivo precisou de mais etapas do que suas páginas permitem e parou."
+        "too_many_steps": "O processamento deste arquivo precisa de mais etapas do que suas páginas permitem."
       },
       "page": {
         "ground_unknown": "Esta página não pode ser aberta a partir daqui."
+      },
+      "material": {
+        "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada."
       }
     }
   },
@@ -193,7 +197,49 @@
       "unreadable": "Ilegíveis"
     },
     "stateLabel": "Estado",
-    "viewPages": "Ver páginas"
+    "viewPages": "Ver páginas",
+    "report": {
+      "label": "Relatório de qualidade",
+      "done": "Páginas processadas",
+      "readByOcr": "Lidas por OCR",
+      "unreadable": "Ilegíveis",
+      "outline": "Sumário",
+      "warnings": "Avisos",
+      "unreadablePages": "Páginas ilegíveis",
+      "page": "Página {page}",
+      "run": "Páginas {first} a {last}",
+      "warning": {
+        "pages_unreadable": {
+          "one": "1 página não pôde ser lida.",
+          "other": "{count} páginas não puderam ser lidas."
+        },
+        "pages_unopened": {
+          "one": "1 página não pôde ser aberta para leitura.",
+          "other": "{count} páginas não puderam ser abertas para leitura."
+        },
+        "outline_empty": {
+          "one": "Nenhuma seção foi encontrada no texto.",
+          "other": "Nenhuma seção foi encontrada no texto."
+        }
+      }
+    },
+    "actions": {
+      "label": "Ações",
+      "accept": "Aceitar",
+      "reprocess": "Reprocessar páginas com falha",
+      "retry": "Tentar de novo",
+      "discard": "Descartar"
+    },
+    "discard": {
+      "title": "Descartar «{name}»?",
+      "pagesOne": "Sai a página lida deste arquivo, com sua imagem e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
+      "pagesOther": "Saem as {pages} páginas lidas deste arquivo, com suas imagens e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
+      "noPages": "Sai o arquivo enviado, com tudo o que foi lido dele. Isso não pode ser desfeito."
+    },
+    "notice": {
+      "needsReview": "{name} precisa de revisão.",
+      "review": "Revisar"
+    }
   },
   "upload": {
     "dialog": {
@@ -298,6 +344,9 @@
     "position": "Página {page} de {total}",
     "previous": "Página anterior",
     "next": "Próxima página",
-    "navigation": "Páginas"
+    "navigation": "Páginas",
+    "extracted": "Texto extraído",
+    "noText": "Nenhum texto foi extraído desta página.",
+    "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório."
   }
 }

@@ -75,7 +75,8 @@
       "service": "GMshield did not recognise this call to the server. Try again in a moment.",
       "upload": "The upload could not continue.",
       "ingestion": "This file could not be processed.",
-      "page": "This page could not be shown."
+      "page": "This page could not be shown.",
+      "material": "The action on the material could not be done."
     },
     "codes": {
       "request": {
@@ -123,10 +124,13 @@
       "ingestion": {
         "password_required": "This PDF is protected by a password. Remove the password and send the file again.",
         "file_unreadable": "This file could not be read as a PDF. Check that it opens, then send it again.",
-        "too_many_steps": "Processing this file needed more steps than its pages allow, so it stopped."
+        "too_many_steps": "Processing this file needs more steps than its pages allow."
       },
       "page": {
         "ground_unknown": "This page cannot be opened from here."
+      },
+      "material": {
+        "action_unavailable": "This action is not available in the material's current state. The page has been updated."
       }
     }
   },
@@ -193,7 +197,49 @@
       "unreadable": "Unreadable"
     },
     "stateLabel": "State",
-    "viewPages": "View pages"
+    "viewPages": "View pages",
+    "report": {
+      "label": "Quality report",
+      "done": "Pages processed",
+      "readByOcr": "Read by OCR",
+      "unreadable": "Unreadable",
+      "outline": "Outline",
+      "warnings": "Warnings",
+      "unreadablePages": "Unreadable pages",
+      "page": "Page {page}",
+      "run": "Pages {first} to {last}",
+      "warning": {
+        "pages_unreadable": {
+          "one": "1 page could not be read.",
+          "other": "{count} pages could not be read."
+        },
+        "pages_unopened": {
+          "one": "1 page could not be opened for reading.",
+          "other": "{count} pages could not be opened for reading."
+        },
+        "outline_empty": {
+          "one": "No section was found in the text.",
+          "other": "No section was found in the text."
+        }
+      }
+    },
+    "actions": {
+      "label": "Actions",
+      "accept": "Accept",
+      "reprocess": "Reprocess failed pages",
+      "retry": "Try again",
+      "discard": "Discard"
+    },
+    "discard": {
+      "title": "Discard «{name}»?",
+      "pagesOne": "The page read from this file goes, with its picture and extracted text, the outline and the uploaded file. This cannot be undone.",
+      "pagesOther": "The {pages} pages read from this file go, with their pictures and extracted text, the outline and the uploaded file. This cannot be undone.",
+      "noPages": "The uploaded file goes, with everything read from it. This cannot be undone."
+    },
+    "notice": {
+      "needsReview": "{name} needs review.",
+      "review": "Review"
+    }
   },
   "upload": {
     "dialog": {
@@ -298,6 +344,9 @@
     "position": "Page {page} of {total}",
     "previous": "Previous page",
     "next": "Next page",
-    "navigation": "Pages"
+    "navigation": "Pages",
+    "extracted": "Extracted text",
+    "noText": "No text was extracted from this page.",
+    "unopened": "This page could not be opened. The report lists it as unreadable."
   }
 }

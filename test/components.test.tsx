@@ -18,6 +18,7 @@ const { ConfirmationDialog } = await import('@/components/ConfirmationDialog');
 const { Notice } = await import('@/components/Notice');
 const { PreferencesForm } = await import('@/components/PreferencesForm');
 const { PageView, pictureUrl } = await import('@/components/PageView');
+const { MaterialActions } = await import('@/components/MaterialActions');
 
 // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
 beforeAll(() => {
@@ -321,6 +322,7 @@ describe('PageView (Story 1.19)', () => {
     ],
     text: null,
     passages: [],
+    outcome: 'read_directly',
   };
 
   it('draws a picture page as one SVG in its pixels: frame, picture, then one transparent text per line fitted to its box', () => {
@@ -355,7 +357,7 @@ describe('PageView (Story 1.19)', () => {
   });
 
   it('shows a text page as its text with its line breaks, never as HTML, and no picture', () => {
-    const page = { page: 2, pageTotal: 9, picture: null, lines: [], text: '# Regras\n\n<b>negrito</b>', passages: [] };
+    const page = { page: 2, pageTotal: 9, picture: null, lines: [], text: '# Regras\n\n<b>negrito</b>', passages: [], outcome: 'read_directly' };
     const { container } = render(<PageView page={page} materialId={MATERIAL} language="en" />);
     expect(container.querySelector('svg')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
@@ -374,5 +376,97 @@ describe('PageView (Story 1.19)', () => {
     const text = container.querySelector('text')!;
     expect(text.getAttribute('textLength')).toBeNull();
     expect(text.getAttribute('font-size')).toBe('0.9');
+  });
+});
+
+describe('MaterialActions (Story 1.20)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000003';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('shows only the actions it is given, Aceitar the one solid pill, and posts the chosen one with the id', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container, rerender } = render(
+      <MaterialActions id={ID} name="Livro.pdf" actions={['accept', 'reprocess', 'discard']} pages={444} language="pt-BR" action={action} />,
+    );
+    const pills = within(container.querySelector('form')!).getAllByRole('button');
+    expect(pills.map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
+      'Aceitar:solid',
+      'Reprocessar páginas com falha:default',
+      'Descartar:default',
+    ]);
+    // From the keyboard: Tab to Aceitar, Enter posts it.
+    await user.tab();
+    expect(document.activeElement).toBe(pills[0]);
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, action: 'accept' }]));
+    await user.click(screen.getByRole('button', { name: 'Reprocessar páginas com falha' }));
+    await vi.waitFor(() => expect(posted.at(-1)).toEqual({ id: ID, action: 'reprocess' }));
+
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={['retry', 'discard']} pages={undefined} language="en" action={action} />);
+    expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
+      'Try again:solid',
+      'Discard:default',
+    ]);
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={[]} pages={444} language="en" action={action} />);
+    expect(container.querySelector('form')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('Descartar opens a confirmation naming what goes, with its count; Esc keeps everything, the danger pill discards', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(
+      <MaterialActions id={ID} name="Livro do Jogador.pdf" actions={['accept', 'discard']} pages={444} language="pt-BR" action={action} />,
+    );
+    const opener = screen.getByRole('button', { name: 'Descartar' });
+    // From the keyboard: Tab past Aceitar to Descartar, Enter opens the dialog.
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Descartar «Livro do Jogador.pdf»?' });
+    expect(dialog.textContent).toContain('Saem as 444 páginas lidas deste arquivo, com suas imagens e o texto extraído, o sumário e o arquivo enviado.');
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Descartar' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, action: 'discard' }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+  });
+
+  it('names one page, or only the uploaded file of a version with no page read, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<MaterialActions id={ID} name="Um.pdf" actions={['discard']} pages={1} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Sai a página lida deste arquivo');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialActions id={ID} name="Fechado.pdf" actions={['discard']} pages={undefined} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByRole('dialog', { name: 'Discard «Fechado.pdf»?' }).textContent).toContain(
+      'The uploaded file goes, with everything read from it.',
+    );
+  });
+
+  it('shows a refusal as an alert under the pills', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Esta ação não está disponível no estado atual do material. A página foi atualizada.' });
+    render(<MaterialActions id={ID} name="Livro.pdf" actions={['accept', 'discard']} pages={2} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Aceitar' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Esta ação não está disponível no estado atual do material. A página foi atualizada.');
   });
 });
