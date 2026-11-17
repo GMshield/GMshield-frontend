@@ -120,6 +120,7 @@ const pagesOf = (done: number, total: number, counts: Partial<NonNullable<Materi
   readDirectly: 0,
   readByOcr: 0,
   unreadable: 0,
+  reading: null,
   ...counts,
 });
 const polite = () => screen.getByTestId('uploads-polite').textContent ?? '';
@@ -546,6 +547,7 @@ describe('the upload tray (Story 1.14)', () => {
     const reading = { text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40 };
     const ocr = { text: { done: 364, total: 364 }, image: { done: 12, total: 80 }, readDirectly: 364, readByOcr: 12 };
     const last = { text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1 };
+    const between = { text: { done: 8, total: 18 }, image: { done: 0, total: 12 }, readDirectly: 8 };
     const cases = [
       ['pt-BR', pagesOf(40, 444, reading), 'lendo texto · 40 de 364 páginas', ['40', '364']],
       ['en', pagesOf(40, 444, reading), 'reading text · 40 of 364 pages', ['40', '364']],
@@ -553,6 +555,12 @@ describe('the upload tray (Story 1.14)', () => {
       ['en', pagesOf(376, 444, ocr), 'reading by OCR · 12 of 80 pages', ['12', '80']],
       // Every page sorted and read, the chain not yet ended: the plain word and every page.
       ['pt-BR', pagesOf(444, 444, last), 'processando · 444 de 444 páginas', ['444', '444']],
+      // OCR between text batches: the step in progress reads image pages while later text pages wait.
+      ['pt-BR', pagesOf(8, 30, { ...between, reading: 'image' }), 'lendo por OCR · 0 de 12 páginas', ['0', '12']],
+      ['en', pagesOf(8, 30, { ...between, reading: 'image' }), 'reading by OCR · 0 of 12 pages', ['0', '12']],
+      // Without a step in progress, the same counts fall back to text first.
+      ['pt-BR', pagesOf(8, 30, between), 'lendo texto · 8 de 18 páginas', ['8', '18']],
+      ['pt-BR', pagesOf(8, 30, { ...between, reading: 'text' }), 'lendo texto · 8 de 18 páginas', ['8', '18']],
     ] as const;
     for (const [language, pages, words, measure] of cases) {
       view({ language, rows: [{ id: ID, name: 'Livro.pdf', state: 'processing', pages }] });

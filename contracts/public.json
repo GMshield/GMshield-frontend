@@ -183,6 +183,12 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "reading" : {
+            "description" : "The layer of the pages being read now, by the step whose job is offered or running; null when none is, when those pages have no layer yet, or when their layers differ",
+            "enum" : [ "text", "image" ],
+            "example" : "text",
+            "type" : [ "string", "null" ]
+          },
           "text" : {
             "$ref" : "#/components/schemas/MaterialPageCount",
             "description" : "The pages found to have a text layer, and those of them with an outcome (0 of 0 until the pages are sorted, and for a text upload)"
@@ -200,7 +206,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "done", "image", "readByOcr", "readDirectly", "text", "total", "unreadable" ],
+        "required" : [ "done", "image", "readByOcr", "readDirectly", "reading", "text", "total", "unreadable" ],
         "type" : "object"
       },
       "MaterialUpload" : {

@@ -123,7 +123,7 @@ export const EXAMPLES = {
     state: 'processing',
     kind: 'rulebook',
     // Story 1.17: a mixed book whose text pages are being read, its scanned pages waiting for OCR.
-    pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0 },
+    pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
   },
 };
 

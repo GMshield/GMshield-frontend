@@ -47,11 +47,18 @@ export type UploadTexts = {
 export type Progress = { readonly phase: keyof Messages['material']['phase'] | null; readonly done: number; readonly total: number };
 
 /**
- * A processing material's measure (Story 1.17), from the counts the backend reports (it names no phase): its text
- * pages while any of them wait, then its image pages (read by OCR) while any of them wait, else all its pages. Within
- * one owner the backend offers the oldest steps first, so the words move from text to OCR.
+ * A processing material's measure (Story 1.17), from what the backend reports (it names no phase): the layer of the
+ * pages the step in progress reads (`reading`), so OCR between two batches of text pages reads "lendo por OCR"; when
+ * it is null, its text pages while any of them wait, then its image pages (read by OCR) while any of them wait, else
+ * all its pages.
  */
 export function progressOf(pages: MaterialPages): Progress {
+  if (pages.reading === 'text') {
+    return { phase: 'text', done: pages.text.done, total: pages.text.total };
+  }
+  if (pages.reading === 'image') {
+    return { phase: 'ocr', done: pages.image.done, total: pages.image.total };
+  }
   if (pages.text.done < pages.text.total) {
     return { phase: 'text', done: pages.text.done, total: pages.text.total };
   }

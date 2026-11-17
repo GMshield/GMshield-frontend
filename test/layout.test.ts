@@ -253,7 +253,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     };
     await useBackend(routes);
 
-    const unsorted = { text: { done: 0, total: 0 }, image: { done: 0, total: 0 }, readDirectly: 0, readByOcr: 0, unreadable: 0 };
+    const unsorted = { text: { done: 0, total: 0 }, image: { done: 0, total: 0 }, readDirectly: 0, readByOcr: 0, unreadable: 0, reading: null };
     answer({ state: 'processing', pages: { done: 0, total: 320, ...unsorted } });
     expect(await page()).toContain('processando · 0 de 320 páginas');
     expect(await page('en')).toContain('processing · 0 of 320 pages');
@@ -301,7 +301,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     // A mixed book: its text pages being read, its scanned pages waiting for OCR.
     answer({
       state: 'processing',
-      pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0 },
+      pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: null },
     });
     let html = await page();
     expect(html).toContain('lendo texto · 40 de 364 páginas');
@@ -315,16 +315,25 @@ describe('the upload tray and the material page (Story 1.14)', () => {
 
     answer({
       state: 'processing',
-      pages: { done: 376, total: 444, text: { done: 364, total: 364 }, image: { done: 12, total: 80 }, readDirectly: 364, readByOcr: 11, unreadable: 1 },
+      pages: { done: 376, total: 444, text: { done: 364, total: 364 }, image: { done: 12, total: 80 }, readDirectly: 364, readByOcr: 11, unreadable: 1, reading: null },
     });
     html = await page();
     expect(html).toContain('lendo por OCR · 12 de 80 páginas');
     expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting'), count(html, 'unreadable')]).toEqual(['364', '11', '68', '1']);
     expect(html).toContain('Ilegíveis');
 
+    // OCR between text batches: the step in progress reads image pages while later text pages wait.
+    answer({
+      state: 'processing',
+      pages: { done: 8, total: 30, text: { done: 8, total: 18 }, image: { done: 0, total: 12 }, readDirectly: 8, readByOcr: 0, unreadable: 0, reading: 'image' },
+    });
+    html = await page();
+    expect(html).toContain('lendo por OCR · 0 de 12 páginas');
+    expect([count(html, 'readDirectly'), count(html, 'readByOcr'), count(html, 'waiting')]).toEqual(['8', '0', '22']);
+
     answer({
       state: 'needs_review',
-      pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1 },
+      pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 79, unreadable: 1, reading: null },
     });
     html = await page();
     expect(html).toContain('precisa de revisão');
@@ -333,7 +342,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
 
     // Waiting, ready or failed: no list.
     for (const state of ['waiting', 'ready', 'failed']) {
-      answer({ state, pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 80, unreadable: 0 } });
+      answer({ state, pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 80, unreadable: 0, reading: null } });
       expect(await page()).not.toContain('data-count=');
     }
   });

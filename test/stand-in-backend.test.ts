@@ -86,7 +86,7 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', '/api/v1/materials', 't')).toMatchObject({ status: 200, body: { items: [] } });
     expect(answer(contract, 'GET', '/api/v1/materials/0190a0b0-0000-7000-8000-000000000003', 't')).toMatchObject({
       status: 200,
-      body: { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'processing', pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0 } },
+      body: { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'processing', pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' } },
     });
   });
 
