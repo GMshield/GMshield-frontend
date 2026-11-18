@@ -279,3 +279,92 @@
   gap: var(--space-3);
   margin-top: var(--space-6);
 }
+
+/* --- Story 1.21: the order of an image set's pages --- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.fieldLabel {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* As the username field: a pill in the control colour. */
+.text {
+  width: 100%;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.pages {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pages > li + li {
+  border-top: 1px solid var(--color-rule);
+}
+
+/* One page: its thumbnail, its number and file name, and its two moves. Dragged by the whole row. */
+.pageRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  min-height: var(--space-touch-target);
+  padding: var(--space-2);
+  cursor: grab;
+}
+
+.pageRow[data-dragging='true'] {
+  background-color: var(--color-surface-active);
+  cursor: grabbing;
+}
+
+.pageText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.pageNumber {
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+}
+
+.moves {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* A small picture, or (HEIC, TIFF) its format's name on a plain tile. */
+.thumbnail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-active);
+  color: var(--color-text);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-meta-line-height);
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { createImageSetAction, dropSetImageAction, replaceSetImageAction } from '@/app/(signed-in)/image-set-actions';
 import { signOutAction } from '@/app/sign-in/actions';
 import { translator } from '@/messages';
 import type { Preferences } from '@/preferences';
@@ -32,6 +33,9 @@ export type ShellProps = {
   readonly children: ReactNode;
 };
 
+/** The image set calls of the guided upload and the tray (Story 1.21): Server Actions. */
+const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageAction, drop: dropSetImageAction };
+
 /**
  * The signed-in shell (Story 1.11): the sidebar, the context bar and the main column, in that order in the page
  * (and so in Tab order), and room for one right panel. The main column is centred and never wider than the
@@ -43,7 +47,7 @@ export function Shell({ preferences, username, current, sidebar, notice, panel, 
     [...SIDEBAR_ENTRIES, ADD_FILE].map(({ key }) => [key, t(`shell.entries.${key}`)]),
   ) as Record<EntryKey, string>;
   return (
-    <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging}>
+    <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging} imageSets={IMAGE_SETS}>
       <div className={styles.shell} data-panel={panel === undefined ? 'none' : 'open'}>
         <Sidebar
           labels={{

@@ -119,7 +119,9 @@
         "incomplete": "O arquivo ainda não foi enviado por inteiro.",
         "file_checksum_mismatch": "O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.",
         "expired": "Este envio ficou 6 horas sem terminar e expirou. Envie o arquivo de novo.",
-        "metadata_invalid": "O nome do arquivo ou as respostas dadas sobre ele não são válidos. O nome precisa ter de 1 a 255 caracteres."
+        "metadata_invalid": "O nome do arquivo ou as respostas dadas sobre ele não são válidos. O nome precisa ter de 1 a 255 caracteres.",
+        "set_too_large": "Um material pode ter até 500 fotos, somando até 2 GB.",
+        "image_not_failed": "Esta foto não falhou, então não pode ser substituída nem deixada de fora. A lista foi atualizada."
       },
       "ingestion": {
         "password_required": "Este PDF é protegido por senha. Remova a senha e envie o arquivo de novo.",
@@ -251,7 +253,7 @@
       "send": "Enviar",
       "files": {
         "question": "Quais arquivos você quer adicionar?",
-        "lead": "Cada arquivo vira um material próprio. PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC, até 2 GB cada.",
+        "lead": "Cada arquivo vira um material próprio, e várias fotos podem virar as páginas de um só material. PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC, até 2 GB cada.",
         "choose": "Escolher arquivos",
         "checking": "Verificando {name}.",
         "none": "Nenhum arquivo escolhido ainda.",
@@ -264,6 +266,33 @@
           "too_large": "{name} tem mais de 2 GB, o máximo que o GMshield aceita, então não será enviado.",
           "format": "{name} está num formato que o GMshield não aceita, então não será enviado. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC."
         }
+      },
+      "set": {
+        "question": "Como ficam as {count} fotos?",
+        "pages": {
+          "label": "Páginas de um material",
+          "description": "As fotos viram as páginas de um só material, na ordem que você escolhe no próximo passo."
+        },
+        "separate": {
+          "label": "Cada imagem é um material",
+          "description": "Cada foto vira um material de uma página."
+        }
+      },
+      "order": {
+        "question": "Em que ordem ficam as páginas?",
+        "lead": "Arraste as fotos, use Subir e Descer, ou, numa foto selecionada, Alt+↑ e Alt+↓. A ordem fica fixa quando você enviar.",
+        "name": "Nome do material",
+        "nameRequired": "Dê um nome ao material.",
+        "list": "Páginas, na ordem",
+        "page": "Página {page}",
+        "row": "{name}, página {page} de {total}",
+        "moved": "{name}, página {page} de {total}",
+        "up": "Subir {name}",
+        "down": "Descer {name}",
+        "upShort": "Subir",
+        "downShort": "Descer",
+        "tooMany": "Um material pode ter até {limit} fotos, e estas são {count}. Remova algumas ou envie cada imagem como um material.",
+        "tooLarge": "As fotos de um material podem somar até 2 GB, e estas somam {size}. Remova algumas ou envie cada imagem como um material."
       },
       "kind": {
         "question": "O que é?",
@@ -337,7 +366,17 @@
       "announce": {
         "state": "{name}: {state}.",
         "percent": "{name}: {percent}% enviado."
-      }
+      },
+      "setFailed": "A foto {position} ({name}) não entrou: {reason}",
+      "replace": "Substituir",
+      "replaceName": "Substituir a foto {position}, {name}",
+      "skip": "Continuar sem ela",
+      "skipName": "Continuar sem a foto {position}, {name}",
+      "notImage": "{name} não é uma imagem que o GMshield aceite. Escolha um JPG, PNG, WebP, TIFF, BMP ou HEIC.",
+      "setInterrupted": "Envio interrompido: faltam {count} de {total} fotos.",
+      "resumeSet": "Retomar as fotos",
+      "resumeSetName": "Retomar as fotos de {name}",
+      "wrongImages": "Estas não são as fotos que faltam. Escolha {names}."
     }
   },
   "pageView": {
