@@ -1,0 +1,391 @@
+{
+  "app": {
+    "title": "GMshield",
+    "description": "A rules assistant for tabletop RPG game masters."
+  },
+  "home": {
+    "heading": "GMshield",
+    "lead": "A rules assistant for tabletop RPG game masters."
+  },
+  "shell": {
+    "name": "GMshield",
+    "menu": "GMshield menu",
+    "signedInAs": "Signed in as {username}",
+    "signOut": "Sign out",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "navigation": "Main navigation",
+    "currentCampaign": "Current campaign",
+    "noCampaign": "No campaign",
+    "context": "System and campaign",
+    "entries": {
+      "questions": "Questions",
+      "rules": "Rule Creation",
+      "campaigns": "My Tables",
+      "systems": "Systems",
+      "characters": "Characters",
+      "files": "My Files",
+      "addFile": "Add File"
+    }
+  },
+  "placeholder": {
+    "questions": "Here you will ask questions about your books and read the answers with their sources.",
+    "rules": "Here you will write your own rules and content, by hand or with an agent.",
+    "campaigns": "Here you will see and organise your campaigns.",
+    "systems": "Here you will see and organise your game systems.",
+    "characters": "Here you will keep the characters of your campaigns.",
+    "files": "Here you will see the files you have sent and the state of each one."
+  },
+  "notFound": {
+    "title": "Not found.",
+    "home": "Go to the start"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "theme": "Theme",
+    "themes": {
+      "illustrated": "Illustrated",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "language": "Language",
+    "languages": {
+      "pt-BR": "Português (Brasil)",
+      "en": "English"
+    },
+    "apply": "Apply"
+  },
+  "dialog": {
+    "cancel": "Cancel"
+  },
+  "notice": {
+    "status": {
+      "danger": "Error",
+      "warning": "Warning",
+      "success": "Done"
+    },
+    "dismiss": "Dismiss notice"
+  },
+  "errors": {
+    "categories": {
+      "request": "The request could not be completed.",
+      "server": "Something went wrong on the server. Try again in a moment.",
+      "integrity": "This data failed its integrity check and is not shown.",
+      "session": "Your session has ended. Sign in again.",
+      "service": "GMshield did not recognise this call to the server. Try again in a moment.",
+      "upload": "The upload could not continue.",
+      "ingestion": "This file could not be processed.",
+      "page": "This page could not be shown.",
+      "material": "The action on the material could not be done."
+    },
+    "codes": {
+      "request": {
+        "invalid": "The request is not valid.",
+        "not_found": "Not found.",
+        "method_not_allowed": "This action is not allowed here.",
+        "not_acceptable": "The server cannot answer in this format.",
+        "too_large": "The request is too large.",
+        "unsupported_media_type": "This type of content is not accepted.",
+        "rejected": "The request was refused.",
+        "cross_origin": "The request did not come from GMshield and was refused.",
+        "sign_in_expired": "The sign-in attempt expired. Try again.",
+        "sign_in_refused": "Google did not confirm the sign-in. Try again.",
+        "username_taken": "This username is already in use.",
+        "username_invalid": "Use {min} to {max} characters: letters a to z in upper or lower case, digits, \"_\", \".\" and \"-\".",
+        "terms_required": "Accept the terms of use and the privacy notice to continue."
+      },
+      "server": {
+        "unexpected": "Something went wrong on the server. Try again in a moment.",
+        "unavailable": "The service is unavailable right now. Try again in a moment."
+      },
+      "integrity": {
+        "failed": "This data failed its integrity check and is not shown."
+      },
+      "session": {
+        "required": "Your session has ended.",
+        "renewal_required": "Your session needs to be renewed. Try again.",
+        "already_renewed": "Your session was just renewed. Try again."
+      },
+      "service": {
+        "unauthenticated": "GMshield did not recognise this call to the server. Try again in a moment."
+      },
+      "upload": {
+        "tus_version": "This upload client is not supported. Reload the page and try again.",
+        "too_large": "This file is larger than 2 GB, the most GMshield accepts.",
+        "format_refused": "This format is not accepted. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC.",
+        "busy": "Another part of this file is being sent. Try again in a moment.",
+        "part_checksum_mismatch": "A part of the file arrived damaged. It will be sent again.",
+        "offset_conflict": "The upload is out of step with the server. Resume it to continue.",
+        "incomplete": "The file has not been sent in full yet.",
+        "file_checksum_mismatch": "The file that arrived differs from the one you chose, so it was discarded. Send it again.",
+        "expired": "This upload was left unfinished for 6 hours and expired. Send the file again.",
+        "metadata_invalid": "The file's name or the answers given about it are not valid. The name needs 1 to 255 characters.",
+        "set_too_large": "A material can have up to 500 photos, adding up to 2 GB.",
+        "image_not_failed": "This photo did not fail, so it cannot be replaced or left out. The list was updated."
+      },
+      "ingestion": {
+        "password_required": "This PDF is protected by a password. Remove the password and send the file again.",
+        "file_unreadable": "This file could not be read as a PDF. Check that it opens, then send it again.",
+        "too_many_steps": "Processing this file needs more steps than its pages allow."
+      },
+      "page": {
+        "ground_unknown": "This page cannot be opened from here."
+      },
+      "material": {
+        "action_unavailable": "This action is not available in the material's current state. The page has been updated."
+      }
+    }
+  },
+  "signIn": {
+    "title": "Sign in",
+    "google": "Continue with Google",
+    "legal": "If you continue, you read the terms of use and the privacy notice before the account is created.",
+    "terms": "Terms of use",
+    "privacy": "Privacy notice"
+  },
+  "username": {
+    "title": "Choose a username",
+    "lead": "This is how you appear in GMshield. Use 3 to 24 characters: letters a to z in upper or lower case, digits, \"_\", \".\" and \"-\".",
+    "label": "Username",
+    "terms": "I have read and accept the terms of use and the privacy notice.",
+    "readTerms": "Read the terms of use",
+    "readPrivacy": "Read the privacy notice",
+    "submit": "Create account"
+  },
+  "legal": {
+    "draft": "Rascunho / Draft",
+    "draftNote": "This text is a draft. The reviewed version replaces it before the public launch.",
+    "home": "Back to the start",
+    "terms": {
+      "title": "Terms of use",
+      "p1": "GMshield is a rules assistant for tabletop RPG game masters. You sign in with your Google account and choose a username.",
+      "p2": "Only send GMshield material you have the right to use, such as books you own or openly licensed texts. Each library is seen only by the person who created it.",
+      "p3": "The assistant's answers can contain mistakes. Check the cited source before deciding a rule at the table.",
+      "p4": "The service is under construction: features may change or be unavailable, with no guarantee of availability.",
+      "p5": "You can stop using GMshield whenever you want. An account that abuses the service may be blocked."
+    },
+    "privacy": {
+      "title": "Privacy notice",
+      "p1": "Of your personal data, GMshield keeps only the username, the email address and the identifier of your Google account, all three encrypted. It also records when you accepted the terms of use and this notice, and which version.",
+      "p2": "Google learns that you use GMshield, because Google confirms your identity when you sign in.",
+      "p3": "The questions you ask the assistant, with the passages of your material used to answer them, are processed by Microsoft's Azure OpenAI.",
+      "p4": "Your material and notes are stored encrypted, and only you see them.",
+      "p5": "Theme, language and session are kept in cookies of your browser that only the server reads. There are no advertising or tracking cookies.",
+      "p6": "This draft does not yet describe how long data is kept, how to delete the account, how to get in touch or your rights under the LGPD. The reviewed version will."
+    }
+  },
+  "material": {
+    "state": {
+      "uploading": "uploading",
+      "waiting": "waiting",
+      "processing": "processing",
+      "needs_review": "needs review",
+      "ready": "ready",
+      "failed": "failed",
+      "superseded": "replaced",
+      "discarded": "discarded"
+    },
+    "pages": "{done} of {total} pages",
+    "phase": {
+      "text": "reading text",
+      "ocr": "reading by OCR"
+    },
+    "percent": "{percent}%",
+    "counts": {
+      "label": "Pages",
+      "readDirectly": "Read directly",
+      "readByOcr": "Read by OCR",
+      "waiting": "Waiting",
+      "unreadable": "Unreadable"
+    },
+    "stateLabel": "State",
+    "viewPages": "View pages",
+    "report": {
+      "label": "Quality report",
+      "done": "Pages processed",
+      "readByOcr": "Read by OCR",
+      "unreadable": "Unreadable",
+      "outline": "Outline",
+      "warnings": "Warnings",
+      "unreadablePages": "Unreadable pages",
+      "page": "Page {page}",
+      "run": "Pages {first} to {last}",
+      "warning": {
+        "pages_unreadable": {
+          "one": "1 page could not be read.",
+          "other": "{count} pages could not be read."
+        },
+        "pages_unopened": {
+          "one": "1 page could not be opened for reading.",
+          "other": "{count} pages could not be opened for reading."
+        },
+        "outline_empty": {
+          "one": "No section was found in the text.",
+          "other": "No section was found in the text."
+        }
+      }
+    },
+    "actions": {
+      "label": "Actions",
+      "accept": "Accept",
+      "reprocess": "Reprocess failed pages",
+      "retry": "Try again",
+      "discard": "Discard"
+    },
+    "discard": {
+      "title": "Discard «{name}»?",
+      "pagesOne": "The page read from this file goes, with its picture and extracted text, the outline and the uploaded file. This cannot be undone.",
+      "pagesOther": "The {pages} pages read from this file go, with their pictures and extracted text, the outline and the uploaded file. This cannot be undone.",
+      "noPages": "The uploaded file goes, with everything read from it. This cannot be undone."
+    },
+    "notice": {
+      "needsReview": "{name} needs review.",
+      "review": "Review"
+    }
+  },
+  "upload": {
+    "dialog": {
+      "title": "Add files",
+      "step": "Step {step} of {total}",
+      "close": "Close",
+      "back": "Back",
+      "next": "Next",
+      "send": "Send",
+      "files": {
+        "question": "Which files do you want to add?",
+        "lead": "Each file becomes a material of its own, and several photos can become the pages of one material. PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC, up to 2 GB each.",
+        "choose": "Choose files",
+        "checking": "Checking {name}.",
+        "none": "No file chosen yet.",
+        "accepted": "Ready to send",
+        "refusedWord": "Not sent:",
+        "remove": "Remove {name}",
+        "removeShort": "Remove",
+        "refused": {
+          "empty": "{name} is empty, so it will not be sent.",
+          "too_large": "{name} is larger than 2 GB, the most GMshield accepts, so it will not be sent.",
+          "format": "{name} is in a format GMshield does not accept, so it will not be sent. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC."
+        }
+      },
+      "set": {
+        "question": "What are the {count} photos?",
+        "pages": {
+          "label": "Pages of one material",
+          "description": "The photos become the pages of a single material, in the order you choose in the next step."
+        },
+        "separate": {
+          "label": "Each image is a material",
+          "description": "Each photo becomes a material of one page."
+        }
+      },
+      "order": {
+        "question": "In what order are the pages?",
+        "lead": "Drag the photos, use Up and Down, or, on a selected photo, Alt+↑ and Alt+↓. The order is fixed once you send.",
+        "name": "Material name",
+        "nameRequired": "Give the material a name.",
+        "list": "Pages, in order",
+        "page": "Page {page}",
+        "row": "{name}, page {page} of {total}",
+        "moved": "{name}, page {page} of {total}",
+        "up": "Move {name} up",
+        "down": "Move {name} down",
+        "upShort": "Up",
+        "downShort": "Down",
+        "tooMany": "A material can have up to {limit} photos, and these are {count}. Remove some or send each image as a material.",
+        "tooLarge": "The photos of a material can add up to 2 GB, and these add up to {size}. Remove some or send each image as a material."
+      },
+      "kind": {
+        "question": "What is it?",
+        "rulebook": {
+          "label": "Rulebook",
+          "description": "The core rules of a game system, such as a player's or a game master's handbook."
+        },
+        "supplement": {
+          "label": "Supplement",
+          "description": "More rules and content for a system: monsters, classes, settings or ready-made adventures."
+        },
+        "homebrew": {
+          "label": "Homebrew",
+          "description": "Rules and content that you or your table made."
+        },
+        "campaign_notes": {
+          "label": "Campaign notes",
+          "description": "What happened and what was decided in your sessions."
+        },
+        "other": {
+          "label": "Something else",
+          "description": "Any other text you want to look things up in."
+        }
+      },
+      "belonging": {
+        "question": "Where does it belong?",
+        "campaign": {
+          "label": "Only in {campaign}",
+          "description": "Answers in this campaign use it; other campaigns do not."
+        },
+        "system": {
+          "label": "In every campaign of {system}",
+          "description": "Answers in any campaign of this system use it."
+        },
+        "none": {
+          "label": "Nowhere yet",
+          "description": "You have no campaign yet, so the file is kept without one."
+        }
+      },
+      "language": {
+        "question": "What language is it in?",
+        "pt-BR": {
+          "label": "Portuguese",
+          "description": "The text is in Portuguese."
+        },
+        "en": {
+          "label": "English",
+          "description": "The text is in English."
+        },
+        "detect": {
+          "label": "Find out for me",
+          "description": "GMshield works out the language when it reads the file."
+        }
+      },
+      "progress": {
+        "title": "Sending",
+        "lead": "You can close this window: the files keep going, and the list above \"Add File\" shows them."
+      }
+    },
+    "tray": {
+      "label": "Files in progress",
+      "sent": "{percent}% sent",
+      "interrupted": "Upload interrupted.",
+      "expires": "It can be resumed until {time}.",
+      "resume": "Resume",
+      "resumeName": "Resume {name}",
+      "wrongFile": "This is not the same file. Choose {name}, of {size}.",
+      "gone": "The unfinished upload of this file expired after 6 hours and was discarded. Send it again.",
+      "dismiss": "Dismiss",
+      "dismissName": "Dismiss {name}",
+      "announce": {
+        "state": "{name}: {state}.",
+        "percent": "{name}: {percent}% sent."
+      },
+      "setFailed": "Photo {position} ({name}) did not go in: {reason}",
+      "replace": "Replace",
+      "replaceName": "Replace photo {position}, {name}",
+      "skip": "Continue without it",
+      "skipName": "Continue without photo {position}, {name}",
+      "notImage": "{name} is not an image GMshield accepts. Choose a JPG, PNG, WebP, TIFF, BMP or HEIC.",
+      "setInterrupted": "Upload interrupted: {count} of {total} photos are missing.",
+      "resumeSet": "Resume the photos",
+      "resumeSetName": "Resume the photos of {name}",
+      "wrongImages": "These are not the missing photos. Choose {names}."
+    }
+  },
+  "pageView": {
+    "position": "Page {page} of {total}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "navigation": "Pages",
+    "extracted": "Extracted text",
+    "noText": "No text was extracted from this page.",
+    "unopened": "This page could not be opened. The report lists it as unreadable."
+  }
+}

@@ -1,0 +1,8 @@
+# Reviewed ZAP false positives: one rule id per line (GMshield-pipeline reads this file; gates are never loosened).
+#
+# 10062 PII Disclosure (credit card numbers). Next.js writes each Server Action's id, 42 hex characters that
+# change with every build, into the page (`$ACTION_ID_<id>` and the RSC payload). When a build's id contains a
+# run of digits that passes the Luhn check, the rule reports a card number: develop run 20261116-194300-f4e6b6f4
+# flagged `5837741382949` inside `40b8260f89a12638c9b7473c888f5837741382949c`. GMshield never stores or shows
+# card numbers, so this rule can only fire on such ids, and at random from one build to the next.
+10062
