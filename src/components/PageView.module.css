@@ -1,0 +1,49 @@
+/* One page of a material (Story 1.19): the picture page as wide as the source view, its text layer invisible. */
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: var(--width-source-view);
+  margin: 0;
+}
+
+/* The SVG keeps the picture's shape at any width; its size comes from its viewBox. */
+.page {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+/* Shown until the picture arrives, and behind a picture with transparent parts. */
+.frame {
+  fill: var(--color-surface);
+}
+
+/* Selectable, read aloud, never seen: the picture shows the words. */
+.line {
+  fill: transparent;
+  cursor: text;
+}
+
+/* A text page: its own line breaks and blank lines, wrapped to the column. */
+.text {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.caption {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}

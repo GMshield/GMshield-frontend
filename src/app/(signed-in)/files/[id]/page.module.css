@@ -1,0 +1,81 @@
+.heading {
+  margin: var(--space-8) 0 var(--space-3);
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
+  overflow-wrap: anywhere;
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* Why a material failed (Story 1.15): plain text under the pill, never a code. */
+.failure {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+}
+
+/* The pages read directly, read by OCR, still waiting and unreadable (Story 1.17): a plain list of word and number. */
+.counts {
+  margin: var(--space-4) 0 0;
+}
+
+.countList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-2) 0 0;
+}
+
+.count {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.count dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.count dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts > h2 {
+  margin: 0;
+}
+
+/* The link to the material's first page (Story 1.19), once it needs review or is ready: a pill, never the solid one. */
+.pages {
+  margin: var(--space-4) 0 0;
+}
+
+.pagesLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}

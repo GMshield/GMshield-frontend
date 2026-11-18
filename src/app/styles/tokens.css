@@ -1,0 +1,208 @@
+/*
+ * GMshield design tokens, from DESIGN.md (docs/_bmad-output/planning-artifacts/ux-designs/).
+ *
+ * - Primitives (`--dark-canvas`, `--light-text`, ...) carry the sampled values, named as in DESIGN.md.
+ * - Each theme maps them to the same roles (`--color-<role>`) under `:root[data-theme=...]`.
+ *   Components use roles only, never a primitive or a hex value.
+ * - The server renders `<html data-theme>` from the theme cookie (src/preferences.ts).
+ *
+ * test/contrast.test.ts parses this file: keep one declaration per line.
+ */
+
+:root {
+  /* Dark theme primitives */
+  --dark-canvas: #121212;
+  --dark-surface: #1e1e1e;
+  --dark-surface-active: #181818;
+  --dark-field: #272727;
+  --dark-control: #585858;
+  --dark-text: #ffffff;
+  --dark-text-muted: #b5b5b5;
+  --dark-rule: #ffffff;
+  --dark-chip: #ffffff;
+  --dark-chip-icon: #121212;
+  --dark-accent: #f2a33a;
+  --dark-danger: #ff8a80;
+  --dark-warning: #ffc857;
+  --dark-success: #7bd88f;
+
+  /* Light theme primitives */
+  --light-canvas: #fafafa;
+  --light-surface: #f0f0f0;
+  --light-surface-active: #c5c5c5;
+  --light-field: #fafafa;
+  --light-field-border: #6b6b6b;
+  --light-control: #4d4d4d;
+  --light-text: #000000;
+  --light-text-muted: #4d4d4d;
+  --light-rule: #4d4d4d;
+  --light-chip: #4d4d4d;
+  --light-chip-icon: #ffffff;
+  --light-accent: #8a4b00;
+  --light-danger: #b3261e;
+  --light-warning: #7a5200;
+  --light-success: #1b6e3c;
+
+  /* Illustrated theme primitives: surfaces are translucent, the hex is the colour before opacity */
+  --illustrated-scrim: #1a0a05;
+  --illustrated-surface: #060404;
+  --illustrated-field: #3d3634;
+  --illustrated-text: #ffffff;
+  --illustrated-text-muted: #d0d0d0;
+  --illustrated-rule: #ffffff;
+  --illustrated-chip: #ffffff;
+  --illustrated-chip-icon: #121212;
+  --illustrated-accent: #f2a33a;
+  --illustrated-danger: #ff8a80;
+  --illustrated-warning: #ffc857;
+  --illustrated-success: #7bd88f;
+
+  /* Typography: one family, DM Sans (bundled from @fontsource-variable/dm-sans) */
+  --font-family: 'DM Sans Variable', system-ui, sans-serif;
+  --font-display-size: 56px;
+  --font-display-weight: 700;
+  --font-display-line-height: 1.15;
+  --font-headline-size: 40px;
+  --font-headline-weight: 300;
+  --font-headline-line-height: 1.2;
+  --font-title-size: 22px;
+  --font-title-weight: 400;
+  --font-title-line-height: 1.3;
+  --font-nav-size: 20px;
+  --font-nav-weight: 400;
+  --font-nav-line-height: 1.3;
+  --font-answer-size: 20px;
+  --font-answer-weight: 400;
+  --font-answer-line-height: 1.4;
+  --font-body-size: 16px;
+  --font-body-weight: 400;
+  --font-body-line-height: 1.5;
+  --font-label-size: 14px;
+  --font-label-weight: 600;
+  --font-label-line-height: 1.3;
+  --font-meta-size: 12px;
+  --font-meta-weight: 700;
+  --font-meta-line-height: 1.3;
+
+  /* Spacing: a 4-pixel scale, and the smallest hit area */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-touch-target: 44px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-panel: 40px;
+  --radius-hero: 80px;
+  --radius-full: 9999px;
+
+  /* Widths */
+  --width-sidebar: 340px;
+  --width-panel: 340px;
+  --width-source-view: 560px;
+  --width-upload-dialog: 560px;
+  --width-reading: 1080px;
+  --width-dialog: 440px;
+
+  /* Motion: globals.css sets it to 0ms under prefers-reduced-motion */
+  --motion-slide: 200ms;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-canvas: var(--dark-canvas);
+  --color-surface: var(--dark-surface);
+  --color-surface-active: var(--dark-surface-active);
+  --color-field: var(--dark-field);
+  --color-field-border: transparent;
+  --color-control: var(--dark-control);
+  --color-control-border: transparent;
+  --color-text: var(--dark-text);
+  --color-text-muted: var(--dark-text-muted);
+  --color-rule: var(--dark-rule);
+  --color-chip: var(--dark-chip);
+  --color-chip-icon: var(--dark-chip-icon);
+  --color-accent: var(--dark-accent);
+  --color-danger: var(--dark-danger);
+  --color-warning: var(--dark-warning);
+  --color-success: var(--dark-success);
+  --color-solid: var(--dark-text);
+  --color-on-solid: var(--dark-canvas);
+  --color-on-status: var(--dark-canvas);
+  --color-scrim: transparent;
+  --color-dim: color-mix(in srgb, var(--dark-canvas) 60%, transparent);
+  --glass-blur: none;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --color-canvas: var(--light-canvas);
+  --color-surface: var(--light-surface);
+  --color-surface-active: var(--light-surface-active);
+  --color-field: var(--light-field);
+  --color-field-border: var(--light-field-border);
+  --color-control: transparent;
+  --color-control-border: var(--light-field-border);
+  --color-text: var(--light-text);
+  --color-text-muted: var(--light-text-muted);
+  --color-rule: var(--light-rule);
+  --color-chip: var(--light-chip);
+  --color-chip-icon: var(--light-chip-icon);
+  --color-accent: var(--light-accent);
+  --color-danger: var(--light-danger);
+  --color-warning: var(--light-warning);
+  --color-success: var(--light-success);
+  --color-solid: var(--light-text);
+  --color-on-solid: var(--light-canvas);
+  --color-on-status: var(--light-canvas);
+  --color-scrim: transparent;
+  --color-dim: color-mix(in srgb, var(--light-canvas) 60%, transparent);
+  --glass-blur: none;
+}
+
+/*
+ * The scrim is uniform over the whole backdrop. Its strength is set by the brightest pixel of the
+ * backdrop (test/contrast.test.ts), so every crop at every width keeps text at 4.5:1 or better.
+ * The brightest pixel of backdrop.webp is near white (#fffee0): at 72%, the text keeps 8.0:1 and
+ * the secondary text 5.2:1 over it.
+ */
+:root[data-theme='illustrated'] {
+  color-scheme: dark;
+  --color-canvas: var(--illustrated-scrim);
+  --color-surface: color-mix(in srgb, var(--illustrated-surface) 85%, transparent);
+  --color-surface-active: color-mix(in srgb, var(--illustrated-surface) 60%, transparent);
+  --color-field: color-mix(in srgb, var(--illustrated-field) 80%, transparent);
+  --color-field-border: transparent;
+  --color-control: color-mix(in srgb, var(--illustrated-field) 80%, transparent);
+  --color-control-border: var(--illustrated-rule);
+  --color-text: var(--illustrated-text);
+  --color-text-muted: var(--illustrated-text-muted);
+  --color-rule: var(--illustrated-rule);
+  --color-chip: var(--illustrated-chip);
+  --color-chip-icon: var(--illustrated-chip-icon);
+  --color-accent: var(--illustrated-accent);
+  --color-danger: var(--illustrated-danger);
+  --color-warning: var(--illustrated-warning);
+  --color-success: var(--illustrated-success);
+  --color-solid: var(--illustrated-text);
+  --color-on-solid: var(--illustrated-scrim);
+  --color-on-status: var(--illustrated-scrim);
+  --color-scrim: color-mix(in srgb, var(--illustrated-scrim) 72%, transparent);
+  --color-dim: color-mix(in srgb, var(--illustrated-scrim) 60%, transparent);
+  --glass-blur: blur(16px);
+  --font-answer-weight: 600;
+}
+
+/* Without a backdrop blur, the illustration shows through the glass in full detail: more opacity. */
+@supports not (backdrop-filter: blur(1px)) {
+  :root[data-theme='illustrated'] {
+    --color-surface: color-mix(in srgb, var(--illustrated-surface) 92%, transparent);
+    --glass-blur: none;
+  }
+}

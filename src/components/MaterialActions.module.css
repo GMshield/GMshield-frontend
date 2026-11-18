@@ -1,0 +1,16 @@
+/* The GM's actions on a material (Story 1.20): a row of pills, the refusal under it. */
+.actions {
+  margin: var(--space-6) 0 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.error {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-text);
+}

@@ -1,0 +1,23 @@
+# Only what the build needs enters the build context.
+.git
+.github
+.gmshield
+.gmshield-reports
+.build-guard
+.next
+.vscode
+.idea
+.scannerwork
+node_modules
+out
+coverage
+reports
+src/server/backend/generated
+*.md
+*.tsbuildinfo
+next-env.d.ts
+sonar-project.properties
+Dockerfile
+.dockerignore
+.env
+.env*
