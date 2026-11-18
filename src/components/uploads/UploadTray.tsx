@@ -61,7 +61,13 @@ export type TraySetImage = {
   readonly live: boolean;
   readonly length: number;
   readonly problem: unknown;
+  /** This tab's failure to send an open image that the backend did not record (a network or server error). */
+  readonly note: unknown;
 };
+
+/** The refusals the backend also records on the image's row (format, whole-file check, expiry). */
+const RECORDED = new Set([410, 415, 422]);
+const IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp,.heic,.heif,image/*';
 
 const ACTIVE = new Set<LiveUpload['phase']>(['queued', 'uploading']);
 
@@ -194,7 +200,11 @@ function setRow(row: Material, set: NonNullable<Material['imageSet']>, mine: rea
   const images = set.images.map((image: SetImageRow): TraySetImage & { readonly sent: number } => {
     const upload = mine.find((candidate) => candidate.uploadId === image.uploadId);
     const sending = upload !== undefined && ACTIVE.has(upload.phase);
-    const liveFailed = upload?.phase === 'failed' && image.state === 'open';
+    // Failed only when the backend says so, or answered a refusal it records too: otherwise the image is still open
+    // there, and can be resumed.
+    const liveFailedOpen = upload?.phase === 'failed' && image.state === 'open';
+    const status = (upload?.problem as { status?: unknown } | null | undefined)?.status;
+    const liveFailed = liveFailedOpen && typeof status === 'number' && RECORDED.has(status);
     const state = image.state === 'failed' || liveFailed ? 'failed' : image.state;
     return {
       position: image.position,
@@ -204,6 +214,7 @@ function setRow(row: Material, set: NonNullable<Material['imageSet']>, mine: rea
       live: sending,
       length: image.length,
       problem: image.failure !== undefined ? { category: 'upload', code: image.failure } : liveFailed ? upload.problem : null,
+      note: liveFailedOpen && !liveFailed ? upload.problem : null,
       sent: image.state === 'complete' || upload?.phase === 'waiting' ? image.length : sending ? upload.sent : image.offset,
     };
   });
@@ -225,6 +236,7 @@ function setRow(row: Material, set: NonNullable<Material['imageSet']>, mine: rea
       live: image.live,
       length: image.length,
       problem: image.problem,
+      note: image.note,
     })),
   };
 }
@@ -415,9 +427,12 @@ function SetImages({ row, texts }: { readonly row: Extract<TrayRow, { kind: 'set
     const files = [...(event.target.files ?? [])];
     event.target.value = '';
     let resumed = 0;
+    // Each chosen file fills one place only, even when two missing images have the same name and size.
+    const used = new Set<File>();
     for (const image of missing) {
-      const file = files.find((candidate) => candidate.name.trim() === image.name && candidate.size === image.length);
+      const file = files.find((candidate) => !used.has(candidate) && candidate.name.trim() === image.name && candidate.size === image.length);
       if (file !== undefined) {
+        used.add(file);
         resume(image.uploadId, file, target(image));
         resumed++;
       }
@@ -433,13 +448,20 @@ function SetImages({ row, texts }: { readonly row: Extract<TrayRow, { kind: 'set
       {missing.length > 0 && !row.sending ? (
         <>
           <p className={styles.note}>{fill(t.setInterrupted, { count: missing.length, total: row.images.length })}</p>
+          {missing
+            .filter((image) => image.note !== null)
+            .map((image) => (
+              <p key={image.uploadId} className={styles.note}>
+                {fill(t.setFailed, { position: image.position, name: image.name, reason: problemText(image.note, texts.errors) })}
+              </p>
+            ))}
           {wrong === null ? null : (
             <p className={styles.note} role="alert">
               {wrong}
             </p>
           )}
           <div className={styles.actions}>
-            <input ref={input} type="file" multiple hidden onChange={onFiles} data-testid={`resume-set-${row.setId}`} />
+            <input ref={input} type="file" multiple hidden accept={IMAGE_ACCEPT} onChange={onFiles} data-testid={`resume-set-${row.setId}`} />
             <PillButton aria-label={fill(t.resumeSetName, { name: row.name })} onClick={() => input.current?.click()}>
               {t.resumeSet}
             </PillButton>
@@ -470,7 +492,8 @@ function FailedImage({ image, target, texts }: { readonly image: TraySetImage; r
       return;
     }
     setRefusal(null);
-    replaceImage(target, file);
+    const problem = await replaceImage(target, file);
+    setRefusal(problem === null ? null : problemText(problem, texts.errors));
   }
 
   async function onSkip() {
@@ -493,7 +516,7 @@ function FailedImage({ image, target, texts }: { readonly image: TraySetImage; r
           ref={input}
           type="file"
           hidden
-          accept=".jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp,.heic,.heif,image/*"
+          accept={IMAGE_ACCEPT}
           onChange={(event) => void onFile(event)}
           data-testid={`replace-${image.uploadId}`}
         />

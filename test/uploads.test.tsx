@@ -94,11 +94,13 @@ function memoryStorage(entries: (PreviousUpload & { urlStorageKey: string })[] =
 }
 
 /** The set calls (Story 1.21), recorded, with answers a test may script. */
-function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unknown[][]; dropped: unknown[][]; next: { create?: SetCallResult<never> } } {
+type NextAnswers = { create?: SetCallResult<never>; replace?: SetCallResult<never>; drop?: SetCallResult<{ state: string }> };
+
+function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unknown[][]; dropped: unknown[][]; next: NextAnswers } {
   const created: ImageSetCreate[] = [];
   const replaced: unknown[][] = [];
   const dropped: unknown[][] = [];
-  const next: { create?: SetCallResult<never> } = {};
+  const next: NextAnswers = {};
   return {
     created,
     replaced,
@@ -121,11 +123,11 @@ function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unkn
     },
     replace: async (id, position, image) => {
       replaced.push([id, position, image]);
-      return { ok: true, data: { position, uploadId: `upload-again-${position}` } };
+      return next.replace ?? { ok: true, data: { position, uploadId: `upload-again-${position}` } };
     },
     drop: async (id, position) => {
       dropped.push([id, position]);
-      return { ok: true, data: { state: 'waiting' } };
+      return next.drop ?? { ok: true, data: { state: 'waiting' } };
     },
   };
 }
@@ -1034,6 +1036,68 @@ describe('a set in the tray (Story 1.21)', () => {
     uploads[0]!.progress(3000);
     expect(tray.querySelector('[data-state="uploading"]')!.textContent).toBe('enviando · 50%');
     expect(tray.textContent).not.toContain('Envio interrompido');
+  });
+
+  it('a refused replacement is shown in the row of the image it was for', async () => {
+    const sets = setCalls();
+    sets.next.replace = { ok: false, problem: { status: 413, category: 'upload', code: 'upload.set_too_large', params: {} } };
+    view({ sets, rows: [setMaterial([image(1, 'complete'), image(2, 'failed', { failure: 'upload.format_refused' })])] });
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    fireEvent.change(screen.getByTestId(`replace-${image(2, 'failed').uploadId}`), { target: { files: [jpeg('nova.jpg')] } });
+    await settle();
+    await settle();
+    expect(sets.replaced).toHaveLength(1);
+    expect(uploads).toHaveLength(0);
+    expect(within(tray).getByRole('alert').textContent).toBe('Um material pode ter até 500 fotos, somando até 2 GB.');
+  });
+
+  it('an image this tab failed to send on a network or server error stays missing, with Retomar and the reason', async () => {
+    view({ sets: setCalls(), rows: [setMaterial([image(1, 'complete'), image(2, 'open')])] });
+    fireEvent.change(screen.getByTestId(`resume-set-${SET}`), { target: { files: [jpeg('foto-2.jpg')] } });
+    await settle();
+    await act(async () => uploads[0]!.fail(503, { status: 503, category: 'server', code: 'server.unavailable' }));
+    await settle();
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(within(tray).queryByRole('button', { name: /Substituir/ })).toBeNull();
+    expect(within(tray).queryByRole('button', { name: /Continuar sem/ })).toBeNull();
+    expect(within(tray).getByRole('button', { name: 'Retomar as fotos de Ficha' })).toBeTruthy();
+    expect(tray.textContent).toContain('Envio interrompido: faltam 1 de 2 fotos.');
+    expect(tray.textContent).toContain('A foto 2 (foto-2.jpg) não entrou:');
+    // A refusal the backend records (a whole-file mismatch) is a failed image, with its two actions.
+    fireEvent.change(screen.getByTestId(`resume-set-${SET}`), { target: { files: [jpeg('foto-2.jpg')] } });
+    await settle();
+    await act(async () => uploads[1]!.fail(422, { status: 422, category: 'upload', code: 'upload.file_checksum_mismatch' }));
+    await settle();
+    expect(urgent()).toBe('foto-2.jpg: falhou. O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.');
+    expect(within(tray).getByRole('button', { name: 'Substituir a foto 2, foto-2.jpg' })).toBeTruthy();
+    expect(within(tray).queryByRole('button', { name: /Retomar as fotos/ })).toBeNull();
+  });
+
+  it('one chosen file fills one missing place only, and the picker offers images', async () => {
+    const same = { name: 'igual.jpg' };
+    view({ sets: setCalls(), rows: [setMaterial([image(1, 'open', same), image(2, 'open', same)])] });
+    const input = screen.getByTestId(`resume-set-${SET}`) as HTMLInputElement;
+    expect(input.accept).toContain('.heic');
+    fireEvent.change(input, { target: { files: [jpeg('igual.jpg')] } });
+    await settle();
+    expect(uploads.map((upload) => upload.options.resumeUrl)).toEqual([`/api/v1/uploads/${image(1, 'open').uploadId}`]);
+  });
+
+  it('going on without the last image says the set failed; without another, that it still sends', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    sets.next.drop = { ok: true, data: { state: 'discarded' } };
+    view({ sets, rows: [setMaterial([image(1, 'failed', { failure: 'upload.expired' })])] });
+    await user.click(screen.getByRole('button', { name: 'Continuar sem a foto 1, foto-1.jpg' }));
+    await settle();
+    expect(polite()).toBe('Ficha: falhou.');
+    cleanup();
+    const other = setCalls();
+    other.next.drop = { ok: true, data: { state: 'uploading' } };
+    view({ sets: other, rows: [setMaterial([image(1, 'failed', { failure: 'upload.expired' }), image(2, 'open')])] });
+    await user.click(screen.getByRole('button', { name: 'Continuar sem a foto 1, foto-1.jpg' }));
+    await settle();
+    expect(polite()).toBe('Ficha: enviando.');
   });
 
   it("a set's images sent before the server's rows show it are one row of their bytes in all", () => {

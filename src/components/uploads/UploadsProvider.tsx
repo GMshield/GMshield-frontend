@@ -76,7 +76,14 @@ type QueuedSet = {
   readonly members: readonly { readonly key: string; readonly file: UploadFile }[];
 };
 /** Story 1.21: a failed image's new upload to ask for, then to send. */
-type QueuedReplacement = { readonly kind: 'replace'; readonly key: string; readonly file: UploadFile; readonly target: SetTarget };
+type QueuedReplacement = {
+  readonly kind: 'replace';
+  readonly key: string;
+  readonly file: UploadFile;
+  readonly target: SetTarget;
+  /** Told the backend's answer to the new upload: its refusal, or null. */
+  readonly answered: (problem: SetProblem | null) => void;
+};
 type Queued = QueuedFile | QueuedSet | QueuedReplacement;
 
 export type Uploads = {
@@ -93,8 +100,11 @@ export type Uploads = {
   send(plan: SendPlan, answers: Answers): number;
   /** Goes on with an upload the server has, from its offset: never a new upload. `member` names an image's set. */
   resume(uploadId: string, file: UploadFile, member?: SetTarget): void;
-  /** Story 1.21: a new upload for a failed image of a set, at its place, then the file sent to it. */
-  replaceImage(target: SetTarget, file: UploadFile): void;
+  /**
+   * Story 1.21: a new upload for a failed image of a set, at its place, then the file sent to it. Answers, once the
+   * backend has answered the new upload, its refusal (for the row to show), or null.
+   */
+  replaceImage(target: SetTarget, file: UploadFile): Promise<SetProblem | null>;
   /** Story 1.21: the set goes on without its failed image; answers the refusal, or null. */
   dropImage(target: SetTarget): Promise<SetProblem | null>;
   /**
@@ -381,10 +391,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         replaced = { ok: false, problem: thrown() };
       }
       if (!replaced.ok) {
+        item.answered(replaced.problem);
         failWith(item.key, file.name, replaced.problem);
         router.refresh();
         return;
       }
+      item.answered(null);
       change(item.key, (upload) => ({ ...upload, uploadId: replaced.data.uploadId }));
       const state = await sendFile(item.key, file, { metadata: {}, resumeUrl: addressOf(replaced.data.uploadId), quiet: true });
       if (state === 'waiting') {
@@ -463,11 +475,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   );
 
   const replaceImage = useCallback(
-    (target: SetTarget, file: UploadFile) => {
-      const key = addLive(file, 0, null, target.materialId, { key: `set-${target.setId}`, name: target.setName, id: target.setId, position: target.position });
-      queue.current.push({ kind: 'replace', key, file, target });
-      void pump();
-    },
+    (target: SetTarget, file: UploadFile) =>
+      new Promise<SetProblem | null>((answered) => {
+        const key = addLive(file, 0, null, target.materialId, { key: `set-${target.setId}`, name: target.setName, id: target.setId, position: target.position });
+        queue.current.push({ kind: 'replace', key, file, target, answered });
+        void pump();
+      }),
     [addLive, pump],
   );
 
