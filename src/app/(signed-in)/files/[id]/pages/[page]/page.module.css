@@ -32,3 +32,70 @@
   line-height: var(--font-label-line-height);
   text-decoration: none;
 }
+
+/* Story 1.20: a picture page beside its extracted text, in the main column (at most 1080px). */
+.beside {
+  display: grid;
+  grid-template-columns: minmax(0, var(--width-source-view)) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .beside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.extracted {
+  min-width: 0;
+}
+
+.extractedHeading {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* The lines' text as read: one line each, wrapped to the column, never HTML. */
+.extractedText {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.noText {
+  max-width: 60ch;
+  margin: 0;
+}
+
+/* An unreadable page whose reading crashed: no picture and no text, only why. */
+.unopened {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: var(--width-source-view);
+  margin: 0;
+}
+
+.unopenedText {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+.caption {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}

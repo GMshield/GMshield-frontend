@@ -1,15 +1,18 @@
 import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
+import { MaterialActions } from '@/components/MaterialActions';
 import { MaterialRefresher } from '@/components/MaterialRefresher';
 import { Notice } from '@/components/Notice';
+import { QualityReport } from '@/components/QualityReport';
 import { StatePill } from '@/components/StatePill';
 import { progressOf } from '@/components/uploads/types';
 import { errorText, failureText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { getMaterial } from '@/server/materials';
+import { getMaterial, getReport } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
+import { materialAction } from './actions';
 import styles from './page.module.css';
 
 /**
@@ -19,8 +22,11 @@ import styles from './page.module.css';
  * while its state is moving and the tab is visible. Since Story 1.17 the pill names what is being read ("lendo texto ·
  * 40 de 364 páginas", "lendo por OCR · 12 de 80 páginas"), and while processing or needing review the page lists the
  * pages read directly, read by OCR and still waiting, and the unreadable ones when there are any. Since Story 1.19 a
- * material that needs review or is ready links to its first page ("Ver páginas"). The quality report and its actions
- * come with Story 1.20.
+ * material that needs review or is ready links to its first page ("Ver páginas"). Since Story 1.20 a material that
+ * needs review shows its quality report (the counts as numerals, the outline, the warnings and the unreadable pages)
+ * and the actions the backend allows (Aceitar, Reprocessar páginas com falha, Descartar); a ready one shows the report
+ * read-only; a failed one says why, then offers Tentar de novo and Descartar. The pages read directly, by OCR and still
+ * waiting are listed while processing only.
  */
 export default async function MaterialPage({ params }: { readonly params: Promise<{ readonly id: string }> }) {
   const [{ id }, { language }, token] = await Promise.all([params, currentPreferences(), currentSessionToken()]);
@@ -32,11 +38,14 @@ export default async function MaterialPage({ params }: { readonly params: Promis
     return <Notice status="danger" language={language} message={errorText(material.problem, language)} />;
   }
   const { state, pages, failure } = material.data;
+  const actions = material.data.actions ?? [];
+  const reviewed = state === 'needs_review' || state === 'ready';
+  const report = reviewed ? await getReport(token ?? '', id) : null;
   const progress = state === 'processing' && pages !== undefined ? progressOf(pages) : null;
   const word = progress?.phase ? t(`material.phase.${progress.phase}`) : t(`material.state.${state}`);
   const detail = progress === null ? undefined : t('material.pages', { done: progress.done, total: progress.total });
   const counts =
-    pages !== undefined && (state === 'processing' || state === 'needs_review')
+    pages !== undefined && state === 'processing'
       ? [
           { key: 'readDirectly', value: pages.readDirectly },
           { key: 'readByOcr', value: pages.readByOcr },
@@ -67,13 +76,26 @@ export default async function MaterialPage({ params }: { readonly params: Promis
         </section>
       )}
       {state === 'failed' ? <p className={styles.failure}>{failureText(failure, language)}</p> : null}
-      {state === 'needs_review' || state === 'ready' ? (
+      <MaterialActions
+        id={material.data.id}
+        name={material.data.name}
+        actions={actions}
+        pages={pages?.done}
+        language={language}
+        action={materialAction}
+      />
+      {reviewed ? (
         <p className={styles.pages}>
           <Link className={styles.pagesLink} href={`/files/${encodeURIComponent(material.data.id)}/pages/1`}>
             {t('material.viewPages')}
           </Link>
         </p>
       ) : null}
+      {report === null ? null : report.ok ? (
+        <QualityReport materialId={material.data.id} pages={pages} report={report.data} language={language} />
+      ) : (
+        <p className={styles.failure}>{errorText(report.problem, language)}</p>
+      )}
       <MaterialRefresher state={state} />
     </>
   );

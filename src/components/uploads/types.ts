@@ -5,7 +5,8 @@ import type { components } from '@/server/backend/generated/public';
  * What the guided upload and the tray share (Story 1.14), with no message file and nothing server-only: the browser
  * gets its texts from the server as {@link UploadTexts}, already in the interface's language.
  */
-export type Material = components['schemas']['Material'];
+/** A material as the tray shows it: the GM's actions (Story 1.20) are the material page's alone. */
+export type Material = Omit<components['schemas']['Material'], 'actions'>;
 export type MaterialState = Material['state'];
 /** A material's pages once its page total is known: done of the total, by layer and by outcome (Story 1.17). */
 export type MaterialPages = NonNullable<Material['pages']>;

@@ -18,7 +18,9 @@ const PAGE = /^[1-9]\d{0,6}$/;
  * One page of a material while its owner reviews it (Story 1.19): the material's name (back to its page), the page as
  * `PageView` shows it with "Página 13 de 364", and links to the previous and next pages, each hidden at the first and
  * the last page. A page the backend does not serve (another owner's, a version not under review, a page outside the
- * material or with no view) shows the single "Não encontrado." page.
+ * material or with no view) shows the single "Não encontrado." page. Since Story 1.20 a picture page sits beside a
+ * "Texto extraído" column, which holds its lines' text or says that none was extracted, and an unreadable page whose
+ * reading crashed (no picture and no text) says it could not be opened.
  */
 export default async function MaterialPageView({
   params,
@@ -50,7 +52,28 @@ export default async function MaterialPageView({
           t('pageView.position', { page: view.page, total: view.pageTotal })
         )}
       </h1>
-      <PageView page={view} materialId={id} language={language} />
+      {view.picture === null && view.text === null ? (
+        <figure className={styles.unopened}>
+          <p className={styles.unopenedText}>{t('pageView.unopened')}</p>
+          <figcaption className={styles.caption}>{t('pageView.position', { page: view.page, total: view.pageTotal })}</figcaption>
+        </figure>
+      ) : view.picture === null ? (
+        <PageView page={view} materialId={id} language={language} />
+      ) : (
+        <div className={styles.beside}>
+          <PageView page={view} materialId={id} language={language} />
+          <section className={styles.extracted} aria-labelledby="extracted-text">
+            <h2 id="extracted-text" className={styles.extractedHeading}>
+              {t('pageView.extracted')}
+            </h2>
+            {view.lines.length === 0 ? (
+              <p className={styles.noText}>{t('pageView.noText')}</p>
+            ) : (
+              <div className={styles.extractedText}>{view.lines.map((line) => line.text).join('\n')}</div>
+            )}
+          </section>
+        </div>
+      )}
       <nav className={styles.nav} aria-label={t('pageView.navigation')}>
         {view.page > 1 ? (
           <Link className={styles.step} href={`${base}/pages/${view.page - 1}`} rel="prev">

@@ -86,8 +86,23 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', '/api/v1/materials', 't')).toMatchObject({ status: 200, body: { items: [] } });
     expect(answer(contract, 'GET', '/api/v1/materials/0190a0b0-0000-7000-8000-000000000003', 't')).toMatchObject({
       status: 200,
-      body: { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'processing', pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' } },
+      body: { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', state: 'processing', pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' }, actions: [] },
     });
+  });
+
+  it('answers the report and the actions (Story 1.20): an outline with its warnings, and a material for each action', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({
+      status: 200,
+      body: { outline: [{ level: 1, title: 'Equipment', page: 92 }, { level: 2 }], unreadable: [{ firstPage: 40, lastPage: 41 }] },
+    });
+    expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: [] } });
+    for (const action of ['reprocess', 'retry', 'discard']) {
+      const answered = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't');
+      expect(answered.status, action).toBe(200);
+      expect(Array.isArray((answered.body as { actions?: unknown }).actions), action).toBe(true);
+    }
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 405 });
   });
 
   it('answers a page (Story 1.19) as a picture page with lines, and its picture as a WebP', async () => {
@@ -95,7 +110,7 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', `/api/v1/materials/${id}/pages/13`, 't')).toMatchObject({
       status: 200,
       type: 'application/json',
-      body: { page: 13, pageTotal: 444, picture: { width: 1545, height: 2000 }, text: null },
+      body: { page: 13, pageTotal: 444, picture: { width: 1545, height: 2000 }, text: null, outcome: 'read_directly' },
     });
     running = await startStandIn();
     const picture = await fetch(`${running.url}/api/v1/materials/${id}/pages/13/picture?ground=review`);

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Notice } from '@/components/Notice';
 import { Shell } from '@/components/Shell';
-import { errorText, problemFields } from '@/messages';
+import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
 import { currentCampaign } from '@/server/library';
@@ -19,6 +19,9 @@ import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server
  * Story 1.14: the upload tray's rows are read here too, so that `router.refresh()` brings fresh ones; when they cannot
  * be loaded the tray shows this tab's uploads only. The current campaign and its system go to the guided upload with
  * their ids.
+ *
+ * Story 1.20: when no campaign notice is shown, a dismissible warning names the newest material that needs review and
+ * links to its page ("Bestiário.pdf precisa de revisão."), from the same list.
  */
 export default async function SignedInLayout({ children }: { readonly children: ReactNode }) {
   const token = await currentSessionToken();
@@ -50,6 +53,18 @@ export default async function SignedInLayout({ children }: { readonly children: 
   let notice: ReactNode = null;
   if (!campaign.ok && problemFields(campaign.problem).code !== 'request.not_found') {
     notice = <Notice status="danger" language={preferences.language} message={errorText(campaign.problem, preferences.language)} />;
+  }
+  const review = materials.ok ? materials.data.items.find((item) => item.state === 'needs_review') : undefined;
+  if (notice === null && review !== undefined) {
+    const t = translator(preferences.language);
+    notice = (
+      <Notice
+        status="warning"
+        language={preferences.language}
+        message={t('material.notice.needsReview', { name: review.name })}
+        link={{ href: `/files/${encodeURIComponent(review.id)}`, label: t('material.notice.review') }}
+      />
+    );
   }
   const current = campaign.ok ? { system: campaign.data.system.name, campaign: campaign.data.name } : null;
   const belonging = campaign.ok

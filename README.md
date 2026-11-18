@@ -46,6 +46,7 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state; `pages/[page]`, one page of it under review (Story 1.19) |
 | `src/app/api/v1/materials/[id]/pages/[page]/picture/route.ts` | the picture relay (Story 1.19): a page's WebP streamed from the backend (`src/server/backend/picture-relay.ts`) |
 | `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
+| `src/components/QualityReport.tsx`, `MaterialActions.tsx` | a material's quality report and the GM's actions on it (Story 1.20); the Server Action is `src/app/(signed-in)/files/[id]/actions.ts` |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
 | `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
@@ -251,9 +252,31 @@ they sit in `src/`.
     word, or it answers "not found" without the backend; only the service credential, the session and a
     `traceparent` go to the backend, and the WebP streams back as `image/webp` with `Cache-Control: no-store` and
     `X-Content-Type-Options: nosniff` (`img-src 'self'` allows it). The proxy runs on this GET as on any page.
+- **The quality report and the GM's review (Story 1.20).** Public contract 1.9.0.
+  - Each material carries `actions`, the subset of `accept`, `reprocess`, `retry` and `discard` the backend allows
+    now; the material page shows only those, so the rules stay in the backend.
+  - A material that needs review shows its quality report (`GET /api/v1/materials/{id}/report`, `getReport`): three
+    large numerals (pages processed = `pages.done`, read by OCR, unreadable) in the title type with their labels in
+    the meta type; the warnings written as facts ("3 páginas não puderam ser lidas.", an unknown code left out); the
+    unreadable pages as links to their page (a run reads "Páginas 40 a 41" and links to its first page); and the
+    outline as a plain list indented by level through classes (`level0` to `level6`, relative to the shallowest),
+    never style attributes. A ready material shows the report read-only. The pages read directly, by OCR and still
+    waiting are listed while processing only.
+  - The actions (`MaterialActions`): "Aceitar" the one solid pill, "Reprocessar páginas com falha" and "Descartar"
+    pills; a failed material says why (`failureText`), then "Tentar de novo" (solid) and "Descartar". Each is a native
+    button posting to the Server Action `materialAction` (the form's `id` and `action`), which calls
+    `POST /api/v1/materials/{id}/{action}` (`actOnMaterial`) and then `refresh()` (`next/cache`), so the page shows the
+    state the backend answered and polling resumes while it moves; a refusal comes back through `errorText` as an
+    alert under the pills. "Descartar" first opens the 440px `ConfirmationDialog`, which names what goes with its
+    count ("Saem as 444 páginas lidas deste arquivo, …"). Every action works from the keyboard.
+  - The page route shows a picture page beside a "Texto extraído" column holding its lines' text, or "Nenhum texto
+    foi extraído desta página."; an unreadable page whose reading crashed (no picture and no text) says it could not
+    be opened, with its number and the page links.
+  - The signed-in layout shows a dismissible warning notice "{name} precisa de revisão." linking to the newest
+    material that needs review, from the tray's list, unless the campaign notice is already shown.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -334,6 +357,10 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.9.0 (Story 1.20): the backend first (its migration `V13__version_removal.sql`, the
+`actions` of a material, the report and the action routes), then the frontend (its health check fails against a 1.8.0
+backend, and its material page reads `actions` and the report).
 
 Deploy order for public contract 1.8.0 (Story 1.19): the backend first (its migration `V12__page_views.sql`, and the
 page routes), then the frontend (its health check fails against a 1.7.0 backend, and its page route reads the new

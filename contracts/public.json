@@ -83,6 +83,14 @@
       },
       "Material" : {
         "properties" : {
+          "actions" : {
+            "description" : "The actions the newest version allows now, in this order: accept and discard while it needs review, reprocess too when a page is unreadable; retry (when it can start again) and discard while it is failed; none otherwise",
+            "items" : {
+              "enum" : [ "accept", "reprocess", "retry", "discard" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "failure" : {
             "description" : "Why the version failed (category.reason), only when the state is failed",
             "example" : "ingestion.password_required",
@@ -120,7 +128,7 @@
             "description" : "The unfinished upload, only while the state is uploading"
           }
         },
-        "required" : [ "id", "name", "state" ],
+        "required" : [ "actions", "id", "name", "state" ],
         "type" : "object"
       },
       "MaterialPage" : {
@@ -168,6 +176,11 @@
             },
             "type" : "array"
           },
+          "outcome" : {
+            "description" : "How the page was read: read_directly, read_by_ocr or unreadable; null when it has no outcome. An unreadable page whose reading crashed has no picture, lines, text or passages",
+            "example" : "read_directly",
+            "type" : [ "string", "null" ]
+          },
           "page" : {
             "description" : "The page's number",
             "example" : 13,
@@ -200,7 +213,7 @@
             "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "lines", "page", "pageTotal", "passages", "picture", "text" ],
+        "required" : [ "lines", "outcome", "page", "pageTotal", "passages", "picture", "text" ],
         "type" : "object"
       },
       "MaterialPages" : {
@@ -250,6 +263,33 @@
           }
         },
         "required" : [ "done", "image", "readByOcr", "readDirectly", "reading", "text", "total", "unreadable" ],
+        "type" : "object"
+      },
+      "MaterialReport" : {
+        "properties" : {
+          "outline" : {
+            "description" : "The sections in reading order",
+            "items" : {
+              "$ref" : "#/components/schemas/ReportSection"
+            },
+            "type" : "array"
+          },
+          "unreadable" : {
+            "description" : "The unreadable pages, as runs of consecutive pages in page order",
+            "items" : {
+              "$ref" : "#/components/schemas/ReportPageRun"
+            },
+            "type" : "array"
+          },
+          "warnings" : {
+            "description" : "Facts about the version, each with a count",
+            "items" : {
+              "$ref" : "#/components/schemas/ReportWarning"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "outline", "unreadable", "warnings" ],
         "type" : "object"
       },
       "MaterialUpload" : {
@@ -401,6 +441,65 @@
         "required" : [ "category", "code", "params", "status", "title", "traceId", "type" ],
         "type" : "object"
       },
+      "ReportPageRun" : {
+        "properties" : {
+          "firstPage" : {
+            "description" : "The run's first page",
+            "example" : 40,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lastPage" : {
+            "description" : "The run's last page (inclusive)",
+            "example" : 41,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "firstPage", "lastPage" ],
+        "type" : "object"
+      },
+      "ReportSection" : {
+        "properties" : {
+          "level" : {
+            "description" : "The heading's level, from 0 (the outermost)",
+            "example" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "page" : {
+            "description" : "The page the section starts on",
+            "example" : 92,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "title" : {
+            "description" : "The heading's title, as read",
+            "example" : "Equipment",
+            "type" : "string"
+          }
+        },
+        "required" : [ "level", "page", "title" ],
+        "type" : "object"
+      },
+      "ReportWarning" : {
+        "properties" : {
+          "code" : {
+            "description" : "What the backend found: report.pages_unreadable (pages that could not be read), report.pages_unopened (of those, pages whose reading crashed, with no view) or report.outline_empty (no section was found; count 0)",
+            "enum" : [ "report.pages_unreadable", "report.pages_unopened", "report.outline_empty" ],
+            "example" : "report.pages_unreadable",
+            "type" : "string"
+          },
+          "count" : {
+            "description" : "How many",
+            "example" : 12,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code", "count" ],
+        "type" : "object"
+      },
       "SessionGrant" : {
         "properties" : {
           "expiresInSeconds" : {
@@ -525,7 +624,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.8.0"
+    "version" : "1.9.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -727,6 +826,98 @@
         "tags" : [ "materials" ]
       }
     },
+    "/api/v1/materials/{id}/accept" : {
+      "post" : {
+        "operationId" : "acceptMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Accepts the newest version of one of the account's materials: needs_review becomes ready, and a ready version of it before becomes superseded. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/discard" : {
+      "post" : {
+        "operationId" : "discardMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Discards the newest version of one of the account's materials, which needs review or failed: it becomes discarded, and its pages, passages, outline and files are removed (a removal that resumes after a restart). Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
     "/api/v1/materials/{id}/pages/{page}" : {
       "get" : {
         "operationId" : "getMaterialPage",
@@ -788,7 +979,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One page of one of the account's materials on a ground: review serves its current version while it needs review or is ready. The page's picture size and text lines (a PDF page) or its text (a text page), and its passages' places. page.ground_unknown (400) without a ground or for another one; request.not_found (404) for another owner's material or an unknown one, a version the ground does not serve, a page outside 1 to the page total or a page with no view; session.required (401) without a session.",
+        "summary" : "One page of one of the account's materials on a ground: review serves its current version while it needs review or is ready. The page's picture size and text lines (a PDF page) or its text (a text page), and its passages' places. page.ground_unknown (400) without a ground or for another one; request.not_found (404) for another owner's material or an unknown one, a version the ground does not serve, a page outside 1 to the page total or a page with no view (unless the page is unreadable); session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -854,7 +1045,145 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The picture of one page of one of the account's materials on a ground, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page). page.ground_unknown (400) without a ground or for another one; request.not_found (404) for another owner's material or an unknown one, a version the ground does not serve, a page outside 1 to the page total or a page with no view; session.required (401) without a session.",
+        "summary" : "The picture of one page of one of the account's materials on a ground, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page, or an unreadable page with no view). page.ground_unknown (400) without a ground or for another one; request.not_found (404) for another owner's material or an unknown one, a version the ground does not serve, a page outside 1 to the page total or a page with no view (unless the page is unreadable); session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/report" : {
+      "get" : {
+        "operationId" : "getMaterialReport",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MaterialReport"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The quality report of one of the account's materials: its newest version's outline, unreadable pages and warnings, while that version needs review or is ready (the counts are the material's pages). request.not_found (404) for another owner's material, an unknown or malformed id, or a version in any other state; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/reprocess" : {
+      "post" : {
+        "operationId" : "reprocessMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Reads again the unreadable pages of the newest version of one of the account's materials, which needs review: it becomes processing, and needs review again once they are read. ingestion.too_many_steps (409) when the new steps would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/retry" : {
+      "post" : {
+        "operationId" : "retryMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Starts again the failed newest version of one of the account's materials, from its cleaned original or its uploaded file: it becomes processing. ingestion.too_many_steps (409) when a new step would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },

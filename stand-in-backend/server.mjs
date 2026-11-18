@@ -126,6 +126,28 @@ export const EXAMPLES = {
     kind: 'rulebook',
     // Story 1.17: a mixed book whose text pages are being read, its scanned pages waiting for OCR.
     pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
+    // Story 1.20: a processing material allows no action.
+    actions: [],
+  },
+  // Story 1.20: the report of a book under review, and the book once accepted.
+  'GET /api/v1/materials/{id}/report': {
+    outline: [
+      { level: 1, title: 'Equipment', page: 92 },
+      { level: 2, title: 'Armor', page: 93 },
+    ],
+    unreadable: [{ firstPage: 40, lastPage: 41 }],
+    warnings: [
+      { code: 'report.pages_unreadable', count: 2 },
+      { code: 'report.pages_unopened', count: 1 },
+    ],
+  },
+  'POST /api/v1/materials/{id}/accept': {
+    id: '0190a0b0-0000-7000-8000-000000000003',
+    name: 'Livro do Jogador.pdf',
+    state: 'ready',
+    kind: 'rulebook',
+    pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
+    actions: [],
   },
   // Story 1.19: page 13 of a book under review, a picture page with two lines and one passage.
   'GET /api/v1/materials/{id}/pages/{page}': {
@@ -138,6 +160,7 @@ export const EXAMPLES = {
     ],
     text: null,
     passages: [{ id: '0190a0b0-0000-7000-8000-000000000009', boxes: [[0.1, 0.1, 0.6, 0.17]] }],
+    outcome: 'read_directly',
   },
 };
 
