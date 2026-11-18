@@ -29,6 +29,67 @@ export type Answers = {
   readonly language: UploadLanguage;
 };
 
+/** Story 1.21: an image of a set as the tray reads it from the server. */
+export type SetImageRow = NonNullable<Material['imageSet']>['images'][number];
+
+/** The formats an image of a set may have (the backend's `Format.IMAGE_CODES`), and those a browser can show. */
+export const IMAGE_FORMATS = ['jpeg', 'png', 'webp', 'tiff', 'bmp', 'heic'] as const;
+export type ImageFormat = (typeof IMAGE_FORMATS)[number];
+export const SHOWN_FORMATS: ReadonlySet<string> = new Set(['jpeg', 'png', 'webp', 'bmp']);
+/** The most images a set holds, and its bytes in all (the backend checks them again). */
+export const MAX_SET_IMAGES = 500;
+export const MAX_SET_BYTES = 2 * 1024 * 1024 * 1024;
+
+export function isImageFormat(format: string | null | undefined): format is ImageFormat {
+  return typeof format === 'string' && (IMAGE_FORMATS as readonly string[]).includes(format);
+}
+
+/** An image of a set as the GM chose it: its file name and size. */
+export type SetImage = { readonly name: string; readonly length: number };
+
+/** What "Enviar" sends to create a set (Story 1.21): its name, the answers and its images in their confirmed order. */
+export type ImageSetCreate = {
+  readonly name: string;
+  readonly kind: Kind;
+  readonly language: UploadLanguage;
+  readonly campaign?: string;
+  readonly system?: string;
+  readonly images: readonly SetImage[];
+};
+
+/** A refusal of a set call, as plain fields: what `problemText` needs. */
+export type SetProblem = {
+  readonly status: number;
+  readonly category: string;
+  readonly code: string;
+  readonly params: Readonly<Record<string, string | number>>;
+};
+
+export type SetCallResult<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly problem: SetProblem };
+
+/** The set calls (Server Actions in the app; stand-ins in tests). */
+export type ImageSetCalls = {
+  readonly create: (request: ImageSetCreate) => Promise<SetCallResult<{ id: string; materialId: string; images: { position: number; uploadId: string }[] }>>;
+  readonly replace: (id: string, position: number, image: SetImage) => Promise<SetCallResult<{ position: number; uploadId: string }>>;
+  readonly drop: (id: string, position: number) => Promise<SetCallResult<{ state: string }>>;
+};
+
+/** What one "Enviar" sends: files that each become a material, and image sets (an image alone is a set of one). */
+export type SendPlan = {
+  readonly files: readonly UploadFileLike[];
+  readonly sets: readonly { readonly name: string; readonly files: readonly UploadFileLike[] }[];
+};
+
+/** A file to upload (the upload client's `UploadFile`), named here so this module stays free of the client. */
+export type UploadFileLike = Blob & { readonly name: string; readonly lastModified?: number };
+
+/** A file name without its extension: the default name of a set, from its first image. */
+export function withoutExtension(name: string): string {
+  const trimmed = name.trim();
+  const dot = trimmed.lastIndexOf('.');
+  return dot > 0 ? trimmed.slice(0, dot) : trimmed;
+}
+
 /** Every text the dialog, the tray and the announcements show, in one language. */
 export type UploadTexts = {
   readonly language: Language;

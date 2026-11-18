@@ -98,3 +98,45 @@ export function actOnMaterial(
     }
   });
 }
+
+/** An image set as the backend minted it (Story 1.21): its id, its material, its images' uploads in order. */
+export type ImageSet = Schemas['ImageSet'];
+export type ImageSetRequest = Schemas['ImageSetRequest'];
+export type ImageSetImage = Schemas['ImageSetImage'];
+export type ImageSetReplacement = Schemas['ImageSetReplacement'];
+export type UploadCompletion = Schemas['UploadCompletion'];
+
+/**
+ * Creates an ordered set of images, its order confirmed (Story 1.21): one material whose pages they become, and one tus
+ * upload per image, sent through the upload relay. Past 500 images or 2 GiB in all, `upload.set_too_large`.
+ */
+export function createImageSet(sessionToken: string, body: ImageSetRequest, options: CallOptions = {}): Promise<Result<ImageSet>> {
+  return call('materials.image_set', options, (client) =>
+    client.POST('/api/v1/image-sets', { params: { header: { 'X-Session-Token': sessionToken } }, body }),
+  );
+}
+
+/** A new upload for the failed image at `position` of one of the account's sets; `upload.image_not_failed` otherwise. */
+export function replaceSetImage(
+  sessionToken: string,
+  id: string,
+  position: number,
+  body: ImageSetImage,
+  options: CallOptions = {},
+): Promise<Result<ImageSetReplacement>> {
+  return call('materials.image_replace', options, (client) =>
+    client.POST('/api/v1/image-sets/{id}/images/{position}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { id, position } },
+      body,
+    }),
+  );
+}
+
+/** Leaves out the failed image at `position` of one of the account's sets: the set as it is now. */
+export function dropSetImage(sessionToken: string, id: string, position: number, options: CallOptions = {}): Promise<Result<UploadCompletion>> {
+  return call('materials.image_drop', options, (client) =>
+    client.DELETE('/api/v1/image-sets/{id}/images/{position}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { id, position } },
+    }),
+  );
+}

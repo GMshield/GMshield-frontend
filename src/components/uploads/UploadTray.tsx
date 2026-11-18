@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
 
+import { checkFile } from '@/client/upload/sniff';
+
 import { PillButton } from '../PillButton';
 import { StatePill } from '../StatePill';
 import { useRefreshWhileMoving } from '../useRefreshWhileMoving';
@@ -10,16 +12,18 @@ import { useRefreshWhileMoving } from '../useRefreshWhileMoving';
 import {
   fill,
   formatSize,
+  isImageFormat,
   MOVING_STATES,
   problemText,
   progressOf,
   type Material,
   type MaterialPages,
   type MaterialState,
+  type SetImageRow,
   type UploadTexts,
 } from './types';
 import styles from './Uploads.module.css';
-import { UPLOAD_LIFETIME_MS, useUploads, type LiveUpload, type StoredUpload } from './UploadsProvider';
+import { UPLOAD_LIFETIME_MS, useUploads, type LiveUpload, type SetTarget, type StoredUpload } from './UploadsProvider';
 
 /** How often the tray asks for fresh rows while one of them is moving and the tab is visible. */
 export { REFRESH_MS } from '../useRefreshWhileMoving';
@@ -29,7 +33,41 @@ export type TrayRow =
   | { readonly kind: 'material'; readonly key: string; readonly materialId: string; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly pages?: MaterialPages }
   | { readonly kind: 'live'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly state: MaterialState; readonly sent: number; readonly total: number; readonly problem: unknown }
   | { readonly kind: 'interrupted'; readonly key: string; readonly materialId: string; readonly name: string; readonly uploadId: string; readonly sent: number; readonly total: number; readonly expiresAt: string; readonly problem: unknown }
-  | { readonly kind: 'gone'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly dismissKeys: readonly string[] };
+  | { readonly kind: 'gone'; readonly key: string; readonly materialId: string | null; readonly name: string; readonly dismissKeys: readonly string[] }
+  | {
+      readonly kind: 'set';
+      readonly key: string;
+      readonly materialId: string;
+      readonly name: string;
+      readonly setId: string;
+      readonly state: MaterialState;
+      readonly sent: number;
+      readonly total: number;
+      /** Whether one of its images is being sent from this tab now. */
+      readonly sending: boolean;
+      readonly images: readonly TraySetImage[];
+    };
+
+/**
+ * An image of a set still uploading (Story 1.21), from the server's row and this tab's live upload of it: `failed`
+ * with its reason (the server's code, or this tab's problem before the server's rows catch up), `open` while it waits
+ * for its bytes (`live` when this tab is sending it), `complete` once verified.
+ */
+export type TraySetImage = {
+  readonly position: number;
+  readonly uploadId: string;
+  readonly name: string;
+  readonly state: 'open' | 'complete' | 'failed';
+  readonly live: boolean;
+  readonly length: number;
+  readonly problem: unknown;
+  /** This tab's failure to send an open image that the backend did not record (a network or server error). */
+  readonly note: unknown;
+};
+
+/** The refusals the backend also records on the image's row (format, whole-file check, expiry). */
+const RECORDED = new Set([410, 415, 422]);
+const IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp,.heic,.heif,image/*';
 
 const ACTIVE = new Set<LiveUpload['phase']>(['queued', 'uploading']);
 
@@ -62,7 +100,9 @@ export function trayRows(
       matched.add(upload.key);
     }
     const newest = mine[0];
-    if (newest !== undefined && ACTIVE.has(newest.phase)) {
+    if (row.state === 'uploading' && row.imageSet !== undefined) {
+      server.push(setRow(row, row.imageSet, mine));
+    } else if (newest !== undefined && ACTIVE.has(newest.phase)) {
       server.push({ kind: 'live', key: row.id, materialId: row.id, name: row.name, state: 'uploading', sent: newest.sent, total: newest.size, problem: null });
     } else if (newest?.phase === 'waiting' && row.state === 'uploading') {
       // Verified here before the server's rows caught up: waiting, not interrupted.
@@ -94,8 +134,14 @@ export function trayRows(
       );
     }
   }
+  // A set's images this tab sends before the server's rows show the set: one row for the set.
+  const sets = new Map<string, LiveUpload[]>();
   for (const upload of live) {
     if (matched.has(upload.key) || dismissed.has(upload.key)) {
+      continue;
+    }
+    if (upload.set !== null) {
+      sets.set(upload.set.key, [...(sets.get(upload.set.key) ?? []), upload]);
       continue;
     }
     result.push({
@@ -107,6 +153,25 @@ export function trayRows(
       sent: upload.phase === 'waiting' ? upload.size : upload.sent,
       total: upload.size,
       problem: upload.phase === 'failed' ? upload.problem : null,
+    });
+  }
+  for (const [key, members] of sets) {
+    const first = members[0];
+    if (first === undefined || dismissed.has(key)) {
+      continue;
+    }
+    const failed = members.find((upload) => upload.phase === 'failed');
+    const active = members.some((upload) => ACTIVE.has(upload.phase));
+    const state: MaterialState = active ? 'uploading' : failed !== undefined ? 'failed' : 'waiting';
+    result.push({
+      kind: 'live',
+      key,
+      materialId: first.materialId,
+      name: first.set?.name ?? first.name,
+      state,
+      sent: members.reduce((sum, upload) => sum + (upload.phase === 'waiting' ? upload.size : upload.sent), 0),
+      total: members.reduce((sum, upload) => sum + upload.size, 0),
+      problem: state === 'failed' ? (failed?.problem ?? null) : null,
     });
   }
   result.push(...server);
@@ -125,6 +190,55 @@ export function trayRows(
     }
   }
   return result;
+}
+
+/**
+ * A set still uploading (Story 1.21): its images from the server, each overlaid with this tab's live upload of it
+ * (the newest first), and its bytes in all.
+ */
+function setRow(row: Material, set: NonNullable<Material['imageSet']>, mine: readonly LiveUpload[]): TrayRow {
+  const images = set.images.map((image: SetImageRow): TraySetImage & { readonly sent: number } => {
+    const upload = mine.find((candidate) => candidate.uploadId === image.uploadId);
+    const sending = upload !== undefined && ACTIVE.has(upload.phase);
+    // Failed only when the backend says so, or answered a refusal it records too: otherwise the image is still open
+    // there, and can be resumed.
+    const liveFailedOpen = upload?.phase === 'failed' && image.state === 'open';
+    const status = (upload?.problem as { status?: unknown } | null | undefined)?.status;
+    const liveFailed = liveFailedOpen && typeof status === 'number' && RECORDED.has(status);
+    const state = image.state === 'failed' || liveFailed ? 'failed' : image.state;
+    return {
+      position: image.position,
+      uploadId: image.uploadId,
+      name: image.name ?? upload?.name ?? '',
+      state,
+      live: sending,
+      length: image.length,
+      problem: image.failure !== undefined ? { category: 'upload', code: image.failure } : liveFailed ? upload.problem : null,
+      note: liveFailedOpen && !liveFailed ? upload.problem : null,
+      sent: image.state === 'complete' || upload?.phase === 'waiting' ? image.length : sending ? upload.sent : image.offset,
+    };
+  });
+  return {
+    kind: 'set',
+    key: row.id,
+    materialId: row.id,
+    name: row.name,
+    setId: set.id,
+    state: row.state,
+    sent: images.reduce((sum, image) => sum + image.sent, 0),
+    total: images.reduce((sum, image) => sum + image.length, 0),
+    sending: images.some((image) => image.live),
+    images: images.map((image) => ({
+      position: image.position,
+      uploadId: image.uploadId,
+      name: image.name,
+      state: image.state,
+      live: image.live,
+      length: image.length,
+      problem: image.problem,
+      note: image.note,
+    })),
+  };
 }
 
 const noSubscription = () => () => undefined;
@@ -261,6 +375,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
           </div>
         </>
       ) : null}
+      {row.kind === 'set' ? <SetImages row={row} texts={texts} /> : null}
       {row.kind === 'live' && row.state === 'failed' ? (
         <>
           <p className={styles.note}>{problemText(row.problem, texts.errors)}</p>
@@ -281,7 +396,7 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
  * "processando · 3 de 3 páginas"); the state's word alone otherwise.
  */
 export function pillOf(row: TrayRow, state: MaterialState, percent: number, texts: UploadTexts): { readonly word: string; readonly detail?: string } {
-  if (row.kind === 'live' && state === 'uploading') {
+  if ((row.kind === 'live' || (row.kind === 'set' && row.sending)) && state === 'uploading') {
     return { word: texts.states.uploading, detail: fill(texts.percent, { percent }) };
   }
   if (row.kind !== 'material' || row.pages === undefined || state !== 'processing') {
@@ -292,6 +407,128 @@ export function pillOf(row: TrayRow, state: MaterialState, percent: number, text
     word: progress.phase === null ? texts.states.processing : texts.phases[progress.phase],
     detail: fill(texts.pages, { done: progress.done, total: progress.total }),
   };
+}
+
+/**
+ * A set's images that need the GM (Story 1.21): each failed one, named with its place and reason, with "Substituir"
+ * (another image for that place, checked here first) and "Continuar sem ela"; then, when images are still missing and
+ * this tab is not sending them, "Retomar as fotos", which asks for those files (each matched by its name and size).
+ */
+function SetImages({ row, texts }: { readonly row: Extract<TrayRow, { kind: 'set' }>; readonly texts: UploadTexts }) {
+  const t = texts.upload.tray;
+  const { resume } = useUploads();
+  const input = useRef<HTMLInputElement>(null);
+  const [wrong, setWrong] = useState<string | null>(null);
+  const failed = row.images.filter((image) => image.state === 'failed');
+  const missing = row.images.filter((image) => image.state === 'open' && !image.live);
+  const target = (image: TraySetImage): SetTarget => ({ setId: row.setId, materialId: row.materialId, setName: row.name, position: image.position });
+
+  function onFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = '';
+    let resumed = 0;
+    // Each chosen file fills one place only, even when two missing images have the same name and size.
+    const used = new Set<File>();
+    for (const image of missing) {
+      const file = files.find((candidate) => !used.has(candidate) && candidate.name.trim() === image.name && candidate.size === image.length);
+      if (file !== undefined) {
+        used.add(file);
+        resume(image.uploadId, file, target(image));
+        resumed++;
+      }
+    }
+    setWrong(resumed === 0 ? fill(t.wrongImages, { names: missing.map((image) => image.name).join(', ') }) : null);
+  }
+
+  return (
+    <>
+      {failed.map((image) => (
+        <FailedImage key={image.uploadId} image={image} target={target(image)} texts={texts} />
+      ))}
+      {missing.length > 0 && !row.sending ? (
+        <>
+          <p className={styles.note}>{fill(t.setInterrupted, { count: missing.length, total: row.images.length })}</p>
+          {missing
+            .filter((image) => image.note !== null)
+            .map((image) => (
+              <p key={image.uploadId} className={styles.note}>
+                {fill(t.setFailed, { position: image.position, name: image.name, reason: problemText(image.note, texts.errors) })}
+              </p>
+            ))}
+          {wrong === null ? null : (
+            <p className={styles.note} role="alert">
+              {wrong}
+            </p>
+          )}
+          <div className={styles.actions}>
+            <input ref={input} type="file" multiple hidden accept={IMAGE_ACCEPT} onChange={onFiles} data-testid={`resume-set-${row.setId}`} />
+            <PillButton aria-label={fill(t.resumeSetName, { name: row.name })} onClick={() => input.current?.click()}>
+              {t.resumeSet}
+            </PillButton>
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function FailedImage({ image, target, texts }: { readonly image: TraySetImage; readonly target: SetTarget; readonly texts: UploadTexts }) {
+  const t = texts.upload.tray;
+  const { replaceImage, dropImage } = useUploads();
+  const input = useRef<HTMLInputElement>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file === undefined) {
+      return;
+    }
+    // Only an image goes to a set's place: anything else is refused here, and no upload is created.
+    const check = await checkFile(file);
+    if (!check.ok || !isImageFormat(check.format)) {
+      setRefusal(fill(t.notImage, { name: file.name }));
+      return;
+    }
+    setRefusal(null);
+    const problem = await replaceImage(target, file);
+    setRefusal(problem === null ? null : problemText(problem, texts.errors));
+  }
+
+  async function onSkip() {
+    setBusy(true);
+    const problem = await dropImage(target);
+    setBusy(false);
+    setRefusal(problem === null ? null : problemText(problem, texts.errors));
+  }
+
+  return (
+    <>
+      <p className={styles.note}>{fill(t.setFailed, { position: image.position, name: image.name, reason: problemText(image.problem, texts.errors) })}</p>
+      {refusal === null ? null : (
+        <p className={styles.note} role="alert">
+          {refusal}
+        </p>
+      )}
+      <div className={styles.actions}>
+        <input
+          ref={input}
+          type="file"
+          hidden
+          accept={IMAGE_ACCEPT}
+          onChange={(event) => void onFile(event)}
+          data-testid={`replace-${image.uploadId}`}
+        />
+        <PillButton aria-label={fill(t.replaceName, { position: image.position, name: image.name })} onClick={() => input.current?.click()}>
+          {t.replace}
+        </PillButton>
+        <PillButton aria-label={fill(t.skipName, { position: image.position, name: image.name })} disabled={busy} onClick={() => void onSkip()}>
+          {t.skip}
+        </PillButton>
+      </div>
+    </>
+  );
 }
 
 /** The expiry as the GM reads it: the time, with the day when it is not today. */

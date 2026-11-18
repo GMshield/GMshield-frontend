@@ -4,6 +4,7 @@ import type { PreviousUpload, UrlStorage } from 'tus-js-client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UploadOptions, UploadResult } from '@/client/upload';
+import type { ImageSetCalls, ImageSetCreate, SetCallResult } from '@/components/uploads/types';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -92,10 +93,56 @@ function memoryStorage(entries: (PreviousUpload & { urlStorageKey: string })[] =
   };
 }
 
-function view(options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: typeof BELONGING | null } = {}) {
+/** The set calls (Story 1.21), recorded, with answers a test may script. */
+type NextAnswers = { create?: SetCallResult<never>; replace?: SetCallResult<never>; drop?: SetCallResult<{ state: string }> };
+
+function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unknown[][]; dropped: unknown[][]; next: NextAnswers } {
+  const created: ImageSetCreate[] = [];
+  const replaced: unknown[][] = [];
+  const dropped: unknown[][] = [];
+  const next: NextAnswers = {};
+  return {
+    created,
+    replaced,
+    dropped,
+    next,
+    create: async (request) => {
+      created.push(request);
+      if (next.create !== undefined) {
+        return next.create;
+      }
+      const index = created.length;
+      return {
+        ok: true,
+        data: {
+          id: `set-${index}`,
+          materialId: `material-${index}`,
+          images: request.images.map((_image, position) => ({ position: position + 1, uploadId: `upload-${index}-${position + 1}` })),
+        },
+      };
+    },
+    replace: async (id, position, image) => {
+      replaced.push([id, position, image]);
+      return next.replace ?? { ok: true, data: { position, uploadId: `upload-again-${position}` } };
+    },
+    drop: async (id, position) => {
+      dropped.push([id, position]);
+      return next.drop ?? { ok: true, data: { state: 'waiting' } };
+    },
+  };
+}
+
+function view(
+  options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: typeof BELONGING | null; sets?: ImageSetCalls } = {},
+) {
   const storage = options.storage ?? memoryStorage();
   const tree = (rows: Material[]) => (
-    <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={options.belonging === undefined ? BELONGING : options.belonging} urlStorage={storage}>
+    <UploadsProvider
+      texts={uploadTexts(options.language ?? 'pt-BR')}
+      belonging={options.belonging === undefined ? BELONGING : options.belonging}
+      urlStorage={storage}
+      {...(options.sets === undefined ? {} : { imageSets: options.sets })}
+    >
       <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={rows} />
     </UploadsProvider>
   );
@@ -111,6 +158,9 @@ function fileOf(name: string, head: string | Uint8Array, size = 6000): File {
 }
 
 const pdf = (name = 'Livro do Jogador.pdf', size = 6000) => fileOf(name, '%PDF-1.7\n', size);
+const jpeg = (name: string, size = 6000) => fileOf(name, new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), size);
+const png = (name: string, size = 6000) => fileOf(name, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), size);
+const heic = (name: string, size = 6000) => fileOf(name, new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]), size);
 /** A material's pages: `done` of `total`, with no layer sorted and no outcome unless `counts` gives them (Story 1.17). */
 const pagesOf = (done: number, total: number, counts: Partial<NonNullable<Material['pages']>> = {}): NonNullable<Material['pages']> => ({
   done,
@@ -637,14 +687,14 @@ describe('the upload tray (Story 1.14)', () => {
   });
 
   it('a verified live upload whose server row still says uploading is waiting, not interrupted', () => {
-    const live = [{ key: 'live-1', batch: 1, name: 'Livro do Jogador.pdf', size: 6000, sent: 6000, phase: 'waiting' as const, uploadId: UPLOAD, materialId: ID, problem: null }];
+    const live = [{ key: 'live-1', batch: 1, name: 'Livro do Jogador.pdf', size: 6000, sent: 6000, phase: 'waiting' as const, uploadId: UPLOAD, materialId: ID, problem: null, set: null }];
     const rows = trayRows([interrupted()], live, [], new Set(), Date.now());
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ kind: 'live', state: 'waiting', materialId: ID });
   });
 
   it('every live upload of one material is that material\'s row; the newest decides its state', () => {
-    const base = { batch: 0, name: 'Livro do Jogador.pdf', size: 6000, sent: 2000, uploadId: UPLOAD, materialId: null, problem: { category: 'server' } };
+    const base = { batch: 0, name: 'Livro do Jogador.pdf', size: 6000, sent: 2000, uploadId: UPLOAD, materialId: null, problem: { category: 'server' }, set: null };
     const live = [
       { ...base, key: 'live-3', phase: 'failed' as const },
       { ...base, key: 'live-2', phase: 'failed' as const },
@@ -667,12 +717,398 @@ describe('the upload tray (Story 1.14)', () => {
   });
 
   it('builds no row for a dismissed material, and keeps the server order after this tab\'s new uploads', () => {
-    const live = [{ key: 'live-1', batch: 1, name: 'novo.pdf', size: 10, sent: 5, phase: 'uploading' as const, uploadId: null, materialId: null, problem: null }];
+    const live = [{ key: 'live-1', batch: 1, name: 'novo.pdf', size: 10, sent: 5, phase: 'uploading' as const, uploadId: null, materialId: null, problem: null, set: null }];
     const rows: Material[] = [
       { id: 'a', name: 'a.pdf', state: 'waiting' },
       { id: 'b', name: 'b.pdf', state: 'processing' },
     ];
     expect(trayRows(rows, live, [], new Set(['a']), 0).map((row) => row.name)).toEqual(['novo.pdf', 'b.pdf']);
+  });
+});
+
+/** The names of the order step's rows, in their order. */
+function pageNames(modal: HTMLElement): string[] {
+  return within(within(modal).getByRole('list', { name: 'Páginas, na ordem' }))
+    .getAllByRole('listitem')
+    .map((row) => row.getAttribute('aria-label') ?? '');
+}
+
+/** Lets the provider's queue go on (a set's creation, then its next image). */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+async function nextSteps(modal: HTMLElement, count: number) {
+  const user = userEvent.setup();
+  for (let step = 0; step < count; step++) {
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+  }
+}
+
+describe('photos as the pages of one material (Story 1.21)', () => {
+  it('asks about two or more images, then orders them, and sends them as one set while other files stay apart', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    view({ sets });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(jpeg('foto-1.jpg'), pdf('Regras.pdf'), png('foto-2.png'));
+    const modal = dialog();
+    expect(within(modal).getByText('Passo 1 de 6')).toBeTruthy();
+
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 2 de 6')).toBeTruthy();
+    expect(within(modal).getByText('Como ficam as 2 fotos?')).toBeTruthy();
+    const pages = within(modal).getByRole('radio', { name: /Páginas de um material/ }) as HTMLInputElement;
+    expect(pages.checked).toBe(true);
+    expect(within(modal).getByRole('radio', { name: /Cada imagem é um material/ }).closest('label')?.textContent).toContain('Cada foto vira um material de uma página.');
+
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 3 de 6')).toBeTruthy();
+    const name = within(modal).getByRole('textbox', { name: 'Nome do material' }) as HTMLInputElement;
+    expect(name.value).toBe('foto-1');
+    expect(document.activeElement).toBe(name);
+    expect(pageNames(modal)).toEqual(['foto-1.jpg, página 1 de 2', 'foto-2.png, página 2 de 2']);
+    // A blank name stops the step.
+    await user.clear(name);
+    expect((within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(modal).getByRole('alert').textContent).toBe('Dê um nome ao material.');
+    await user.type(name, 'Ficha do herói');
+
+    await nextSteps(modal, 3);
+    expect(within(modal).getByText('Passo 6 de 6')).toBeTruthy();
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    await settle();
+
+    // The PDF first, as a material of its own, then the set: created once, its order confirmed.
+    expect(uploads.map((upload) => upload.file.name)).toEqual(['Regras.pdf']);
+    await act(async () => uploads[0]!.finish('m-pdf'));
+    await settle();
+    expect(sets.created).toEqual([
+      {
+        name: 'Ficha do herói',
+        kind: 'rulebook',
+        language: 'detect',
+        campaign: BELONGING.campaign.id,
+        images: [
+          { name: 'foto-1.jpg', length: 6000 },
+          { name: 'foto-2.png', length: 6000 },
+        ],
+      },
+    ]);
+    // Each image goes to the address of its own upload, one after another, never creating another.
+    expect(uploads.map((upload) => [upload.file.name, upload.options.resumeUrl])).toEqual([
+      ['Regras.pdf', undefined],
+      ['foto-1.jpg', '/api/v1/uploads/upload-1-1'],
+    ]);
+    expect(uploads[1]!.options.metadata).toEqual({});
+    await act(async () => uploads[1]!.finish('material-1'));
+    await settle();
+    expect(uploads[2]!.options.resumeUrl).toBe('/api/v1/uploads/upload-1-2');
+    await act(async () => {
+      uploads[2]!.finish('material-1');
+    });
+    await settle();
+    expect(polite()).toBe('Ficha do herói: aguardando.');
+  });
+
+  it('reorders by Alt+arrows on a row and by its buttons, announcing each move politely, and sends that order', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    view({ sets });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(heic('foto-1.heic'), jpeg('foto-2.jpg'), png('foto-3.png'));
+    const modal = dialog();
+    await nextSteps(modal, 2);
+    const row = within(modal).getByRole('listitem', { name: 'foto-1.heic, página 1 de 3' });
+    row.focus();
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(pageNames(modal)).toEqual(['foto-2.jpg, página 1 de 3', 'foto-1.heic, página 2 de 3', 'foto-3.png, página 3 de 3']);
+    expect(polite()).toBe('foto-1.heic, página 2 de 3');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('foto-1.heic, página 2 de 3');
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(pageNames(modal)[2]).toBe('foto-1.heic, página 3 de 3');
+    // Without Alt the arrows do nothing here.
+    await user.keyboard('{ArrowUp}');
+    expect(pageNames(modal)[2]).toBe('foto-1.heic, página 3 de 3');
+
+    const up = within(modal).getByRole('button', { name: 'Subir foto-3.png' });
+    expect((within(modal).getByRole('button', { name: 'Subir foto-2.jpg' }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(up);
+    expect(pageNames(modal)).toEqual(['foto-3.png, página 1 de 3', 'foto-2.jpg, página 2 de 3', 'foto-1.heic, página 3 de 3']);
+    expect(polite()).toBe('foto-3.png, página 1 de 3');
+    // At the top its "Subir" is disabled: focus goes to its "Descer".
+    expect(document.activeElement).toBe(within(modal).getByRole('button', { name: 'Descer foto-3.png' }));
+
+    await nextSteps(modal, 3);
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    await settle();
+    expect(sets.created[0]!.name).toBe('foto-3');
+    expect(sets.created[0]!.images.map((image) => image.name)).toEqual(['foto-3.png', 'foto-2.jpg', 'foto-1.heic']);
+  });
+
+  it('reorders by dragging a row onto another', async () => {
+    const user = userEvent.setup();
+    view({ sets: setCalls() });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(jpeg('a.jpg'), jpeg('b.jpg'), jpeg('c.jpg'));
+    const modal = dialog();
+    await nextSteps(modal, 2);
+    const data = new Map<string, string>();
+    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: (type: string, value: string) => data.set(type, value), getData: (type: string) => data.get(type) ?? '' };
+    const rows = within(within(modal).getByRole('list', { name: 'Páginas, na ordem' })).getAllByRole('listitem');
+    expect(rows.every((row) => row.getAttribute('draggable') === 'true')).toBe(true);
+    fireEvent.dragStart(rows[2]!, { dataTransfer });
+    expect(rows[2]!.getAttribute('data-dragging')).toBe('true');
+    fireEvent.dragOver(rows[0]!, { dataTransfer });
+    fireEvent.drop(rows[0]!, { dataTransfer });
+    expect(pageNames(modal)).toEqual(['c.jpg, página 1 de 3', 'a.jpg, página 2 de 3', 'b.jpg, página 3 de 3']);
+    expect(polite()).toBe('c.jpg, página 1 de 3');
+  });
+
+  it('shows a picture of the images a browser shows, upright, and the format of a HEIC or a TIFF', async () => {
+    const user = userEvent.setup();
+    const drawn: unknown[] = [];
+    vi.stubGlobal('createImageBitmap', async (_file: Blob, options: ImageBitmapOptions) => {
+      drawn.push(options);
+      return { width: 100, height: 50, close: () => undefined };
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ clearRect: () => undefined, drawImage: () => undefined } as unknown as CanvasRenderingContext2D);
+    try {
+      view({ sets: setCalls() });
+      await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+      await choose(jpeg('a.jpg'), heic('b.heic'), fileOf('c.tif', new Uint8Array([0x49, 0x49, 0x2a, 0])));
+      const modal = dialog();
+      await nextSteps(modal, 2);
+      await settle();
+      const rows = within(within(modal).getByRole('list', { name: 'Páginas, na ordem' })).getAllByRole('listitem');
+      expect(rows[0]!.querySelector('canvas')).not.toBeNull();
+      expect(rows[1]!.querySelector('[data-placeholder]')?.textContent).toBe('HEIC');
+      expect(rows[2]!.querySelector('[data-placeholder]')?.textContent).toBe('TIFF');
+      expect(drawn).toEqual([{ imageOrientation: 'from-image', resizeWidth: 96, resizeQuality: 'low' }]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('refuses a set past 500 images or 2 GB in the dialog, with the limit', async () => {
+    const user = userEvent.setup();
+    view({ sets: setCalls() });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    const big = [jpeg('a.jpg'), jpeg('b.jpg')];
+    for (const file of big) {
+      Object.defineProperty(file, 'size', { value: 1.5 * 1024 ** 3 });
+    }
+    await choose(...big);
+    const modal = dialog();
+    await nextSteps(modal, 2);
+    expect(within(modal).getByRole('alert').textContent).toContain('podem somar até 2 GB, e estas somam 3,2 GB');
+    expect((within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement).disabled).toBe(true);
+    // As separate materials each one is within its own limit.
+    await user.click(within(modal).getByRole('button', { name: 'Voltar' }));
+    await user.click(within(modal).getByRole('radio', { name: /Cada imagem é um material/ }));
+    expect(within(modal).getByText('Passo 2 de 5')).toBeTruthy();
+
+    cleanup();
+    view({ sets: setCalls() });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(...Array.from({ length: 501 }, (_unused, index) => jpeg(`f${index}.jpg`, 100)));
+    await nextSteps(dialog(), 2);
+    expect(within(dialog()).getByRole('alert').textContent).toContain('até 500 fotos, e estas são 501');
+    expect((within(dialog()).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('sends each image as a material of its own when asked, and a lone image as a set of one with no question', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    view({ sets });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(jpeg('frente.jpg'), png('verso.png'));
+    const modal = dialog();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('radio', { name: /Cada imagem é um material/ }));
+    await nextSteps(modal, 3);
+    expect(within(modal).getByText('Passo 5 de 5')).toBeTruthy();
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    await settle();
+    await act(async () => uploads[0]!.finish('material-1'));
+    await settle();
+    expect(sets.created.map((set) => [set.name, set.images.map((image) => image.name)])).toEqual([
+      ['frente.jpg', ['frente.jpg']],
+      ['verso.png', ['verso.png']],
+    ]);
+
+    cleanup();
+    const alone = setCalls();
+    view({ sets: alone });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(png('mapa.png'));
+    expect(within(dialog()).getByText('Passo 1 de 4')).toBeTruthy();
+    await nextSteps(dialog(), 3);
+    await user.click(within(dialog()).getByRole('button', { name: 'Enviar' }));
+    await settle();
+    expect(alone.created.map((set) => set.name)).toEqual(['mapa.png']);
+    expect(uploads.at(-1)!.options.resumeUrl).toBe('/api/v1/uploads/upload-1-1');
+  });
+
+  it('a refused set says so at once and sends none of its images', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    sets.next.create = { ok: false, problem: { status: 413, category: 'upload', code: 'upload.set_too_large', params: { maxImages: 500 } } };
+    view({ sets });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(jpeg('a.jpg'), jpeg('b.jpg'));
+    await nextSteps(dialog(), 5);
+    await user.click(within(dialog()).getByRole('button', { name: 'Enviar' }));
+    await settle();
+    expect(uploads).toHaveLength(0);
+    expect(urgent()).toBe('a: falhou. Um material pode ter até 500 fotos, somando até 2 GB.');
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(within(tray).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(tray).getByText('falhou')).toBeTruthy();
+  });
+});
+
+describe('a set in the tray (Story 1.21)', () => {
+  const MATERIAL = '0190a0b0-0000-7000-8000-000000000003';
+  const SET = '0190a0b0-0000-7000-8000-000000000004';
+  const image = (position: number, state: 'open' | 'complete' | 'failed', extra: Record<string, unknown> = {}) => ({
+    position,
+    uploadId: `0190a0b0-0000-7000-8000-00000000001${position}`,
+    ...(state === 'complete' ? {} : { name: `foto-${position}.jpg` }),
+    state,
+    offset: state === 'complete' ? 6000 : 0,
+    length: 6000,
+    expiresAt: '2099-01-01T00:00:00Z',
+    ...extra,
+  });
+  const setMaterial = (images: ReturnType<typeof image>[]): Material => ({
+    id: MATERIAL,
+    name: 'Ficha',
+    state: 'uploading',
+    imageSet: { id: SET, images: images as NonNullable<Material['imageSet']>['images'] },
+  });
+
+  it('names a failed image with its reason, replaces it at its place with an image, or goes on without it', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    view({ sets, rows: [setMaterial([image(1, 'complete'), image(2, 'failed', { failure: 'upload.file_checksum_mismatch' }), image(3, 'complete')])] });
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(within(tray).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(tray).getByRole('link', { name: 'Ficha' }).getAttribute('href')).toBe(`/files/${MATERIAL}`);
+    expect(tray.textContent).toContain('A foto 2 (foto-2.jpg) não entrou: O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.');
+    expect((within(tray).getByRole('progressbar') as HTMLProgressElement).value).toBe(12000);
+
+    // "Substituir" takes only an image: anything else is refused in the row, and nothing is asked of the server.
+    const input = screen.getByTestId(`replace-${image(2, 'failed').uploadId}`);
+    fireEvent.change(input, { target: { files: [pdf('errado.pdf')] } });
+    await settle();
+    expect(within(tray).getByRole('alert').textContent).toBe('errado.pdf não é uma imagem que o GMshield aceite. Escolha um JPG, PNG, WebP, TIFF, BMP ou HEIC.');
+    expect(sets.replaced).toEqual([]);
+    expect(within(tray).getByRole('button', { name: 'Substituir a foto 2, foto-2.jpg' })).toBeTruthy();
+    fireEvent.change(input, { target: { files: [jpeg('nova.jpg')] } });
+    await settle();
+    await settle();
+    expect(sets.replaced).toEqual([[SET, 2, { name: 'nova.jpg', length: 6000 }]]);
+    expect(uploads.map((upload) => [upload.file.name, upload.options.resumeUrl])).toEqual([['nova.jpg', '/api/v1/uploads/upload-again-2']]);
+
+    await user.click(within(tray).getByRole('button', { name: 'Continuar sem a foto 2, foto-2.jpg' }));
+    await settle();
+    expect(sets.dropped).toEqual([[SET, 2]]);
+    expect(polite()).toBe('Ficha: aguardando.');
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('an image refused at its first bytes shows that reason; images still missing can be resumed by their files', async () => {
+    view({ sets: setCalls(), rows: [setMaterial([image(1, 'failed', { failure: 'upload.format_refused' }), image(2, 'open'), image(3, 'complete')])] });
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(tray.textContent).toContain('A foto 1 (foto-1.jpg) não entrou: Este formato não é aceito.');
+    expect(tray.textContent).toContain('Envio interrompido: faltam 1 de 3 fotos.');
+    const resume = screen.getByTestId(`resume-set-${SET}`);
+    fireEvent.change(resume, { target: { files: [jpeg('outra.jpg')] } });
+    expect(within(tray).getByRole('alert').textContent).toBe('Estas não são as fotos que faltam. Escolha foto-2.jpg.');
+    expect(uploads).toHaveLength(0);
+    fireEvent.change(resume, { target: { files: [jpeg('foto-2.jpg')] } });
+    await settle();
+    expect(uploads.map((upload) => upload.options.resumeUrl)).toEqual([`/api/v1/uploads/${image(2, 'open').uploadId}`]);
+    uploads[0]!.progress(3000);
+    expect(tray.querySelector('[data-state="uploading"]')!.textContent).toBe('enviando · 50%');
+    expect(tray.textContent).not.toContain('Envio interrompido');
+  });
+
+  it('a refused replacement is shown in the row of the image it was for', async () => {
+    const sets = setCalls();
+    sets.next.replace = { ok: false, problem: { status: 413, category: 'upload', code: 'upload.set_too_large', params: {} } };
+    view({ sets, rows: [setMaterial([image(1, 'complete'), image(2, 'failed', { failure: 'upload.format_refused' })])] });
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    fireEvent.change(screen.getByTestId(`replace-${image(2, 'failed').uploadId}`), { target: { files: [jpeg('nova.jpg')] } });
+    await settle();
+    await settle();
+    expect(sets.replaced).toHaveLength(1);
+    expect(uploads).toHaveLength(0);
+    expect(within(tray).getByRole('alert').textContent).toBe('Um material pode ter até 500 fotos, somando até 2 GB.');
+  });
+
+  it('an image this tab failed to send on a network or server error stays missing, with Retomar and the reason', async () => {
+    view({ sets: setCalls(), rows: [setMaterial([image(1, 'complete'), image(2, 'open')])] });
+    fireEvent.change(screen.getByTestId(`resume-set-${SET}`), { target: { files: [jpeg('foto-2.jpg')] } });
+    await settle();
+    await act(async () => uploads[0]!.fail(503, { status: 503, category: 'server', code: 'server.unavailable' }));
+    await settle();
+    const tray = screen.getByRole('region', { name: 'Arquivos em andamento' });
+    expect(within(tray).queryByRole('button', { name: /Substituir/ })).toBeNull();
+    expect(within(tray).queryByRole('button', { name: /Continuar sem/ })).toBeNull();
+    expect(within(tray).getByRole('button', { name: 'Retomar as fotos de Ficha' })).toBeTruthy();
+    expect(tray.textContent).toContain('Envio interrompido: faltam 1 de 2 fotos.');
+    expect(tray.textContent).toContain('A foto 2 (foto-2.jpg) não entrou:');
+    // A refusal the backend records (a whole-file mismatch) is a failed image, with its two actions.
+    fireEvent.change(screen.getByTestId(`resume-set-${SET}`), { target: { files: [jpeg('foto-2.jpg')] } });
+    await settle();
+    await act(async () => uploads[1]!.fail(422, { status: 422, category: 'upload', code: 'upload.file_checksum_mismatch' }));
+    await settle();
+    expect(urgent()).toBe('foto-2.jpg: falhou. O arquivo que chegou é diferente do que você escolheu e foi descartado. Envie-o de novo.');
+    expect(within(tray).getByRole('button', { name: 'Substituir a foto 2, foto-2.jpg' })).toBeTruthy();
+    expect(within(tray).queryByRole('button', { name: /Retomar as fotos/ })).toBeNull();
+  });
+
+  it('one chosen file fills one missing place only, and the picker offers images', async () => {
+    const same = { name: 'igual.jpg' };
+    view({ sets: setCalls(), rows: [setMaterial([image(1, 'open', same), image(2, 'open', same)])] });
+    const input = screen.getByTestId(`resume-set-${SET}`) as HTMLInputElement;
+    expect(input.accept).toContain('.heic');
+    fireEvent.change(input, { target: { files: [jpeg('igual.jpg')] } });
+    await settle();
+    expect(uploads.map((upload) => upload.options.resumeUrl)).toEqual([`/api/v1/uploads/${image(1, 'open').uploadId}`]);
+  });
+
+  it('going on without the last image says the set failed; without another, that it still sends', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    sets.next.drop = { ok: true, data: { state: 'discarded' } };
+    view({ sets, rows: [setMaterial([image(1, 'failed', { failure: 'upload.expired' })])] });
+    await user.click(screen.getByRole('button', { name: 'Continuar sem a foto 1, foto-1.jpg' }));
+    await settle();
+    expect(polite()).toBe('Ficha: falhou.');
+    cleanup();
+    const other = setCalls();
+    other.next.drop = { ok: true, data: { state: 'uploading' } };
+    view({ sets: other, rows: [setMaterial([image(1, 'failed', { failure: 'upload.expired' }), image(2, 'open')])] });
+    await user.click(screen.getByRole('button', { name: 'Continuar sem a foto 1, foto-1.jpg' }));
+    await settle();
+    expect(polite()).toBe('Ficha: enviando.');
+  });
+
+  it("a set's images sent before the server's rows show it are one row of their bytes in all", () => {
+    const set = { key: 'set-1', name: 'Ficha', id: SET, position: 1 };
+    const base = { batch: 1, size: 1000, uploadId: null, materialId: MATERIAL, problem: null };
+    const live = [
+      { ...base, key: 'live-2', name: 'b.jpg', sent: 0, phase: 'queued' as const, set: { ...set, position: 2 } },
+      { ...base, key: 'live-1', name: 'a.jpg', sent: 500, phase: 'uploading' as const, set },
+    ];
+    const rows = trayRows([], live, [], new Set(), Date.now());
+    expect(rows).toEqual([{ kind: 'live', key: 'set-1', materialId: MATERIAL, name: 'Ficha', state: 'uploading', sent: 500, total: 2000, problem: null }]);
   });
 });
 

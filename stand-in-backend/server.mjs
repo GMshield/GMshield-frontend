@@ -7,7 +7,8 @@
 // to its end and answers the offset it would reach.
 // A few answers are set in EXAMPLES instead (Story 1.14): the materials list is empty, so the tray of a test-mode
 // shell stays still, and a material reads as one being processed, its pages known (Story 1.15). A page reads as a
-// picture page with two lines (Story 1.19), and a binary answer (a page's picture, image/webp) is a 1 x 1 WebP.
+// picture page with two lines (Story 1.19), and a binary answer (a page's picture, image/webp) is a 1 x 1 WebP. An
+// image set (Story 1.21) is created with two images, and leaving one out answers it waiting.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -148,6 +149,21 @@ export const EXAMPLES = {
     kind: 'rulebook',
     pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
     actions: [],
+  },
+  // Story 1.21: a set of two images, created with its order; the set once its failed image is left out.
+  'POST /api/v1/image-sets': {
+    id: '0190a0b0-0000-7000-8000-000000000004',
+    materialId: '0190a0b0-0000-7000-8000-000000000003',
+    expiresAt: '2026-11-17T06:00:00Z',
+    images: [
+      { position: 1, uploadId: '0190a0b0-0000-7000-8000-000000000011' },
+      { position: 2, uploadId: '0190a0b0-0000-7000-8000-000000000012' },
+    ],
+  },
+  'DELETE /api/v1/image-sets/{id}/images/{position}': {
+    materialId: '0190a0b0-0000-7000-8000-000000000003',
+    versionId: '0190a0b0-0000-7000-8000-000000000004',
+    state: 'waiting',
   },
   // Story 1.19: page 13 of a book under review, a picture page with two lines and one passage.
   'GET /api/v1/materials/{id}/pages/{page}': {

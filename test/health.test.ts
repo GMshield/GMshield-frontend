@@ -27,7 +27,7 @@ describe('GET /api/health', () => {
 
   it('Healthy: 200 UP when the backend reports the minimum version or newer', async () => {
     const output = captureOutput();
-    for (const version of ['1.9.0', '1.9.2', '2.0.0']) {
+    for (const version of ['1.10.0', '1.10.2', '2.0.0']) {
       running = await startStandIn(version);
       const response = await health(running.url, `00-${TRACE_ID}-00f067aa0ba902b7-01`);
       expect(response.status).toBe(200);
@@ -43,7 +43,7 @@ describe('GET /api/health', () => {
 
   it('Old backend: 503 DOWN and one log line naming both versions', async () => {
     const output = captureOutput();
-    running = await startStandIn('1.8.0');
+    running = await startStandIn('1.9.0');
     const response = await health(running.url, `00-${TRACE_ID}-00f067aa0ba902b7-01`);
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ status: 'DOWN' });
@@ -54,8 +54,8 @@ describe('GET /api/health', () => {
       traceId: TRACE_ID,
       unit: 'server.health',
       event: 'health.backend_outdated',
-      backendVersion: '1.8.0',
-      minimumVersion: '1.9.0',
+      backendVersion: '1.9.0',
+      minimumVersion: '1.10.0',
     });
   });
 

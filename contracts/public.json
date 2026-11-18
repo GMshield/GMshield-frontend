@@ -81,6 +81,134 @@
         "required" : [ "attemptToken" ],
         "type" : "object"
       },
+      "ImageSet" : {
+        "properties" : {
+          "expiresAt" : {
+            "description" : "When the images' uploads expire",
+            "example" : "2026-11-17T06:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The set's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000004",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "images" : {
+            "description" : "The images, in their order",
+            "items" : {
+              "$ref" : "#/components/schemas/ImageSetMember"
+            },
+            "type" : "array"
+          },
+          "materialId" : {
+            "description" : "The material's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000003",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expiresAt", "id", "images", "materialId" ],
+        "type" : "object"
+      },
+      "ImageSetImage" : {
+        "properties" : {
+          "length" : {
+            "description" : "The image's size in bytes, 1 to 2147483648",
+            "example" : 3145728,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "description" : "The image's file name",
+            "example" : "foto-1.jpg",
+            "type" : "string"
+          }
+        },
+        "required" : [ "length", "name" ],
+        "type" : "object"
+      },
+      "ImageSetMember" : {
+        "properties" : {
+          "position" : {
+            "description" : "The image's place, from 1",
+            "example" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "uploadId" : {
+            "description" : "Its upload: send the file through tus at /api/v1/uploads/{uploadId}",
+            "example" : "0190a0b0-0000-7000-8000-000000000006",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "position", "uploadId" ],
+        "type" : "object"
+      },
+      "ImageSetReplacement" : {
+        "properties" : {
+          "expiresAt" : {
+            "description" : "When the new upload expires",
+            "example" : "2026-11-17T06:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "position" : {
+            "description" : "The image's place",
+            "example" : 2,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "uploadId" : {
+            "description" : "The new upload: send the file through tus at /api/v1/uploads/{uploadId}",
+            "example" : "0190a0b0-0000-7000-8000-000000000007",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expiresAt", "position", "uploadId" ],
+        "type" : "object"
+      },
+      "ImageSetRequest" : {
+        "properties" : {
+          "campaign" : {
+            "description" : "One of the account's campaigns it belongs to (never with system)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "images" : {
+            "description" : "The images, in the order of their pages: 1 to 500",
+            "items" : {
+              "$ref" : "#/components/schemas/ImageSetImage"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "description" : "What the material is",
+            "enum" : [ "rulebook", "supplement", "homebrew", "campaign_notes", "other" ],
+            "type" : "string"
+          },
+          "language" : {
+            "description" : "Its language, or detect",
+            "enum" : [ "pt-BR", "en", "detect" ],
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The material's name",
+            "example" : "Ficha do personagem",
+            "type" : "string"
+          },
+          "system" : {
+            "description" : "One of the account's systems it belongs to (never with campaign)",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "images", "name" ],
+        "type" : "object"
+      },
       "Material" : {
         "properties" : {
           "actions" : {
@@ -101,6 +229,10 @@
             "example" : "0190a0b0-0000-7000-8000-000000000003",
             "format" : "uuid",
             "type" : "string"
+          },
+          "imageSet" : {
+            "$ref" : "#/components/schemas/MaterialImageSet",
+            "description" : "The image set still uploading (Story 1.21), only while the state is uploading; upload is then absent"
           },
           "kind" : {
             "description" : "What the material is, when the GM said",
@@ -129,6 +261,25 @@
           }
         },
         "required" : [ "actions", "id", "name", "state" ],
+        "type" : "object"
+      },
+      "MaterialImageSet" : {
+        "properties" : {
+          "id" : {
+            "description" : "The set's id: /api/v1/image-sets/{id}",
+            "example" : "0190a0b0-0000-7000-8000-000000000004",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "images" : {
+            "description" : "The set's images, in their order",
+            "items" : {
+              "$ref" : "#/components/schemas/MaterialSetImage"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "id", "images" ],
         "type" : "object"
       },
       "MaterialPage" : {
@@ -290,6 +441,59 @@
           }
         },
         "required" : [ "outline", "unreadable", "warnings" ],
+        "type" : "object"
+      },
+      "MaterialSetImage" : {
+        "properties" : {
+          "expiresAt" : {
+            "description" : "When the image's upload expires",
+            "example" : "2026-11-17T06:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "failure" : {
+            "description" : "Why the image failed (category.reason), only when it failed",
+            "enum" : [ "upload.file_checksum_mismatch", "upload.format_refused", "upload.expired" ],
+            "example" : "upload.file_checksum_mismatch",
+            "type" : "string"
+          },
+          "length" : {
+            "description" : "The image's size in bytes",
+            "example" : 3145728,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "description" : "The image's file name, while it is not complete",
+            "example" : "foto-2.jpg",
+            "type" : "string"
+          },
+          "offset" : {
+            "description" : "Bytes verified and stored",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "position" : {
+            "description" : "The image's place in its set, from 1",
+            "example" : 2,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "state" : {
+            "description" : "The image's upload state",
+            "enum" : [ "open", "complete", "failed" ],
+            "example" : "failed",
+            "type" : "string"
+          },
+          "uploadId" : {
+            "description" : "The image's upload: it resumes at /api/v1/uploads/{uploadId}",
+            "example" : "0190a0b0-0000-7000-8000-000000000006",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "expiresAt", "length", "offset", "position", "state", "uploadId" ],
         "type" : "object"
       },
       "MaterialUpload" : {
@@ -624,7 +828,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.9.0"
+    "version" : "1.10.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -709,6 +913,175 @@
         },
         "summary" : "One of the account's campaigns, with its system; request.not_found (404) for any other id",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/image-sets" : {
+      "post" : {
+        "operationId" : "createImageSet",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImageSetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImageSet"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "An ordered set of images that become the pages of one material, its order confirmed: the material, its version in uploading and one tus upload per image, each expiring after 6 hours. The first ingestion step starts by itself once every image is complete. upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name (the set's or an image's) or a kind, language, campaign or system that is not valid (it never says which); request.invalid (400) for a body without images or an image without a size of at least 1 byte; request.unsupported_media_type (415) for a body that is not JSON; session.required (401) without a session.",
+        "tags" : [ "image-sets" ]
+      }
+    },
+    "/api/v1/image-sets/{id}/images/{position}" : {
+      "delete" : {
+        "operationId" : "dropImageSetImage",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The set's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The image's place",
+          "in" : "path",
+          "name" : "position",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "maximum" : 500,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UploadCompletion"
+                }
+              }
+            },
+            "description" : "The set as it is now"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Leaves out the failed image at a place of a set still uploading: the images after it move up by one place, and the set starts when every image left is complete; leaving out the last one discards the version. upload.image_not_failed (409) when the image there has not failed; request.not_found (404) for another account's set, an unknown one, a set no longer uploading or a place it does not have; session.required (401) without a session.",
+        "tags" : [ "image-sets" ]
+      },
+      "post" : {
+        "operationId" : "replaceImageSetImage",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The set's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The image's place",
+          "in" : "path",
+          "name" : "position",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "maximum" : 500,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImageSetImage"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImageSetReplacement"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Replaces the failed image at a place of a set still uploading: a new tus upload at that place, checked again, expiring after 6 hours. upload.image_not_failed (409) when the image there has not failed; upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name that is not valid; request.invalid (400) for a size under 1 byte; request.not_found (404) for another account's set, an unknown one, a set no longer uploading or a place it does not have; session.required (401) without a session.",
+        "tags" : [ "image-sets" ]
       }
     },
     "/api/v1/materials" : {

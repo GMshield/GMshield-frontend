@@ -274,6 +274,31 @@ they sit in `src/`.
     be opened, with its number and the page links.
   - The signed-in layout shows a dismissible warning notice "{name} precisa de revisão." linking to the newest
     material that needs review, from the tray's list, unless the campaign notice is already shown.
+- **Photos as the pages of one material (Story 1.21).** Public contract 1.10.0.
+  - The dialog's step count follows its questions. With two or more images chosen (JPG, PNG, WebP, TIFF, BMP or HEIC,
+    as the browser's check found them), a step asks "Páginas de um material" (the default) or "Cada imagem é um
+    material"; other files in the same pick stay materials of their own. As pages, an order step follows: the
+    material's name (a text field, the first page's file name without its extension until the GM edits it; a blank
+    name stops the step) and the images as a list, each row with its thumbnail, its page number, its name and
+    "Subir"/"Descer". Rows move by native drag events (no library), by those buttons, or by Alt+↑/Alt+↓ on the focused
+    row; each move is announced politely ("foto-2.jpg, página 3 de 5") and focus stays on what moved. A thumbnail is
+    drawn on a canvas (`createImageBitmap`, upright by EXIF; the policy allows no image source) for JPG, PNG, WebP and
+    BMP; HEIC and TIFF show their format's name. Past 500 images or 2 GB in all the step says so with the limit and
+    stops there.
+  - "Enviar" confirms the order. `UploadsProvider.send({files, sets})` sends the other files as before, then each set:
+    the Server Action `createImageSetAction` (`src/app/(signed-in)/image-set-actions.ts`, given to the provider by the
+    shell) checks what the browser sent and calls `POST /api/v1/image-sets` (`createImageSet` in
+    `src/server/materials.ts`), which answers one upload id per image; each image then goes through the upload relay
+    to `/api/v1/uploads/{id}` with `startUpload(file, {resumeUrl})`, one after another, so no other upload is ever
+    created. "Cada imagem é um material" and an image chosen alone are each a set of one, named as a file is. The set
+    is announced as one (when it starts sending and when its last image is verified); a failed image is said at once.
+  - The tray shows a set still uploading as one row (`Material.imageSet` from the server, merged with this tab's
+    uploads of its images): the bytes of all its images on one line, then each failed image named with its place and
+    reason, with "Substituir" (another image for that place, checked in the browser first; `replaceSetImageAction`,
+    `POST /api/v1/image-sets/{id}/images/{position}`, then that file to the new upload) and "Continuar sem ela"
+    (`dropSetImageAction`, `DELETE …/images/{position}`, then `refresh()`). Images still missing with no upload in this
+    tab read "Envio interrompido: faltam N de M fotos." with "Retomar as fotos", which asks for those files and
+    resumes each one matched by its name and size.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -357,6 +382,11 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.10.0 (Story 1.21): the backend first (its migration `V14__image_sets.sql`, the
+image set routes and a material's `imageSet`), then the frontend (its health check fails against a 1.9.0 backend, and
+the guided upload creates image sets). The worker of the same story (internal contract 1.6.0, pipeline "6") reads the
+sets' images.
 
 Deploy order for public contract 1.9.0 (Story 1.20): the backend first (its migration `V13__version_removal.sql`, the
 `actions` of a material, the report and the action routes), then the frontend (its health check fails against a 1.8.0
