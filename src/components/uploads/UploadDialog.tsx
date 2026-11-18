@@ -85,7 +85,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const [order, setOrder] = useState<readonly number[]>([]);
   const [setName, setSetName] = useState<string | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
-  const focusAfterMove = useRef<{ readonly id: number; readonly target: 'row' | 'up' | 'down' } | null>(null);
+  const focusAfterMove = useRef<{ readonly id: number; readonly target: 'up' | 'down' } | null>(null);
   const nextId = useRef(0);
 
   useEffect(() => {
@@ -147,7 +147,8 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const current: StepName | null = steps[step - 1] ?? null;
   const questions = steps.length;
 
-  // After a move the row (or its button) takes focus again: React moves the row in the page, which loses focus.
+  // After a keyboard move the row's button takes focus again (React moves the row in the page, which loses focus): the
+  // same one, or the other when the move disabled it (at the top or the bottom).
   useEffect(() => {
     const target = focusAfterMove.current;
     if (target === null) {
@@ -155,11 +156,12 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     }
     focusAfterMove.current = null;
     const row = dialogRef.current?.querySelector<HTMLElement>(`[data-image-id="${target.id}"]`);
-    const button = target.target === 'row' ? null : row?.querySelector<HTMLButtonElement>(`[data-move="${target.target}"]:not([disabled])`);
-    (button ?? row)?.focus();
+    const button =
+      row?.querySelector<HTMLButtonElement>(`[data-move="${target.target}"]:not([disabled])`) ?? row?.querySelector<HTMLButtonElement>('[data-move]:not([disabled])');
+    button?.focus();
   });
 
-  function move(id: number, to: number, focus: 'row' | 'up' | 'down') {
+  function move(id: number, to: number, focus: 'up' | 'down' | null) {
     const from = orderedIds.indexOf(id);
     if (from < 0 || to < 0 || to >= orderedIds.length || from === to) {
       return;
@@ -168,19 +170,21 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     next.splice(from, 1);
     next.splice(to, 0, id);
     setOrder(next);
-    focusAfterMove.current = { id, target: focus };
+    focusAfterMove.current = focus === null ? null : { id, target: focus };
     const item = ordered[from];
     if (item !== undefined) {
       announce(fill(t.order.moved, { name: item.file.name, page: to + 1, total: next.length }));
     }
   }
 
+  /** Alt+↑ and Alt+↓ on a row's "Subir" or "Descer" (the row's focusable controls) move its image. */
   function onRowKeyDown(event: KeyboardEvent<HTMLLIElement>, id: number, index: number) {
-    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || event.target !== event.currentTarget) {
+    const control = (event.target as HTMLElement).dataset.move;
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || (control !== 'up' && control !== 'down')) {
       return;
     }
     event.preventDefault();
-    move(id, event.key === 'ArrowUp' ? index - 1 : index + 1, 'row');
+    move(id, event.key === 'ArrowUp' ? index - 1 : index + 1, control);
   }
 
   function onDragStart(event: DragEvent<HTMLLIElement>, id: number) {
@@ -201,7 +205,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     const id = dragging ?? Number(event.dataTransfer.getData('text/plain'));
     setDragging(null);
     if (Number.isInteger(id)) {
-      move(id, index, 'row');
+      move(id, index, null);
     }
   }
 
@@ -358,7 +362,6 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
                   data-image-id={item.id}
                   data-dragging={dragging === item.id ? 'true' : undefined}
                   draggable
-                  tabIndex={0}
                   aria-label={fill(t.order.row, { name: fileName, page: index + 1, total: ordered.length })}
                   onKeyDown={(event) => onRowKeyDown(event, item.id, index)}
                   onDragStart={(event) => onDragStart(event, item.id)}
@@ -368,16 +371,19 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
                 >
                   <Thumbnail file={item.file} format={format} />
                   <span className={styles.pageText}>
-                    <span className={styles.pageNumber}>{fill(t.order.page, { page: index + 1 })}</span>
+                    <span className={styles.pageNumber} id={`${titleId}-page-${item.id}`}>
+                      {fill(t.order.page, { page: index + 1 })}
+                    </span>
                     <span className={styles.name}>{fileName}</span>
                   </span>
                   <span className={styles.moves}>
-                    <PillButton data-move="up" aria-label={fill(t.order.up, { name: fileName })} disabled={index === 0} onClick={() => move(item.id, index - 1, index - 1 === 0 ? 'down' : 'up')}>
+                    <PillButton data-move="up" aria-label={fill(t.order.up, { name: fileName })} aria-describedby={`${titleId}-page-${item.id}`} disabled={index === 0} onClick={() => move(item.id, index - 1, index - 1 === 0 ? 'down' : 'up')}>
                       {t.order.upShort}
                     </PillButton>
                     <PillButton
                       data-move="down"
                       aria-label={fill(t.order.down, { name: fileName })}
+                      aria-describedby={`${titleId}-page-${item.id}`}
                       disabled={index === ordered.length - 1}
                       onClick={() => move(item.id, index + 1, index + 1 === ordered.length - 1 ? 'up' : 'down')}
                     >
@@ -520,7 +526,12 @@ function Thumbnail({ file, format }: { readonly file: File; readonly format: Ima
       </span>
     );
   }
-  return <canvas ref={canvasRef} className={styles.thumbnail} width={THUMBNAIL * 2} height={THUMBNAIL * 2} aria-hidden="true" />;
+  // The canvas sits in a hidden span: it is never focusable, and a screen reader skips it.
+  return (
+    <span className={styles.thumbnail} aria-hidden="true">
+      <canvas ref={canvasRef} width={THUMBNAIL * 2} height={THUMBNAIL * 2} />
+    </span>
+  );
 }
 
 /** A thumbnail's side in CSS pixels (drawn at twice that for sharp screens). */

@@ -821,18 +821,32 @@ describe('photos as the pages of one material (Story 1.21)', () => {
     await choose(heic('foto-1.heic'), jpeg('foto-2.jpg'), png('foto-3.png'));
     const modal = dialog();
     await nextSteps(modal, 2);
-    const row = within(modal).getByRole('listitem', { name: 'foto-1.heic, página 1 de 3' });
-    row.focus();
+    // The row's controls are its buttons: Alt+arrows on one of them move the row, and focus stays on that button.
+    const down = within(modal).getByRole('button', { name: 'Descer foto-1.heic' });
+    expect(down.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(down.getAttribute('aria-describedby')!)?.textContent).toBe('Página 1');
+    down.focus();
     await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
     expect(pageNames(modal)).toEqual(['foto-2.jpg, página 1 de 3', 'foto-1.heic, página 2 de 3', 'foto-3.png, página 3 de 3']);
     expect(polite()).toBe('foto-1.heic, página 2 de 3');
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('foto-1.heic, página 2 de 3');
+    expect(document.activeElement).toBe(within(modal).getByRole('button', { name: 'Descer foto-1.heic' }));
     await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    expect(pageNames(modal)[2]).toBe('foto-1.heic, página 3 de 3');
+    // At the bottom its "Descer" is disabled: focus goes to its "Subir".
+    expect(document.activeElement).toBe(within(modal).getByRole('button', { name: 'Subir foto-1.heic' }));
     await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
     expect(pageNames(modal)[2]).toBe('foto-1.heic, página 3 de 3');
     // Without Alt the arrows do nothing here.
     await user.keyboard('{ArrowUp}');
     expect(pageNames(modal)[2]).toBe('foto-1.heic, página 3 de 3');
+    // No row is a tab stop of its own, and no thumbnail canvas is hidden on its own (Sonar S6845, S6825).
+    for (const row of within(modal).getAllByRole('listitem')) {
+      expect(row.hasAttribute('tabindex')).toBe(false);
+    }
+    for (const canvas of modal.querySelectorAll('canvas')) {
+      expect(canvas.hasAttribute('aria-hidden')).toBe(false);
+      expect(canvas.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
 
     const up = within(modal).getByRole('button', { name: 'Subir foto-3.png' });
     expect((within(modal).getByRole('button', { name: 'Subir foto-2.jpg' }) as HTMLButtonElement).disabled).toBe(true);
