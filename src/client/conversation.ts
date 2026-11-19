@@ -1,3 +1,5 @@
+import type { components } from '@/server/backend/generated/public';
+
 /**
  * The browser's side of the conversation (Story 2.4), towards this site only: a question is posted to the relay
  * `POST /api/v1/campaigns/{id}/turns`, and a turn's answer is read from `GET /api/v1/turns/{id}/events` with
@@ -44,4 +46,47 @@ export async function postQuestion(campaignId: string, question: string): Promis
 /** The address of a turn's event stream. */
 export function turnEventsUrl(turnId: string): string {
   return `/api/v1/turns/${encodeURIComponent(turnId)}/events`;
+}
+
+/** A source reference of a finished answer, as the `done` event carries it (Story 2.5, `TurnSourceReference`). */
+export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceReference'], 'sectionPath' | 'passageIds'>> & {
+  readonly sectionPath: readonly string[];
+  readonly passageIds: readonly string[];
+};
+
+/** A citation of the answer: a passage id at a code-point offset of the answer's text (`TurnCitationEvent`). */
+export type Citation = { readonly passageId: string; readonly offset: number };
+
+/** The `done` event's data: its references, and whether the sources say nothing (no reference). */
+export type Done = { readonly silent: boolean; readonly references: readonly SourceReference[] };
+
+function isStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isReference(value: unknown): value is SourceReference {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const reference = value as Record<string, unknown>;
+  return Number.isInteger(reference.number) && (reference.number as number) >= 1
+    && typeof reference.materialName === 'string' && isStrings(reference.sectionPath)
+    && Number.isInteger(reference.page) && isStrings(reference.passageIds) && typeof reference.removed === 'boolean';
+}
+
+/**
+ * The data of a `done` event. Only what it carries is shown: a reference that is not well formed is left out, and an
+ * answer with no reference left is silent, whatever the event said (no uncited text stays on screen).
+ */
+export function parseDone(data: Record<string, unknown> | null): Done {
+  const references = Array.isArray(data?.references) ? data.references.filter(isReference) : [];
+  return { silent: data?.silent === true || references.length === 0, references: data?.silent === true ? [] : references };
+}
+
+/** The data of a `citation` event, or null when it is not one. */
+export function parseCitation(data: Record<string, unknown> | null): Citation | null {
+  if (typeof data?.passageId !== 'string' || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
+    return null;
+  }
+  return { passageId: data.passageId, offset: data.offset as number };
 }

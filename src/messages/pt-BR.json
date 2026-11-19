@@ -406,6 +406,11 @@
       "en": "inglês"
     },
     "link": "{text} ({address})",
+    "silent": "As fontes não dizem nada sobre isso.",
+    "references": "Fontes",
+    "citation": "fonte",
+    "sourceRemoved": "fonte removida",
+    "page": "p. {page}",
     "empty": {
       "noSources": "Esta campanha ainda não tem fontes aceitas.",
       "upload": "Enviar um arquivo",

@@ -169,8 +169,9 @@
 /*
  * The scrim is uniform over the whole backdrop. Its strength is set by the brightest pixel of the
  * backdrop (test/contrast.test.ts), so every crop at every width keeps text at 4.5:1 or better.
- * The brightest pixel of backdrop.webp is near white (#fffee0): at 72%, the text keeps 8.0:1 and
- * the secondary text 5.2:1 over it.
+ * The brightest pixel of backdrop.webp is near white (#fffee0). Story 2.5 raised the scrim from 72%
+ * to 78% so that accent-coloured text (citation superscripts, the reference numbers) keeps 4.82:1 over
+ * it; the text and the secondary text are higher than before.
  */
 :root[data-theme='illustrated'] {
   color-scheme: dark;
@@ -193,7 +194,7 @@
   --color-solid: var(--illustrated-text);
   --color-on-solid: var(--illustrated-scrim);
   --color-on-status: var(--illustrated-scrim);
-  --color-scrim: color-mix(in srgb, var(--illustrated-scrim) 72%, transparent);
+  --color-scrim: color-mix(in srgb, var(--illustrated-scrim) 78%, transparent);
   --color-dim: color-mix(in srgb, var(--illustrated-scrim) 60%, transparent);
   --glass-blur: blur(16px);
   --font-answer-weight: 600;

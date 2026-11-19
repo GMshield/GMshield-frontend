@@ -185,3 +185,37 @@
     line-height: var(--font-body-line-height);
   }
 }
+
+/* Story 2.5: a reference's number repeated inline, in the accent. */
+.citation {
+  color: var(--color-accent);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: 0;
+  vertical-align: super;
+  margin-inline-start: 0.1em;
+}
+
+/* The numbered references under a finished answer, above the closing rule, in label type. */
+.references {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  list-style: decimal;
+  overflow-wrap: anywhere;
+}
+
+.references li::marker {
+  color: var(--color-accent);
+}
+
+/* A removed source: struck through, then "fonte removida". */
+.removed {
+  text-decoration: line-through;
+}

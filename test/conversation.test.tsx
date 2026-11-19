@@ -18,6 +18,19 @@ const { uploadTexts } = await import('@/components/uploads/upload-texts');
 
 const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const TURN = '0190a0b0-0000-7000-8000-000000000021';
+const PASSAGE_A = '0190a0b0-0000-7000-8000-000000000009';
+const PASSAGE_B = '0190a0b0-0000-7000-8000-00000000000b';
+const PASSAGE_C = '0190a0b0-0000-7000-8000-00000000000c';
+
+/** A source reference as the done event carries it (Story 2.5). */
+function reference(number: number, passageIds: string[], more: Record<string, unknown> = {}) {
+  return { number, materialName: 'Livro do Jogador.pdf', sectionPath: ['Magias', 'Fire Bolt'], page: 3, passageIds, removed: false, ...more };
+}
+
+/** A done event with one reference of `passageIds`. */
+function doneWith(...passageIds: string[]) {
+  return { silent: false, references: [reference(1, passageIds)] };
+}
 
 /** A stream the test writes events into, as the backend would. */
 class FakeStream extends EventTarget {
@@ -75,9 +88,19 @@ function composer(): HTMLTextAreaElement {
   return screen.getByRole('textbox') as HTMLTextAreaElement;
 }
 
-/** The turns as the screen shows them (the live region repeats some of their words). */
+/** The turns as the screen shows them (the live region repeats some of their words): the first list on the page. */
 function turns() {
-  return within(screen.getByRole('list'));
+  return within(screen.getAllByRole('list')[0]!);
+}
+
+/** A superscript's visible number (its last text; a visually hidden word comes before it). */
+function shown(sup: Node): string {
+  return sup.lastChild?.textContent ?? '';
+}
+
+/** The numbers of the superscripts on the screen, in order. */
+function superscripts(): string[] {
+  return [...screen.getAllByRole('list')[0]!.querySelectorAll('sup')].map(shown);
 }
 
 function polite(): string {
@@ -179,15 +202,15 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('delta', { text: 'Fire Bolt causa ' });
     expect(screen.queryByText('Procurando nas fontes…')).toBeNull();
     stream.emit('delta', { text: '**1d10** de dano.' });
-    stream.emit('citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: 16 });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 16 });
     expect(turns().getByText('1d10').tagName).toBe('STRONG');
     expect(document.querySelector('hr')).toBeNull();
 
-    stream.emit('done', {});
+    stream.emit('done', doneWith(PASSAGE_A));
 
     expect(stream.closed).toBe(true);
     expect(document.querySelector('hr')).not.toBeNull();
-    expect(polite()).toBe('Fire Bolt causa 1d10 de dano.');
+    expect(polite()).toBe('Fire Bolt causa 1d10 de dano.Livro do Jogador.pdf, Magias › Fire Bolt, p. 3');
     // No bubble, card or avatar: the answer is text in the column.
     expect(document.querySelector('img')).toBeNull();
   });
@@ -199,7 +222,8 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('delta', {
       text: 'Veja ![mapa](https://evil.example/x.png) e [o SRD](https://srd.example/fire-bolt).\n\n<b>negrito</b><script>alert(1)</script><img src=x onerror=alert(1)>',
     });
-    stream.emit('done', {});
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 4 });
+    stream.emit('done', doneWith(PASSAGE_A));
 
     expect(document.querySelector('img')).toBeNull();
     expect(document.querySelector('a')).toBeNull();
@@ -216,7 +240,8 @@ describe('the conversation (Story 2.4)', () => {
     view();
     const stream = await ask('What does Fire Bolt do?', 'en');
     stream.emit('delta', { text: 'Fire Bolt deals 1d10 fire damage.' });
-    stream.emit('done', {});
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 33 });
+    stream.emit('done', doneWith(PASSAGE_A));
 
     expect(screen.getByText('Resposta em inglês')).toBeTruthy();
     expect(turns().getByText('Fire Bolt deals 1d10 fire damage.').closest('[lang]')?.getAttribute('lang')).toBe('en');
@@ -334,5 +359,258 @@ describe('the conversation (Story 2.4)', () => {
     expect(polite()).toBe('Answering…');
     stream.emit('delta', { text: 'Um d10.' });
     expect(screen.getByText('Answer in Portuguese')).toBeTruthy();
+  });
+});
+
+describe('sources under every answer (Story 2.5)', () => {
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    localStorage.clear();
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows no superscript and no list while the answer streams', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Fire Bolt causa 1d10.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 21 });
+    stream.emit('delta', { text: ' Mais.' });
+
+    expect(document.querySelector('sup')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Fontes' })).toBeNull();
+    expect(screen.queryByText(/Livro do Jogador/)).toBeNull();
+
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    expect(superscripts()).toEqual(['1']);
+    expect(screen.getAllByRole('list', { name: 'Fontes' })).toHaveLength(2);
+  });
+
+  it('places superscripts at code-point offsets of the Markdown text, after an emoji too', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    // "😀" is one code point but two UTF-16 units: offsets count code points.
+    stream.emit('delta', { text: '😀 Fogo. Gelo.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 7 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 13 });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 13 });
+    stream.emit('done', {
+      silent: false,
+      references: [reference(1, [PASSAGE_A]), reference(2, [PASSAGE_B], { page: 9 })],
+    });
+
+    const paragraph = turns().getByText((_, element) => element?.tagName === 'P' && (element.textContent ?? '').startsWith('😀'));
+    const parts = [...paragraph.childNodes].map((node) => `${node.nodeName}:${node.nodeName === 'SUP' ? shown(node) : node.textContent}`);
+    expect(parts).toEqual(['#text:😀 Fogo.', 'SUP:1', '#text: Gelo.', 'SUP:2', 'SUP:1']);
+    for (const sup of paragraph.querySelectorAll('sup')) {
+      expect(sup.className).toMatch(/citation/);
+    }
+    expect(document.body.innerHTML).not.toContain('style=');
+  });
+
+  it('gives passages cited at the same place one number', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', doneWith(PASSAGE_A, PASSAGE_B));
+
+    expect(superscripts()).toEqual(['1', '1']);
+    const list = screen.getAllByRole('list', { name: 'Fontes' })[0]!;
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('shows nothing for a citation with no matching reference', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_C, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 9 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    expect(superscripts()).toEqual(['1']);
+    expect(turns().getByText((_, element) => element?.tagName === 'P' && element.textContent === 'Um. Dois.fonte 1')).toBeTruthy();
+  });
+
+  it('says a visually hidden word before each superscript\'s number, in the answer\'s language', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Fire Bolt causa dano de fogo.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 29 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    const sup = document.querySelector('sup')!;
+    expect(sup.textContent).toBe('fonte 1');
+    const word = sup.firstElementChild!;
+    expect(word.tagName).toBe('SPAN');
+    expect(word.className).toMatch(/visuallyHidden/);
+    expect(word.textContent).toBe('fonte ');
+    cleanup();
+    streams = [];
+    view();
+    const english = await ask('What does Fire Bolt do?', 'en');
+    english.emit('delta', { text: 'It deals fire damage.' });
+    english.emit('citation', { passageId: PASSAGE_A, offset: 21 });
+    english.emit('done', doneWith(PASSAGE_A));
+    expect(document.querySelector('sup')?.textContent).toBe('source 1');
+  });
+
+  it('puts a citation past the end of the text at its end', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 50 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    expect(superscripts()).toEqual(['1']);
+    const paragraph = document.querySelector('sup')!.parentElement!;
+    expect(paragraph.tagName).toBe('P');
+    expect(paragraph.lastChild?.nodeName).toBe('SUP');
+    expect(paragraph.firstChild?.textContent).toBe('Um.');
+  });
+
+  it('keeps a fully bold cited sentence bold, with the superscript inside and no literal asterisk', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    const text = '**Fire Bolt causa 1d10.**';
+    stream.emit('delta', { text });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: Array.from(text).length });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    const strong = turns().getByText((_, element) => element?.tagName === 'STRONG');
+    expect(strong.firstChild?.textContent).toBe('Fire Bolt causa 1d10.');
+    expect(strong.querySelector('sup')).not.toBeNull();
+    expect(superscripts()).toEqual(['1']);
+    expect(screen.getAllByRole('list')[0]!.textContent).not.toContain('*');
+  });
+
+  it('puts a citation just after a paragraph break at the end of that paragraph, keeping the next heading', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    const first = 'Um parágrafo.\n\n';
+    stream.emit('delta', { text: `${first}## Título\n\nMais.` });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: Array.from(first).length });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    const heading = turns().getByRole('heading', { level: 2 });
+    expect(heading.textContent).toBe('Título');
+    const sup = document.querySelector('sup')!;
+    expect(sup.parentElement?.tagName).toBe('P');
+    expect(sup.parentElement?.firstChild?.textContent).toBe('Um parágrafo.');
+    expect(sup.parentElement?.nextElementSibling).toBe(heading);
+  });
+
+  it('lists the references in label type under the answer and above the rule, a removed one struck through', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', {
+      silent: false,
+      references: [reference(1, [PASSAGE_A]), reference(2, [PASSAGE_B], { materialName: 'Bestiário.pdf', sectionPath: [], page: 12, removed: true })],
+    });
+
+    const list = screen.getAllByRole('list', { name: 'Fontes' })[0]!;
+    expect(list.className).toMatch(/references/);
+    const items = within(list).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Livro do Jogador.pdf, Magias › Fire Bolt, p. 3',
+      'Bestiário.pdf, p. 12 — fonte removida',
+    ]);
+    expect(items.map((item) => item.getAttribute('value'))).toEqual(['1', '2']);
+    const struck = items[1]!.querySelector('s');
+    expect(struck?.textContent).toBe('Bestiário.pdf, p. 12');
+    expect(items[0]!.querySelector('s')).toBeNull();
+    // References open nothing yet (Story 2.7).
+    expect(list.querySelector('a, button')).toBeNull();
+    // Under the answer, above the closing rule.
+    const turn = list.closest('li')!;
+    const order = [...turn.children].map((child) => child.tagName);
+    expect(order.indexOf('OL')).toBeGreaterThan(order.indexOf('DIV'));
+    expect(order.indexOf('HR')).toBeGreaterThan(order.indexOf('OL'));
+  });
+
+  it('replaces a silent answer with the fixed sentence in the turn\'s language: no list, no superscript, no label', async () => {
+    view();
+    const stream = await ask('What does Fire Bolt do?', 'en');
+    stream.emit('delta', { text: 'Some uncited words about it.' });
+    stream.emit('done', { silent: true, references: [] });
+
+    expect(turns().queryByText('Some uncited words about it.')).toBeNull();
+    expect(turns().getByText('The sources say nothing about this.')).toBeTruthy();
+    expect(screen.queryByText('Resposta em inglês')).toBeNull();
+    expect(screen.queryAllByRole('list', { name: 'Fontes' })).toHaveLength(0);
+    expect(document.querySelector('sup')).toBeNull();
+    expect(polite()).toBe('The sources say nothing about this.');
+    expect(document.querySelector('hr')).not.toBeNull();
+  });
+
+  it('gives a silent answer of an unsure language the interface language, and treats a done with no reference as silent', async () => {
+    view();
+    const stream = await ask('Hmm?', null);
+    stream.emit('delta', { text: 'Texto sem fonte.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 5 });
+    // No well-formed reference left: silent, whatever the event said.
+    stream.emit('done', { silent: false, references: [{ number: 1, passageIds: [PASSAGE_A] }] });
+
+    expect(turns().queryByText('Texto sem fonte.')).toBeNull();
+    expect(turns().getByText('As fontes não dizem nada sobre isso.')).toBeTruthy();
+    expect(document.querySelector('sup')).toBeNull();
+  });
+
+  it('says the finished answer, then the references as a list, in the polite region', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Fire Bolt causa **1d10**.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 25 });
+    stream.emit('done', {
+      silent: false,
+      references: [reference(1, [PASSAGE_A]), reference(2, [PASSAGE_B], { removed: true, page: 4 })],
+    });
+
+    const region = screen.getByTestId('conversation-polite');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.firstElementChild?.tagName).toBe('P');
+    expect(region.firstElementChild?.textContent).toBe('Fire Bolt causa 1d10.');
+    const list = region.querySelector('ol');
+    expect(list?.getAttribute('aria-label')).toBe('Fontes');
+    expect([...(list?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
+      'Livro do Jogador.pdf, Magias › Fire Bolt, p. 3',
+      'Livro do Jogador.pdf, Magias › Fire Bolt, p. 4 — fonte removida',
+    ]);
+    expect(region.querySelector('sup')).toBeNull();
+  });
+
+  it('drops any sentinel the model text carries, so it never shows as a superscript', async () => {
+    view();
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: `Um${String.fromCodePoint(0xf0007)} dois.` });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 9 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    expect(superscripts()).toEqual(['1']);
+    expect(document.body.innerHTML).not.toContain(String.fromCodePoint(0xf0007));
+  });
+
+  it('has the references and the silent sentence in English too', async () => {
+    view({ language: 'en' });
+    const stream = await ask('What does Fire Bolt do?', 'en');
+    stream.emit('delta', { text: 'It deals 1d10.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { removed: true })] });
+
+    const list = screen.getAllByRole('list', { name: 'Sources' })[0]!;
+    expect(within(list).getByRole('listitem').textContent).toBe('Livro do Jogador.pdf, Magias › Fire Bolt, p. 3 — source removed');
+    cleanup();
+    streams = [];
+    view({ language: 'en' });
+    const silent = await ask('Quanto dano?', 'pt-BR');
+    silent.emit('done', { silent: true, references: [] });
+    expect(turns().getByText('As fontes não dizem nada sobre isso.')).toBeTruthy();
   });
 });

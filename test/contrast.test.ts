@@ -109,6 +109,8 @@ function pairs(theme: Theme, page: Rgb): [string, Rgb, Rgb][] {
     ['text on surface', text, surface],
     ['muted text on surface', muted, surface],
     ['accent on surface', opaque(role(theme, 'accent')), surface],
+    // Story 2.5: citation superscripts and reference numbers are accent text on the canvas.
+    ['accent text on canvas', opaque(role(theme, 'accent')), page],
     ['text on active row', text, over(role(theme, 'surface-active'), surface)],
     ['text in field', text, over(role(theme, 'field'), page)],
     ['text on dialog over the dimmed canvas', text, dialog],

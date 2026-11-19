@@ -859,7 +859,21 @@
         "type" : "object"
       },
       "TurnDoneEvent" : {
-        "description" : "The data of a done event: the answer is complete (an empty object)",
+        "description" : "The data of a done event: the answer is complete, with its source references. Built when the event is sent, so a replay shows removed as of then",
+        "properties" : {
+          "references" : {
+            "description" : "The source references, by number (1..n, each once)",
+            "items" : {
+              "$ref" : "#/components/schemas/TurnSourceReference"
+            },
+            "type" : "array"
+          },
+          "silent" : {
+            "description" : "True exactly when references is empty: the sources say nothing about the question",
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "references", "silent" ],
         "type" : "object"
       },
       "TurnErrorEvent" : {
@@ -871,6 +885,49 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "TurnSourceReference" : {
+        "description" : "A source reference of a completed answer, stored by value with the turn: one distinct place (material version, section path, page) the answer cited",
+        "properties" : {
+          "materialName" : {
+            "description" : "The material's name",
+            "type" : "string"
+          },
+          "number" : {
+            "description" : "Its number, 1..n by first citation: unique within the turn and contiguous from 1",
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "page" : {
+            "description" : "The page",
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "passageIds" : {
+            "description" : "The cited passages at this place, in the order first cited; a passage id appears in at most one reference of the turn",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "removed" : {
+            "description" : "Whether its source has been removed since (its version gone, discarded or pending removal, or its material gone), as of when the event is sent. A version superseded by a newer accepted one is not removed",
+            "type" : "boolean"
+          },
+          "sectionPath" : {
+            "description" : "The section path, outermost first; may be empty",
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "materialName", "number", "page", "passageIds", "removed", "sectionPath" ],
         "type" : "object"
       },
       "UploadCompletion" : {
@@ -919,7 +976,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.11.0"
+    "version" : "1.12.0"
   },
   "openapi" : "3.1.0",
   "paths" : {

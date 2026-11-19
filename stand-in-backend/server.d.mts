@@ -6,6 +6,7 @@ export type Answer = { status: number; type: string | null; body: unknown; heade
 
 export const EXAMPLES: Readonly<Record<string, unknown>>;
 export const PICTURE: Buffer;
+export const ANSWER_DONE: { silent: boolean; references: unknown[] };
 export const ANSWER_EVENTS: string;
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
