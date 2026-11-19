@@ -52,7 +52,10 @@
   backdrop-filter: var(--glass-blur);
 }
 
-/* Story 2.7: the source view. At 1280px and more it is a 560px column and the main column narrows. */
+/*
+ * Story 2.7: the source view. At 1280px and more it is a 560px column and the main column narrows. The panel scrolls
+ * (so ↓, PageDown and Space scroll the page from any control in it); the view keeps its header and footer in sight.
+ */
 .shell[data-panel='source'] .panel {
   width: var(--width-source-view);
 }
