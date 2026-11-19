@@ -191,6 +191,7 @@ export const EXAMPLES = {
 
 /** Story 2.5: the data of the stand-in answer's `done` event, with its one source reference. */
 export const ANSWER_DONE = {
+  stopped: false,
   silent: false,
   references: [
     {
@@ -204,7 +205,11 @@ export const ANSWER_DONE = {
   ],
 };
 
-/** Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its references). */
+/**
+ * Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its
+ * references; Story 2.6: not stopped). `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the contract
+ * declares.
+ */
 export const ANSWER_EVENTS = [
   'id:1\nevent:delta\ndata:{"text":"**Fire Bolt** causa 1d10 de dano de fogo."}\n\n',
   'id:2\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000009","offset":40}\n\n',

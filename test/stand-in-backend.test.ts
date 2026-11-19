@@ -156,6 +156,11 @@ describe('stand-in backend', () => {
     expect(ANSWER_DONE.references).toHaveLength(1);
     expectShape('TurnSourceReference', ANSWER_DONE.references[0] as Record<string, unknown>);
     expect(ANSWER_DONE.silent).toBe(false);
+    // Story 2.6: done says whether the GM stopped the answer, and the stop route answers 204.
+    expect(ANSWER_DONE.stopped).toBe(false);
+    const stopped = await fetch(`${running.url}/api/v1/turns/0190a0b0-0000-7000-8000-000000000021/stop`, { method: 'POST' });
+    expect(stopped.status).toBe(204);
+    expect(await stopped.text()).toBe('');
   });
 
   it('answers any other path with a 404 problem detail', async () => {

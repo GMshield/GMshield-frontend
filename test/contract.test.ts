@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 2.5 reads the source references on the done event, added in 1.12.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.12.0');
-    expect(meetsMinimum('1.12.0')).toBe(true);
-    expect(meetsMinimum('1.12.1')).toBe(true);
+    // Story 2.6 stops a turn and reads stopped on the done event, added in 1.13.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.13.0');
+    expect(meetsMinimum('1.13.0')).toBe(true);
+    expect(meetsMinimum('1.13.1')).toBe(true);
+    expect(meetsMinimum('1.12.0')).toBe(false);
     expect(meetsMinimum('1.11.0')).toBe(false);
     expect(meetsMinimum('1.10.0')).toBe(false);
     expect(meetsMinimum('1.9.0')).toBe(false);
