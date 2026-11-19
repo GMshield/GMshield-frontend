@@ -26,6 +26,7 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | sharp (measures the backdrop in `test/contrast.test.ts` only) | 0.35.5 | `package.json` |
 | tus-js-client (the browser's tus client, Story 1.13) | 4.3.1 | `package.json` |
 | hash-wasm (the whole-file SHA-256, Story 1.13) | 4.12.0 | `package.json` |
+| react-markdown (an answer's sanitized Markdown, Story 2.4; released 2025-03-07) | 10.1.0 | `package.json` |
 | Build and runtime image | `node:26.13.0-alpine3.24`, pinned by digest | `Dockerfile` |
 
 ## Structure
@@ -45,6 +46,8 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/components/uploads` | the guided upload and the upload tray (Story 1.14): `UploadsProvider`, `UploadDialog`, `UploadTray`, their texts built on the server (`upload-texts.ts`) |
 | `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state; `pages/[page]`, one page of it under review (Story 1.19) |
 | `src/app/api/v1/materials/[id]/pages/[page]/picture/route.ts` | the picture relay (Story 1.19): a page's WebP streamed from the backend (`src/server/backend/picture-relay.ts`) |
+| `src/app/(signed-in)/questions`, `src/components/conversation` | the conversation screen (Story 2.4): `Conversation` (composer, turns, live region, empty state) and `AnswerMarkdown` |
+| `src/app/api/v1/campaigns/[id]/turns/route.ts`, `src/app/api/v1/turns/[id]/events/route.ts` | the question relay and the turn event stream relay (Story 2.4), over `src/server/conversations.ts`; `src/client/conversation.ts` is the browser's side |
 | `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
 | `src/components/QualityReport.tsx`, `MaterialActions.tsx` | a material's quality report and the GM's actions on it (Story 1.20); the Server Action is `src/app/(signed-in)/files/[id]/actions.ts` |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
@@ -299,6 +302,33 @@ they sit in `src/`.
     (`dropSetImageAction`, `DELETE …/images/{position}`, then `refresh()`). Images still missing with no upload in this
     tab read "Envio interrompido: faltam N de M fotos." with "Retomar as fotos", which asks for those files and
     resumes each one matched by its name and size.
+- **Ask a question and read the answer as it is written (Story 2.4).** Public contract 1.11.0.
+  - `/questions` is the conversation screen. The page (a server component) loads `GET /api/v1/conversations/current`
+    (`currentConversation` in `src/server/conversations.ts`: the campaign and `hasSources`) and the newest material
+    that needs review, and renders the client `Conversation`. Only the turns asked since the page opened are shown:
+    past turns are stored, and listed from Story 3.10.
+  - The composer is a 48px pill textarea: Enter sends, Shift+Enter adds a line, and it grows to six lines (its `rows`
+    by line count, and `field-sizing: content` where the browser has it; no style attribute). The send button is a
+    48px outlined circle with an arrow, spoken "Enviar". The draft is kept per campaign in `localStorage`
+    (`gmshield:draft:<campaignId>`, every access in try/catch) and cleared on send. Under 768px the composer stays
+    pinned at the bottom (sticky) and answers use the body size.
+  - On send the question shows at once in `--color-text-muted` with "Procurando nas fontes…" (no spinner). The browser
+    posts it to `POST /api/v1/campaigns/{id}/turns` of this site (`postQuestion`, `src/client/conversation.ts`; the
+    only `fetch` outside `src/server`, to a relative `/api/v1/` path, which `test/boundaries.test.ts` allows), whose
+    route checks the origin, reads the session cookie and calls the backend through the typed client. Then it opens
+    `EventSource` on `/api/v1/turns/{turnId}/events` and closes it on `done` or `error`.
+  - The stream relay (`relayTurnEvents`) checks the origin, sends the service credential, the session as
+    `X-Session-Token` and a numeric `Last-Event-ID`, uses a raw `fetch` with no time limit, streams the body back
+    unbuffered (`no-store`, `nosniff`, `X-Accel-Buffering: no`) and aborts the backend request when the browser leaves.
+    `src/proxy.ts`'s matcher skips `/api/v1/turns/{id}/events`.
+  - The answer streams in as Markdown (`react-markdown` with `skipHtml`; images dropped; a link shown as "{text}
+    ({address})", never an anchor; nothing set as HTML) in `--font-answer-size`, with no bubble, card or avatar, and a
+    full-width rule once it ends. An answer whose `language` differs from the interface's gets `lang` and a visible
+    "Resposta em inglês" / "Answer in Portuguese". A polite live region says "Respondendo…" at the start and the whole
+    answer once at `done`; an `error` event shows the generic text of `errorText` (Story 2.6 refines it).
+  - With `hasSources` false, a line above the composer says "Esta campanha ainda não tem fontes aceitas." with
+    "Enviar um arquivo", which opens the guided upload (`openUpload` of the uploads context, which now holds the
+    dialog's open state), and "Revisar {name}" when a material needs review. The composer stays enabled.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -382,6 +412,11 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.11.0 (Story 2.4): the backend first (its migration `V17__conversations.sql`, the
+conversation routes and the turn event stream), then the worker (internal contract 1.10.0: it answers
+`question.answer`), then the frontend (its health check fails against a 1.10.0 backend, and `/questions` reads the
+new routes).
 
 Deploy order for public contract 1.10.0 (Story 1.21): the backend first (its migration `V14__image_sets.sql`, the
 image set routes and a material's `imageSet`), then the frontend (its health check fails against a 1.9.0 backend, and

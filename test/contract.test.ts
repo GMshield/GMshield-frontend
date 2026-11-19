@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 1.21 creates image sets and reads a set's images in the tray, added in 1.10.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.10.0');
-    expect(meetsMinimum('1.10.0')).toBe(true);
-    expect(meetsMinimum('1.10.1')).toBe(true);
+    // Story 2.4 asks questions and reads their answers as server-sent events, added in 1.11.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.11.0');
+    expect(meetsMinimum('1.11.0')).toBe(true);
+    expect(meetsMinimum('1.11.1')).toBe(true);
+    expect(meetsMinimum('1.10.0')).toBe(false);
     expect(meetsMinimum('1.9.0')).toBe(false);
     expect(meetsMinimum('1.8.0')).toBe(false);
     expect(meetsMinimum('1.6.0')).toBe(false);

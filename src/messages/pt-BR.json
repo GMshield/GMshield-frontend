@@ -387,5 +387,29 @@
     "extracted": "Texto extraído",
     "noText": "Nenhum texto foi extraído desta página.",
     "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório."
+  },
+  "conversation": {
+    "heading": "Consultas",
+    "turns": "Perguntas e respostas",
+    "question": "Pergunta",
+    "answer": "Resposta",
+    "composer": {
+      "label": "Sua pergunta",
+      "placeholder": "Pergunte sobre as regras da campanha",
+      "send": "Enviar"
+    },
+    "searching": "Procurando nas fontes…",
+    "answering": "Respondendo…",
+    "answerIn": "Resposta em {language}",
+    "languages": {
+      "pt-BR": "português",
+      "en": "inglês"
+    },
+    "link": "{text} ({address})",
+    "empty": {
+      "noSources": "Esta campanha ainda não tem fontes aceitas.",
+      "upload": "Enviar um arquivo",
+      "review": "Revisar {name}"
+    }
   }
 }

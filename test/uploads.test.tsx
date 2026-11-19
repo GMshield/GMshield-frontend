@@ -62,6 +62,7 @@ const { UploadsProvider, UPLOAD_LIFETIME_MS } = await import('@/components/uploa
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { trayRows, REFRESH_MS } = await import('@/components/uploads/UploadTray');
 const { MaterialRefresher } = await import('@/components/MaterialRefresher');
+const { Conversation } = await import('@/components/conversation/Conversation');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -1123,6 +1124,25 @@ describe('a set in the tray (Story 1.21)', () => {
     ];
     const rows = trayRows([], live, [], new Set(), Date.now());
     expect(rows).toEqual([{ kind: 'live', key: 'set-1', materialId: MATERIAL, name: 'Ficha', state: 'uploading', sent: 500, total: 2000, problem: null }]);
+  });
+});
+
+describe("the conversation's empty state (Story 2.4)", () => {
+  it('opens the guided upload, the same dialog as the sidebar', async () => {
+    const user = userEvent.setup();
+    render(
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()}>
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
+        <Conversation language="pt-BR" campaignId={BELONGING.campaign.id} hasSources={false} review={null} />
+      </UploadsProvider>,
+    );
+    expect(screen.queryByRole('dialog', { name: 'Adicionar arquivos' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Enviar um arquivo' }));
+
+    const modal = screen.getByRole('dialog', { name: 'Adicionar arquivos' });
+    expect((modal as HTMLDialogElement).open).toBe(true);
+    expect(within(modal).getByText('Passo 1 de 4')).toBeTruthy();
   });
 });
 
