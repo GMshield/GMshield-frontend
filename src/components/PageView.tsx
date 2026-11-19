@@ -122,7 +122,9 @@ function markedText(text: string, ranges: readonly (readonly [number, number])[]
     }
     parts.push(
       <span key={from} role="group" aria-label={label}>
-        <mark className={styles.mark}>{points.slice(from, to).join('')}</mark>
+        <mark className={styles.mark} data-cited="">
+          {points.slice(from, to).join('')}
+        </mark>
       </span>,
     );
     at = to;
@@ -185,6 +187,7 @@ export function PageView({
           <rect
             key={`mark-${index}`}
             className={styles.passage}
+            data-cited=""
             x={rounded(left * picture.width)}
             y={rounded(top * picture.height)}
             width={rounded(Math.max(right - left, 0) * picture.width)}

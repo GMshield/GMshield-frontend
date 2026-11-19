@@ -992,6 +992,51 @@ describe('open the cited page in the source view (Story 2.7)', () => {
     );
   }
 
+  it('scrolls its panel so the first cited passage sits in the middle, and opens a page with none at its top', async () => {
+    const { SourceView } = await import('@/components/SourceView');
+    // jsdom has no layout: the panel is 600px high at the top of the window, the cited box 900px down the page.
+    const boxes = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.tagName.toLowerCase() === 'aside') {
+        return DOMRect.fromRect({ x: 0, y: 0, width: 560, height: 600 });
+      }
+      if (this.hasAttribute('data-cited')) {
+        return DOMRect.fromRect({ x: 0, y: 900 - (this.closest('aside')?.scrollTop ?? 0), width: 300, height: 40 });
+      }
+      return DOMRect.fromRect({ x: 0, y: 0, width: 0, height: 0 });
+    });
+    try {
+      render(
+        <aside data-testid="panel">
+          <SourceView turnId={TURN} reference={reference(1, [PASSAGE_A])} language="pt-BR" onClose={() => undefined} load={load as never} />
+        </aside>,
+      );
+      const panel = screen.getByTestId('panel');
+      // Page 3 carries the cited passage: its middle (920) goes to the panel's middle (300).
+      await waitFor(() => expect(panel.scrollTop).toBe(620));
+      expect(panel.querySelectorAll('[data-cited]').length).toBeGreaterThan(0);
+      // The next page has no cited passage: it opens at its top.
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Próxima página' }));
+      await waitFor(() => expect(screen.getByText('p. 4')).toBeTruthy());
+      await waitFor(() => expect(panel.scrollTop).toBe(0));
+      expect(panel.querySelector('[data-cited]')).toBeNull();
+    } finally {
+      boxes.mockRestore();
+    }
+  });
+
+  it('marks the cited range of a text page for the scroll too', async () => {
+    const { SourceView } = await import('@/components/SourceView');
+    load.mockResolvedValue({ page: 3, pageTotal: 3, picture: null, lines: [], text: '# Magias\n\nFire Bolt causa 1d10.', passages: [{ id: PASSAGE_A, range: [10, 31] }], outcome: 'read_directly' });
+    render(
+      <aside>
+        <SourceView turnId={TURN} reference={reference(1, [PASSAGE_A])} language="pt-BR" onClose={() => undefined} load={load as never} />
+      </aside>,
+    );
+    const cited = await screen.findByText('Fire Bolt causa 1d10.');
+    expect(cited.tagName.toLowerCase()).toBe('mark');
+    expect(cited.hasAttribute('data-cited')).toBe(true);
+  });
+
   function referenceButton(name: string): HTMLButtonElement {
     return within(screen.getAllByRole('list', { name: /^(Fontes|Sources)$/ })[0]!).getByRole('button', { name }) as HTMLButtonElement;
   }
