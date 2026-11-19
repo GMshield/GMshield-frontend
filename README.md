@@ -404,7 +404,7 @@ they sit in `src/`.
     sheet.
   - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
     with a text page whose cited range is marked.
-- **The indexing notice.** Public contract 1.15.0.
+- **The indexing notice.** Public contract 1.15.0; the failure line from 1.16.0.
   - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
     (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a
     warning at the top of the main column says "Preparando as fontes para busca: faltam {remaining} trechos" /
@@ -426,8 +426,23 @@ they sit in `src/`.
   - The Shell's notice slot is a list (`notices`), one line each, in this order: a campaign that cannot be loaded
     (danger), the newest material that needs review (warning, dismissible), then the indexing notice. A campaign error no
     longer hides the needs-review notice.
-  - The stand-in backend answers `indexing: null` (its sources are indexed), so a test-mode shell shows no indexing
-    notice and reads no count.
+  - **Passages that could not be prepared (public contract 1.16.0).** The current conversation also carries
+    `indexingFailed`, `{passages, retrying}` or null: the in-scope passages whose index change failed, and whether the
+    backend will try one of them again (every 10 minutes, at most 3 times). The layout renders `IndexingNotice` when
+    either value is set, and it shows up to two stacked lines, the failure line second, neither dismissible nor live:
+    - while a retry remains, a warning: "Não foi possível preparar {count} trechos para busca; nova tentativa em alguns
+      minutos." / "Could not prepare {count} passages for search; trying again in a few minutes."
+      (`notice.indexingRetrying`, `notice.indexingRetryingOne` for one);
+    - after the last retry, an error (`Notice`'s `danger`, the word "Erro" / "Error"): "Não foi possível preparar
+      {count} trechos para busca." / "Could not prepare {count} passages for search." (`notice.indexingFailed`,
+      `notice.indexingFailedOne`).
+    `fetchIndexing` returns both values (`{kind: 'read', remaining, failed}`, each null when there is none, or
+    `{kind: 'failed'}`). The notice keeps polling, with the same 5 s and 4 s rules, while anything is pending or a retry
+    remains, and stops when only a final failure is left (that line stays) or nothing is (the notice goes). The
+    10-minute stall applies only while no failure is retrying; while one is, the notice polls until the state changes
+    (at most about 40 minutes over 3 retries).
+  - The stand-in backend answers `indexing: null` and `indexingFailed: null` (its sources are indexed), so a test-mode
+    shell shows no indexing notice and reads no count.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -513,7 +528,13 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.15.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.16.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.16.0 (indexing at worker start): the backend first (`indexingFailed` on the
+current conversation, the recipe route of internal contract 1.12.0, migration `V20__index_change_retries.sql`), then
+the frontend (its health check fails against a 1.15.0 backend), then the worker (it states its recipe at every check of
+a backend at 1.12.0 or later). The worker and the frontend do not depend on each other here. A rollback goes the other
+way.
 
 Deploy order for public contract 1.15.0 (the indexing notice): the backend first (`indexing` on the current
 conversation, no migration), then the frontend (its health check fails against a 1.14.0 backend). The worker does not

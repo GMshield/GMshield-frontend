@@ -27,9 +27,10 @@ import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server
  *
  * The indexing notice: while the current conversation counts passages still being prepared for search (`indexing`), a
  * warning that cannot be dismissed says how many are left ("Preparando as fontes para busca: faltam 2000 trechos").
- * From that first count, `IndexingNotice` keeps its number current on its own (it reads the count again every 5 s and
- * goes once nothing is pending); the page is never refreshed for it. When the conversation cannot be loaded there is
- * no such notice.
+ * While some could not be prepared (`indexingFailed`), a second line says how many: a warning while a retry remains,
+ * an error once none does. From those first values, `IndexingNotice` keeps its lines current on its own (it reads them
+ * again every 5 s while anything is pending or a retry remains, and goes once nothing is left); the page is never
+ * refreshed for it. When the conversation cannot be loaded there is no such notice.
  *
  * The notices stack, one line each, in this order: a campaign that cannot be loaded, the material that needs review,
  * then the indexing notice.
@@ -81,10 +82,11 @@ export default async function SignedInLayout({ children }: { readonly children: 
       />,
     );
   }
-  const indexing = conversation.ok ? (conversation.data.indexing ?? null) : null;
-  if (indexing !== null) {
+  const remaining = conversation.ok ? (conversation.data.indexing?.remaining ?? null) : null;
+  const failed = conversation.ok ? (conversation.data.indexingFailed ?? null) : null;
+  if (remaining !== null || failed !== null) {
     notices.push(
-      <IndexingNotice key="indexing" remaining={indexing.remaining} language={preferences.language} />,
+      <IndexingNotice key="indexing" remaining={remaining} failed={failed} language={preferences.language} />,
     );
   }
   const current = campaign.ok ? { system: campaign.data.system.name, campaign: campaign.data.name } : null;

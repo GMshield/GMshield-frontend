@@ -697,9 +697,12 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
 
 describe('the indexing notice', () => {
   const CONVERSATION = 'GET /api/v1/conversations/current';
-  const conversation = (indexing: { remaining: number } | null) => ({
+  const conversation = (
+    indexing: { remaining: number } | null,
+    indexingFailed: { passages: number; retrying: boolean } | null = null,
+  ) => ({
     status: 200,
-    body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing },
+    body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing, indexingFailed },
   });
   /** The notices of the main column, in order: [status, text, live?]. */
   const notices = (html: string) =>
@@ -741,6 +744,35 @@ describe('the indexing notice', () => {
     html = await layoutHtml();
     expect(notices(html)).toEqual([]);
     expect(html).not.toContain('Preparing your sources');
+  });
+
+  it('adds the failure line second: a warning while a retry remains, an error after, also with nothing pending', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [CONVERSATION]: conversation({ remaining: 50 }, { passages: 200, retrying: true }),
+    };
+    await useBackend(routes);
+
+    // Matrix row "Run fails": both lines, the failure second, neither dismissible nor live.
+    let html = await layoutHtml();
+    expect(notices(html)).toEqual([
+      ['warning', 'Atenção Preparando as fontes para busca: faltam 50 trechos', false],
+      ['warning', 'Atenção Não foi possível preparar 200 trechos para busca; nova tentativa em alguns minutos.', false],
+    ]);
+    expect(html).not.toContain('Dispensar aviso');
+    // Nothing pending, a retry to come: the failure line alone.
+    routes[CONVERSATION] = conversation(null, { passages: 1, retrying: true });
+    expect(notices(await layoutHtml())).toEqual([
+      ['warning', 'Atenção Não foi possível preparar 1 trecho para busca; nova tentativa em alguns minutos.', false],
+    ]);
+    // Matrix row "Retries used": an error line.
+    routes[CONVERSATION] = conversation(null, { passages: 200, retrying: false });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([['danger', 'Error Could not prepare 200 passages for search.', false]]);
+    expect(html).not.toContain('Dismiss notice');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
   });
 
   it('no conversation (no campaign) or one that cannot be loaded: no notice', async () => {

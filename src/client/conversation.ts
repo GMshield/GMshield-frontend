@@ -6,7 +6,8 @@ import type { components } from '@/server/backend/generated/public';
  * `EventSource`. Story 2.6: a turn's answer is stopped with `POST /api/v1/turns/{id}/stop`, and a stream the page
  * reopens itself names the last event id in its address. Story 2.7: a page a turn's reference names is read from
  * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The indexing notice
- * reads the count of passages still being prepared for search from `GET /api/v1/conversations/current`. The relays
+ * reads the count of passages still being prepared for search, and of those that could not be, from
+ * `GET /api/v1/conversations/current`. The relays
  * reach the backend; the browser never does.
  */
 
@@ -187,20 +188,53 @@ export async function fetchReferencePage(turnId: string, number: number, page: n
   }
 }
 
+/** Passages that could not be prepared for search, and whether a retry remains (public contract 1.16.0). */
+export type IndexingFailed = { readonly passages: number; readonly retrying: boolean };
+
 /**
- * What one read of the indexing count gave: the passages still being prepared for search, nothing pending any more
- * (`none`), or no usable answer (`failed`: the relay refused, did not answer, or answered something else).
+ * What one read of the indexing state gave: the passages still being prepared for search and those that could not be
+ * (`read`, each null when there is none), or no usable answer (`failed`: the relay refused, did not answer, or
+ * answered something else).
  */
 export type IndexingPoll =
-  | { readonly kind: 'count'; readonly remaining: number }
-  | { readonly kind: 'none' }
+  | { readonly kind: 'read'; readonly remaining: number | null; readonly failed: IndexingFailed | null }
   | { readonly kind: 'failed' };
 
 const POLL_FAILED: IndexingPoll = { kind: 'failed' };
 
+/** A count from 1, as the contract has it; anything else is `undefined`. */
+function countOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined;
+}
+
+/** `indexing` as the contract has it: null, or `{remaining}` from 1; `undefined` for anything else. */
+function remainingOf(indexing: unknown): number | null | undefined {
+  if (indexing === null) {
+    return null;
+  }
+  return typeof indexing === 'object' ? countOf((indexing as { remaining?: unknown }).remaining) : undefined;
+}
+
 /**
- * Reads the current conversation's indexing count from the relay on this site: `count` for `{remaining}` (an integer
- * from 1), `none` for null, and `failed` for anything else, so a failed read never hides the notice.
+ * `indexingFailed` as the contract has it: null, or `{passages, retrying}` with `passages` from 1; `undefined` for
+ * anything else. Absent reads as null.
+ */
+function failedOf(failed: unknown): IndexingFailed | null | undefined {
+  if (failed === null || failed === undefined) {
+    return null;
+  }
+  if (typeof failed !== 'object') {
+    return undefined;
+  }
+  const passages = countOf((failed as { passages?: unknown }).passages);
+  const retrying = (failed as { retrying?: unknown }).retrying;
+  return passages !== undefined && typeof retrying === 'boolean' ? { passages, retrying } : undefined;
+}
+
+/**
+ * Reads the current conversation's indexing state from the relay on this site: `read` with the passages still being
+ * prepared (`indexing.remaining`, null when none is) and those that could not be (`indexingFailed`, null when none
+ * failed), and `failed` for anything else, so a failed read never hides the notice.
  */
 export async function fetchIndexing(signal?: AbortSignal): Promise<IndexingPoll> {
   try {
@@ -213,14 +247,9 @@ export async function fetchIndexing(signal?: AbortSignal): Promise<IndexingPoll>
     if (response.status !== 200 || typeof body !== 'object' || body === null || !('indexing' in body)) {
       return POLL_FAILED;
     }
-    const indexing = (body as { indexing: unknown }).indexing;
-    if (indexing === null) {
-      return { kind: 'none' };
-    }
-    const remaining = (indexing as { remaining?: unknown } | undefined)?.remaining;
-    return typeof remaining === 'number' && Number.isInteger(remaining) && remaining >= 1
-      ? { kind: 'count', remaining }
-      : POLL_FAILED;
+    const remaining = remainingOf((body as { indexing: unknown }).indexing);
+    const failed = failedOf((body as { indexingFailed?: unknown }).indexingFailed);
+    return remaining === undefined || failed === undefined ? POLL_FAILED : { kind: 'read', remaining, failed };
   } catch {
     return POLL_FAILED;
   }
