@@ -48,9 +48,15 @@
   line-height: var(--font-label-line-height);
 }
 
-/* Story 2.7: a cited passage's box on a picture page, under the translucent accent mark. */
+/*
+ * Story 2.7: a cited passage's box on a picture page, under the translucent accent mark. The picture is printed
+ * paper, often yellowed, whatever the theme: a 2px dark amber edge, the same width at any zoom, keeps it visible.
+ */
 .passage {
   fill: var(--color-passage-mark);
+  stroke: var(--color-passage-mark-edge);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Story 2.7: a cited passage's range in a text page's text. */

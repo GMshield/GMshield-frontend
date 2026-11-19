@@ -203,6 +203,20 @@ describe('contrast (WCAG 2.1 AA, 4.5:1)', () => {
     expectAA('illustrated', worst);
   });
 
+  it('the edge of a cited passage on a page picture: 3:1 over white and over yellowed paper, in every theme', () => {
+    // A page picture is printed paper whatever the theme. The yellowed paper is the margin of a scanned 19th-century
+    // book page (a 636-page scan, p. 94) as the source view rendered it on 2026-11-19, sampled from a screenshot.
+    // The stroke is centred on the box, so each side is checked: the bare paper outside and the marked paper inside.
+    const papers: [string, Rgb][] = [['white paper', [255, 255, 255]], ['yellowed paper', hex('#a29570')]];
+    for (const theme of THEMES) {
+      const edge = opaque(role(theme, 'passage-mark-edge'));
+      for (const [name, paper] of papers) {
+        expect(ratio(edge, paper), `${theme}: mark edge on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+        expect(ratio(edge, over(role(theme, 'passage-mark'), paper)), `${theme}: mark edge on marked ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+      }
+    }
+  });
+
   it('sharp loads (it measures the backdrop)', async () => {
     const { info } = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ffffff' } }).raw().toBuffer({ resolveWithObject: true });
     expect(info.width).toBe(2);

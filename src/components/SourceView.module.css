@@ -1,6 +1,7 @@
 /*
  * The source view (Story 2.7): the shell's right panel slot holds it (Shell.module.css sizes and places the slot).
- * A header with the source and the close control, the page, which scrolls, and a footer that moves one page.
+ * A header with the source and the close control, the page, and a footer that moves one page. The panel scrolls; the
+ * header and the footer are sticky, on the panel's surface, so they stay in view at every size.
  */
 .view {
   /* A non-modal <dialog> in the flow of its panel: none of the browser's own dialog box. */
@@ -22,6 +23,13 @@
 }
 
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  margin-block-start: calc(-1 * var(--space-4));
+  padding-block: var(--space-4) var(--space-2);
+  background-color: var(--color-surface);
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -55,7 +63,6 @@
 
 .body {
   flex: 1;
-  min-height: 0;
 }
 
 /* Until the page arrives: the empty frame, so the panel opens at once. */
@@ -80,6 +87,13 @@
 }
 
 .footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex: none;
+  margin-block-end: calc(-1 * var(--space-4));
+  padding-block: var(--space-2) var(--space-4);
+  background-color: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -479,6 +479,22 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
     expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*position: fixed;/);
     expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*left: 0;\s*width: 100%;/);
   });
+  it('keeps the source view header and footer in view while the panel itself scrolls (keys scroll from any control)', () => {
+    const shellCss = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
+    expect(shellCss).not.toMatch(/data-panel='source'\] \.panel \{[^}]*overflow: hidden/);
+    const viewCss = readFileSync(join(process.cwd(), 'src/components/SourceView.module.css'), 'utf8');
+    for (const [part, edge] of [['header', 'top'], ['footer', 'bottom']] as const) {
+      const rule = new RegExp(`\\.${part} \\{([^}]*)\\}`).exec(viewCss)?.[1] ?? '';
+      expect(rule, part).toMatch(/position: sticky;/);
+      expect(rule, part).toMatch(new RegExp(`\\b${edge}: 0;`));
+      expect(rule, part).toMatch(/background-color: var\(--color-surface\);/);
+    }
+  });
+
+  it('outlines a cited box on a page picture with the paper edge, 2px at any zoom', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/PageView.module.css'), 'utf8');
+    expect(css).toMatch(/\.passage \{\s*fill: var\(--color-passage-mark\);\s*stroke: var\(--color-passage-mark-edge\);\s*stroke-width: 2;\s*vector-effect: non-scaling-stroke;\s*\}/);
+  });
 });
 
 describe('the shell hands the guided upload its campaign and system (Story 1.14)', () => {

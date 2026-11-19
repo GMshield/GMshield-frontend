@@ -49,12 +49,16 @@ function sourceLine(reference: SourceReference): string {
  *   loaded" with "Try again", which loads the same page again. An unreadable page with nothing on it (no picture and
  *   no text) shows the "could not be opened" text.
  * - ← and → with Alt, Ctrl, Meta or Shift are left to the browser (Alt+← is its back).
+ * - Once a page has arrived, the panel that holds the view (its `<aside>`) scrolls so the first cited passage sits in
+ *   the middle of what it shows, clear of the sticky header and footer; a page without one opens at its top. Only that
+ *   panel scrolls, never the conversation behind it.
  *
  * The page is read from this site's relays only, never stored.
  */
 export function SourceView({ turnId, reference, language, onClose, load = fetchReferencePage }: SourceViewProps) {
   const t = translator(language);
   const titleId = useId();
+  const viewRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const previousRef = useRef<HTMLButtonElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
@@ -115,6 +119,25 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
     target?.current?.focus();
   }, [page]);
 
+  // A page that has arrived: bring its first cited passage into the middle of the panel, or open it at its top.
+  useEffect(() => {
+    if (shown.state !== 'loaded' || shown.page !== page) {
+      return;
+    }
+    const scroller = viewRef.current?.closest('aside');
+    if (scroller === null || scroller === undefined) {
+      return;
+    }
+    const cited = viewRef.current?.querySelector('[data-cited]');
+    if (cited === null || cited === undefined) {
+      scroller.scrollTop = 0;
+      return;
+    }
+    const mark = cited.getBoundingClientRect();
+    const panel = scroller.getBoundingClientRect();
+    scroller.scrollTop += mark.top + mark.height / 2 - (panel.top + panel.height / 2);
+  }, [shown, page]);
+
   /** Loads the page that failed again; focus, on the retry control, goes to the close control meanwhile. */
   function retry() {
     closeRef.current?.focus();
@@ -164,7 +187,7 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
   }
 
   return (
-    <dialog open className={styles.view} aria-labelledby={titleId} onKeyDown={onKeyDown}>
+    <dialog ref={viewRef} open className={styles.view} aria-labelledby={titleId} onKeyDown={onKeyDown}>
       <header className={styles.header}>
         <h2 id={titleId} className={styles.title}>
           {sourceLine(reference)}
