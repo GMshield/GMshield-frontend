@@ -121,6 +121,24 @@ describe('stand-in backend', () => {
     expect(bytes.subarray(8, 12).toString('ascii')).toBe('WEBP');
   });
 
+  it('answers the conversation paths (Story 2.4) with sources, a recorded question and a short streamed answer', async () => {
+    expect(answer(contract, 'GET', '/api/v1/conversations/current', 't')).toMatchObject({
+      status: 200,
+      body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true },
+    });
+    expect(answer(contract, 'POST', '/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/turns', 't')).toMatchObject({
+      status: 201,
+      body: { language: 'pt-BR' },
+    });
+    running = await startStandIn();
+    const stream = await fetch(`${running.url}/api/v1/turns/0190a0b0-0000-7000-8000-000000000021/events`);
+    expect(stream.status).toBe(200);
+    expect(stream.headers.get('content-type')).toBe('text/event-stream');
+    const text = await stream.text();
+    expect(text).toContain('event:delta');
+    expect(text.trimEnd().endsWith('event:done\ndata:{}')).toBe(true);
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

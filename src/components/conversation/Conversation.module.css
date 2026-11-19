@@ -1,0 +1,187 @@
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-block-size: 100%;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.question {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.waiting {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+/* The answer: plain large text on the canvas, no bubble, card or avatar. */
+.answer {
+  color: var(--color-text);
+  font-size: var(--font-answer-size);
+  font-weight: var(--font-answer-weight);
+  line-height: var(--font-answer-line-height);
+  overflow-wrap: anywhere;
+}
+
+.answer p,
+.answer ul,
+.answer ol,
+.answer blockquote,
+.answer pre {
+  margin: 0 0 var(--space-3);
+}
+
+.answer pre {
+  white-space: pre-wrap;
+}
+
+/* Under 768px the answer uses the body size (Story 2.4). */
+@media (max-width: 767px) {
+  .answer {
+    font-size: var(--font-body-size);
+    line-height: var(--font-body-line-height);
+  }
+}
+
+.languageLabel {
+  display: inline-block;
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.failed {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+.rule {
+  inline-size: 100%;
+  margin: 0;
+  border: 0;
+  border-block-start: 1px solid var(--color-rule);
+}
+
+/* The composer stays at the bottom of the column, above the on-screen keyboard on a phone. */
+.dock {
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: auto;
+  padding-block: var(--space-3);
+  background-color: var(--color-canvas);
+}
+
+.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+.emptyAction {
+  min-block-size: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--space-touch-target);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* A 48px pill that grows to six lines. */
+.field {
+  flex: 1;
+  min-block-size: var(--space-12);
+  max-block-size: calc(6lh + 2 * var(--space-3));
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-field-border);
+  border-radius: calc(var(--space-12) / 2);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  resize: none;
+  field-sizing: content;
+  overflow-y: auto;
+}
+
+.field::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* A 48px outlined circle with an arrow. */
+.send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--space-12);
+  block-size: var(--space-12);
+  padding: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.visuallyHidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A phone: answers in the body size. */
+@media (width < 768px) {
+  .answer {
+    font-size: var(--font-body-size);
+    line-height: var(--font-body-line-height);
+  }
+}

@@ -59,6 +59,21 @@
         "required" : [ "version" ],
         "type" : "object"
       },
+      "CurrentConversation" : {
+        "properties" : {
+          "campaignId" : {
+            "description" : "The current campaign's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "hasSources" : {
+            "description" : "Whether the campaign's scope has an accepted source (an allowed source, or one whose index change is still pending)",
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "campaignId", "hasSources" ],
+        "type" : "object"
+      },
       "GoogleCallback" : {
         "properties" : {
           "attemptToken" : {
@@ -537,6 +552,18 @@
         "required" : [ "username" ],
         "type" : "object"
       },
+      "NewTurn" : {
+        "properties" : {
+          "question" : {
+            "description" : "The GM's question: 1 to 4,000 code points, not blank",
+            "maxLength" : 4000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "question" ],
+        "type" : "object"
+      },
       "PageLine" : {
         "properties" : {
           "box" : {
@@ -782,6 +809,70 @@
         "required" : [ "id", "name" ],
         "type" : "object"
       },
+      "Turn" : {
+        "properties" : {
+          "conversationId" : {
+            "description" : "The campaign's conversation",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The turn's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "language" : {
+            "description" : "The question's language, null when unsure",
+            "enum" : [ "pt-BR", "en" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "conversationId", "id", "language" ],
+        "type" : "object"
+      },
+      "TurnCitationEvent" : {
+        "description" : "The data of a citation event: a passage cited at a place of the answer's text",
+        "properties" : {
+          "offset" : {
+            "description" : "Where the citation stands, in code points of the answer's text",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "passageId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "offset", "passageId" ],
+        "type" : "object"
+      },
+      "TurnDeltaEvent" : {
+        "description" : "The data of a delta event: more of the answer's text, as Markdown",
+        "properties" : {
+          "text" : {
+            "description" : "Display text, to append",
+            "type" : "string"
+          }
+        },
+        "required" : [ "text" ],
+        "type" : "object"
+      },
+      "TurnDoneEvent" : {
+        "description" : "The data of a done event: the answer is complete (an empty object)",
+        "type" : "object"
+      },
+      "TurnErrorEvent" : {
+        "description" : "The data of an error event: the answer ended without completing",
+        "properties" : {
+          "code" : {
+            "description" : "category.reason, for example model.unavailable",
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
       "UploadCompletion" : {
         "properties" : {
           "materialId" : {
@@ -828,7 +919,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.10.0"
+    "version" : "1.11.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -867,6 +958,62 @@
         },
         "summary" : "The current campaign with its system; session.required (401) without a session, request.not_found (404) when the account has no campaign",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/turns" : {
+      "post" : {
+        "operationId" : "askQuestion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewTurn"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Turn"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Ask a question in the campaign's conversation: the turn and its answer job are recorded together (201); request.invalid (400) for a blank question or one past 4,000 code points, request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/campaigns/{id}" : {
@@ -913,6 +1060,43 @@
         },
         "summary" : "One of the account's campaigns, with its system; request.not_found (404) for any other id",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/conversations/current" : {
+      "get" : {
+        "operationId" : "getCurrentConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CurrentConversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The current campaign's conversation: its campaign and whether it has an accepted source; request.not_found (404) when the account has no campaign",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/image-sets" : {
@@ -1815,6 +1999,69 @@
         },
         "summary" : "One of the account's game systems; request.not_found (404) for any other id",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/turns/{turnId}/events" : {
+      "get" : {
+        "operationId" : "streamTurnEvents",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The id of the last event received: only later events are sent",
+          "in" : "header",
+          "name" : "Last-Event-ID",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "description" : "Each event's data is one of these, by its event name",
+                  "oneOf" : [ {
+                    "$ref" : "#/components/schemas/TurnDeltaEvent"
+                  }, {
+                    "$ref" : "#/components/schemas/TurnCitationEvent"
+                  }, {
+                    "$ref" : "#/components/schemas/TurnDoneEvent"
+                  }, {
+                    "$ref" : "#/components/schemas/TurnErrorEvent"
+                  } ]
+                }
+              }
+            },
+            "description" : "The event stream"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/uploads" : {

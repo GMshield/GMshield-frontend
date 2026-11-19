@@ -30,7 +30,15 @@ describe('boundaries', () => {
   it('no code outside src/server calls fetch or reads the backend address', () => {
     for (const path of sources.filter((p) => !p.includes('/src/server/'))) {
       const text = readFileSync(path, 'utf8');
-      expect(text, relative(ROOT, path)).not.toMatch(/\bfetch\(|GMSHIELD_BACKEND_URL|openapi-fetch/);
+      expect(text, relative(ROOT, path)).not.toMatch(/GMSHIELD_BACKEND_URL|openapi-fetch/);
+      if (path.includes('/src/client/')) {
+        // Story 2.4: the browser's modules may call this site's own relays, by a relative /api/v1/ path only.
+        for (const [call] of text.matchAll(/\bfetch\([^,)]*/g)) {
+          expect(call, relative(ROOT, path)).toMatch(/^fetch\(`\/api\/v1\//);
+        }
+      } else {
+        expect(text, relative(ROOT, path)).not.toMatch(/\bfetch\(/);
+      }
     }
   });
 

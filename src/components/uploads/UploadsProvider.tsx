@@ -114,6 +114,11 @@ export type Uploads = {
   dismiss(...keys: readonly string[]): void;
   /** Says `text` through the live region: politely, or at once. */
   announce(text: string, urgent?: boolean): void;
+  /** Story 2.4: whether the guided upload is open; the sidebar's control and the conversation's empty state open it. */
+  readonly uploadOpen: boolean;
+  /** Opens the guided upload (Story 2.4: from the conversation's empty state too). */
+  openUpload(): void;
+  closeUpload(): void;
 };
 
 const UploadsContext = createContext<Uploads | null>(null);
@@ -213,6 +218,9 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const [polite, setPolite] = useState('');
   const [urgent, setUrgent] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const openUpload = useCallback(() => setUploadOpen(true), []);
+  const closeUpload = useCallback(() => setUploadOpen(false), []);
   const queue = useRef<Queued[]>([]);
   const running = useRef(false);
   const stopped = useRef(false);
@@ -534,8 +542,23 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   }, []);
 
   const value = useMemo<Uploads>(
-    () => ({ texts, belonging, live, stored, dismissed, send, resume, replaceImage, dropImage, dismiss, announce }),
-    [texts, belonging, live, stored, dismissed, send, resume, replaceImage, dropImage, dismiss, announce],
+    () => ({
+      texts,
+      belonging,
+      live,
+      stored,
+      dismissed,
+      send,
+      resume,
+      replaceImage,
+      dropImage,
+      dismiss,
+      announce,
+      uploadOpen,
+      openUpload,
+      closeUpload,
+    }),
+    [texts, belonging, live, stored, dismissed, send, resume, replaceImage, dropImage, dismiss, announce, uploadOpen, openUpload, closeUpload],
   );
 
   return (

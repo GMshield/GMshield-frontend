@@ -387,5 +387,29 @@
     "extracted": "Extracted text",
     "noText": "No text was extracted from this page.",
     "unopened": "This page could not be opened. The report lists it as unreadable."
+  },
+  "conversation": {
+    "heading": "Questions",
+    "turns": "Questions and answers",
+    "question": "Question",
+    "answer": "Answer",
+    "composer": {
+      "label": "Your question",
+      "placeholder": "Ask about the campaign's rules",
+      "send": "Send"
+    },
+    "searching": "Searching the sources…",
+    "answering": "Answering…",
+    "answerIn": "Answer in {language}",
+    "languages": {
+      "pt-BR": "Portuguese",
+      "en": "English"
+    },
+    "link": "{text} ({address})",
+    "empty": {
+      "noSources": "This campaign has no accepted sources yet.",
+      "upload": "Upload a file",
+      "review": "Review {name}"
+    }
   }
 }

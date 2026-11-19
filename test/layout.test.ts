@@ -150,9 +150,8 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html).toContain('Nenhuma campanha');
   });
 
-  it('every entry page names itself and says what will be there, in both languages', async () => {
+  it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
     const pages = {
-      questions: (await import('@/app/(signed-in)/questions/page')).default,
       rules: (await import('@/app/(signed-in)/rules/page')).default,
       campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
       systems: SystemsPage,
@@ -171,7 +170,48 @@ describe('the signed-in layout (Story 1.11)', () => {
         expect(messages.placeholder[key], `${language} ${key}`).not.toMatch(/!|\p{Extended_Pictographic}/u);
       }
     }
-    expect(ptBR.placeholder.questions).toBe('Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.');
+    expect(ptBR.placeholder.rules).toBe('Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.');
+  });
+
+  it('the questions page (Story 2.4) is the conversation: the composer, and with no source the empty state', async () => {
+    const conversation = { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: false };
+    const review = { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', kind: 'rulebook' }] };
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': { status: 200, body: conversation },
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: review },
+    });
+    requestHeaders = { 'x-gmshield-path': '/questions' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+
+    let html = await layoutHtml(await QuestionsPage());
+
+    expect(html).toContain('<h1');
+    expect(html).toContain('Consultas');
+    expect(html).toContain('aria-label="Enviar"');
+    expect(html).toContain('<textarea');
+    expect(html).toContain('Esta campanha ainda não tem fontes aceitas.');
+    expect(html).toContain('Enviar um arquivo');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
+    expect(html).toContain('Revisar Bestiário.pdf');
+    expect(html).not.toContain('style=');
+    const asked = server.calls.find((request) => request.url === '/api/v1/conversations/current');
+    expect(asked?.headers['x-session-token']).toBe(SESSION);
+
+    await backend?.close();
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': { status: 200, body: { ...conversation, hasSources: true } },
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: { items: [] } },
+    });
+    cookieJar = { ...cookieJar, '__Host-gmshield-lang': 'en' };
+    html = await layoutHtml(await QuestionsPage());
+    expect(html).toContain('aria-label="Send"');
+    expect(html).not.toContain('has no accepted sources');
   });
 });
 
