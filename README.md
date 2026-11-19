@@ -329,6 +329,25 @@ they sit in `src/`.
   - With `hasSources` false, a line above the composer says "Esta campanha ainda não tem fontes aceitas." with
     "Enviar um arquivo", which opens the guided upload (`openUpload` of the uploads context, which now holds the
     dialog's open state), and "Revisar {name}" when a material needs review. The composer stays enabled.
+- **Sources under every answer (Story 2.5).** Public contract 1.12.0.
+  - The `done` event's data is `{silent, references: [{number, materialName, sectionPath: […], page, passageIds: […],
+    removed}]}` (`TurnDoneEvent`, `TurnSourceReference`): the backend expands the cited passage ids into numbered
+    references when the answer completes, stores them with the turn, and builds the data when it streams `done`, so a
+    replay shows `removed` as of then. `parseDone` (`src/client/conversation.ts`) keeps only well-formed references,
+    and an answer with none left is silent whatever the event said.
+  - The screen keeps each turn's `citation` events (`parseCitation`: a passage id and a code-point offset) and shows
+    nothing of them while the answer streams. At `done`, when not silent, each citation whose passage id is in a
+    reference becomes a superscript with that reference's number in `--color-accent`, at its code-point offset in the
+    Markdown text (`AnswerMarkdown`: each mark travels through the parser as one private-use code point, U+F0000 plus
+    the number, which the model's own text never keeps, and a small rehype step turns it into `<sup>`). A citation
+    with no matching reference shows nothing. Under the answer and above the closing rule, `References` lists the
+    references in label type, one line each: the material's name, the section path joined with " › ", and "p. N"; a
+    removed one is struck through, followed by "fonte removida" / "source removed". Nothing opens yet (Story 2.7).
+  - A silent answer (`silent: true`) replaces whatever streamed with "As fontes não dizem nada sobre isso." / "The
+    sources say nothing about this.", in the turn's language (the interface's when it is null): no list, no
+    superscript and no language label.
+  - The polite region says the finished answer, then the references as a list (or the silent sentence alone).
+  - The frontend renders only what it receives: it never builds a reference from a passage id.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -361,8 +380,9 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
   the rules above.
 - The backdrop, `src/app/assets/backdrop.webp` (1280x720 pixel art, drawn without smoothing), was
   supplied by Dalton on 2026-11-16: a generated image with no third-party licence. Its brightest
-  pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 72%: 8.0:1 for the
-  text and 5.2:1 for the secondary text over that pixel.
+  pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 78% (Story 2.5, up
+  from 72%): accent text on the canvas, such as a citation superscript, keeps 4.82:1 over that pixel
+  (it was 3.85:1), and the text and the secondary text keep more than before.
 - DM Sans is bundled from `@fontsource-variable/dm-sans` into `/_next/static`; nothing loads from
   another host.
 
@@ -412,6 +432,10 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.12.0 (Story 2.5): the backend first (its migration `V18__turn_references.sql`
+and the references on `done`), then the frontend (its health check fails against a 1.11.0 backend). The worker does
+not change. A rollback goes the other way: the frontend first, back to the 2.4 release, then the backend.
 
 Deploy order for public contract 1.11.0 (Story 2.4): the backend first (its migration `V17__conversations.sql`, the
 conversation routes and the turn event stream), then the worker (internal contract 1.10.0: it answers

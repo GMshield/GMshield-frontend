@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
+import { ANSWER_DONE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
 
 import { CONTRACT_PATH, startStandIn, type Running } from './support/servers';
 
@@ -136,7 +136,26 @@ describe('stand-in backend', () => {
     expect(stream.headers.get('content-type')).toBe('text/event-stream');
     const text = await stream.text();
     expect(text).toContain('event:delta');
-    expect(text.trimEnd().endsWith('event:done\ndata:{}')).toBe(true);
+    // Story 2.5: done carries the references, as TurnDoneEvent says.
+    const done = /event:done\ndata:(.*)$/.exec(text.trimEnd());
+    expect(done).not.toBeNull();
+    expect(JSON.parse(done![1]!)).toEqual(ANSWER_DONE);
+    // Every key the contract requires of TurnDoneEvent and TurnSourceReference, with its declared JSON type.
+    type Schema = { required?: string[]; properties?: Record<string, { type?: string }> };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const jsonType = (value: unknown) => (Array.isArray(value) ? 'array' : Number.isInteger(value) ? 'integer' : typeof value);
+    const expectShape = (name: string, value: Record<string, unknown>) => {
+      const schema = schemas[name]!;
+      expect(schema.required?.length, name).toBeGreaterThan(0);
+      for (const key of schema.required ?? []) {
+        expect(value, `${name}.${key}`).toHaveProperty(key);
+        expect(jsonType(value[key]), `${name}.${key}`).toBe(schema.properties?.[key]?.type);
+      }
+    };
+    expectShape('TurnDoneEvent', ANSWER_DONE as unknown as Record<string, unknown>);
+    expect(ANSWER_DONE.references).toHaveLength(1);
+    expectShape('TurnSourceReference', ANSWER_DONE.references[0] as Record<string, unknown>);
+    expect(ANSWER_DONE.silent).toBe(false);
   });
 
   it('answers any other path with a 404 problem detail', async () => {

@@ -406,6 +406,11 @@
       "en": "English"
     },
     "link": "{text} ({address})",
+    "silent": "The sources say nothing about this.",
+    "references": "Sources",
+    "citation": "source",
+    "sourceRemoved": "source removed",
+    "page": "p. {page}",
     "empty": {
       "noSources": "This campaign has no accepted sources yet.",
       "upload": "Upload a file",

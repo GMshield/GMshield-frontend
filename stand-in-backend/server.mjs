@@ -189,11 +189,26 @@ export const EXAMPLES = {
   },
 };
 
-/** Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done`. */
+/** Story 2.5: the data of the stand-in answer's `done` event, with its one source reference. */
+export const ANSWER_DONE = {
+  silent: false,
+  references: [
+    {
+      number: 1,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Spells', 'Fire Bolt'],
+      page: 13,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
+      removed: false,
+    },
+  ],
+};
+
+/** Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its references). */
 export const ANSWER_EVENTS = [
   'id:1\nevent:delta\ndata:{"text":"**Fire Bolt** causa 1d10 de dano de fogo."}\n\n',
   'id:2\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000009","offset":40}\n\n',
-  'id:3\nevent:done\ndata:{}\n\n',
+  `id:3\nevent:done\ndata:${JSON.stringify(ANSWER_DONE)}\n\n`,
 ].join('');
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */

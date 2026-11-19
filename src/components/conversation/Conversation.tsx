@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
-import { postQuestion, turnEventsUrl } from '@/client/conversation';
+import { parseCitation, parseDone, postQuestion, turnEventsUrl, type Citation, type SourceReference } from '@/client/conversation';
 import { errorText, translator, type Language } from '@/messages';
 
 import { useUploads } from '../uploads/UploadsProvider';
 
-import { AnswerMarkdown } from './AnswerMarkdown';
+import { AnswerMarkdown, type CitationMark } from './AnswerMarkdown';
 import styles from './Conversation.module.css';
+import { References, referenceLine } from './References';
 
 /** The most lines the composer grows to; past them it scrolls. */
 export const COMPOSER_MAX_LINES = 6;
@@ -19,7 +20,10 @@ const CLOSED = 2;
 
 type TurnStatus = 'sending' | 'searching' | 'answering' | 'done' | 'failed';
 
-/** A turn asked since the page opened: its question, then its answer as it is written. */
+/**
+ * A turn asked since the page opened: its question, then its answer as it is written. Story 2.5: its citations as they
+ * arrive, and once it is done its references, or `silent` when it has none.
+ */
 type ShownTurn = {
   readonly key: number;
   readonly question: string;
@@ -27,7 +31,34 @@ type ShownTurn = {
   readonly language: string | null;
   readonly text: string;
   readonly problem: unknown;
+  readonly citations: readonly Citation[];
+  readonly references: readonly SourceReference[];
+  readonly silent: boolean;
 };
+
+/** What the polite region says: plain words, or a finished answer (rendered) followed by its references as a list. */
+type Spoken = { readonly text: string; readonly answer: boolean; readonly references: readonly SourceReference[] };
+
+/** The superscripts of a finished answer: each citation whose passage is in a reference, with its number. */
+function marksOf(turn: ShownTurn): CitationMark[] {
+  const numbers = new Map<string, number>();
+  for (const reference of turn.references) {
+    for (const passageId of reference.passageIds) {
+      if (!numbers.has(passageId)) {
+        numbers.set(passageId, reference.number);
+      }
+    }
+  }
+  return turn.citations.flatMap((citation) => {
+    const number = numbers.get(citation.passageId);
+    return number === undefined ? [] : [{ offset: citation.offset, number }];
+  });
+}
+
+/** The turn's language when the interface has it, else the interface's. */
+function languageOf(turnLanguage: string | null, fallback: Language): Language {
+  return turnLanguage === 'pt-BR' || turnLanguage === 'en' ? turnLanguage : fallback;
+}
 
 export type ConversationProps = {
   readonly language: Language;
@@ -82,6 +113,10 @@ function dataOf(event: Event): Record<string, unknown> | null {
  *   is marked with its own (`lang` and a visible label).
  * - A polite live region says "Respondendo…" when the answer starts and the whole answer once it is done; an error event
  *   shows the generic text of its code.
+ * - Story 2.5: once the answer is done, each citation whose passage is in a reference becomes an accent superscript with
+ *   that reference's number, and the numbered references are listed under the answer, above the closing rule. A silent
+ *   answer (no reference) replaces whatever streamed with the one "the sources say nothing" sentence, in the turn's
+ *   language. Nothing of this shows while the answer streams. The polite region says the answer, then the references.
  * - With no accepted source, a line above the composer says so, with the guided upload and the newest material to
  *   review; asking still works.
  */
@@ -90,7 +125,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   const uploads = useUploads();
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<readonly ShownTurn[]>([]);
-  const [spoken, setSpoken] = useState<{ readonly text: string; readonly answer: boolean }>({ text: '', answer: false });
+  const [spoken, setSpoken] = useState<Spoken>({ text: '', answer: false, references: [] });
   const counter = useRef(0);
   const streams = useRef(new Set<EventSource>());
 
@@ -118,10 +153,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     };
   }, []);
 
-  /** Says `text` politely; an answer is said as it reads, its Markdown rendered as on the screen. */
-  const say = useCallback((text: string, answer = false) => {
+  /**
+   * Says `text` politely; an answer is said as it reads, its Markdown rendered as on the screen, then its references as
+   * a list.
+   */
+  const say = useCallback((text: string, answer = false, references: readonly SourceReference[] = []) => {
     // A zero-width space alternates so that the same words are said again.
-    setSpoken((previous) => ({ text: previous.text === text ? `${text}\u200b` : text, answer }));
+    setSpoken((previous) => ({ text: previous.text === text ? `${text}\u200b` : text, answer, references }));
   }, []);
 
   const change = useCallback((key: number, update: (turn: ShownTurn) => ShownTurn) => {
@@ -129,10 +167,11 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   }, []);
 
   const follow = useCallback(
-    (key: number, turnId: string) => {
+    (key: number, turnId: string, turnLanguage: string | null) => {
       const stream = (openStream ?? ((url: string) => new EventSource(url)))(turnEventsUrl(turnId));
       streams.current.add(stream);
       let text = '';
+      const citations: Citation[] = [];
       const end = () => {
         stream.close();
         streams.current.delete(stream);
@@ -145,10 +184,23 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
           change(key, (turn) => ({ ...turn, status: 'answering', text: now }));
         }
       });
-      stream.addEventListener('done', () => {
+      stream.addEventListener('citation', (event) => {
+        // Kept, not shown: the superscripts wait for the references the done event carries.
+        const citation = parseCitation(dataOf(event));
+        if (citation !== null) {
+          citations.push(citation);
+        }
+      });
+      stream.addEventListener('done', (event) => {
         end();
-        change(key, (turn) => ({ ...turn, status: 'done' }));
-        say(text, true);
+        const done = parseDone(dataOf(event));
+        const kept = [...citations];
+        change(key, (turn) => ({ ...turn, status: 'done', citations: kept, references: done.references, silent: done.silent }));
+        if (done.silent) {
+          say(translator(languageOf(turnLanguage, language))('conversation.silent'));
+        } else {
+          say(text, true, done.references);
+        }
       });
       stream.addEventListener('error', (event) => {
         const data = dataOf(event);
@@ -179,7 +231,10 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     }
     counter.current += 1;
     const key = counter.current;
-    setTurns((all) => [...all, { key, question, status: 'sending', language: null, text: '', problem: null }]);
+    setTurns((all) => [
+      ...all,
+      { key, question, status: 'sending', language: null, text: '', problem: null, citations: [], references: [], silent: false },
+    ]);
     setDraft('');
     writeDraft(campaignId, '');
     const asked = await postQuestion(campaignId, question);
@@ -198,7 +253,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     }
     change(key, (turn) => ({ ...turn, status: 'searching', language: asked.turn.language }));
     say(t('conversation.answering'));
-    follow(key, asked.turn.id);
+    follow(key, asked.turn.id, asked.turn.language);
   }, [campaignId, change, draft, follow, language, say, t]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -223,6 +278,8 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         {turns.map((turn) => {
           const foreign = turn.language !== null && turn.language !== language;
           const languageName = turn.language === 'pt-BR' || turn.language === 'en' ? t(`conversation.languages.${turn.language}`) : turn.language;
+          const finished = turn.status === 'done';
+          const silent = finished && turn.silent;
           return (
             <li key={turn.key} className={styles.turn}>
               <p className={styles.question}>
@@ -232,12 +289,23 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
               {turn.status === 'sending' || turn.status === 'searching' ? (
                 <p className={styles.waiting}>{t('conversation.searching')}</p>
               ) : null}
-              {turn.text === '' ? null : (
+              {silent ? (
+                <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
+                  <p>{translator(languageOf(turn.language, language))('conversation.silent')}</p>
+                </div>
+              ) : null}
+              {silent || turn.text === '' ? null : (
                 <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
                   {foreign ? <p className={styles.languageLabel}>{t('conversation.answerIn', { language: languageName ?? '' })}</p> : null}
-                  <AnswerMarkdown text={turn.text} linkText={linkText} />
+                  <AnswerMarkdown
+                    text={turn.text}
+                    linkText={linkText}
+                    marks={finished ? marksOf(turn) : []}
+                    citationWord={translator(languageOf(turn.language, language))('conversation.citation')}
+                  />
                 </div>
               )}
+              {finished && !silent && turn.references.length > 0 ? <References references={turn.references} t={t} /> : null}
               {turn.status === 'failed' ? <p className={styles.failed}>{errorText(turn.problem, language)}</p> : null}
               {turn.status === 'done' || turn.status === 'failed' ? <hr className={styles.rule} /> : null}
             </li>
@@ -284,6 +352,15 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
       </div>
       <div className={styles.visuallyHidden} aria-live="polite" data-testid="conversation-polite">
         {spoken.answer ? <AnswerMarkdown text={spoken.text} linkText={linkText} /> : spoken.text}
+        {spoken.references.length === 0 ? null : (
+          <ol aria-label={t('conversation.references')}>
+            {spoken.references.map((reference) => (
+              <li key={reference.number} value={reference.number}>
+                {referenceLine(reference, t)}
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </section>
   );
