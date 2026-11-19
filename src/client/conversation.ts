@@ -3,7 +3,8 @@ import type { components } from '@/server/backend/generated/public';
 /**
  * The browser's side of the conversation (Story 2.4), towards this site only: a question is posted to the relay
  * `POST /api/v1/campaigns/{id}/turns`, and a turn's answer is read from `GET /api/v1/turns/{id}/events` with
- * `EventSource`. The relays reach the backend; the browser never does.
+ * `EventSource`. Story 2.6: a turn's answer is stopped with `POST /api/v1/turns/{id}/stop`, and a stream the page
+ * reopens itself names the last event id in its address. The relays reach the backend; the browser never does.
  */
 
 /** A recorded turn, as the relay answers it. */
@@ -43,9 +44,30 @@ export async function postQuestion(campaignId: string, question: string): Promis
   }
 }
 
-/** The address of a turn's event stream. */
-export function turnEventsUrl(turnId: string): string {
-  return `/api/v1/turns/${encodeURIComponent(turnId)}/events`;
+/**
+ * The address of a turn's event stream; with `lastEventId` (Story 2.6), a reopened stream that resumes after that
+ * event (`?lastEventId=`, which the relay forwards as `Last-Event-ID`).
+ */
+export function turnEventsUrl(turnId: string, lastEventId?: string | null): string {
+  const base = `/api/v1/turns/${encodeURIComponent(turnId)}/events`;
+  return lastEventId ? `${base}?lastEventId=${encodeURIComponent(lastEventId)}` : base;
+}
+
+/**
+ * Asks to stop a turn's answer (Story 2.6). True when the relay answered 204 (also for an answer that had ended);
+ * false otherwise, the answer then going on until its own end.
+ */
+export async function stopTurn(turnId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/stop`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    return response.status === 204;
+  } catch {
+    return false;
+  }
 }
 
 /** A source reference of a finished answer, as the `done` event carries it (Story 2.5, `TurnSourceReference`). */
@@ -57,8 +79,11 @@ export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceRef
 /** A citation of the answer: a passage id at a code-point offset of the answer's text (`TurnCitationEvent`). */
 export type Citation = { readonly passageId: string; readonly offset: number };
 
-/** The `done` event's data: its references, and whether the sources say nothing (no reference). */
-export type Done = { readonly silent: boolean; readonly references: readonly SourceReference[] };
+/**
+ * The `done` event's data: its references, whether the GM stopped the answer (Story 2.6), and whether the sources say
+ * nothing (no reference, and not stopped).
+ */
+export type Done = { readonly stopped: boolean; readonly silent: boolean; readonly references: readonly SourceReference[] };
 
 function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -76,11 +101,16 @@ function isReference(value: unknown): value is SourceReference {
 
 /**
  * The data of a `done` event. Only what it carries is shown: a reference that is not well formed is left out, and an
- * answer with no reference left is silent, whatever the event said (no uncited text stays on screen).
+ * answer with no reference left is silent, whatever the event said (no uncited text stays on screen). A stopped answer
+ * (Story 2.6) is never silent: its partial text stays, marked stopped, with whatever references it has.
  */
 export function parseDone(data: Record<string, unknown> | null): Done {
+  const stopped = data?.stopped === true;
   const references = Array.isArray(data?.references) ? data.references.filter(isReference) : [];
-  return { silent: data?.silent === true || references.length === 0, references: data?.silent === true ? [] : references };
+  if (stopped) {
+    return { stopped, silent: false, references };
+  }
+  return { stopped, silent: data?.silent === true || references.length === 0, references: data?.silent === true ? [] : references };
 }
 
 /** The data of a `citation` event, or null when it is not one. */

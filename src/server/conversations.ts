@@ -8,9 +8,10 @@ import { currentSettings } from './settings';
 import { outgoingTraceparent, traceFrom } from './trace';
 
 /**
- * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, and the relay of a
- * turn's answer as server-sent events. The backend takes the owner from the session token alone; another owner's
- * campaign or turn answers `request.not_found`. Nothing here logs a question or an answer's text.
+ * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
+ * turn's answer as server-sent events, and the GM's stop of an answer (Story 2.6). The backend takes the owner from
+ * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
+ * or an answer's text.
  */
 const UNIT = 'server.conversations';
 
@@ -42,6 +43,16 @@ export function askQuestion(sessionToken: string, campaignId: string, question: 
   );
 }
 
+/**
+ * Stops the turn's answer (Story 2.6): 204, also for a turn whose answer had ended; `request.not_found` for a turn
+ * that is not the account's.
+ */
+export function stopTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.stop', options, (client) =>
+    client.POST('/api/v1/turns/{turnId}/stop', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
 /** Whether an id can be a campaign's or a turn's. */
 export function isId(id: string): boolean {
   return ID.test(id);
@@ -59,6 +70,12 @@ export function relayProblem(status: number, category: string, code: string, tit
 /** What the stream relay needs to know of the incoming request. */
 export type StreamRequest = {
   readonly headers: Headers;
+  /**
+   * The `lastEventId` query parameter (Story 2.6): the last event id a reopened stream asks to resume after, forwarded
+   * as `Last-Event-ID` when the header is absent. A browser's own reconnection sends the header; the page's reopen
+   * cannot set it on an `EventSource`, so it names the id in the address.
+   */
+  readonly lastEventId?: string | null;
   readonly signal: AbortSignal;
   /** The session token of the visitor's cookie, if any. */
   readonly sessionToken: string | null;
@@ -77,7 +94,8 @@ export type StreamRelayOptions = {
  * - A request that is not from the site's own origin is refused (403 `request.cross_origin`); an id that is not one
  *   answers "not found" without reaching the backend.
  * - Only the service credential, the session token, the `traceparent`, `Accept: text/event-stream` and a valid
- *   `Last-Event-ID` go to the backend. There is no time limit: the stream lives as long as the answer. When the browser
+ *   `Last-Event-ID` go to the backend: the request's header, or else its `lastEventId` query (Story 2.6), each only
+ *   when it is a sequence. There is no time limit: the stream lives as long as the answer. When the browser
  *   leaves, the backend request is aborted (the backend never stops the answer for that).
  * - The answer goes back with its status and only its content type, `no-store`, `nosniff` and `X-Accel-Buffering: no`.
  */
@@ -100,7 +118,7 @@ export async function relayTurnEvents(request: StreamRequest, turnId: string, op
   if (request.sessionToken !== null) {
     headers.set('x-session-token', request.sessionToken);
   }
-  const last = request.headers.get('last-event-id');
+  const last = request.headers.get('last-event-id') ?? request.lastEventId ?? null;
   if (last !== null && SEQUENCE.test(last)) {
     headers.set('last-event-id', last);
   }

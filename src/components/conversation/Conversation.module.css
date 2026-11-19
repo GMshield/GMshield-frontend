@@ -219,3 +219,56 @@
 .removed {
   text-decoration: line-through;
 }
+
+/* Story 2.6: the Stop glyph, a filled square in the button's colour. */
+.stopGlyph {
+  fill: currentColor;
+}
+
+/* Story 2.6: a stopped answer's mark, under its text and above its references. */
+.stopped {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* Story 2.6: the line under a running answer whose connection was lost, and its action once given up. */
+.connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+/* Story 2.6: a failure's text and its "Tentar de novo". */
+.failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.retry {
+  min-block-size: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  cursor: pointer;
+}
+
+.retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

@@ -325,7 +325,7 @@ they sit in `src/`.
     ({address})", never an anchor; nothing set as HTML) in `--font-answer-size`, with no bubble, card or avatar, and a
     full-width rule once it ends. An answer whose `language` differs from the interface's gets `lang` and a visible
     "Resposta em inglês" / "Answer in Portuguese". A polite live region says "Respondendo…" at the start and the whole
-    answer once at `done`; an `error` event shows the generic text of `errorText` (Story 2.6 refines it).
+    answer once at `done`; an `error` event shows its own failure text (Story 2.6, below).
   - With `hasSources` false, a line above the composer says "Esta campanha ainda não tem fontes aceitas." with
     "Enviar um arquivo", which opens the guided upload (`openUpload` of the uploads context, which now holds the
     dialog's open state), and "Revisar {name}" when a material needs review. The composer stays enabled.
@@ -348,6 +348,31 @@ they sit in `src/`.
     superscript and no language label.
   - The polite region says the finished answer, then the references as a list (or the silent sentence alone).
   - The frontend renders only what it receives: it never builds a reference from a passage id.
+- **Stop an answer, and answers that fail clearly (Story 2.6).** Public contract 1.13.0.
+  - Stop: while a turn is `sending`, `searching` or `answering`, the send button is Stop (a filled square, labelled
+    "Parar" / "Stop"), and Esc anywhere on the conversation screen does the same. Enter sends nothing then, and the
+    draft stays. The browser posts `POST /api/v1/turns/{id}/stop` (`stopTurn` in `src/client/conversation.ts`) to the
+    relay `src/app/api/v1/turns/[id]/stop/route.ts` (same-origin check, `isId`, session; `stopTurn` in
+    `src/server/conversations.ts` through the typed client; 204 or the backend's problem). A stop pressed before the
+    turn's id is known is sent as soon as the id arrives.
+  - The `done` event carries `stopped` (always present); `silent` is true exactly when the answer was not stopped and
+    has no reference. `parseDone` never makes a stopped answer silent. A stopped answer keeps the text received so far,
+    its superscripts and references (when it has any), and is marked "Interrompida" / "Stopped" under the text; it is
+    never replaced by the silent sentence. The polite region says the answer, then "Interrompida".
+  - Lost connection: an `error` with no data while the stream reconnects shows "Conexão perdida. Tentando de novo…" /
+    "Connection lost. Trying again…" under the text (also said politely); the next `open` removes it. When the browser
+    gives up (`CLOSED`), the page reopens the stream itself from the last event id, waiting 1 s, 2 s, 4 s… up to 15 s.
+    The id goes as `?lastEventId=` (`turnEventsUrl(turnId, lastEventId)`), which the events relay forwards as
+    `Last-Event-ID` when the header is absent, with the same sequence check. An event whose id is not after the last
+    one is ignored, so no text repeats. After 2 minutes without an `open`, the line becomes "Não foi possível
+    reconectar." / "Could not reconnect." with "Tentar de novo", which reopens the stream.
+  - Failures: an `error` event's code has its own text, said at once by an assertive region (`role="alert"`).
+    `model.refused`: "O modelo recusou este pedido. Reformule a pergunta e envie de novo.", the question back in the
+    composer when it is empty, no retry. `model.truncated`: the partial text stays, followed by "A resposta foi cortada
+    antes do fim." and "Tentar de novo". Any other code (`model.unavailable`, `job.provider_unavailable`,
+    `job.attempts_exhausted`, `job.claim_lapsed`, …): "O serviço de IA está indisponível agora." with "Tentar de
+    novo". A refusal and an outage hide any partial text. "Tentar de novo" asks the same question again as a new turn,
+    in place of the failed one.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -432,6 +457,10 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.13.0 (Story 2.6): the backend first (its migration `V19__answer_stop.sql`, the
+stop route and `stopped` on `done`), then the worker (internal contract 1.11.0: it obeys the stop and reports an
+estimated usage), then the frontend (its health check fails against a 1.12.0 backend). A rollback goes the other way.
 
 Deploy order for public contract 1.12.0 (Story 2.5): the backend first (its migration `V18__turn_references.sql`
 and the references on `done`), then the frontend (its health check fails against a 1.11.0 backend). The worker does

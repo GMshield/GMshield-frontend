@@ -105,6 +105,41 @@ describe('the turn event stream relay (Story 2.4)', () => {
     await relayed.body?.cancel();
   });
 
+  it('forwards a valid lastEventId query as Last-Event-ID when the header is absent, and drops an invalid one (Story 2.6)', async () => {
+    live = await streamingBackend();
+    const resumed = await relayTurnEvents(incoming({}, { lastEventId: '7' }), TURN, { baseUrl: live.url });
+    expect(live.seen[0]!.headers['last-event-id']).toBe('7');
+    await resumed.body?.cancel();
+
+    const invalid = await relayTurnEvents(incoming({}, { lastEventId: '7\r\nx-evil: 1' }), TURN, { baseUrl: live.url });
+    expect(live.seen[1]!.headers['last-event-id']).toBeUndefined();
+    expect(live.seen[1]!.headers['x-evil']).toBeUndefined();
+    await invalid.body?.cancel();
+
+    // The browser's own header wins over the query.
+    const both = await relayTurnEvents(incoming({ 'last-event-id': '9' }, { lastEventId: '7' }), TURN, { baseUrl: live.url });
+    expect(live.seen[2]!.headers['last-event-id']).toBe('9');
+    await both.body?.cancel();
+  });
+
+  it('reads the lastEventId query of the route address (Story 2.6)', async () => {
+    live = await streamingBackend();
+    vi.stubEnv('GMSHIELD_BACKEND_URL', live.url);
+    const { NextRequest } = await import('next/server');
+    const { GET } = await import('@/app/api/v1/turns/[id]/events/route');
+    const controller = new AbortController();
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${TURN}/events?lastEventId=8`, {
+      headers: { host: 'gm.test', origin: 'http://gm.test', cookie: `__Host-gmshield-session=${SESSION}.4102444800` },
+      signal: controller.signal,
+    });
+    const relayed = await GET(request, { params: Promise.resolve({ id: TURN }) });
+    expect(relayed.status).toBe(200);
+    expect(live.seen[0]!.url).toBe(`/api/v1/turns/${TURN}/events`);
+    expect(live.seen[0]!.headers['last-event-id']).toBe('8');
+    controller.abort();
+    await relayed.body?.cancel().catch(() => undefined);
+  });
+
   it('aborts the backend request when the browser leaves', async () => {
     live = await streamingBackend();
     const leaving = new AbortController();
@@ -233,5 +268,98 @@ describe("the browser's question call (Story 2.4)", () => {
     expect(await postQuestion(CAMPAIGN, 'Quanto?')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
 
     expect(turnEventsUrl(TURN)).toBe(`/api/v1/turns/${TURN}/events`);
+  });
+});
+
+describe('the stop relay (Story 2.6)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+  });
+
+  async function stop(headers: Record<string, string>, id = TURN): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const { POST } = await import('@/app/api/v1/turns/[id]/stop/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/stop`, { method: 'POST', headers: { host: 'gm.test', ...headers } });
+    return POST(request, { params: Promise.resolve({ id }) });
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+
+  it('stops the turn through the typed client with the session, and answers 204', async () => {
+    const backend = await useBackend({ [`POST /api/v1/turns/${TURN}/stop`]: { status: 204 } });
+
+    const stopped = await stop({ origin: 'http://gm.test', cookie });
+
+    expect(stopped.status).toBe(204);
+    expect(stopped.headers.get('cache-control')).toBe('no-store');
+    expect(await stopped.text()).toBe('');
+    expect(backend.calls).toHaveLength(1);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+  });
+
+  it('refuses another origin, an id that is not one and no session without reaching the backend', async () => {
+    const backend = await useBackend({});
+    expect((await stop({ origin: 'http://evil.test', cookie })).status).toBe(403);
+    expect((await stop({ origin: 'http://gm.test', cookie }, 'nope')).status).toBe(404);
+    expect((await stop({ origin: 'http://gm.test' })).status).toBe(401);
+    expect(backend.calls).toEqual([]);
+  });
+
+  it("passes another owner's turn on as not found", async () => {
+    await useBackend({
+      [`POST /api/v1/turns/${TURN}/stop`]: { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } },
+    });
+    const refused = await stop({ origin: 'http://gm.test', cookie });
+    expect(refused.status).toBe(404);
+    expect(refused.headers.get('content-type')).toBe('application/problem+json');
+    expect(await refused.json()).toMatchObject({ code: 'request.not_found' });
+  });
+});
+
+describe("the browser's stop call and stream address (Story 2.6)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts the stop to the relay on this site, true only for 204', async () => {
+    const { stopTurn } = await import('@/client/conversation');
+    const send = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', send);
+    expect(await stopTurn(TURN)).toBe(true);
+    expect(send).toHaveBeenCalledWith(`/api/v1/turns/${TURN}/stop`, expect.objectContaining({ method: 'POST' }));
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    expect(await stopTurn(TURN)).toBe(false);
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await stopTurn(TURN)).toBe(false);
+  });
+
+  it('names the last event id of a reopened stream in its address', async () => {
+    const { turnEventsUrl } = await import('@/client/conversation');
+    expect(turnEventsUrl(TURN, '7')).toBe(`/api/v1/turns/${TURN}/events?lastEventId=7`);
+    expect(turnEventsUrl(TURN, null)).toBe(`/api/v1/turns/${TURN}/events`);
+  });
+
+  it('reads a stopped done: never silent, its references kept', async () => {
+    const { parseDone } = await import('@/client/conversation');
+    const reference = { number: 1, materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
+    expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, references: [] });
+    expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, references: [reference] });
+    expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, references: [] });
+    expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, references: [reference] });
   });
 });
