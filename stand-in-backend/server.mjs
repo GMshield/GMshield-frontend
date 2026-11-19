@@ -169,8 +169,13 @@ export const EXAMPLES = {
     state: 'waiting',
   },
   // Story 2.4: the current campaign's conversation, with sources; a question recorded in Portuguese. Its sources are
-  // indexed (indexing null), so a test-mode shell shows no indexing notice and reads no count.
-  'GET /api/v1/conversations/current': { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing: null },
+  // indexed (indexing and indexingFailed null), so a test-mode shell shows no indexing notice and reads no count.
+  'GET /api/v1/conversations/current': {
+    campaignId: '0190a0b0-0000-7000-8000-000000000002',
+    hasSources: true,
+    indexing: null,
+    indexingFailed: null,
+  },
   'POST /api/v1/campaigns/{campaignId}/turns': {
     id: '0190a0b0-0000-7000-8000-000000000021',
     conversationId: '0190a0b0-0000-7000-8000-000000000020',

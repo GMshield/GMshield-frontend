@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // The indexing notice reads the current conversation's indexing count, added in 1.15.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.15.0');
-    expect(meetsMinimum('1.15.0')).toBe(true);
-    expect(meetsMinimum('1.15.1')).toBe(true);
+    // The indexing notice reads the current conversation's failed passages (indexingFailed), added in 1.16.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.16.0');
+    expect(meetsMinimum('1.16.0')).toBe(true);
+    expect(meetsMinimum('1.16.1')).toBe(true);
+    expect(meetsMinimum('1.15.0')).toBe(false);
     expect(meetsMinimum('1.14.0')).toBe(false);
     expect(meetsMinimum('1.13.0')).toBe(false);
     expect(meetsMinimum('1.12.0')).toBe(false);

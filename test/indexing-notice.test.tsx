@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { UrlStorage } from 'tus-js-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { IndexingPoll } from '@/client/conversation';
+import type { IndexingFailed, IndexingPoll } from '@/client/conversation';
 
 // The notice must never refresh the page: every router.refresh is counted.
 const refresh = vi.fn();
@@ -26,13 +26,23 @@ const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const TURN = '0190a0b0-0000-7000-8000-000000000021';
 const PASSAGE = '0190a0b0-0000-7000-8000-000000000009';
 
-const count = (remaining: number): IndexingPoll => ({ kind: 'count', remaining });
-const NONE: IndexingPoll = { kind: 'none' };
+const count = (remaining: number): IndexingPoll => ({ kind: 'read', remaining, failed: null });
+const NONE: IndexingPoll = { kind: 'read', remaining: null, failed: null };
 const FAILED: IndexingPoll = { kind: 'failed' };
+/** A read with these values: pending passages (or null) and failed ones (or null). */
+const state = (remaining: number | null, failed: IndexingFailed | null): IndexingPoll => ({ kind: 'read', remaining, failed });
 
 /** The notice's line, or null when it is not on the screen. */
 function line(container: HTMLElement): HTMLElement | null {
   return container.querySelector('[data-status="warning"]');
+}
+
+/** Every line of the notice, in order: its status and its text. */
+function lines(container: HTMLElement): [string, string][] {
+  return [...container.querySelectorAll('[data-status]')].map((element) => [
+    element.getAttribute('data-status') ?? '',
+    element.textContent ?? '',
+  ]);
 }
 
 /** Runs one poll interval and lets the read it started settle. */
@@ -68,7 +78,7 @@ describe('the indexing notice', () => {
       ['pt-BR', 'AtençãoPreparando as fontes para busca: faltam 2.000 trechos'],
       ['en', 'WarningPreparing your sources for search: 2,000 passages left'],
     ] as const) {
-      const { container } = render(<IndexingNotice remaining={2000} language={language} />);
+      const { container } = render(<IndexingNotice remaining={2000} failed={null} language={language} />);
       expect(line(container)!.textContent).toBe(text);
       expect(screen.queryByRole('status')).toBeNull();
       expect(container.querySelector('[aria-live]')).toBeNull();
@@ -81,7 +91,7 @@ describe('the indexing notice', () => {
   it('reads the count every 5 s and shows each new number, never refreshing the page', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValueOnce(count(1800)).mockResolvedValueOnce(count(1500));
-    const { container } = render(<IndexingNotice remaining={2000} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={2000} failed={null} language="pt-BR" />);
 
     await act(() => vi.advanceTimersByTimeAsync(INDEXING_POLL_MS - 1));
     expect(fetchIndexing).not.toHaveBeenCalled();
@@ -96,7 +106,7 @@ describe('the indexing notice', () => {
   it('keeps the last number when a read fails, and the next read updates it (matrix row "Poll fails")', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(count(1900));
-    const { container } = render(<IndexingNotice remaining={2000} language="en" />);
+    const { container } = render(<IndexingNotice remaining={2000} failed={null} language="en" />);
 
     await tick();
     expect(line(container)!.textContent).toContain('2,000 passages left');
@@ -108,7 +118,7 @@ describe('the indexing notice', () => {
   it('goes away, and stops reading, once nothing is pending (matrix row "Nothing pending")', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValueOnce(count(100)).mockResolvedValueOnce(NONE).mockResolvedValue(count(50));
-    const { container } = render(<IndexingNotice remaining={150} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={150} failed={null} language="pt-BR" />);
 
     await tick();
     expect(line(container)!.textContent).toContain('faltam 100 trechos');
@@ -122,7 +132,7 @@ describe('the indexing notice', () => {
   it('stops reading after 10 minutes without a change, and the line stays (matrix row "Stuck")', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValueOnce(count(700)).mockResolvedValue(count(700));
-    const { container } = render(<IndexingNotice remaining={800} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={800} failed={null} language="pt-BR" />);
 
     await tick();
     expect(line(container)!.textContent).toContain('faltam 700 trechos');
@@ -142,7 +152,7 @@ describe('the indexing notice', () => {
       ['pt-BR', 'Preparando as fontes para busca: falta 1 trecho'],
       ['en', 'Preparing your sources for search: 1 passage left'],
     ] as const) {
-      const { container } = render(<IndexingNotice remaining={1} language={language} />);
+      const { container } = render(<IndexingNotice remaining={1} failed={null} language={language} />);
       expect(line(container)!.textContent).toContain(text);
       cleanup();
     }
@@ -151,7 +161,7 @@ describe('the indexing notice', () => {
   it('a failed read never counts towards the 10 minutes: after more than 10 minutes of failures a new count shows', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValue(FAILED);
-    const { container } = render(<IndexingNotice remaining={800} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={800} failed={null} language="pt-BR" />);
 
     const polls = INDEXING_STALL_MS / INDEXING_POLL_MS;
     await tick(polls + 10);
@@ -173,7 +183,7 @@ describe('the indexing notice', () => {
       signals.push(signal);
       return new Promise<IndexingPoll>(() => undefined);
     }).mockResolvedValueOnce(count(1500));
-    const { container } = render(<IndexingNotice remaining={2000} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={2000} failed={null} language="pt-BR" />);
 
     await tick();
     expect(fetchIndexing).toHaveBeenCalledTimes(1);
@@ -188,14 +198,14 @@ describe('the indexing notice', () => {
   it('a new count from the page shows again after a null read hid the notice, and the reads start again', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValueOnce(NONE).mockResolvedValue(count(300));
-    const { container, rerender } = render(<IndexingNotice remaining={500} language="pt-BR" />);
+    const { container, rerender } = render(<IndexingNotice remaining={500} failed={null} language="pt-BR" />);
     await tick();
     expect(line(container)).toBeNull();
     await tick(3);
     expect(fetchIndexing).toHaveBeenCalledTimes(1);
 
     // The tray or a material's page refreshed the layout: it renders the notice in place with a new count.
-    rerender(<IndexingNotice remaining={400} language="pt-BR" />);
+    rerender(<IndexingNotice remaining={400} failed={null} language="pt-BR" />);
     expect(line(container)!.textContent).toContain('faltam 400 trechos');
     await tick();
     expect(fetchIndexing).toHaveBeenCalledTimes(2);
@@ -205,12 +215,12 @@ describe('the indexing notice', () => {
   it('a new count from the page shows after a stall, and the reads and the 10 minutes start again', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValue(count(700));
-    const { container, rerender } = render(<IndexingNotice remaining={700} language="pt-BR" />);
+    const { container, rerender } = render(<IndexingNotice remaining={700} failed={null} language="pt-BR" />);
     const polls = INDEXING_STALL_MS / INDEXING_POLL_MS;
     await tick(polls + 5);
     expect(fetchIndexing).toHaveBeenCalledTimes(polls);
 
-    rerender(<IndexingNotice remaining={650} language="pt-BR" />);
+    rerender(<IndexingNotice remaining={650} failed={null} language="pt-BR" />);
     expect(line(container)!.textContent).toContain('faltam 650 trechos');
     fetchIndexing.mockResolvedValue(count(650));
     await tick(polls - 1);
@@ -223,7 +233,7 @@ describe('the indexing notice', () => {
   it('does not read while the tab is hidden, and reads again once it is visible', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValue(count(10));
-    const { container } = render(<IndexingNotice remaining={20} language="pt-BR" />);
+    const { container } = render(<IndexingNotice remaining={20} failed={null} language="pt-BR" />);
 
     setVisibility('hidden');
     await tick(3);
@@ -237,10 +247,182 @@ describe('the indexing notice', () => {
   it('stops reading once it leaves the page', async () => {
     vi.useFakeTimers();
     fetchIndexing.mockResolvedValue(count(10));
-    const { unmount } = render(<IndexingNotice remaining={20} language="pt-BR" />);
+    const { unmount } = render(<IndexingNotice remaining={20} failed={null} language="pt-BR" />);
     unmount();
     await tick(3);
     expect(fetchIndexing).not.toHaveBeenCalled();
+  });
+});
+
+describe('the indexing notice with passages that could not be prepared', () => {
+  it('shows the failure line second, a warning while a retry remains and an error after, in both languages', () => {
+    for (const [language, retrying, expected] of [
+      ['pt-BR', true, [
+        ['warning', 'AtençãoPreparando as fontes para busca: faltam 2.000 trechos'],
+        ['warning', 'AtençãoNão foi possível preparar 1.200 trechos para busca; nova tentativa em alguns minutos.'],
+      ]],
+      ['en', true, [
+        ['warning', 'WarningPreparing your sources for search: 2,000 passages left'],
+        ['warning', 'WarningCould not prepare 1,200 passages for search; trying again in a few minutes.'],
+      ]],
+      ['pt-BR', false, [
+        ['warning', 'AtençãoPreparando as fontes para busca: faltam 2.000 trechos'],
+        ['danger', 'ErroNão foi possível preparar 1.200 trechos para busca.'],
+      ]],
+      ['en', false, [
+        ['warning', 'WarningPreparing your sources for search: 2,000 passages left'],
+        ['danger', 'ErrorCould not prepare 1,200 passages for search.'],
+      ]],
+    ] as const) {
+      const { container } = render(
+        <IndexingNotice remaining={2000} failed={{ passages: 1200, retrying }} language={language} />,
+      );
+      expect(lines(container)).toEqual(expected);
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(container.querySelector('[aria-live]')).toBeNull();
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(container.querySelector('[style]')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('says one passage in the singular, and shows the failure line alone when nothing is pending', () => {
+    for (const [language, retrying, text] of [
+      ['pt-BR', true, 'Não foi possível preparar 1 trecho para busca; nova tentativa em alguns minutos.'],
+      ['en', true, 'Could not prepare 1 passage for search; trying again in a few minutes.'],
+      ['pt-BR', false, 'Não foi possível preparar 1 trecho para busca.'],
+      ['en', false, 'Could not prepare 1 passage for search.'],
+    ] as const) {
+      const { container } = render(<IndexingNotice remaining={null} failed={{ passages: 1, retrying }} language={language} />);
+      expect(lines(container)).toHaveLength(1);
+      expect(lines(container)[0]![1]).toContain(text);
+      cleanup();
+    }
+    const { container } = render(<IndexingNotice remaining={null} failed={null} language="pt-BR" />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('keeps reading while a retry remains, and goes once the retry succeeds (matrix row "Run fails")', async () => {
+    vi.useFakeTimers();
+    fetchIndexing.mockResolvedValueOnce(state(null, { passages: 200, retrying: true }))
+      .mockResolvedValueOnce(state(200, null))
+      .mockResolvedValueOnce(NONE)
+      .mockResolvedValue(state(5, null));
+    const { container } = render(
+      <IndexingNotice remaining={null} failed={{ passages: 200, retrying: true }} language="pt-BR" />,
+    );
+
+    await tick();
+    expect(lines(container)).toEqual([
+      ['warning', 'AtençãoNão foi possível preparar 200 trechos para busca; nova tentativa em alguns minutos.'],
+    ]);
+    // The sweep gave the run a new job: its passages are pending again, and the failure line goes.
+    await tick();
+    expect(lines(container)).toEqual([['warning', 'AtençãoPreparando as fontes para busca: faltam 200 trechos']]);
+    await tick();
+    expect(container.innerHTML).toBe('');
+    await tick(5);
+    expect(fetchIndexing).toHaveBeenCalledTimes(3);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('stops reading once only a final failure is left, and that line stays (matrix row "Retries used")', async () => {
+    vi.useFakeTimers();
+    fetchIndexing.mockResolvedValueOnce(state(50, { passages: 200, retrying: true }))
+      .mockResolvedValueOnce(state(null, { passages: 200, retrying: false }))
+      .mockResolvedValue(NONE);
+    const { container } = render(
+      <IndexingNotice remaining={100} failed={{ passages: 200, retrying: true }} language="en" />,
+    );
+
+    await tick();
+    expect(lines(container)).toEqual([
+      ['warning', 'WarningPreparing your sources for search: 50 passages left'],
+      ['warning', 'WarningCould not prepare 200 passages for search; trying again in a few minutes.'],
+    ]);
+    await tick();
+    expect(lines(container)).toEqual([['danger', 'ErrorCould not prepare 200 passages for search.']]);
+    await tick(5);
+    expect(fetchIndexing).toHaveBeenCalledTimes(2);
+    expect(lines(container)).toEqual([['danger', 'ErrorCould not prepare 200 passages for search.']]);
+  });
+
+  it('does not read at all when the page gives only a final failure, and a failed read keeps both lines', async () => {
+    vi.useFakeTimers();
+    const { container } = render(
+      <IndexingNotice remaining={null} failed={{ passages: 30, retrying: false }} language="pt-BR" />,
+    );
+    await tick(3);
+    expect(fetchIndexing).not.toHaveBeenCalled();
+    expect(lines(container)).toEqual([['danger', 'ErroNão foi possível preparar 30 trechos para busca.']]);
+    cleanup();
+
+    fetchIndexing.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(state(10, { passages: 30, retrying: true }));
+    const again = render(<IndexingNotice remaining={20} failed={{ passages: 30, retrying: true }} language="pt-BR" />);
+    await tick();
+    expect(lines(again.container)).toEqual([
+      ['warning', 'AtençãoPreparando as fontes para busca: faltam 20 trechos'],
+      ['warning', 'AtençãoNão foi possível preparar 30 trechos para busca; nova tentativa em alguns minutos.'],
+    ]);
+    await tick();
+    expect(lines(again.container)[0]![1]).toContain('faltam 10 trechos');
+  });
+
+  it('keeps reading past 10 minutes while a retry remains, and the line goes once its state changes (matrix row "Long retry")', async () => {
+    vi.useFakeTimers();
+    const retrying = state(null, { passages: 200, retrying: true });
+    const polls = INDEXING_STALL_MS / INDEXING_POLL_MS;
+    // Unchanged for 15 minutes, then the sweep gives the run a new job: its passages are pending again.
+    for (let i = 0; i < (polls * 3) / 2; i += 1) {
+      fetchIndexing.mockResolvedValueOnce(retrying);
+    }
+    fetchIndexing.mockResolvedValueOnce(state(200, null)).mockResolvedValue(NONE);
+    const { container } = render(
+      <IndexingNotice remaining={null} failed={{ passages: 200, retrying: true }} language="pt-BR" />,
+    );
+
+    await tick((polls * 3) / 2);
+    expect(fetchIndexing).toHaveBeenCalledTimes((polls * 3) / 2);
+    expect(lines(container)).toEqual([
+      ['warning', 'AtençãoNão foi possível preparar 200 trechos para busca; nova tentativa em alguns minutos.'],
+    ]);
+    await tick();
+    expect(lines(container)).toEqual([['warning', 'AtençãoPreparando as fontes para busca: faltam 200 trechos']]);
+    await tick();
+    expect(container.innerHTML).toBe('');
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('with a pending line and a retrying failure, the 10 minutes never stop the reads', async () => {
+    vi.useFakeTimers();
+    fetchIndexing.mockResolvedValue(state(40, { passages: 200, retrying: true }));
+    render(<IndexingNotice remaining={40} failed={{ passages: 200, retrying: true }} language="en" />);
+    const polls = INDEXING_STALL_MS / INDEXING_POLL_MS;
+
+    await tick(polls * 2);
+
+    expect(fetchIndexing).toHaveBeenCalledTimes(polls * 2);
+  });
+
+  it('stops after 10 minutes without a change once no failure is retrying, and a new state from the page starts it again', async () => {
+    vi.useFakeTimers();
+    fetchIndexing.mockResolvedValue(state(40, { passages: 200, retrying: false }));
+    const { container, rerender } = render(
+      <IndexingNotice remaining={40} failed={{ passages: 200, retrying: false }} language="pt-BR" />,
+    );
+    const polls = INDEXING_STALL_MS / INDEXING_POLL_MS;
+    await tick(polls + 5);
+    expect(fetchIndexing).toHaveBeenCalledTimes(polls);
+    expect(lines(container)).toEqual([
+      ['warning', 'AtençãoPreparando as fontes para busca: faltam 40 trechos'],
+      ['danger', 'ErroNão foi possível preparar 200 trechos para busca.'],
+    ]);
+
+    rerender(<IndexingNotice remaining={30} failed={{ passages: 200, retrying: false }} language="pt-BR" />);
+    expect(lines(container)[0]![1]).toContain('faltam 30 trechos');
+    await tick();
+    expect(fetchIndexing).toHaveBeenCalledTimes(polls + 1);
   });
 });
 
@@ -271,7 +453,7 @@ describe('the indexing notice on the questions page (matrix row "Questions page"
     const streams: FakeStream[] = [];
     const { container } = render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={null} urlStorage={memoryStorage()}>
-        <IndexingNotice remaining={2000} language="pt-BR" />
+        <IndexingNotice remaining={2000} failed={null} language="pt-BR" />
         <Conversation
           language="pt-BR"
           campaignId={CAMPAIGN}

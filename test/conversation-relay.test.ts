@@ -477,7 +477,12 @@ describe('the current conversation relay and the indexing fetcher (the indexing 
     vi.unstubAllGlobals();
   });
 
-  const CURRENT = { campaignId: CAMPAIGN, hasSources: true, indexing: { remaining: 2000 } };
+  const CURRENT = {
+    campaignId: CAMPAIGN,
+    hasSources: true,
+    indexing: { remaining: 2000 },
+    indexingFailed: { passages: 200, retrying: true },
+  };
   const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
 
   async function read(headers: Record<string, string>): Promise<Response> {
@@ -534,20 +539,29 @@ describe('the current conversation relay and the indexing fetcher (the indexing 
     expect(down.status).toBe(503);
   });
 
-  it('fetches the count from the relay on this site: count, none, or failed for anything else', async () => {
+  it('fetches both values from the relay on this site, each null when there is none, or failed for anything else', async () => {
     const { fetchIndexing } = await import('@/client/conversation');
     const send = vi.fn(async () => Response.json(CURRENT));
     vi.stubGlobal('fetch', send);
-    expect(await fetchIndexing()).toEqual({ kind: 'count', remaining: 2000 });
+    expect(await fetchIndexing()).toEqual({ kind: 'read', remaining: 2000, failed: { passages: 200, retrying: true } });
     expect(send).toHaveBeenCalledWith('/api/v1/conversations/current', expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }));
 
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...CURRENT, indexing: null })));
-    expect(await fetchIndexing()).toEqual({ kind: 'none' });
+    expect(await fetchIndexing()).toEqual({ kind: 'read', remaining: null, failed: { passages: 200, retrying: true } });
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...CURRENT, indexingFailed: { passages: 1, retrying: false } })));
+    expect(await fetchIndexing()).toEqual({ kind: 'read', remaining: 2000, failed: { passages: 1, retrying: false } });
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...CURRENT, indexing: null, indexingFailed: null })));
+    expect(await fetchIndexing()).toEqual({ kind: 'read', remaining: null, failed: null });
     for (const answer of [
       Response.json({ status: 503, code: 'server.unavailable' }, { status: 503 }),
       Response.json({ ...CURRENT, indexing: { remaining: 0 } }),
       Response.json({ ...CURRENT, indexing: { remaining: 1.5 } }),
       Response.json({ ...CURRENT, indexing: { remaining: '7' } }),
+      Response.json({ ...CURRENT, indexing: 7 }),
+      Response.json({ ...CURRENT, indexingFailed: { passages: 0, retrying: true } }),
+      Response.json({ ...CURRENT, indexingFailed: { passages: 3, retrying: 'yes' } }),
+      Response.json({ ...CURRENT, indexingFailed: { passages: 3 } }),
+      Response.json({ ...CURRENT, indexingFailed: 3 }),
       Response.json({ campaignId: CAMPAIGN, hasSources: true }),
       new Response('not json', { status: 200 }),
     ]) {

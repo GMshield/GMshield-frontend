@@ -66,7 +66,11 @@
     },
     "dismiss": "Dispensar aviso",
     "indexing": "Preparando as fontes para busca: faltam {remaining} trechos",
-    "indexingOne": "Preparando as fontes para busca: falta {remaining} trecho"
+    "indexingOne": "Preparando as fontes para busca: falta {remaining} trecho",
+    "indexingRetrying": "Não foi possível preparar {count} trechos para busca; nova tentativa em alguns minutos.",
+    "indexingRetryingOne": "Não foi possível preparar {count} trecho para busca; nova tentativa em alguns minutos.",
+    "indexingFailed": "Não foi possível preparar {count} trechos para busca.",
+    "indexingFailedOne": "Não foi possível preparar {count} trecho para busca."
   },
   "errors": {
     "categories": {

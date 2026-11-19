@@ -124,7 +124,7 @@ describe('stand-in backend', () => {
   it('answers the conversation paths (Story 2.4) with sources, a recorded question and a short streamed answer', async () => {
     expect(answer(contract, 'GET', '/api/v1/conversations/current', 't')).toMatchObject({
       status: 200,
-      body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing: null },
+      body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing: null, indexingFailed: null },
     });
     expect(answer(contract, 'POST', '/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/turns', 't')).toMatchObject({
       status: 201,

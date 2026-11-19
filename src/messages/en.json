@@ -66,7 +66,11 @@
     },
     "dismiss": "Dismiss notice",
     "indexing": "Preparing your sources for search: {remaining} passages left",
-    "indexingOne": "Preparing your sources for search: {remaining} passage left"
+    "indexingOne": "Preparing your sources for search: {remaining} passage left",
+    "indexingRetrying": "Could not prepare {count} passages for search; trying again in a few minutes.",
+    "indexingRetryingOne": "Could not prepare {count} passage for search; trying again in a few minutes.",
+    "indexingFailed": "Could not prepare {count} passages for search.",
+    "indexingFailedOne": "Could not prepare {count} passage for search."
   },
   "errors": {
     "categories": {
