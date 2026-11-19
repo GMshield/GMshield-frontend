@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 2.7 opens a reference's page through the turn's reference routes, added in 1.14.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.14.0');
-    expect(meetsMinimum('1.14.0')).toBe(true);
-    expect(meetsMinimum('1.14.1')).toBe(true);
+    // The indexing notice reads the current conversation's indexing count, added in 1.15.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.15.0');
+    expect(meetsMinimum('1.15.0')).toBe(true);
+    expect(meetsMinimum('1.15.1')).toBe(true);
+    expect(meetsMinimum('1.14.0')).toBe(false);
     expect(meetsMinimum('1.13.0')).toBe(false);
     expect(meetsMinimum('1.12.0')).toBe(false);
     expect(meetsMinimum('1.11.0')).toBe(false);

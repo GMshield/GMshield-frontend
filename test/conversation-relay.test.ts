@@ -467,3 +467,94 @@ describe('the reference page relay and the browser fetcher (Story 2.7)', () => {
     expect(referencePictureUrl(TURN, 2, 7)).toBe(`/api/v1/turns/${TURN}/references/2/pages/7/picture`);
   });
 });
+
+describe('the current conversation relay and the indexing fetcher (the indexing notice)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const CURRENT = { campaignId: CAMPAIGN, hasSources: true, indexing: { remaining: 2000 } };
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+
+  async function read(headers: Record<string, string>): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const { GET } = await import('@/app/api/v1/conversations/current/route');
+    return GET(new NextRequest('http://gm.test/api/v1/conversations/current', { headers: { host: 'gm.test', ...headers } }));
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  it('reads the current conversation through the typed client with the session, never stored', async () => {
+    const backend = await useBackend({ 'GET /api/v1/conversations/current': { status: 200, body: CURRENT } });
+
+    const answer = await read({ 'sec-fetch-site': 'same-origin', cookie, traceparent: TRACEPARENT });
+
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual(CURRENT);
+    expect(answer.headers.get('cache-control')).toBe('no-store');
+    expect(answer.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(backend.calls).toHaveLength(1);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.cookie).toBeUndefined();
+  });
+
+  it('drops another origin and answers 401 with no session, without reaching the backend', async () => {
+    const backend = await useBackend({});
+    const foreign = await read({ origin: 'http://evil.test', cookie });
+    expect(foreign.status).toBe(403);
+    expect(await foreign.json()).toMatchObject({ code: 'request.cross_origin' });
+    const signedOut = await read({ origin: 'http://gm.test' });
+    expect(signedOut.status).toBe(401);
+    expect(signedOut.headers.get('cache-control')).toBe('no-store');
+    expect(await signedOut.json()).toMatchObject({ code: 'session.required' });
+    expect(backend.calls).toEqual([]);
+  });
+
+  it('passes no campaign on as not found, and an unreachable backend as unavailable', async () => {
+    await useBackend({
+      'GET /api/v1/conversations/current': { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } },
+    });
+    const missing = await read({ origin: 'http://gm.test', cookie });
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('content-type')).toBe('application/problem+json');
+    vi.stubEnv('GMSHIELD_BACKEND_URL', await closedAddress());
+    const down = await read({ origin: 'http://gm.test', cookie });
+    expect(down.status).toBe(503);
+  });
+
+  it('fetches the count from the relay on this site: count, none, or failed for anything else', async () => {
+    const { fetchIndexing } = await import('@/client/conversation');
+    const send = vi.fn(async () => Response.json(CURRENT));
+    vi.stubGlobal('fetch', send);
+    expect(await fetchIndexing()).toEqual({ kind: 'count', remaining: 2000 });
+    expect(send).toHaveBeenCalledWith('/api/v1/conversations/current', expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }));
+
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...CURRENT, indexing: null })));
+    expect(await fetchIndexing()).toEqual({ kind: 'none' });
+    for (const answer of [
+      Response.json({ status: 503, code: 'server.unavailable' }, { status: 503 }),
+      Response.json({ ...CURRENT, indexing: { remaining: 0 } }),
+      Response.json({ ...CURRENT, indexing: { remaining: 1.5 } }),
+      Response.json({ ...CURRENT, indexing: { remaining: '7' } }),
+      Response.json({ campaignId: CAMPAIGN, hasSources: true }),
+      new Response('not json', { status: 200 }),
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => answer));
+      expect(await fetchIndexing()).toEqual({ kind: 'failed' });
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await fetchIndexing()).toEqual({ kind: 'failed' });
+  });
+});

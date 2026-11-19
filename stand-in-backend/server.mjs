@@ -9,9 +9,9 @@
 // shell stays still, and a material reads as one being processed, its pages known (Story 1.15). A page reads as a
 // picture page with two lines (Story 1.19), and a binary answer (a page's picture, image/webp) is a 1 x 1 WebP. An
 // image set (Story 1.21) is created with two images, and leaving one out answers it waiting. Story 2.4: the current
-// conversation has sources, a question is recorded in Portuguese, and a turn's events (text/event-stream) are a short
-// cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose passage it cites, and the page
-// of reference 2 a text page with the cited passage's range.
+// conversation has sources (all indexed: no indexing count), a question is recorded in Portuguese, and a turn's events
+// (text/event-stream) are a short cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose
+// passage it cites, and the page of reference 2 a text page with the cited passage's range.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -168,8 +168,9 @@ export const EXAMPLES = {
     versionId: '0190a0b0-0000-7000-8000-000000000004',
     state: 'waiting',
   },
-  // Story 2.4: the current campaign's conversation, with sources; a question recorded in Portuguese.
-  'GET /api/v1/conversations/current': { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true },
+  // Story 2.4: the current campaign's conversation, with sources; a question recorded in Portuguese. Its sources are
+  // indexed (indexing null), so a test-mode shell shows no indexing notice and reads no count.
+  'GET /api/v1/conversations/current': { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing: null },
   'POST /api/v1/campaigns/{campaignId}/turns': {
     id: '0190a0b0-0000-7000-8000-000000000021',
     conversationId: '0190a0b0-0000-7000-8000-000000000020',

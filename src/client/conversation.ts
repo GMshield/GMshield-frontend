@@ -5,8 +5,9 @@ import type { components } from '@/server/backend/generated/public';
  * `POST /api/v1/campaigns/{id}/turns`, and a turn's answer is read from `GET /api/v1/turns/{id}/events` with
  * `EventSource`. Story 2.6: a turn's answer is stopped with `POST /api/v1/turns/{id}/stop`, and a stream the page
  * reopens itself names the last event id in its address. Story 2.7: a page a turn's reference names is read from
- * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The relays reach the
- * backend; the browser never does.
+ * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The indexing notice
+ * reads the count of passages still being prepared for search from `GET /api/v1/conversations/current`. The relays
+ * reach the backend; the browser never does.
  */
 
 /** A recorded turn, as the relay answers it. */
@@ -183,5 +184,44 @@ export async function fetchReferencePage(turnId: string, number: number, page: n
     return response.status === 200 && isPage(body) ? body : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * What one read of the indexing count gave: the passages still being prepared for search, nothing pending any more
+ * (`none`), or no usable answer (`failed`: the relay refused, did not answer, or answered something else).
+ */
+export type IndexingPoll =
+  | { readonly kind: 'count'; readonly remaining: number }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'failed' };
+
+const POLL_FAILED: IndexingPoll = { kind: 'failed' };
+
+/**
+ * Reads the current conversation's indexing count from the relay on this site: `count` for `{remaining}` (an integer
+ * from 1), `none` for null, and `failed` for anything else, so a failed read never hides the notice.
+ */
+export async function fetchIndexing(signal?: AbortSignal): Promise<IndexingPoll> {
+  try {
+    const response = await fetch(`/api/v1/conversations/current`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal,
+    });
+    const body: unknown = await response.json().catch(() => null);
+    if (response.status !== 200 || typeof body !== 'object' || body === null || !('indexing' in body)) {
+      return POLL_FAILED;
+    }
+    const indexing = (body as { indexing: unknown }).indexing;
+    if (indexing === null) {
+      return { kind: 'none' };
+    }
+    const remaining = (indexing as { remaining?: unknown } | undefined)?.remaining;
+    return typeof remaining === 'number' && Number.isInteger(remaining) && remaining >= 1
+      ? { kind: 'count', remaining }
+      : POLL_FAILED;
+  } catch {
+    return POLL_FAILED;
   }
 }
