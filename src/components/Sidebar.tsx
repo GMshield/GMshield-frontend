@@ -9,7 +9,7 @@ import { sidebarCookieLine, type SidebarState } from '@/sidebar-cookie';
 import { ChevronLeftIcon, ChevronRightIcon, UploadIcon } from './Icons';
 import { LogoMark } from './Logo';
 import { LogoMenu } from './LogoMenu';
-import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
+import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, setInertBy, type EntryKey } from './shell-entries';
 import styles from './Sidebar.module.css';
 import type { Material } from './uploads/types';
 import { UploadDialog } from './uploads/UploadDialog';
@@ -90,11 +90,11 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
   useEffect(() => {
     const behind = document.querySelectorAll(`[${BEHIND_SIDEBAR}]`);
     for (const element of behind) {
-      element.toggleAttribute('inert', narrowOpen);
+      setInertBy(element, 'sidebar', narrowOpen);
     }
     return () => {
       for (const element of behind) {
-        element.removeAttribute('inert');
+        setInertBy(element, 'sidebar', false);
       }
     };
   }, [narrowOpen]);

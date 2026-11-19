@@ -5,6 +5,7 @@ import { startScripted, type Scripted } from './support/servers';
 
 const { NextRequest } = await import('next/server');
 const route = await import('@/app/api/v1/materials/[id]/pages/[page]/picture/route');
+const referenceRoute = await import('@/app/api/v1/turns/[id]/references/[number]/pages/[page]/picture/route');
 
 const CREDENTIAL = 'configured-service-credential-0123456789';
 const SESSION = 'sessionTokenAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -49,5 +50,28 @@ describe('picture route', () => {
     expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
     expect(backend.calls[0]!.headers.cookie).toBeUndefined();
     expect(backend.calls[0]!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+  });
+
+  it('relays a reference page picture (Story 2.7): the path is its ground, no query, the session as X-Session-Token', async () => {
+    const TURN = '0190a0b0-0000-7000-8000-000000000021';
+    backend = await startScripted({
+      [`GET /api/v1/turns/${TURN}/references/1/pages/13/picture`]: { status: 200, body: 'webp', contentType: 'image/webp' },
+    });
+    vi.stubEnv('GMSHIELD_BACKEND_URL', backend.url);
+    captureOutput();
+    expect(referenceRoute.runtime).toBe('nodejs');
+    expect(referenceRoute.dynamic).toBe('force-dynamic');
+    const answer = await referenceRoute.GET(
+      new NextRequest(`${SITE}/api/v1/turns/${TURN}/references/1/pages/13/picture?ground=review`, {
+        headers: { cookie: `__Host-gmshield-session=${SESSION}.4102444800` },
+      }),
+      { params: Promise.resolve({ id: TURN, number: '1', page: '13' }) },
+    );
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('image/webp');
+    expect(answer.headers.get('cache-control')).toBe('no-store');
+    expect(backend.calls[0]!.url).toBe(`/api/v1/turns/${TURN}/references/1/pages/13/picture`);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.cookie).toBeUndefined();
   });
 });

@@ -10,7 +10,8 @@
 // picture page with two lines (Story 1.19), and a binary answer (a page's picture, image/webp) is a 1 x 1 WebP. An
 // image set (Story 1.21) is created with two images, and leaving one out answers it waiting. Story 2.4: the current
 // conversation has sources, a question is recorded in Portuguese, and a turn's events (text/event-stream) are a short
-// cited answer and `done`.
+// cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose passage it cites, and the page
+// of reference 2 a text page with the cited passage's range.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -189,7 +190,10 @@ export const EXAMPLES = {
   },
 };
 
-/** Story 2.5: the data of the stand-in answer's `done` event, with its one source reference. */
+/**
+ * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds a second, into
+ * a Markdown material (a text page).
+ */
 export const ANSWER_DONE = {
   stopped: false,
   silent: false,
@@ -202,8 +206,32 @@ export const ANSWER_DONE = {
       passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
       removed: false,
     },
+    {
+      number: 2,
+      materialName: 'Notas da campanha.md',
+      sectionPath: ['Magias'],
+      page: 2,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000010'],
+      removed: false,
+    },
   ],
 };
+
+/** Story 2.7: the page of reference 1, the picture page of Story 1.19 whose passage reference 1 cites. */
+export const REFERENCE_PAGE = EXAMPLES['GET /api/v1/materials/{id}/pages/{page}'];
+
+/** Story 2.7: the page of reference 2, a text page whose cited passage is code points 10 to 46 of its text. */
+export const REFERENCE_TEXT_PAGE = {
+  page: 2,
+  pageTotal: 3,
+  picture: null,
+  lines: [],
+  text: '# Magias\n\nFire Bolt causa 1d10 de dano de fogo.\n',
+  passages: [{ id: '0190a0b0-0000-7000-8000-000000000010', range: [10, 47] }],
+  outcome: 'read_directly',
+};
+
+const REFERENCE_PAGE_PATH = /^\/api\/v1\/turns\/[^/]+\/references\/([^/]+)\/pages\/[^/]+$/;
 
 /**
  * Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its
@@ -213,7 +241,8 @@ export const ANSWER_DONE = {
 export const ANSWER_EVENTS = [
   'id:1\nevent:delta\ndata:{"text":"**Fire Bolt** causa 1d10 de dano de fogo."}\n\n',
   'id:2\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000009","offset":40}\n\n',
-  `id:3\nevent:done\ndata:${JSON.stringify(ANSWER_DONE)}\n\n`,
+  'id:3\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000010","offset":40}\n\n',
+  `id:4\nevent:done\ndata:${JSON.stringify(ANSWER_DONE)}\n\n`,
 ].join('');
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
@@ -248,6 +277,10 @@ export function answer(contract, method, pathname, traceId) {
     }
     if (!type.includes('json')) {
       return { status, type, body: PICTURE, ...headers };
+    }
+    const reference = REFERENCE_PAGE_PATH.exec(pathname)?.[1];
+    if (reference !== undefined && method.toUpperCase() === 'GET') {
+      return { status: 200, type, body: reference === '2' ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});

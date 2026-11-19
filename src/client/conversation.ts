@@ -4,7 +4,9 @@ import type { components } from '@/server/backend/generated/public';
  * The browser's side of the conversation (Story 2.4), towards this site only: a question is posted to the relay
  * `POST /api/v1/campaigns/{id}/turns`, and a turn's answer is read from `GET /api/v1/turns/{id}/events` with
  * `EventSource`. Story 2.6: a turn's answer is stopped with `POST /api/v1/turns/{id}/stop`, and a stream the page
- * reopens itself names the last event id in its address. The relays reach the backend; the browser never does.
+ * reopens itself names the last event id in its address. Story 2.7: a page a turn's reference names is read from
+ * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The relays reach the
+ * backend; the browser never does.
  */
 
 /** A recorded turn, as the relay answers it. */
@@ -119,4 +121,67 @@ export function parseCitation(data: Record<string, unknown> | null): Citation | 
     return null;
   }
   return { passageId: data.passageId, offset: data.offset as number };
+}
+
+/** A page a turn's reference names (Story 2.7), as the relay answers it: the shape of a material's page. */
+export type SourcePage = components['schemas']['MaterialPageView'];
+
+function isNumbers(value: unknown, length?: number): value is number[] {
+  return Array.isArray(value) && (length === undefined || value.length === length) && value.every((item) => typeof item === 'number');
+}
+
+function isPassage(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const passage = value as Record<string, unknown>;
+  const boxes = passage.boxes === undefined || (Array.isArray(passage.boxes) && passage.boxes.every((box) => isNumbers(box, 4)));
+  const range = passage.range === undefined || isNumbers(passage.range, 2);
+  return typeof passage.id === 'string' && boxes && range;
+}
+
+/** Whether the relay's answer is a page: its numbers, its picture's size or none, its lines, text and passages. */
+function isPage(value: unknown): value is SourcePage {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const page = value as Record<string, unknown>;
+  const picture = page.picture as Record<string, unknown> | null | undefined;
+  return Number.isInteger(page.page) && Number.isInteger(page.pageTotal)
+    && (picture === null || (typeof picture === 'object' && picture !== undefined && typeof picture.width === 'number' && typeof picture.height === 'number'))
+    && Array.isArray(page.lines) && page.lines.every((line: unknown) => typeof (line as { text?: unknown } | null)?.text === 'string'
+      && isNumbers((line as { box?: unknown }).box, 4))
+    && (page.text === null || typeof page.text === 'string')
+    && Array.isArray(page.passages) && page.passages.every(isPassage);
+}
+
+/**
+ * The relay's path of a page a turn's reference names, from 1 (Story 2.7), under `/api/v1/`: each caller writes that
+ * prefix itself, so every `fetch` here visibly reaches this site's relays (`test/boundaries.test.ts`).
+ */
+function referencePagePath(turnId: string, number: number, page: number): string {
+  return `turns/${encodeURIComponent(turnId)}/references/${number}/pages/${page}`;
+}
+
+/** The address of the picture of a page a turn's reference names (Story 2.7), through the picture relay. */
+export function referencePictureUrl(turnId: string, number: number, page: number): string {
+  return `/api/v1/${referencePagePath(turnId, number, page)}/picture`;
+}
+
+/**
+ * Reads a page a turn's reference names (Story 2.7): the page, or null when the relay refused it (a removed source,
+ * a page that is not one, no session) or did not answer one.
+ */
+export async function fetchReferencePage(turnId: string, number: number, page: number, signal?: AbortSignal): Promise<SourcePage | null> {
+  try {
+    const response = await fetch(`/api/v1/${referencePagePath(turnId, number, page)}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal,
+    });
+    const body: unknown = await response.json().catch(() => null);
+    return response.status === 200 && isPage(body) ? body : null;
+  } catch {
+    return null;
+  }
 }

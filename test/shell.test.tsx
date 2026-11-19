@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/questions';
@@ -24,6 +27,7 @@ vi.mock('@/client/upload', async (importOriginal) => ({ ...(await importOriginal
 
 const { Shell } = await import('@/components/Shell');
 const { SIDEBAR_ENTRIES } = await import('@/components/shell-entries');
+const { ShellPanel } = await import('@/components/ShellPanel');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -352,6 +356,128 @@ describe('the signed-in shell (Story 1.11)', () => {
     );
     expect(within(screen.getByRole('complementary')).getByText('panel')).toBeTruthy();
     act(() => undefined);
+  });
+});
+
+describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
+  /** A page whose source view is open or not: it fills the slot from the main column through `ShellPanel`. */
+  function page(open: boolean, sidebar: 'open' | 'closed' = 'open') {
+    return shell({
+      sidebar,
+      children: (
+        <>
+          <button type="button">referência</button>
+          {open ? (
+            <ShellPanel>
+              <section role="dialog" aria-label="fonte">
+                <button type="button">Fechar a fonte</button>
+              </section>
+            </ShellPanel>
+          ) : null}
+        </>
+      ),
+    });
+  }
+  const frame = () => area().parentElement!;
+  const column = () => screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+
+  it('at 1280px and more takes the 560px column beside the main one, and nothing is inert', () => {
+    const view = render(page(false));
+    expect(frame().dataset.panel).toBe('none');
+    expect(screen.queryByRole('complementary')).toBeNull();
+
+    view.rerender(page(true));
+
+    expect(frame().dataset.panel).toBe('source');
+    const panel = screen.getByRole('complementary');
+    expect(within(panel).getByRole('dialog', { name: 'fonte' })).toBeTruthy();
+    expect(within(screen.getByRole('main')).queryByRole('dialog')).toBeNull();
+    expect(column().hasAttribute('inert')).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
+
+    view.rerender(page(false));
+    expect(frame().dataset.panel).toBe('none');
+    expect(screen.queryByRole('complementary')).toBeNull();
+  });
+
+  it('under 1280px opens over the main column, which is inert until it closes, and focus can go back to it at once', () => {
+    atWidth(1000);
+    const view = render(page(true, 'closed'));
+    expect(frame().dataset.panel).toBe('source');
+    expect(column().hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('complementary').hasAttribute('inert')).toBe(false);
+
+    view.rerender(page(false, 'closed'));
+    expect(column().hasAttribute('inert')).toBe(false);
+    const reference = screen.getByRole('button', { name: 'referência' });
+    reference.focus();
+    expect(document.activeElement).toBe(reference);
+
+    // Widened to 1280px while open: the main column narrows instead and is no longer inert.
+    view.rerender(page(true, 'closed'));
+    expect(column().hasAttribute('inert')).toBe(true);
+    resizeTo(1440);
+    expect(column().hasAttribute('inert')).toBe(false);
+  });
+
+  it('under 1280px, on close, a parent effect already sees the main column without inert, so it can give focus back', () => {
+    atWidth(1000);
+    const seen: boolean[] = [];
+    /** As the conversation does: on close, its effect gives focus back to the reference behind the panel. */
+    function Closer({ open }: { readonly open: boolean }) {
+      const reference = useRef<HTMLButtonElement>(null);
+      const wasOpen = useRef(false);
+      useEffect(() => {
+        if (!open && wasOpen.current) {
+          seen.push(reference.current!.closest('[inert]') === null);
+          reference.current!.focus();
+        }
+        wasOpen.current = open;
+      }, [open]);
+      return (
+        <>
+          <button ref={reference} type="button">
+            referência
+          </button>
+          {open ? (
+            <ShellPanel>
+              <section role="dialog" aria-label="fonte">
+                <button type="button">Fechar a fonte</button>
+              </section>
+            </ShellPanel>
+          ) : null}
+        </>
+      );
+    }
+    const view = render(shell({ sidebar: 'closed', children: <Closer open /> }));
+    expect(column().hasAttribute('inert')).toBe(true);
+
+    view.rerender(shell({ sidebar: 'closed', children: <Closer open={false} /> }));
+
+    expect(seen).toEqual([true]);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'referência' }));
+  });
+
+  it('under 768px is the same, and the sidebar opened over it leaves the main column inert for the panel once it closes', async () => {
+    const user = userEvent.setup();
+    atWidth(600);
+    render(page(true, 'closed'));
+    expect(column().hasAttribute('inert')).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    expect(column().hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('complementary', { hidden: true }).hasAttribute('inert')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Fechar menu' }));
+
+    expect(column().hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('complementary').hasAttribute('inert')).toBe(false);
+  });
+
+  it('sizes the slot in CSS: 560px, over the main column under 1280px, a full-screen sheet under 768px', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
+    expect(css).toMatch(/\.shell\[data-panel='source'\] \.panel \{\s*width: var\(--width-source-view\);/);
+    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*position: fixed;/);
+    expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*left: 0;\s*width: 100%;/);
   });
 });
 

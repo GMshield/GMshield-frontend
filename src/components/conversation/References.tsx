@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { SourceReference } from '@/client/conversation';
 import type { Translate } from '@/messages';
 
@@ -17,28 +19,39 @@ export function referenceLine(reference: SourceReference, t: Translate): string 
 export type ReferencesProps = {
   readonly references: readonly SourceReference[];
   readonly t: Translate;
+  /** Story 2.7: opens a reference's page in the source view; `button` is where focus goes back when it closes. */
+  readonly onOpen?: (reference: SourceReference, button: HTMLButtonElement) => void;
 };
 
 /**
  * The numbered source references under a finished answer (Story 2.5), in label type, one line each. A removed source is
- * struck through and followed by "fonte removida". Only what the backend sent is shown, and nothing opens yet (Story
- * 2.7 opens the cited page).
+ * struck through and followed by "fonte removida". Only what the backend sent is shown. Story 2.7: the line of a
+ * reference that is not removed is a button, named by its line, that opens its page in the source view; a removed one
+ * stays struck through and opens nothing.
  */
-export function References({ references, t }: ReferencesProps) {
+export function References({ references, t, onOpen }: ReferencesProps) {
   return (
     <ol className={styles.references} aria-label={t('conversation.references')}>
       {references.map((reference) => {
         const line = referenceLine({ ...reference, removed: false }, t);
+        let shown: ReactNode = line;
+        if (reference.removed) {
+          shown = (
+            <>
+              <s className={styles.removed}>{line}</s>
+              {` — ${t('conversation.sourceRemoved')}`}
+            </>
+          );
+        } else if (onOpen !== undefined) {
+          shown = (
+            <button type="button" className={styles.reference} aria-haspopup="dialog" onClick={(event) => onOpen(reference, event.currentTarget)}>
+              {line}
+            </button>
+          );
+        }
         return (
           <li key={reference.number} value={reference.number}>
-            {reference.removed ? (
-              <>
-                <s className={styles.removed}>{line}</s>
-                {` — ${t('conversation.sourceRemoved')}`}
-              </>
-            ) : (
-              line
-            )}
+            {shown}
           </li>
         );
       })}

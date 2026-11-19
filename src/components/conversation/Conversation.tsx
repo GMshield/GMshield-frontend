@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import { parseCitation, parseDone, postQuestion, stopTurn, turnEventsUrl, type Citation, type SourceReference } from '@/client/conversation';
 import { errorText, translator, type Language } from '@/messages';
 
+import { ShellPanel } from '../ShellPanel';
+import { SourceView, type LoadPage } from '../SourceView';
 import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark } from './AnswerMarkdown';
@@ -35,11 +37,12 @@ type Connection = 'open' | 'lost' | 'failed';
 
 /**
  * A turn asked since the page opened: its question, then its answer as it is written. Story 2.5: its citations as they
- * arrive, and once it is done its references, or `silent` when it has none. Story 2.6: its id once known, how it
- * failed, and its stream's connection.
+ * arrive, and once it is done its references, or `silent` when it has none. Story 2.6: how it failed, and its stream's
+ * connection. Story 2.7: its id once known, which names its references to the source view.
  */
 type ShownTurn = {
   readonly key: number;
+  readonly id: string | null;
   readonly question: string;
   readonly status: TurnStatus;
   readonly language: string | null;
@@ -103,7 +106,15 @@ export type ConversationProps = {
   readonly review: { readonly href: string; readonly name: string } | null;
   /** For tests: how a stream of a turn is opened (the browser's `EventSource` by default). */
   readonly openStream?: (url: string) => EventSource;
+  /** For tests: how the source view reads a page (the relay by default). */
+  readonly loadPage?: LoadPage;
 };
+
+/**
+ * The reference open in the source view (Story 2.7): its turn's id, the reference, and how many times a reference was
+ * opened, so selecting the open reference again reopens it at its cited page.
+ */
+type OpenSource = { readonly turnId: string; readonly reference: SourceReference; readonly opened: number };
 
 function readDraft(campaignId: string): string {
   try {
@@ -142,6 +153,7 @@ function dataOf(event: Event): Record<string, unknown> | null {
 function newTurn(key: number, question: string): ShownTurn {
   return {
     key,
+    id: null,
     question,
     status: 'sending',
     language: null,
@@ -188,7 +200,7 @@ function sequenceOf(id: string): number | null {
  * - With no accepted source, a line above the composer says so, with the guided upload and the newest material to
  *   review; asking still works.
  */
-export function Conversation({ language, campaignId, hasSources, review, openStream }: ConversationProps) {
+export function Conversation({ language, campaignId, hasSources, review, openStream, loadPage }: ConversationProps) {
   const t = translator(language);
   const uploads = useUploads();
   const [draft, setDraft] = useState('');
@@ -200,6 +212,11 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   /** The ids of the turns asked, by key, as soon as they are known; and the keys whose stop waits for one. */
   const turnIds = useRef(new Map<number, string>());
   const pendingStops = useRef(new Set<number>());
+  /** Story 2.7: the reference open in the source view, the button that opened it, and whether focus goes back to it. */
+  const [source, setSource] = useState<OpenSource | null>(null);
+  const sourceOpener = useRef<HTMLButtonElement | null>(null);
+  const focusOpener = useRef(false);
+  const openings = useRef(0);
 
   useEffect(() => {
     // Read after the first render, so the server's and the browser's first renders agree.
@@ -490,7 +507,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         return;
       }
       turnIds.current.set(key, asked.turn.id);
-      change(key, (turn) => ({ ...turn, status: 'searching', language: asked.turn.language }));
+      change(key, (turn) => ({ ...turn, id: asked.turn.id, status: 'searching', language: asked.turn.language }));
       say(t('conversation.answering'));
       follow(key, asked.turn.id, asked.turn.language, question);
       if (pendingStops.current.delete(key)) {
@@ -535,6 +552,34 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     };
   }, [running, stop]);
 
+  /**
+   * Opens a reference's page in the source view (Story 2.7); another reference replaces it and its focus target, and
+   * the open one selected again reopens at its cited page with focus on the close control.
+   */
+  const openSource = useCallback((turnId: string, reference: SourceReference, button: HTMLButtonElement) => {
+    sourceOpener.current = button;
+    openings.current += 1;
+    setSource({ turnId, reference, opened: openings.current });
+  }, []);
+
+  const closeSource = useCallback(() => {
+    focusOpener.current = true;
+    setSource(null);
+  }, []);
+
+  // Closed: focus goes back to the reference that opened it, once the main column is no longer behind the panel.
+  useEffect(() => {
+    if (source !== null || !focusOpener.current) {
+      return;
+    }
+    focusOpener.current = false;
+    const opener = sourceOpener.current;
+    sourceOpener.current = null;
+    if (opener?.isConnected) {
+      opener.focus();
+    }
+  }, [source]);
+
   const send = useCallback(async () => {
     const question = draft;
     if (running || question.trim() === '') {
@@ -571,6 +616,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
           const silent = turn.status === 'done' && turn.silent;
           // A refusal and an outage show in place of the answer: what streamed is hidden. A truncation keeps it.
           const hidden = turn.status === 'failed' && turn.failure !== 'truncated';
+          const turnId = turn.id;
           return (
             <li key={turn.key} className={styles.turn}>
               <p className={styles.question}>
@@ -607,7 +653,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
                 </p>
               ) : null}
               {turn.status === 'stopped' ? <p className={styles.stopped}>{t('conversation.stopped')}</p> : null}
-              {finished && !silent && turn.references.length > 0 ? <References references={turn.references} t={t} /> : null}
+              {finished && !silent && turn.references.length > 0 ? (
+                <References
+                  references={turn.references}
+                  t={t}
+                  onOpen={turnId === null ? undefined : (reference, button) => openSource(turnId, reference, button)}
+                />
+              ) : null}
               {turn.status === 'failed' && turn.failure === null ? <p className={styles.failed}>{errorText(turn.problem, language)}</p> : null}
               {turn.status === 'failed' && turn.failure !== null ? (
                 <p className={styles.failed}>
@@ -696,6 +748,18 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
       <div className={styles.visuallyHidden} role="alert" data-testid="conversation-alert">
         {alerted}
       </div>
+      {source === null ? null : (
+        <ShellPanel>
+          <SourceView
+            key={`${source.turnId}:${source.reference.number}:${source.opened}`}
+            turnId={source.turnId}
+            reference={source.reference}
+            language={language}
+            onClose={closeSource}
+            load={loadPage}
+          />
+        </ShellPanel>
+      )}
     </section>
   );
 }

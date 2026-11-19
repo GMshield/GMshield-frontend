@@ -18,3 +18,8 @@ export function ChevronRightIcon() {
 export function UploadIcon() {
   return <Icon path="M12 16V4M7 9l5-5 5 5M5 20h14" />;
 }
+
+/** Story 2.7: the source view's close control. */
+export function CloseIcon() {
+  return <Icon path="M6 6l12 12M18 6L6 18" />;
+}

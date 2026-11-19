@@ -111,6 +111,8 @@ function pairs(theme: Theme, page: Rgb): [string, Rgb, Rgb][] {
     ['accent on surface', opaque(role(theme, 'accent')), surface],
     // Story 2.5: citation superscripts and reference numbers are accent text on the canvas.
     ['accent text on canvas', opaque(role(theme, 'accent')), page],
+    // Story 2.7: a cited passage of a text page is text over the passage mark, in the source view's surface.
+    ['text on a cited passage', text, over(role(theme, 'passage-mark'), surface)],
     ['text on active row', text, over(role(theme, 'surface-active'), surface)],
     ['text in field', text, over(role(theme, 'field'), page)],
     ['text on dialog over the dimmed canvas', text, dialog],

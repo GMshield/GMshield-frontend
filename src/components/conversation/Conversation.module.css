@@ -215,6 +215,22 @@
   color: var(--color-accent);
 }
 
+/* Story 2.7: a reference's line is a button that opens its page; it reads as the line, underlined, 24px high at least. */
+.reference {
+  display: inline-block;
+  min-block-size: var(--space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* A removed source: struck through, then "fonte removida". */
 .removed {
   text-decoration: line-through;
