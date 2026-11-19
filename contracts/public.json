@@ -69,9 +69,17 @@
           "hasSources" : {
             "description" : "Whether the campaign's scope has an accepted source (an allowed source, or one whose index change is still pending)",
             "type" : "boolean"
+          },
+          "indexing" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/IndexingCount"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "How many passages of the campaign's scope are still being prepared for search (the distinct in-scope passages covered by an index change that has not ended); null when nothing in scope is pending"
           }
         },
-        "required" : [ "campaignId", "hasSources" ],
+        "required" : [ "campaignId", "hasSources", "indexing" ],
         "type" : "object"
       },
       "GoogleCallback" : {
@@ -222,6 +230,20 @@
           }
         },
         "required" : [ "images", "name" ],
+        "type" : "object"
+      },
+      "IndexingCount" : {
+        "description" : "Passages still being prepared for search",
+        "properties" : {
+          "remaining" : {
+            "description" : "The passages of the campaign's scope still waiting for search",
+            "example" : 2000,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "remaining" ],
         "type" : "object"
       },
       "Material" : {
@@ -980,7 +1002,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.14.0"
+    "version" : "1.15.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1156,7 +1178,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The current campaign's conversation: its campaign and whether it has an accepted source; request.not_found (404) when the account has no campaign",
+        "summary" : "The current campaign's conversation: its campaign, whether it has an accepted source, and how many of its passages are still being prepared for search (null when nothing is pending); request.not_found (404) when the account has no campaign",
         "tags" : [ "conversations" ]
       }
     },

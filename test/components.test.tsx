@@ -212,6 +212,43 @@ describe('Notice', () => {
     expect(screen.getByRole('status').textContent).toContain('Pronto');
   });
 
+  it('one that is not dismissible has no dismiss control, in either language, and still says its status', () => {
+    for (const [language, word] of [
+      ['pt-BR', 'Atenção'],
+      ['en', 'Warning'],
+    ] as const) {
+      const { container } = render(<Notice status="warning" message="Preparando as fontes para busca: faltam 2 trechos" language={language} dismissible={false} />);
+      const notice = screen.getByRole('status');
+      expect(notice.textContent).toContain(word);
+      expect(notice.textContent).toContain('Preparando as fontes para busca: faltam 2 trechos');
+      expect(within(notice).queryByRole('button')).toBeNull();
+      expect(notice.className).toMatch(/still/);
+      expectNoStyleAttribute(container);
+      cleanup();
+    }
+    // The default stays dismissible.
+    render(<Notice status="warning" message="m" language="en" />);
+    expect(screen.getByRole('button', { name: 'Dismiss notice' })).toBeTruthy();
+    expect(screen.getByRole('status').className).not.toMatch(/still/);
+  });
+
+  it('one that is not live has no status role, so its changing text is never announced again', () => {
+    const { container, rerender } = render(<Notice status="warning" message="faltam 2000 trechos" language="pt-BR" dismissible={false} live={false} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(container.querySelector('[aria-live]')).toBeNull();
+    const line = container.querySelector('[data-status="warning"]')!;
+    expect(line.getAttribute('role')).toBeNull();
+    expect(line.textContent).toBe('Atençãofaltam 2000 trechos');
+    rerender(<Notice status="warning" message="faltam 1500 trechos" language="pt-BR" dismissible={false} live={false} />);
+    expect(container.querySelector('[data-status="warning"]')!.textContent).toContain('faltam 1500 trechos');
+    expect(screen.queryByRole('status')).toBeNull();
+    expectNoStyleAttribute(container);
+    // The default stays live.
+    cleanup();
+    render(<Notice status="warning" message="m" language="en" />);
+    expect(screen.getByRole('status')).toBeTruthy();
+  });
+
   it('writes each status as a word, in both languages', () => {
     for (const [status, word] of [
       ['danger', 'Error'],

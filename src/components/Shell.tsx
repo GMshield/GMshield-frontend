@@ -23,8 +23,11 @@ export type ShellProps = {
   /** The current campaign and its system, or null when the account has none. */
   readonly current: { readonly system: string; readonly campaign: string } | null;
   readonly sidebar: SidebarState;
-  /** A line at the top of the main column, such as a failure to load the current campaign. */
-  readonly notice?: ReactNode;
+  /**
+   * Lines at the top of the main column, one each, in the order given, such as a failure to load the current campaign.
+   * Each element carries its own `key`.
+   */
+  readonly notices?: readonly ReactNode[];
   /**
    * A right panel rendered on the server, when one is open: it narrows the main column. From Story 2.7 the source view
    * fills the same slot from the browser (`ShellPanel`).
@@ -46,7 +49,7 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * reading width. Around it, the uploads of this tab (Story 1.14), which go on while the GM moves inside the app.
  * Story 2.7: the grid and its panel slot are `ShellFrame`'s, which a page's source view fills from the browser.
  */
-export function Shell({ preferences, username, current, sidebar, notice, panel, belonging = null, trayRows = [], children }: ShellProps) {
+export function Shell({ preferences, username, current, sidebar, notices = [], panel, belonging = null, trayRows = [], children }: ShellProps) {
   const t = translator(preferences.language);
   const entries = Object.fromEntries(
     [...SIDEBAR_ENTRIES, ADD_FILE].map(({ key }) => [key, t(`shell.entries.${key}`)]),
@@ -80,7 +83,7 @@ export function Shell({ preferences, username, current, sidebar, notice, panel, 
         <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
           <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} />
           <main className={styles.main}>
-            {notice}
+            {notices}
             {children}
           </main>
         </div>

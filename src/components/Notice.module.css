@@ -13,6 +13,12 @@
   line-height: var(--font-body-line-height);
 }
 
+/* With no dismiss control, the line keeps the height and the right padding the control gave it. */
+.still {
+  min-height: var(--space-touch-target);
+  padding-right: var(--space-4);
+}
+
 .word {
   font-weight: var(--font-label-weight);
 }

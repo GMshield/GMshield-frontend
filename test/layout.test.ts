@@ -94,7 +94,12 @@ describe('the signed-in layout (Story 1.11)', () => {
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
-    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(['GET /api/v1/campaigns/current', MATERIALS, 'GET /api/v1/me']);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      'GET /api/v1/campaigns/current',
+      'GET /api/v1/conversations/current',
+      MATERIALS,
+      'GET /api/v1/me',
+    ]);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
       expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
@@ -681,13 +686,103 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     routes[MATERIALS] = { status: 200, body: { items: [{ id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] }] } };
     expect(await layoutHtml()).not.toContain('role="status"');
 
-    // A campaign notice already shown: no second notice.
+    // With a campaign notice, both show, one line each: the campaign's first.
     routes['GET /api/v1/campaigns/current'] = problem(503, 'server.unavailable');
     routes[MATERIALS] = { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: [] }] } };
     html = await layoutHtml();
-    expect(html).toContain('data-status="danger"');
-    expect(html).not.toContain('needs review.');
-    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html.match(/role="status"/g)).toHaveLength(2);
+    expect(html.indexOf('data-status="danger"')).toBeLessThan(html.indexOf('Antigo.pdf needs review.'));
+  });
+});
+
+describe('the indexing notice', () => {
+  const CONVERSATION = 'GET /api/v1/conversations/current';
+  const conversation = (indexing: { remaining: number } | null) => ({
+    status: 200,
+    body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing },
+  });
+  /** The notices of the main column, in order: [status, text, live?]. */
+  const notices = (html: string) =>
+    [...html.matchAll(/<div ([^>]*)data-status="(\w+)"[^>]*>(.*?)<\/div>/g)].map((match) => [
+      match[2],
+      match[3]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      match[1]!.includes('role="status"'),
+    ]);
+
+  it('says how many passages are left, in both languages, with no dismiss control and no live role, on every signed-in page', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [CONVERSATION]: conversation({ remaining: 2000 }),
+    };
+    const server = await useBackend(routes);
+    let html = await layoutHtml(await SystemsPage());
+
+    // Matrix row "Indexing": the SRD's 2,000 passages pending.
+    expect(notices(html)).toEqual([['warning', 'Atenção Preparando as fontes para busca: faltam 2.000 trechos', false]]);
+    expect(html).not.toContain('Dispensar aviso');
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    expect(server.calls.find((call) => call.url === '/api/v1/conversations/current')?.headers['x-session-token']).toBe(SESSION);
+    // In the main column, before the page.
+    expect(html.indexOf('<main')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(html.indexOf('Preparando as fontes')).toBeLessThan(html.indexOf('<h1'));
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([['warning', 'Warning Preparing your sources for search: 2,000 passages left', false]]);
+    expect(html).not.toContain('Dismiss notice');
+
+    // Matrix row "Two versions": the backend adds them up; the layout shows its number as it is.
+    routes[CONVERSATION] = conversation({ remaining: 150 });
+    expect(notices(await layoutHtml())).toEqual([['warning', 'Warning Preparing your sources for search: 150 passages left', false]]);
+
+    // Matrix row "Nothing pending": no notice.
+    routes[CONVERSATION] = conversation(null);
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+    expect(html).not.toContain('Preparing your sources');
+  });
+
+  it('no conversation (no campaign) or one that cannot be loaded: no notice', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(404, 'request.not_found'),
+      [CONVERSATION]: problem(404, 'request.not_found'),
+    };
+    await useBackend(routes);
+    let html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+    routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
+    routes[CONVERSATION] = problem(503, 'server.unavailable');
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+  });
+
+  it('stacks under a campaign error and a material that needs review, one line each, in that order', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(503, 'server.unavailable'),
+      [MATERIALS]: { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', actions: [] }] } },
+      [CONVERSATION]: conversation({ remaining: 150 }),
+    };
+    await useBackend(routes);
+    let html = await layoutHtml();
+
+    expect(notices(html)).toEqual([
+      ['danger', 'Erro O serviço está indisponível agora. Tente de novo em instantes.', true],
+      ['warning', 'Atenção Bestiário.pdf precisa de revisão. Revisar', true],
+      ['warning', 'Atenção Preparando as fontes para busca: faltam 150 trechos', false],
+    ]);
+    // The first two can be dismissed; the indexing notice cannot.
+    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(2);
+    expect(html.lastIndexOf('Dispensar aviso')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+
+    // The campaign loads again: the review and indexing notices stay, in that order.
+    routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
+    html = await layoutHtml();
+    expect(notices(html).map(([status]) => status)).toEqual(['warning', 'warning']);
+    expect(html.indexOf('precisa de revisão')).toBeLessThan(html.indexOf('Preparando as fontes'));
   });
 });
 

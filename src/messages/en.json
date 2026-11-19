@@ -64,7 +64,9 @@
       "warning": "Warning",
       "success": "Done"
     },
-    "dismiss": "Dismiss notice"
+    "dismiss": "Dismiss notice",
+    "indexing": "Preparing your sources for search: {remaining} passages left",
+    "indexingOne": "Preparing your sources for search: {remaining} passage left"
   },
   "errors": {
     "categories": {

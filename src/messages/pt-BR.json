@@ -64,7 +64,9 @@
       "warning": "Atenção",
       "success": "Pronto"
     },
-    "dismiss": "Dispensar aviso"
+    "dismiss": "Dispensar aviso",
+    "indexing": "Preparando as fontes para busca: faltam {remaining} trechos",
+    "indexingOne": "Preparando as fontes para busca: falta {remaining} trecho"
   },
   "errors": {
     "categories": {

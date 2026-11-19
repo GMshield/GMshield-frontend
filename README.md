@@ -404,6 +404,30 @@ they sit in `src/`.
     sheet.
   - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
     with a text page whose cited range is marked.
+- **The indexing notice.** Public contract 1.15.0.
+  - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
+    (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a
+    warning at the top of the main column says "Preparando as fontes para busca: faltam {remaining} trechos" /
+    "Preparing your sources for search: {remaining} passages left" (`notice.indexing`), on every signed-in page. The
+    backend counts; the frontend only shows the number. A conversation that cannot be loaded (no campaign: 404) shows
+    no notice.
+  - The notice is the client component `IndexingNotice` (`src/components/IndexingNotice.tsx`), given that first count.
+    It has no dismiss control (`Notice`'s `dismissible={false}`) and is not a live region (`live={false}` drops
+    `role="status"`), so its changing number is never announced again.
+  - It keeps its own count. Polling: while the tab is visible, every 5 s, it reads `indexing` through the same-site
+    relay `GET /api/v1/conversations/current` (`src/app/api/v1/conversations/current/route.ts`: same-origin check, the
+    session, `no-store`, `nosniff`) with `fetchIndexing` (`src/client/conversation.ts`), each read bounded to 4 s. A new
+    number replaces the shown one; null hides the notice and stops polling; a failed (or hung) read keeps the number and
+    changes nothing else; after 10 minutes of successful reads without a change polling stops and the line stays; a new
+    count from the page (the layout rendered again by another refresh) shows at once and starts polling again. It never
+    calls `router.refresh()`, so a page (the questions page's turns) is never re-rendered for it.
+  - The number is formatted for the language ("2.000" / "2,000"), and one passage left has its own sentence
+    (`notice.indexingOne`: "falta 1 trecho" / "1 passage left").
+  - The Shell's notice slot is a list (`notices`), one line each, in this order: a campaign that cannot be loaded
+    (danger), the newest material that needs review (warning, dismissible), then the indexing notice. A campaign error no
+    longer hides the needs-review notice.
+  - The stand-in backend answers `indexing: null` (its sources are indexed), so a test-mode shell shows no indexing
+    notice and reads no count.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -488,6 +512,12 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+From public contract 1.15.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.15.0 (the indexing notice): the backend first (`indexing` on the current
+conversation, no migration), then the frontend (its health check fails against a 1.14.0 backend). The worker does not
+change. A rollback goes the other way.
 
 Deploy order for public contract 1.14.0 (Story 2.7): the backend first (the reference page and picture routes, no
 migration), then the frontend (its health check fails against a 1.13.0 backend). The worker does not change. A
