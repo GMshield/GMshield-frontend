@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { picturePath, relayPicture, type PictureRequest } from '@/server/backend/picture-relay';
+import { picturePath, referencePicturePath, relayPicture, relayReferencePicture, type PictureRequest } from '@/server/backend/picture-relay';
 
 import { captureOutput } from './support/capture';
 import { closedAddress, startScripted, type Scripted } from './support/servers';
@@ -150,5 +150,63 @@ describe('picture relay (Story 1.19)', () => {
     expect(answer.status).toBe(503);
     expect((await answer.json()).code).toBe('server.unavailable');
     expect(output.lines()).toContainEqual(expect.objectContaining({ level: 'WARN', event: 'picture.backend_unreachable' }));
+  });
+});
+
+describe('picture relay of a reference page (Story 2.7)', () => {
+  const TURN = '0190a0b0-0000-7000-8000-000000000021';
+  const PATH = `/api/v1/turns/${TURN}/references/2/pages/13/picture`;
+  beforeEach(() => {
+    vi.stubEnv('GMSHIELD_MODE', '');
+    vi.stubEnv('GMSHIELD_BACKEND_URL', 'http://backend.invalid:8080');
+    vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('maps only a turn id, a reference number and a page number to the backend path, which is its ground', () => {
+    expect(referencePicturePath(TURN, '2', '13')).toBe(PATH);
+    for (const [id, number, page] of [
+      ['..', '1', '1'],
+      ['not-a-uuid', '1', '1'],
+      [`${TURN}/..`, '1', '1'],
+      [TURN, '0', '1'],
+      [TURN, '01', '1'],
+      [TURN, '1?ground=review', '1'],
+      [TURN, '1', '0'],
+      [TURN, '1', '1.5'],
+      [TURN, '1', '12345678'],
+    ] as const) {
+      expect(referencePicturePath(id, number, page), `${id} ${number} ${page}`).toBeNull();
+    }
+  });
+
+  it('streams the WebP back as the material picture does, and drops a malformed path without reaching the backend', async () => {
+    const picture = webp(1000);
+    const fake = vi.fn(async () => new Response(new Blob([picture]).stream(), { status: 200, headers: { 'Content-Type': 'image/webp', 'Content-Length': '1000' } }));
+    captureOutput();
+    const answer = await relayReferencePicture(incoming({ traceparent: TRACEPARENT }, { ground: undefined }), TURN, '2', '13', { fetch: fake as typeof fetch });
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('image/webp');
+    expect(answer.headers.get('cache-control')).toBe('no-store');
+    expect(answer.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(new Uint8Array(await answer.arrayBuffer())).toEqual(picture);
+    const [url, init] = fake.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`http://backend.invalid:8080${PATH}`);
+    expect(new Headers(init.headers).get('x-session-token')).toBe(SESSION);
+
+    fake.mockClear();
+    for (const [id, number, page] of [
+      ['nope', '1', '1'],
+      [TURN, 'x', '1'],
+      [TURN, '1', '-1'],
+    ] as const) {
+      const refused = await relayReferencePicture(incoming(), id, number, page, { fetch: fake as unknown as typeof fetch });
+      expect(refused.status).toBe(404);
+      expect((await refused.json()).code).toBe('request.not_found');
+    }
+    expect(fake).not.toHaveBeenCalled();
   });
 });

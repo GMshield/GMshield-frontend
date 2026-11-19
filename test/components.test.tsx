@@ -326,7 +326,7 @@ describe('PageView (Story 1.19)', () => {
   };
 
   it('draws a picture page as one SVG in its pixels: frame, picture, then one transparent text per line fitted to its box', () => {
-    const { container } = render(<PageView page={picturePage} materialId={MATERIAL} language="pt-BR" />);
+    const { container } = render(<PageView page={picturePage} pictureSrc={pictureUrl(MATERIAL, 13)} language="pt-BR" />);
     const svg = container.querySelector('svg')!;
     expect(svg.getAttribute('viewBox')).toBe('0 0 1545 2000');
     expect(svg.getAttribute('role')).toBe('group');
@@ -358,7 +358,7 @@ describe('PageView (Story 1.19)', () => {
 
   it('shows a text page as its text with its line breaks, never as HTML, and no picture', () => {
     const page = { page: 2, pageTotal: 9, picture: null, lines: [], text: '# Regras\n\n<b>negrito</b>', passages: [], outcome: 'read_directly' };
-    const { container } = render(<PageView page={page} materialId={MATERIAL} language="en" />);
+    const { container } = render(<PageView page={page} pictureSrc={pictureUrl(MATERIAL, 2)} language="en" />);
     expect(container.querySelector('svg')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
     const text = container.querySelector('figure > div')!;
@@ -372,10 +372,96 @@ describe('PageView (Story 1.19)', () => {
   it('builds the relayed picture URL, and draws a line with no width without stretching it', () => {
     expect(pictureUrl(MATERIAL, 7)).toBe(`/api/v1/materials/${MATERIAL}/pages/7/picture?ground=review`);
     const page = { ...picturePage, lines: [{ text: 'x', box: [0.5, 0.5, 0.5, 0.5] }] };
-    const { container } = render(<PageView page={page} materialId={MATERIAL} language="pt-BR" />);
+    const { container } = render(<PageView page={page} pictureSrc={pictureUrl(MATERIAL, 13)} language="pt-BR" />);
     const text = container.querySelector('text')!;
     expect(text.getAttribute('textLength')).toBeNull();
     expect(text.getAttribute('font-size')).toBe('0.9');
+  });
+});
+
+describe('PageView marks the cited passages (Story 2.7)', () => {
+  const CITED = '0190a0b0-0000-7000-8000-000000000009';
+  const OTHER = '0190a0b0-0000-7000-8000-00000000000b';
+  const SRC = '/api/v1/turns/0190a0b0-0000-7000-8000-000000000021/references/1/pages/13/picture';
+  const picturePage = {
+    page: 13,
+    pageTotal: 364,
+    picture: { width: 1000, height: 2000 },
+    lines: [
+      { text: 'Armor', box: [0.1, 0.05, 0.3, 0.07] },
+      { text: 'Fire Bolt', box: [0.1, 0.2, 0.5, 0.22] },
+      { text: '1d10 fire damage', box: [0.1, 0.23, 0.6, 0.25] },
+      { text: 'Plate | 1,500 gp', box: [0.1, 0.5, 0.6, 0.52] },
+    ],
+    text: null,
+    passages: [
+      { id: CITED, boxes: [[0.1, 0.19, 0.7, 0.26]] },
+      { id: OTHER, boxes: [[0.1, 0.49, 0.7, 0.53]] },
+    ],
+    outcome: 'read_directly',
+  };
+
+  it('draws each box of a cited passage as a rect under the passage mark, and groups its lines as the cited passage', () => {
+    const { container } = render(<PageView page={picturePage} pictureSrc={SRC} language="pt-BR" cited={[CITED]} />);
+    const svg = container.querySelector('svg')!;
+    expect(svg.querySelector('image')!.getAttribute('href')).toBe(SRC);
+    const marks = [...svg.querySelectorAll('rect')].filter((rect) => /passage/.test(rect.getAttribute('class') ?? ''));
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.getAttribute('x')).toBe('100');
+    expect(marks[0]!.getAttribute('y')).toBe('380');
+    expect(marks[0]!.getAttribute('width')).toBe('600');
+    expect(marks[0]!.getAttribute('height')).toBe('140');
+    expect(marks[0]!.getAttribute('aria-hidden')).toBe('true');
+    const group = screen.getByRole('group', { name: 'trecho citado' });
+    expect(group.tagName.toLowerCase()).toBe('g');
+    expect([...group.querySelectorAll('text')].map((text) => text.textContent)).toEqual(['Fire Bolt', '1d10 fire damage']);
+    // Every line keeps its reading order; the uncited ones stand alone.
+    expect([...svg.querySelectorAll('text')].map((text) => text.textContent)).toEqual(picturePage.lines.map((line) => line.text));
+    expect(svg.querySelectorAll('g')).toHaveLength(1);
+    expectNoStyleAttribute(container);
+  });
+
+  it('marks nothing on a page without a cited passage', () => {
+    const { container } = render(<PageView page={picturePage} pictureSrc={SRC} language="en" cited={['0190a0b0-0000-7000-8000-0000000000ff']} />);
+    expect([...container.querySelectorAll('svg > *')].map((child) => child.tagName.toLowerCase())).toEqual(['rect', 'image', 'text', 'text', 'text', 'text']);
+    expect(screen.queryByRole('group', { name: 'cited passage' })).toBeNull();
+    cleanup();
+    const text = { page: 2, pageTotal: 3, picture: null, lines: [], text: 'Fire Bolt.', passages: [{ id: OTHER, range: [0, 4] }], outcome: null };
+    const { container: plain } = render(<PageView page={text} pictureSrc={SRC} language="en" cited={[CITED]} />);
+    expect(plain.querySelector('mark')).toBeNull();
+    expect(plain.querySelector('figure > div')!.textContent).toBe('Fire Bolt.');
+  });
+
+  it('wraps the code-point range of each cited passage of a text page in a mark announced as the cited passage', () => {
+    // An emoji is one code point and two UTF-16 units: ranges count code points, as the backend does.
+    const text = '🔥 Fire Bolt: 1d10. <b>Plate</b> AC 18.';
+    const page = {
+      page: 2,
+      pageTotal: 3,
+      picture: null,
+      lines: [],
+      text,
+      passages: [
+        { id: CITED, range: [2, 18] },
+        { id: OTHER, range: [19, 31] },
+      ],
+      outcome: 'read_directly',
+    };
+    const { container } = render(<PageView page={page} pictureSrc={SRC} language="en" cited={[CITED]} />);
+    const marks = [...container.querySelectorAll('mark')];
+    expect(marks.map((mark) => mark.textContent)).toEqual(['Fire Bolt: 1d10.']);
+    expect(marks[0]!.getAttribute('class')).toMatch(/mark/);
+    expect(screen.getByRole('group', { name: 'cited passage' }).firstElementChild).toBe(marks[0]);
+    const block = container.querySelector('figure > div')!;
+    expect(block.textContent).toBe(text);
+    expect(block.querySelector('b')).toBeNull();
+    cleanup();
+    // Two cited passages that overlap become one mark.
+    const both = { ...page, passages: [{ id: CITED, range: [2, 12] }, { id: OTHER, range: [8, 18] }] };
+    const { container: merged } = render(<PageView page={both} pictureSrc={SRC} language="pt-BR" cited={[CITED, OTHER]} />);
+    expect([...merged.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['Fire Bolt: 1d10.']);
+    expect(screen.getAllByRole('group', { name: 'trecho citado' })).toHaveLength(1);
+    expectNoStyleAttribute(merged);
   });
 });
 

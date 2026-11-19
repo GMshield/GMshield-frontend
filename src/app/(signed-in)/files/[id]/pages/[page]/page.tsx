@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { notFoundFor } from '@/app/not-found';
 import { Notice } from '@/components/Notice';
-import { PageView } from '@/components/PageView';
+import { PageView, pictureUrl } from '@/components/PageView';
 import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { getMaterial, getPage } from '@/server/materials';
@@ -58,10 +58,10 @@ export default async function MaterialPageView({
           <figcaption className={styles.caption}>{t('pageView.position', { page: view.page, total: view.pageTotal })}</figcaption>
         </figure>
       ) : view.picture === null ? (
-        <PageView page={view} materialId={id} language={language} />
+        <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} />
       ) : (
         <div className={styles.beside}>
-          <PageView page={view} materialId={id} language={language} />
+          <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} />
           <section className={styles.extracted} aria-labelledby="extracted-text">
             <h2 id="extracted-text" className={styles.extractedHeading}>
               {t('pageView.extracted')}

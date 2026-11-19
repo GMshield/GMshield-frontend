@@ -1,6 +1,7 @@
 /*
  * Three columns: the sidebar (Sidebar.module.css places itself in `sidebar`), the main column, and one right
- * panel slot that narrows the main column when a panel is open. Only the middle one is always there.
+ * panel slot that narrows the main column when a panel is open. Only the middle one is always there. Story 2.7: the
+ * source view fills the slot (`data-panel="source"`) at its own width, and opens over the main column under 1280px.
  */
 .shell {
   display: grid;
@@ -49,6 +50,33 @@
   border-radius: var(--radius-panel) 0 0 var(--radius-panel);
   background-color: var(--color-surface);
   backdrop-filter: var(--glass-blur);
+}
+
+/* Story 2.7: the source view. At 1280px and more it is a 560px column and the main column narrows. */
+.shell[data-panel='source'] .panel {
+  width: var(--width-source-view);
+}
+
+@media (max-width: 1279px) {
+  /* Over the main column, at the right (the main column behind it is inert); under the open sidebar. */
+  .shell[data-panel='source'] .panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  /* A full-screen sheet. */
+  .shell[data-panel='source'] .panel {
+    left: 0;
+    width: 100%;
+    border-radius: 0;
+  }
 }
 
 .signedInAs {

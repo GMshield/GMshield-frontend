@@ -9,7 +9,8 @@ import { outgoingTraceparent, traceFrom } from './trace';
 
 /**
  * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
- * turn's answer as server-sent events, and the GM's stop of an answer (Story 2.6). The backend takes the owner from
+ * turn's answer as server-sent events, the GM's stop of an answer (Story 2.6), and a page a turn's source reference
+ * names (Story 2.7). The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -18,9 +19,13 @@ const UNIT = 'server.conversations';
 type Schemas = components['schemas'];
 export type CurrentConversation = Schemas['CurrentConversation'];
 export type Turn = Schemas['Turn'];
+/** A page a reference names (Story 2.7): the same shape as a material's page on the review ground. */
+export type ReferencePage = Schemas['MaterialPageView'];
 
 /** A campaign or turn id as the backend mints it (a UUID); anything else is one nowhere. */
 const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
+/** A reference or page number as the backend reads it: from 1, no sign, no leading zero. */
+const NUMBER = /^[1-9]\d{0,6}$/;
 /** A `Last-Event-ID` as the backend writes them: a sequence. Anything else is not forwarded. */
 const SEQUENCE = /^\d{1,18}$/;
 const PROBLEM = 'application/problem+json';
@@ -51,6 +56,30 @@ export function stopTurn(sessionToken: string, turnId: string, options: CallOpti
   return call('conversations.stop', options, (client) =>
     client.POST('/api/v1/turns/{turnId}/stop', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
   );
+}
+
+/**
+ * One page of the version the turn's reference `number` names (Story 2.7), any page from 1 to its page total;
+ * `request.not_found` for a turn that is not the account's, no such reference, a source removed since, or a page that
+ * is not one.
+ */
+export function referencePage(
+  sessionToken: string,
+  turnId: string,
+  number: string,
+  page: string,
+  options: CallOptions = {},
+): Promise<Result<ReferencePage>> {
+  return call('conversations.reference_page', options, (client) =>
+    client.GET('/api/v1/turns/{turnId}/references/{number}/pages/{page}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { turnId, number: Number(number), page: Number(page) } },
+    }),
+  );
+}
+
+/** Whether a text can be a reference's or a page's number. */
+export function isNumber(text: string): boolean {
+  return NUMBER.test(text);
 }
 
 /** Whether an id can be a campaign's or a turn's. */

@@ -386,7 +386,9 @@
     "navigation": "Páginas",
     "extracted": "Texto extraído",
     "noText": "Nenhum texto foi extraído desta página.",
-    "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório."
+    "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório.",
+    "citedPassage": "trecho citado",
+    "loadFailed": "Não foi possível carregar esta página."
   },
   "conversation": {
     "heading": "Consultas",
@@ -423,6 +425,7 @@
       "noSources": "Esta campanha ainda não tem fontes aceitas.",
       "upload": "Enviar um arquivo",
       "review": "Revisar {name}"
-    }
+    },
+    "close": "Fechar a fonte"
   }
 }

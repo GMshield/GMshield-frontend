@@ -342,7 +342,7 @@ they sit in `src/`.
     the number, which the model's own text never keeps, and a small rehype step turns it into `<sup>`). A citation
     with no matching reference shows nothing. Under the answer and above the closing rule, `References` lists the
     references in label type, one line each: the material's name, the section path joined with " › ", and "p. N"; a
-    removed one is struck through, followed by "fonte removida" / "source removed". Nothing opens yet (Story 2.7).
+    removed one is struck through, followed by "fonte removida" / "source removed". Story 2.7 opens the others.
   - A silent answer (`silent: true`) replaces whatever streamed with "As fontes não dizem nada sobre isso." / "The
     sources say nothing about this.", in the turn's language (the interface's when it is null): no list, no
     superscript and no language label.
@@ -373,6 +373,37 @@ they sit in `src/`.
     `job.attempts_exhausted`, `job.claim_lapsed`, …): "O serviço de IA está indisponível agora." with "Tentar de
     novo". A refusal and an outage hide any partial text. "Tentar de novo" asks the same question again as a new turn,
     in place of the failed one.
+- **Open the cited page in the source view (Story 2.7).** Public contract 1.14.0.
+  - The line of a reference that is not removed is a button named by its line; a removed one stays struck through and
+    opens nothing, and the superscripts stay plain text. Selecting it opens `SourceView`
+    (`src/components/SourceView.tsx`) at once with the empty frame and "p. N"; selecting another reference replaces its
+    page and its focus target.
+  - The page comes from `GET /api/v1/turns/{id}/references/{number}/pages/{page}` (`fetchReferencePage` in
+    `src/client/conversation.ts`) through the relay
+    `src/app/api/v1/turns/[id]/references/[number]/pages/[page]/route.ts` (same-origin check, `isId` and `isNumber`,
+    session; `referencePage` in `src/server/conversations.ts` through the typed client; no-store). Its picture comes
+    from `.../picture` through the picture relay (`relayReferencePicture` in `src/server/backend/picture-relay.ts`,
+    whose path is its ground). A malformed id or number answers "not found" without reaching the backend. The backend
+    checks the turn, its campaign and the reference, and serves the version the reference names.
+  - `PageView` takes the picture's address (`pictureSrc`) and `cited`, the reference's passage ids. On a picture page
+    each box of a cited passage is an SVG `<rect>` filled with `--color-passage-mark` (a translucent accent in every
+    theme), and the lines within a cited box sit in a group named "trecho citado" / "cited passage"; on a text page each
+    cited code-point `range` is a `<mark>` in such a group. A page without a cited passage marks nothing.
+  - A page that fails to load (404, 401, 5xx, no network: `fetchReferencePage` answers null) shows "Não foi possível
+    carregar esta página." / "This page could not be loaded." with "Tentar de novo" / "Try again", which loads the same
+    page again. An unreadable page with nothing on it (`picture` and `text` both null) shows `pageView.unopened`.
+  - The panel is a non-modal `<dialog>` named by its source line. On open focus goes to its close control; with focus in
+    it ← and → move one page, as the footer's controls do (disabled at the first and last page; a control that becomes
+    disabled hands focus to the other); with Alt, Ctrl, Meta or Shift the arrows are left to the browser. Esc or the
+    close control closes it and focus goes back to the reference; selecting the open reference again reopens it at its
+    cited page. The conversation's Esc listener skips a dialog, so that Esc never stops a running answer.
+  - The shell's panel slot is `ShellFrame` (`src/components/ShellPanel.tsx`), which the conversation fills from the
+    browser with `ShellPanel` (a portal; in place outside a shell). At 1280px and more it is a 560px column and the main
+    column narrows, with nothing inert; under 1280px it opens over the main column, which is inert while it is open
+    (`data-behind-panel`; `setInertBy` keeps the sidebar's and the panel's inert apart); under 768px it is a full-screen
+    sheet.
+  - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
+    with a text page whose cited range is marked.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -457,6 +488,10 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+Deploy order for public contract 1.14.0 (Story 2.7): the backend first (the reference page and picture routes, no
+migration), then the frontend (its health check fails against a 1.13.0 backend). The worker does not change. A
+rollback goes the other way.
 
 Deploy order for public contract 1.13.0 (Story 2.6): the backend first (its migration `V19__answer_stop.sql`, the
 stop route and `stopped` on `done`), then the worker (internal contract 1.11.0: it obeys the stop and reports an

@@ -47,3 +47,14 @@
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
 }
+
+/* Story 2.7: a cited passage's box on a picture page, under the translucent accent mark. */
+.passage {
+  fill: var(--color-passage-mark);
+}
+
+/* Story 2.7: a cited passage's range in a text page's text. */
+.mark {
+  background-color: var(--color-passage-mark);
+  color: inherit;
+}

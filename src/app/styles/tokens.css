@@ -129,6 +129,8 @@
   --color-chip: var(--dark-chip);
   --color-chip-icon: var(--dark-chip-icon);
   --color-accent: var(--dark-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--dark-accent) 30%, transparent);
   --color-danger: var(--dark-danger);
   --color-warning: var(--dark-warning);
   --color-success: var(--dark-success);
@@ -155,6 +157,8 @@
   --color-chip: var(--light-chip);
   --color-chip-icon: var(--light-chip-icon);
   --color-accent: var(--light-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--light-accent) 20%, transparent);
   --color-danger: var(--light-danger);
   --color-warning: var(--light-warning);
   --color-success: var(--light-success);
@@ -188,6 +192,8 @@
   --color-chip: var(--illustrated-chip);
   --color-chip-icon: var(--illustrated-chip-icon);
   --color-accent: var(--illustrated-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--illustrated-accent) 30%, transparent);
   --color-danger: var(--illustrated-danger);
   --color-warning: var(--illustrated-warning);
   --color-success: var(--illustrated-success);

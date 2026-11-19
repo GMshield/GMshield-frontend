@@ -363,3 +363,107 @@ describe("the browser's stop call and stream address (Story 2.6)", () => {
     expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, references: [reference] });
   });
 });
+
+describe('the reference page relay and the browser fetcher (Story 2.7)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const PAGE = {
+    page: 13,
+    pageTotal: 14,
+    picture: { width: 1545, height: 2000 },
+    lines: [{ text: 'Fire Bolt', box: [0.1, 0.2, 0.9, 0.25] }],
+    text: null,
+    passages: [{ id: '0190a0b0-0000-7000-8000-000000000009', boxes: [[0.1, 0.2, 0.9, 0.3]] }],
+    outcome: 'read_directly',
+  };
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+
+  async function read(headers: Record<string, string>, id = TURN, number = '1', page = '13'): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const { GET } = await import('@/app/api/v1/turns/[id]/references/[number]/pages/[page]/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/references/${number}/pages/${page}`, { headers: { host: 'gm.test', ...headers } });
+    return GET(request, { params: Promise.resolve({ id, number, page }) });
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  it('reads the page through the typed client with the session, never stored', async () => {
+    const backend = await useBackend({ [`GET /api/v1/turns/${TURN}/references/1/pages/13`]: { status: 200, body: PAGE } });
+
+    const answer = await read({ 'sec-fetch-site': 'same-origin', cookie });
+
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual(PAGE);
+    expect(answer.headers.get('cache-control')).toBe('no-store');
+    expect(answer.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(backend.calls).toHaveLength(1);
+    expect(backend.calls[0]!.url).toBe(`/api/v1/turns/${TURN}/references/1/pages/13`);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.cookie).toBeUndefined();
+  });
+
+  it('drops another origin, a malformed id or number and no session without reaching the backend', async () => {
+    const backend = await useBackend({});
+    expect((await read({ origin: 'http://evil.test', cookie })).status).toBe(403);
+    for (const [id, number, page] of [
+      ['nope', '1', '13'],
+      [TURN, '0', '13'],
+      [TURN, '01', '13'],
+      [TURN, 'x', '13'],
+      [TURN, '1', '0'],
+      [TURN, '1', '-1'],
+      [TURN, '1', '1.5'],
+      [TURN, '1', '99999999'],
+    ] as const) {
+      const refused = await read({ origin: 'http://gm.test', cookie }, id, number, page);
+      expect(refused.status, `${id} ${number} ${page}`).toBe(404);
+      expect(await refused.json()).toMatchObject({ code: 'request.not_found' });
+    }
+    expect((await read({ origin: 'http://gm.test' })).status).toBe(401);
+    expect(backend.calls).toEqual([]);
+  });
+
+  it('passes a removed source or another owner\'s turn on as not found', async () => {
+    await useBackend({
+      [`GET /api/v1/turns/${TURN}/references/1/pages/13`]: { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } },
+    });
+    const refused = await read({ origin: 'http://gm.test', cookie });
+    expect(refused.status).toBe(404);
+    expect(refused.headers.get('content-type')).toBe('application/problem+json');
+  });
+
+  it('fetches from the relay on this site: the page, or null for a refusal, a malformed answer or no answer', async () => {
+    const { fetchReferencePage, referencePictureUrl } = await import('@/client/conversation');
+    const send = vi.fn(async () => Response.json(PAGE));
+    vi.stubGlobal('fetch', send);
+    expect(await fetchReferencePage(TURN, 1, 13)).toEqual(PAGE);
+    expect(send).toHaveBeenCalledWith(`/api/v1/turns/${TURN}/references/1/pages/13`, expect.objectContaining({ cache: 'no-store' }));
+    const text = { ...PAGE, picture: null, lines: [], text: 'abc', passages: [{ id: 'p', range: [0, 2] }] };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(text)));
+    expect(await fetchReferencePage(TURN, 1, 2)).toEqual(text);
+
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 'request.not_found' }, { status: 404 })));
+    expect(await fetchReferencePage(TURN, 1, 13)).toBeNull();
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...PAGE, lines: [{ text: 1 }] })));
+    expect(await fetchReferencePage(TURN, 1, 13)).toBeNull();
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...PAGE, passages: [{ id: 'p', boxes: [[1, 2]] }] })));
+    expect(await fetchReferencePage(TURN, 1, 13)).toBeNull();
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await fetchReferencePage(TURN, 1, 13)).toBeNull();
+    expect(referencePictureUrl(TURN, 2, 7)).toBe(`/api/v1/turns/${TURN}/references/2/pages/7/picture`);
+  });
+});

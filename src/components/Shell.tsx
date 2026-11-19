@@ -10,6 +10,7 @@ import { ContextBar } from './ContextBar';
 import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
 import styles from './Shell.module.css';
+import { ShellFrame } from './ShellPanel';
 import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
 import { Sidebar } from './Sidebar';
 import type { Belonging, Material } from './uploads/types';
@@ -24,7 +25,10 @@ export type ShellProps = {
   readonly sidebar: SidebarState;
   /** A line at the top of the main column, such as a failure to load the current campaign. */
   readonly notice?: ReactNode;
-  /** The right panel, when one is open: it narrows the main column. None yet. */
+  /**
+   * A right panel rendered on the server, when one is open: it narrows the main column. From Story 2.7 the source view
+   * fills the same slot from the browser (`ShellPanel`).
+   */
   readonly panel?: ReactNode;
   /** The current campaign and its system with their ids, which the guided upload offers (Story 1.14). */
   readonly belonging?: Belonging;
@@ -40,6 +44,7 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * The signed-in shell (Story 1.11): the sidebar, the context bar and the main column, in that order in the page
  * (and so in Tab order), and room for one right panel. The main column is centred and never wider than the
  * reading width. Around it, the uploads of this tab (Story 1.14), which go on while the GM moves inside the app.
+ * Story 2.7: the grid and its panel slot are `ShellFrame`'s, which a page's source view fills from the browser.
  */
 export function Shell({ preferences, username, current, sidebar, notice, panel, belonging = null, trayRows = [], children }: ShellProps) {
   const t = translator(preferences.language);
@@ -48,7 +53,7 @@ export function Shell({ preferences, username, current, sidebar, notice, panel, 
   ) as Record<EntryKey, string>;
   return (
     <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging} imageSets={IMAGE_SETS}>
-      <div className={styles.shell} data-panel={panel === undefined ? 'none' : 'open'}>
+      <ShellFrame panel={panel}>
         <Sidebar
           labels={{
             name: t('shell.name'),
@@ -72,19 +77,14 @@ export function Shell({ preferences, username, current, sidebar, notice, panel, 
             </>
           }
         />
-        <div className={styles.column} data-behind-sidebar="">
+        <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
           <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} />
           <main className={styles.main}>
             {notice}
             {children}
           </main>
         </div>
-        {panel === undefined ? null : (
-          <aside className={styles.panel} data-behind-sidebar="">
-            {panel}
-          </aside>
-        )}
-      </div>
+      </ShellFrame>
     </UploadsProvider>
   );
 }

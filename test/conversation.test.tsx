@@ -84,7 +84,11 @@ function UploadState() {
   return <p data-testid="upload-state">{useUploads().uploadOpen ? 'open' : 'closed'}</p>;
 }
 
-function view(options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review?: { href: string; name: string } | null } = {}) {
+type LoadPage = (turnId: string, number: number, page: number, signal: AbortSignal) => Promise<unknown>;
+
+function view(
+  options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review?: { href: string; name: string } | null; loadPage?: LoadPage } = {},
+) {
   return render(
     <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={null} urlStorage={memoryStorage()}>
       <Conversation
@@ -97,6 +101,7 @@ function view(options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review
           streams.push(stream);
           return stream as unknown as EventSource;
         }}
+        loadPage={options.loadPage as never}
       />
       <UploadState />
     </UploadsProvider>,
@@ -543,8 +548,12 @@ describe('sources under every answer (Story 2.5)', () => {
     const struck = items[1]!.querySelector('s');
     expect(struck?.textContent).toBe('Bestiário.pdf, p. 12');
     expect(items[0]!.querySelector('s')).toBeNull();
-    // References open nothing yet (Story 2.7).
-    expect(list.querySelector('a, button')).toBeNull();
+    // Story 2.7: a reference's line is a button named by its line; a removed one has none and stays struck through.
+    expect(within(items[0]!).getByRole('button').textContent).toBe('Livro do Jogador.pdf, Magias › Fire Bolt, p. 3');
+    expect(within(items[0]!).getByRole('button', { name: 'Livro do Jogador.pdf, Magias › Fire Bolt, p. 3' })).toBeTruthy();
+    expect(items[1]!.querySelector('a, button')).toBeNull();
+    // The superscripts stay plain text.
+    expect(document.querySelector('sup a, sup button')).toBeNull();
     // Under the answer, above the closing rule.
     const turn = list.closest('li')!;
     const order = [...turn.children].map((child) => child.tagName);
@@ -939,5 +948,333 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     failed.emit('error', { code: 'model.unavailable' }, 1);
     expect(turns().getByText('The AI service is unavailable right now.')).toBeTruthy();
     expect(turns().getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('open the cited page in the source view (Story 2.7)', () => {
+  const PICTURE_PAGE = (page: number) => ({
+    page,
+    pageTotal: 4,
+    picture: { width: 1000, height: 2000 },
+    lines: [{ text: `Linha ${page}`, box: [0.1, 0.2, 0.5, 0.22] }],
+    text: null,
+    passages: page === 3 ? [{ id: PASSAGE_A, boxes: [[0.1, 0.19, 0.7, 0.26]] }] : [],
+    outcome: 'read_directly',
+  });
+  let load: ReturnType<typeof vi.fn<LoadPage>>;
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+    load = vi.fn<LoadPage>(async (_turn, _number, page) => PICTURE_PAGE(page));
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  /** A finished answer citing A (reference 1, p. 3) and B (reference 2, p. 12, or removed). */
+  async function answered(removed = false): Promise<void> {
+    const stream = await ask('Quanto dano?');
+    stream.emit('delta', { text: 'Um. Dois.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 }, 2);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 }, 3);
+    stream.emit(
+      'done',
+      {
+        stopped: false,
+        silent: false,
+        references: [reference(1, [PASSAGE_A]), reference(2, [PASSAGE_B], { materialName: 'Bestiário.pdf', sectionPath: [], page: 12, removed })],
+      },
+      4,
+    );
+  }
+
+  function referenceButton(name: string): HTMLButtonElement {
+    return within(screen.getAllByRole('list', { name: /^(Fontes|Sources)$/ })[0]!).getByRole('button', { name }) as HTMLButtonElement;
+  }
+
+  const FIRST = 'Livro do Jogador.pdf, Magias › Fire Bolt, p. 3';
+
+  it('opens the panel at once with the frame and p. N, focus on its close control, then the page with the cited passage marked', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    load.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+
+    await user.click(referenceButton(FIRST));
+
+    const dialog = screen.getByRole('dialog', { name: 'Livro do Jogador.pdf, Magias › Fire Bolt' });
+    expect(within(dialog).getByText('p. 3')).toBeTruthy();
+    expect(dialog.querySelector('[class*="frame"]')).not.toBeNull();
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Fechar a fonte' }));
+    expect(load).toHaveBeenCalledWith(TURN, 1, 3, expect.any(AbortSignal));
+
+    await act(async () => answer(PICTURE_PAGE(3)));
+
+    const image = dialog.querySelector('image')!;
+    expect(image.getAttribute('href')).toBe(`/api/v1/turns/${TURN}/references/1/pages/3/picture`);
+    expect(within(dialog).getByRole('group', { name: 'trecho citado' }).textContent).toBe('Linha 3');
+    expect(dialog.querySelectorAll('rect[class*="passage"]')).toHaveLength(1);
+    // The page number shows once, in the footer: no "Página 3 de 4" caption under the page.
+    expect(dialog.querySelector('figcaption')).toBeNull();
+    expect(within(dialog).getByText('p. 3')).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain('style=');
+  });
+
+  it('moves one page with the arrows only while focus is in the panel, and with the footer controls, disabled at either end', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    await user.click(referenceButton(FIRST));
+    const dialog = screen.getByRole('dialog');
+    await waitFor(() => expect(dialog.querySelector('image')).not.toBeNull());
+
+    await user.keyboard('{ArrowRight}');
+    await within(dialog).findByRole('group', { name: 'Página 4 de 4' });
+    expect(load).toHaveBeenLastCalledWith(TURN, 1, 4, expect.any(AbortSignal));
+    // The next page: nothing on it is cited.
+    expect(within(dialog).queryByRole('group', { name: 'trecho citado' })).toBeNull();
+    const next = within(dialog).getByRole('button', { name: 'Próxima página' }) as HTMLButtonElement;
+    const previous = within(dialog).getByRole('button', { name: 'Página anterior' }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    await user.keyboard('{ArrowRight}');
+    expect(load).toHaveBeenCalledTimes(2);
+
+    await user.click(previous);
+    await within(dialog).findByRole('group', { name: 'Página 3 de 4' });
+    await user.keyboard('{ArrowLeft}{ArrowLeft}');
+    await within(dialog).findByRole('group', { name: 'Página 1 de 4' });
+    expect(previous.disabled).toBe(true);
+    // Previous reached the first page with focus on it: focus moved exactly to Next.
+    expect(document.activeElement).toBe(next);
+    const calls = load.mock.calls.length;
+    await user.keyboard('{ArrowLeft}');
+    expect(load).toHaveBeenCalledTimes(calls);
+
+    // With focus outside the panel, the arrows do nothing to it.
+    composer().focus();
+    await user.keyboard('{ArrowRight}');
+    expect(load).toHaveBeenCalledTimes(calls);
+    expect(within(dialog).getByText('p. 1')).toBeTruthy();
+  });
+
+  it('gives focus to Previous when Next reaches the last page, and to Next when Previous reaches the first', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    await user.click(referenceButton(FIRST));
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByRole('group', { name: 'Página 3 de 4' });
+    const next = within(dialog).getByRole('button', { name: 'Próxima página' }) as HTMLButtonElement;
+    const previous = within(dialog).getByRole('button', { name: 'Página anterior' }) as HTMLButtonElement;
+
+    await user.click(next);
+    await within(dialog).findByRole('group', { name: 'Página 4 de 4' });
+    expect(next.disabled).toBe(true);
+    expect(document.activeElement).toBe(previous);
+
+    await user.click(previous);
+    await within(dialog).findByRole('group', { name: 'Página 3 de 4' });
+    expect(document.activeElement).toBe(previous);
+    await user.click(previous);
+    await within(dialog).findByRole('group', { name: 'Página 2 de 4' });
+    await user.click(previous);
+    await within(dialog).findByRole('group', { name: 'Página 1 de 4' });
+    expect(previous.disabled).toBe(true);
+    expect(document.activeElement).toBe(next);
+  });
+
+  it('leaves the arrows with Alt, Ctrl, Meta or Shift to the browser', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    await user.click(referenceButton(FIRST));
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByRole('group', { name: 'Página 3 de 4' });
+
+    for (const modifier of ['Alt', 'Control', 'Meta', 'Shift']) {
+      await user.keyboard(`{${modifier}>}{ArrowLeft}{ArrowRight}{/${modifier}}`);
+    }
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByText('p. 3')).toBeTruthy();
+  });
+
+  it('reopens the open reference at its cited page, focus on the close control, when it is selected again', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    const button = referenceButton(FIRST);
+    await user.click(button);
+    await within(screen.getByRole('dialog')).findByRole('group', { name: 'Página 3 de 4' });
+    await user.keyboard('{ArrowRight}');
+    await within(screen.getByRole('dialog')).findByRole('group', { name: 'Página 4 de 4' });
+
+    await user.click(button);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('p. 3')).toBeTruthy();
+    expect(load).toHaveBeenLastCalledWith(TURN, 1, 3, expect.any(AbortSignal));
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Fechar a fonte' }));
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('closes with Esc or the close control and gives focus back to the reference', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    const button = referenceButton(FIRST);
+    await user.click(button);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button);
+
+    await user.click(button);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Fechar a fonte' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('closes with Esc while another answer runs, and the answer goes on', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    const button = referenceButton(FIRST);
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: '0190a0b0-0000-7000-8000-000000000022', conversationId: 'c', language: 'pt-BR' } });
+    await user.type(composer(), 'Outra?{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(2));
+    streams[1]!.emit('delta', { text: 'Respondendo agora' }, 1);
+    expect(screen.getByRole('button', { name: 'Parar' })).toBeTruthy();
+
+    await user.click(button);
+    expect(document.activeElement).toBe(within(screen.getByRole('dialog')).getByRole('button', { name: 'Fechar a fonte' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    expect(stopTurn).not.toHaveBeenCalled();
+    expect(streams[1]!.closed).toBe(false);
+    expect(screen.getByRole('button', { name: 'Parar' })).toBeTruthy();
+  });
+
+  it('replaces the page and the focus target when another reference is selected', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    await user.click(referenceButton(FIRST));
+    const second = referenceButton('Bestiário.pdf, p. 12');
+
+    await user.click(second);
+
+    const dialog = screen.getByRole('dialog', { name: 'Bestiário.pdf' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(dialog).getByText('p. 12')).toBeTruthy();
+    expect(load).toHaveBeenLastCalledWith(TURN, 2, 12, expect.any(AbortSignal));
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(second);
+  });
+
+  it('gives a removed reference no button', async () => {
+    view({ loadPage: load });
+    await answered(true);
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(within(items[1]!).queryByRole('button')).toBeNull();
+    expect(items[1]!.querySelector('s')?.textContent).toBe('Bestiário.pdf, p. 12');
+    expect(within(items[0]!).getByRole('button', { name: FIRST })).toBeTruthy();
+  });
+
+  it('shows the load-failure text and Tentar de novo when a page fails to load, and a retry loads the same page again', async () => {
+    load.mockResolvedValueOnce(null);
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+
+    await user.click(referenceButton(FIRST));
+
+    const dialog = screen.getByRole('dialog');
+    const failure = await within(dialog).findByRole('alert');
+    expect(failure.textContent).toBe('Não foi possível carregar esta página.');
+    expect(within(dialog).queryByText(/ilegível/)).toBeNull();
+    expect(within(dialog).getByText('p. 3')).toBeTruthy();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Tentar de novo' }));
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenLastCalledWith(TURN, 1, 3, expect.any(AbortSignal));
+    await waitFor(() => expect(dialog.querySelector('image')).not.toBeNull());
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByRole('group', { name: 'trecho citado' })).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('gives focus to the close control when an arrow moves the page with focus on Tentar de novo', async () => {
+    load.mockResolvedValueOnce(null);
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    await user.click(referenceButton(FIRST));
+    const dialog = screen.getByRole('dialog');
+    const retry = await within(dialog).findByRole('button', { name: 'Tentar de novo' });
+    retry.focus();
+
+    await user.keyboard('{ArrowLeft}');
+
+    await within(dialog).findByRole('group', { name: 'Página 2 de 4' });
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Fechar a fonte' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows the unopened text for an unreadable page with nothing on it, and no retry', async () => {
+    load.mockResolvedValue({ page: 3, pageTotal: 4, picture: null, lines: [], text: null, passages: [], outcome: 'unreadable' });
+    view({ loadPage: load });
+    await answered();
+
+    await userEvent.setup().click(referenceButton(FIRST));
+
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByText('Esta página não pôde ser aberta. Ela consta como ilegível no relatório.');
+    expect(within(dialog).queryByRole('button', { name: 'Tentar de novo' })).toBeNull();
+    expect(within(dialog).queryByText('Não foi possível carregar esta página.')).toBeNull();
+  });
+
+  it('marks the cited range of a text page, and has the source view strings in English too', async () => {
+    load.mockResolvedValue({
+      page: 3,
+      pageTotal: 3,
+      picture: null,
+      lines: [],
+      text: '# Magias\n\nFire Bolt causa 1d10.',
+      passages: [{ id: PASSAGE_A, range: [10, 31] }],
+      outcome: 'read_directly',
+    });
+    view({ loadPage: load, language: 'en' });
+    await answered();
+
+    await userEvent.setup().click(referenceButton(FIRST));
+
+    const dialog = screen.getByRole('dialog');
+    const group = await within(dialog).findByRole('group', { name: 'cited passage' });
+    expect(group.querySelector('mark')?.textContent).toBe('Fire Bolt causa 1d10.');
+    expect(within(dialog).getByRole('button', { name: 'Close the source' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Previous page' })).toBeTruthy();
+    expect((within(dialog).getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('has the load-failure text and its retry in English too', async () => {
+    load.mockResolvedValue(null);
+    view({ loadPage: load, language: 'en' });
+    await answered();
+
+    await userEvent.setup().click(referenceButton(FIRST));
+
+    const dialog = screen.getByRole('dialog');
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('This page could not be loaded.');
+    expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 });

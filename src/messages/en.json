@@ -386,7 +386,9 @@
     "navigation": "Pages",
     "extracted": "Extracted text",
     "noText": "No text was extracted from this page.",
-    "unopened": "This page could not be opened. The report lists it as unreadable."
+    "unopened": "This page could not be opened. The report lists it as unreadable.",
+    "citedPassage": "cited passage",
+    "loadFailed": "This page could not be loaded."
   },
   "conversation": {
     "heading": "Questions",
@@ -423,6 +425,7 @@
       "noSources": "This campaign has no accepted sources yet.",
       "upload": "Upload a file",
       "review": "Review {name}"
-    }
+    },
+    "close": "Close the source"
   }
 }
