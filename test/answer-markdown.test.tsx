@@ -20,14 +20,23 @@ function shown(text: string, marks: CitationMark[]) {
   return { container, numbers, code };
 }
 
-/** No superscript inside code, no script, and no fence left as text outside a code block. */
+/** No superscript inside code, no script, and no fence left as text outside a code block (in any element). */
 function expectCodeClean(container: HTMLElement) {
   expect(container.querySelector('code sup')).toBeNull();
   expect(container.querySelector('script')).toBeNull();
-  for (const element of Array.from(container.querySelectorAll('p, li, blockquote'))) {
-    const outside = Array.from(element.childNodes).filter((node) => node.nodeName !== 'PRE' && node.nodeName !== 'CODE');
-    expect(outside.map((node) => node.textContent).join('')).not.toMatch(/```|~~~/);
+  for (const element of [container, ...Array.from(container.querySelectorAll('*'))]) {
+    if (element.closest('pre, code') !== null) {
+      continue;
+    }
+    const own = Array.from(element.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE);
+    expect(own.map((node) => node.textContent).join('')).not.toMatch(/```|~~~/);
   }
+}
+
+/** The text just before the only superscript, and just after it. */
+function around(container: HTMLElement) {
+  const sup = container.querySelector('sup')!;
+  return [sup.previousSibling?.textContent, sup.nextSibling?.textContent];
 }
 
 /** `after` comes after `before` in the document. */
@@ -191,5 +200,73 @@ describe('a citation never breaks or enters code', () => {
     expectCodeClean(container);
     expect(container.querySelector('pre')!.nextElementSibling!.textContent).toBe('fonte 1');
     expect(container.querySelector('p:last-of-type')!.textContent).toBe('Fim.');
+  });
+});
+
+describe('a mark inside text whose source has syntax of its own lands after the text it follows', () => {
+  const PRIVATE = String.fromCodePoint(0xf0007);
+
+  it.each([
+    ['an escaped character', 'a \\*b c', 'a \\*b', ['a *b', ' c']],
+    ['the second line of a quote', '> um\n> dois três', '> um\n> doi', ['um\ndoi', 's três']],
+    ['the second line of a list item', '- um\n  dois três', '- um\n  doi', ['um\ndoi', 's três']],
+    ['a reference decoding to "&"', '&amp;and fim', '&amp;', ['&', 'and fim']],
+    ['a numeric reference', 'x &#42;y fim', 'x &#42;y', ['x *y', ' fim']],
+    ['a U+0000, shown as U+FFFD', 'a\u0000b c', 'a\u0000b', ['a\uFFFDb', ' c']],
+    ['a private-use code point', `Um${PRIVATE} dois`, `Um${PRIVATE} do`, [`Um${PRIVATE} do`, 'is']],
+  ])('%s', (_name, text, before, expected) => {
+    const { container, numbers } = shown(text, [{ offset: lengthOf(before), number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    expect(around(container)).toEqual(expected);
+  });
+});
+
+describe('a mark on syntax goes where the text says', () => {
+  it.each([
+    ['inside a link\'s words', 'Veja [o S'],
+    ['at a link\'s end', 'Veja [o SRD](https://srd.example/x)'],
+  ])('a mark %s goes right after the link, its words and address whole', (_name, before) => {
+    const text = 'Veja [o SRD](https://srd.example/x) agora.';
+    const { container, numbers } = shown(text, [{ offset: lengthOf(before), number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    const sup = container.querySelector('sup')!;
+    const span = container.querySelector('p > span')!;
+    expect(span.textContent).toBe('o SRD (https://srd.example/x)');
+    expect(span.nextSibling).toBe(sup);
+    expect(sup.nextSibling?.textContent).toBe(' agora.');
+  });
+
+  it('a mark on a heading\'s # marker goes at the heading\'s start', () => {
+    const { container, numbers } = shown('## Título\n\nMais.', [{ offset: 1, number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    const heading = container.querySelector('h2')!;
+    expect(heading.firstChild?.nodeName).toBe('SUP');
+    expect(heading.textContent).toBe('fonte 1Título');
+  });
+
+  it('a mark in an empty list item gets the superscript in that item', () => {
+    const { container, numbers } = shown('- um\n-\n- três', [{ offset: lengthOf('- um\n-'), number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    const items = Array.from(container.querySelectorAll('li'));
+    expect(items.map((item) => item.textContent)).toEqual(['um', 'fonte 1', 'três']);
+    expect(container.querySelector('sup')!.closest('li')).toBe(items[1]);
+  });
+
+  it('a mark in an empty quote gets a paragraph with the superscript in that quote', () => {
+    const { container, numbers } = shown('>\n\nFim.', [{ offset: 1, number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    const paragraph = container.querySelector('blockquote > p')!;
+    expect(paragraph.textContent).toBe('fonte 1');
+    expect(container.lastElementChild!.textContent).toBe('Fim.');
+  });
+
+  it('a mark on a thematic break gets a paragraph after it', () => {
+    const text = 'Antes.\n\n---\n\nDepois.';
+    const { container, numbers } = shown(text, [{ offset: lengthOf('Antes.\n\n---'), number: 1 }]);
+    expect(numbers).toEqual(['1']);
+    const next = container.querySelector('hr')!.nextElementSibling!;
+    expect(next.tagName).toBe('P');
+    expect(next.textContent).toBe('fonte 1');
+    expect(container.lastElementChild!.textContent).toBe('Depois.');
   });
 });

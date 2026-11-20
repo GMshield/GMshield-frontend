@@ -46,18 +46,18 @@ type TreeNode = {
 };
 
 /** Nodes whose children are text and inline nodes: a mark inside one stays inline. */
-const PHRASING = new Set(['paragraph', 'heading', 'emphasis', 'strong', 'delete', 'tableCell']);
+const PHRASING = new Set(['paragraph', 'heading', 'emphasis', 'strong']);
 
 /** Inline nodes a mark enters; any other inline node (code, a link, an image) takes the mark right after it. */
-const INLINE_CONTAINERS = new Set(['emphasis', 'strong', 'delete']);
+const INLINE_CONTAINERS = new Set(['emphasis', 'strong']);
 
 /** A character reference (`&amp;`, `&#42;`, `&#x2A;`): one character of a text node's value, several of its source. */
 const REFERENCE = /^&(?:#\d{1,7}|#[xX][\da-fA-F]{1,6}|[A-Za-z][A-Za-z\d]{0,31});/u;
 
 /**
  * Where each mark lands in the tree: inside a text node (at an index of its value), before a line break, after an inline
- * node, at the start of an inline parent, in a paragraph after a block (a code block, a rule), or in a paragraph of an
- * otherwise empty container. Numbers at one place keep their order.
+ * node, at the start of an inline parent, in a paragraph after a block (a code block, a rule; unwrapped in a tight list
+ * item), or in a paragraph of an otherwise empty container. Numbers at one place keep their order.
  */
 type Places = {
   readonly inText: Map<TreeNode, Map<number, number[]>>;
@@ -81,9 +81,26 @@ function endOf(node: TreeNode): number {
 }
 
 /**
+ * One step of walking a text node's source and value together: how far it moves in each. A reference the parser decoded
+ * is its whole name in the source and one character (one or two UTF-16 units) in the value; a U+0000 in the source is a
+ * U+FFFD in the value; any other source character the value does not have next is the source's own syntax.
+ */
+function stepOf(source: string, cursor: number, value: string, index: number): readonly [number, number] {
+  const reference = source[cursor] === '&' ? REFERENCE.exec(source.slice(cursor, cursor + 40)) : null;
+  if (reference !== null && !value.startsWith(reference[0], index)) {
+    return [reference[0].length, /[\uD800-\uDBFF]/u.test(value[index] ?? '') ? 2 : 1];
+  }
+  const point = source[cursor];
+  if (point === value[index] || (point === '\u0000' && value[index] === '\uFFFD')) {
+    return [1, 1];
+  }
+  return [1, 0];
+}
+
+/**
  * The index in a text node's value of the source offset `at` (inside the node's source): the source and the value are
- * walked together, the source's own syntax (an escape's `\`, a container's `> ` or indentation, a reference's name)
- * skipped.
+ * walked together (`stepOf`), the source's own syntax (an escape's `\`, a container's `> ` or indentation, a reference's
+ * name) skipped.
  */
 function indexIn(text: TreeNode, source: string, at: number): number {
   const value = text.value ?? '';
@@ -93,59 +110,59 @@ function indexIn(text: TreeNode, source: string, at: number): number {
   let index = 0;
   let cursor = startOf(text);
   while (cursor < at && index < value.length) {
-    if (source[cursor] === value[index]) {
-      cursor += 1;
-      index += 1;
-      continue;
-    }
-    const reference = source[cursor] === '&' ? REFERENCE.exec(source.slice(cursor, cursor + 40)) : null;
-    if (reference === null) {
-      cursor += 1;
-    } else {
-      cursor += reference[0].length;
-      index += /[\uD800-\uDBFF]/u.test(value[index] ?? '') ? 2 : 1;
-    }
+    const [inSource, inValue] = stepOf(source, cursor, value, index);
+    cursor += inSource;
+    index += inValue;
   }
   return index;
 }
 
 /** Records where a mark at the source offset `at` lands, looking from `parent` down. */
 function locate(parent: TreeNode, at: number, source: string, number: number, places: Places): void {
-  const children = parent.children ?? [];
-  const inline = PHRASING.has(parent.type);
   // The first child holding the offset: at a boundary, the one the mark follows.
-  const child = children.find((node) => startOf(node) <= at && at <= endOf(node));
+  const child = (parent.children ?? []).find((node) => startOf(node) <= at && at <= endOf(node));
   if (child === undefined) {
-    // Between children (a container's syntax): at the end of the one before, else at the start of the one after.
-    const preceding = children.findLast((node) => endOf(node) >= 0 && endOf(node) <= at);
-    const following = children.find((node) => startOf(node) >= at);
-    if (preceding !== undefined) {
-      locate(parent, endOf(preceding), source, number, places);
-    } else if (inline) {
-      add(places.first, parent, number);
-    } else if (following !== undefined) {
-      locate(parent, startOf(following), source, number, places);
-    } else {
-      add(places.alone, parent, number);
-    }
-    return;
-  }
-  if (inline) {
-    if (child.type === 'text') {
-      const marks = places.inText.get(child) ?? new Map<number, number[]>();
-      add(marks, indexIn(child, source, at), number);
-      places.inText.set(child, marks);
-    } else if (child.type === 'break') {
-      add(places.before, child, number);
-    } else if (INLINE_CONTAINERS.has(child.type)) {
-      locate(child, at, source, number, places);
-    } else {
-      add(places.after, child, number);
-    }
+    locateBetween(parent, at, source, number, places);
+  } else if (PHRASING.has(parent.type)) {
+    locateInline(child, at, source, number, places);
   } else if (child.type !== 'code' && Array.isArray(child.children)) {
     locate(child, at, source, number, places);
   } else {
     add(places.below, child, number);
+  }
+}
+
+/**
+ * A mark between `parent`'s children (on a container's syntax): at the end of the child before it, else at the start of
+ * an inline parent, else at the start of the child after it, else in a paragraph of its own (an empty container).
+ */
+function locateBetween(parent: TreeNode, at: number, source: string, number: number, places: Places): void {
+  const children = parent.children ?? [];
+  const preceding = children.findLast((node) => endOf(node) >= 0 && endOf(node) <= at);
+  const following = children.find((node) => startOf(node) >= at);
+  if (preceding !== undefined) {
+    locate(parent, endOf(preceding), source, number, places);
+  } else if (PHRASING.has(parent.type)) {
+    add(places.first, parent, number);
+  } else if (following !== undefined) {
+    locate(parent, startOf(following), source, number, places);
+  } else {
+    add(places.alone, parent, number);
+  }
+}
+
+/** A mark on an inline `child`: inside its text, before a line break, inside an emphasis, else right after the node. */
+function locateInline(child: TreeNode, at: number, source: string, number: number, places: Places): void {
+  if (child.type === 'text') {
+    const marks = places.inText.get(child) ?? new Map<number, number[]>();
+    add(marks, indexIn(child, source, at), number);
+    places.inText.set(child, marks);
+  } else if (child.type === 'break') {
+    add(places.before, child, number);
+  } else if (INLINE_CONTAINERS.has(child.type)) {
+    locate(child, at, source, number, places);
+  } else {
+    add(places.after, child, number);
   }
 }
 
@@ -226,15 +243,21 @@ function insert(parent: TreeNode, places: Places, word: string): void {
  * The remark step that places each mark in the parsed Markdown tree (the text itself is never changed): at its place
  * (`placeOf`, in code points, turned into the tree's UTF-16 offsets) as a superscript after the text it follows. A mark
  * on or inside a code block (fenced or indented, in any container, closed or not) goes in a paragraph right after the
- * block, in the same container; one on or inside inline code or a link goes right after it. Marks at one place keep
- * their order.
+ * block, in the same container (in a tight list item that paragraph is unwrapped, so the superscript sits directly in
+ * the `li` after the `pre`); one on or inside inline code or a link goes right after it. Marks at one place keep their
+ * order.
  */
 function remarkCitations(text: string, marks: readonly CitationMark[], word: string) {
   return () => (tree: { type: string }) => {
     const points = Array.from(text);
+    // The UTF-16 offset of each code-point offset.
+    const units = [0];
+    for (const point of points) {
+      units.push((units.at(-1) ?? 0) + point.length);
+    }
     const placed = marks
       .filter((mark) => Number.isInteger(mark.number) && mark.number >= 1)
-      .map((mark) => ({ number: mark.number, at: points.slice(0, placeOf(points, mark.offset)).join('').length }))
+      .map((mark) => ({ number: mark.number, at: units[placeOf(points, mark.offset)] ?? text.length }))
       .sort((one, other) => one.at - other.at);
     const places: Places = {
       inText: new Map(),
@@ -250,7 +273,6 @@ function remarkCitations(text: string, marks: readonly CitationMark[], word: str
     insert(tree as TreeNode, places, word);
   };
 }
-
 
 /**
  * Story 2.8: a link's address is only ever shown as text (`a` renders a span, never an anchor), so it is kept as written,
