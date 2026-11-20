@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
+import { ANSWER_DONE, REFERENCE_TEXT_PAGE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
 
 import { CONTRACT_PATH, startStandIn, type Running } from './support/servers';
 
@@ -119,6 +119,77 @@ describe('stand-in backend', () => {
     const bytes = Buffer.from(await picture.arrayBuffer());
     expect(bytes.subarray(0, 4).toString('ascii')).toBe('RIFF');
     expect(bytes.subarray(8, 12).toString('ascii')).toBe('WEBP');
+  });
+
+  it('answers the conversation paths (Story 2.4) with sources, a recorded question and a short streamed answer', async () => {
+    expect(answer(contract, 'GET', '/api/v1/conversations/current', 't')).toMatchObject({
+      status: 200,
+      body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing: null, indexingFailed: null },
+    });
+    expect(answer(contract, 'POST', '/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/turns', 't')).toMatchObject({
+      status: 201,
+      body: { language: 'pt-BR' },
+    });
+    running = await startStandIn();
+    const stream = await fetch(`${running.url}/api/v1/turns/0190a0b0-0000-7000-8000-000000000021/events`);
+    expect(stream.status).toBe(200);
+    expect(stream.headers.get('content-type')).toBe('text/event-stream');
+    const text = await stream.text();
+    expect(text).toContain('event:delta');
+    // Story 2.5: done carries the references, as TurnDoneEvent says.
+    const done = /event:done\ndata:(.*)$/.exec(text.trimEnd());
+    expect(done).not.toBeNull();
+    expect(JSON.parse(done![1]!)).toEqual(ANSWER_DONE);
+    // Every key the contract requires of TurnDoneEvent and TurnSourceReference, with its declared JSON type.
+    type Schema = { required?: string[]; properties?: Record<string, { type?: string }> };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const jsonType = (value: unknown) => (Array.isArray(value) ? 'array' : Number.isInteger(value) ? 'integer' : typeof value);
+    const expectShape = (name: string, value: Record<string, unknown>) => {
+      const schema = schemas[name]!;
+      expect(schema.required?.length, name).toBeGreaterThan(0);
+      for (const key of schema.required ?? []) {
+        expect(value, `${name}.${key}`).toHaveProperty(key);
+        expect(jsonType(value[key]), `${name}.${key}`).toBe(schema.properties?.[key]?.type);
+      }
+    };
+    expectShape('TurnDoneEvent', ANSWER_DONE as unknown as Record<string, unknown>);
+    // Story 2.7: a second reference, into a text page.
+    expect(ANSWER_DONE.references).toHaveLength(2);
+    for (const reference of ANSWER_DONE.references) {
+      expectShape('TurnSourceReference', reference as Record<string, unknown>);
+    }
+    expect(ANSWER_DONE.silent).toBe(false);
+    // Story 2.6: done says whether the GM stopped the answer, and the stop route answers 204.
+    expect(ANSWER_DONE.stopped).toBe(false);
+    const stopped = await fetch(`${running.url}/api/v1/turns/0190a0b0-0000-7000-8000-000000000021/stop`, { method: 'POST' });
+    expect(stopped.status).toBe(204);
+    expect(await stopped.text()).toBe('');
+  });
+
+  it('answers the reference pages (Story 2.7): reference 1 the picture page its passage is on, reference 2 a text page', async () => {
+    const turn = '0190a0b0-0000-7000-8000-000000000021';
+    const [first, second] = ANSWER_DONE.references;
+    const picture = answer(contract, 'GET', `/api/v1/turns/${turn}/references/1/pages/13`, 't');
+    expect(picture).toMatchObject({ status: 200, type: 'application/json', body: { page: 13, picture: { width: 1545, height: 2000 }, text: null } });
+    const pictureBody = picture.body as { passages: { id: string; boxes: number[][] }[] };
+    expect(pictureBody.passages.map((passage) => passage.id)).toEqual(first!.passageIds);
+    const text = answer(contract, 'GET', `/api/v1/turns/${turn}/references/2/pages/2`, 't');
+    expect(text).toMatchObject({ status: 200, body: { page: 2, picture: null, lines: [] } });
+    expect(text.body).toEqual(REFERENCE_TEXT_PAGE);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(second!.passageIds);
+    const [start, end] = REFERENCE_TEXT_PAGE.passages[0]!.range;
+    expect(Array.from(REFERENCE_TEXT_PAGE.text).slice(start, end).join('')).toBe('Fire Bolt causa 1d10 de dano de fogo.');
+    // Both shapes are MaterialPageView's, as the contract says.
+    type Schema = { required?: string[] };
+    const schema = (contract.components as { schemas: Record<string, Schema> }).schemas.MaterialPageView!;
+    for (const key of schema.required ?? []) {
+      expect(picture.body, key).toHaveProperty(key);
+      expect(text.body, key).toHaveProperty(key);
+    }
+    running = await startStandIn();
+    const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/1/pages/13/picture`);
+    expect(bytes.status).toBe(200);
+    expect(bytes.headers.get('content-type')).toBe('image/webp');
   });
 
   it('answers any other path with a 404 problem detail', async () => {

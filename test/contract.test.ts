@@ -22,10 +22,16 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 1.21 creates image sets and reads a set's images in the tray, added in 1.10.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.10.0');
-    expect(meetsMinimum('1.10.0')).toBe(true);
-    expect(meetsMinimum('1.10.1')).toBe(true);
+    // The indexing notice reads the current conversation's failed passages (indexingFailed), added in 1.16.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.16.0');
+    expect(meetsMinimum('1.16.0')).toBe(true);
+    expect(meetsMinimum('1.16.1')).toBe(true);
+    expect(meetsMinimum('1.15.0')).toBe(false);
+    expect(meetsMinimum('1.14.0')).toBe(false);
+    expect(meetsMinimum('1.13.0')).toBe(false);
+    expect(meetsMinimum('1.12.0')).toBe(false);
+    expect(meetsMinimum('1.11.0')).toBe(false);
+    expect(meetsMinimum('1.10.0')).toBe(false);
     expect(meetsMinimum('1.9.0')).toBe(false);
     expect(meetsMinimum('1.8.0')).toBe(false);
     expect(meetsMinimum('1.6.0')).toBe(false);

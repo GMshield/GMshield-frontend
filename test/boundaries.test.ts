@@ -13,7 +13,7 @@ function files(directory: string): string[] {
   });
 }
 
-const sources = files(join(ROOT, 'src')).filter((path) => /\.(ts|tsx|mts|mjs|js)$/.test(path) && !path.includes('/generated/'));
+const sources = files(join(ROOT, 'src')).filter((path) => /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/.test(path) && !path.includes('/generated/'));
 
 describe('boundaries', () => {
   it('every module under src/server starts with server-only', () => {
@@ -30,7 +30,25 @@ describe('boundaries', () => {
   it('no code outside src/server calls fetch or reads the backend address', () => {
     for (const path of sources.filter((p) => !p.includes('/src/server/'))) {
       const text = readFileSync(path, 'utf8');
-      expect(text, relative(ROOT, path)).not.toMatch(/\bfetch\(|GMSHIELD_BACKEND_URL|openapi-fetch/);
+      expect(text, relative(ROOT, path)).not.toMatch(/GMSHIELD_BACKEND_URL|openapi-fetch/);
+      if (path.includes('/src/client/')) {
+        // Story 2.4: the browser's modules may call this site's own relays, by a relative /api/v1/ path only.
+        for (const [call] of text.matchAll(/\bfetch\([^,)]*/g)) {
+          expect(call, relative(ROOT, path)).toMatch(/^fetch\(`\/api\/v1\//);
+        }
+      } else {
+        expect(text, relative(ROOT, path)).not.toMatch(/\bfetch\(/);
+      }
+    }
+  });
+
+  it('no code under src sets raw HTML (Story 2.8)', () => {
+    expect(sources.length).toBeGreaterThan(0);
+    for (const path of sources) {
+      const text = readFileSync(path, 'utf8');
+      expect(text, relative(ROOT, path)).not.toMatch(
+        /dangerouslySetInnerHTML|\binnerHTML\b|\bouterHTML\b|\binsertAdjacentHTML\b|\bdocument\.write(ln)?\b|\bsrc[dD]oc\b|\bparseFromString\b|\bcreateContextualFragment\b|\bsetHTMLUnsafe\b/,
+      );
     }
   });
 

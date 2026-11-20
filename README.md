@@ -26,6 +26,7 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | sharp (measures the backdrop in `test/contrast.test.ts` only) | 0.35.5 | `package.json` |
 | tus-js-client (the browser's tus client, Story 1.13) | 4.3.1 | `package.json` |
 | hash-wasm (the whole-file SHA-256, Story 1.13) | 4.12.0 | `package.json` |
+| react-markdown (an answer's sanitized Markdown, Story 2.4; released 2025-03-07) | 10.1.0 | `package.json` |
 | Build and runtime image | `node:26.13.0-alpine3.24`, pinned by digest | `Dockerfile` |
 
 ## Structure
@@ -45,6 +46,8 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/components/uploads` | the guided upload and the upload tray (Story 1.14): `UploadsProvider`, `UploadDialog`, `UploadTray`, their texts built on the server (`upload-texts.ts`) |
 | `src/app/(signed-in)/files/[id]` | a material's page (Story 1.14): its name and state; `pages/[page]`, one page of it under review (Story 1.19) |
 | `src/app/api/v1/materials/[id]/pages/[page]/picture/route.ts` | the picture relay (Story 1.19): a page's WebP streamed from the backend (`src/server/backend/picture-relay.ts`) |
+| `src/app/(signed-in)/questions`, `src/components/conversation` | the conversation screen (Story 2.4): `Conversation` (composer, turns, live region, empty state) and `AnswerMarkdown` |
+| `src/app/api/v1/campaigns/[id]/turns/route.ts`, `src/app/api/v1/turns/[id]/events/route.ts` | the question relay and the turn event stream relay (Story 2.4), over `src/server/conversations.ts`; `src/client/conversation.ts` is the browser's side |
 | `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
 | `src/components/QualityReport.tsx`, `MaterialActions.tsx` | a material's quality report and the GM's actions on it (Story 1.20); the Server Action is `src/app/(signed-in)/files/[id]/actions.ts` |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
@@ -299,6 +302,167 @@ they sit in `src/`.
     (`dropSetImageAction`, `DELETE …/images/{position}`, then `refresh()`). Images still missing with no upload in this
     tab read "Envio interrompido: faltam N de M fotos." with "Retomar as fotos", which asks for those files and
     resumes each one matched by its name and size.
+- **Ask a question and read the answer as it is written (Story 2.4).** Public contract 1.11.0.
+  - `/questions` is the conversation screen. The page (a server component) loads `GET /api/v1/conversations/current`
+    (`currentConversation` in `src/server/conversations.ts`: the campaign and `hasSources`) and the newest material
+    that needs review, and renders the client `Conversation`. Only the turns asked since the page opened are shown:
+    past turns are stored, and listed from Story 3.10.
+  - The composer is a 48px pill textarea: Enter sends, Shift+Enter adds a line, and it grows to six lines (its `rows`
+    by line count, and `field-sizing: content` where the browser has it; no style attribute). The send button is a
+    48px outlined circle with an arrow, spoken "Enviar". The draft is kept per campaign in `localStorage`
+    (`gmshield:draft:<campaignId>`, every access in try/catch) and cleared on send. Under 768px the composer stays
+    pinned at the bottom (sticky) and answers use the body size.
+  - On send the question shows at once in `--color-text-muted` with "Procurando nas fontes…" (no spinner). The browser
+    posts it to `POST /api/v1/campaigns/{id}/turns` of this site (`postQuestion`, `src/client/conversation.ts`; the
+    only `fetch` outside `src/server`, to a relative `/api/v1/` path, which `test/boundaries.test.ts` allows), whose
+    route checks the origin, reads the session cookie and calls the backend through the typed client. Then it opens
+    `EventSource` on `/api/v1/turns/{turnId}/events` and closes it on `done` or `error`.
+  - The stream relay (`relayTurnEvents`) checks the origin, sends the service credential, the session as
+    `X-Session-Token` and a numeric `Last-Event-ID`, uses a raw `fetch` with no time limit, streams the body back
+    unbuffered (`no-store`, `nosniff`, `X-Accel-Buffering: no`) and aborts the backend request when the browser leaves.
+    `src/proxy.ts`'s matcher skips `/api/v1/turns/{id}/events`.
+  - The answer streams in as Markdown (`react-markdown` with `skipHtml`; images dropped; a link shown as "{text}
+    ({address})", never an anchor; nothing set as HTML) in `--font-answer-size`, with no bubble, card or avatar, and a
+    full-width rule once it ends. An answer whose `language` differs from the interface's gets `lang` and a visible
+    "Resposta em inglês" / "Answer in Portuguese". A polite live region says "Respondendo…" at the start and the whole
+    answer once at `done`; an `error` event shows its own failure text (Story 2.6, below).
+  - With `hasSources` false, a line above the composer says "Esta campanha ainda não tem fontes aceitas." with
+    "Enviar um arquivo", which opens the guided upload (`openUpload` of the uploads context, which now holds the
+    dialog's open state), and "Revisar {name}" when a material needs review. The composer stays enabled.
+- **Sources under every answer (Story 2.5).** Public contract 1.12.0.
+  - The `done` event's data is `{silent, references: [{number, materialName, sectionPath: […], page, passageIds: […],
+    removed}]}` (`TurnDoneEvent`, `TurnSourceReference`): the backend expands the cited passage ids into numbered
+    references when the answer completes, stores them with the turn, and builds the data when it streams `done`, so a
+    replay shows `removed` as of then. `parseDone` (`src/client/conversation.ts`) keeps only well-formed references,
+    and an answer with none left is silent whatever the event said.
+  - The screen keeps each turn's `citation` events (`parseCitation`: a passage id and a code-point offset) and shows
+    nothing of them while the answer streams. At `done`, when not silent, each citation whose passage id is in a
+    reference becomes a superscript with that reference's number in `--color-accent`, at its code-point offset in the
+    Markdown text (`AnswerMarkdown`: each mark travels through the parser as one private-use code point, U+F0000 plus
+    the number, which the model's own text never keeps, and a small rehype step turns it into `<sup>`). A citation
+    with no matching reference shows nothing. Under the answer and above the closing rule, `References` lists the
+    references in label type, one line each: the material's name, the section path joined with " › ", and "p. N"; a
+    removed one is struck through, followed by "fonte removida" / "source removed". Story 2.7 opens the others.
+  - A silent answer (`silent: true`) replaces whatever streamed with "As fontes não dizem nada sobre isso." / "The
+    sources say nothing about this.", in the turn's language (the interface's when it is null): no list, no
+    superscript and no language label.
+  - The polite region says the finished answer, then the references as a list (or the silent sentence alone).
+  - The frontend renders only what it receives: it never builds a reference from a passage id.
+- **Stop an answer, and answers that fail clearly (Story 2.6).** Public contract 1.13.0.
+  - Stop: while a turn is `sending`, `searching` or `answering`, the send button is Stop (a filled square, labelled
+    "Parar" / "Stop"), and Esc anywhere on the conversation screen does the same. Enter sends nothing then, and the
+    draft stays. The browser posts `POST /api/v1/turns/{id}/stop` (`stopTurn` in `src/client/conversation.ts`) to the
+    relay `src/app/api/v1/turns/[id]/stop/route.ts` (same-origin check, `isId`, session; `stopTurn` in
+    `src/server/conversations.ts` through the typed client; 204 or the backend's problem). A stop pressed before the
+    turn's id is known is sent as soon as the id arrives.
+  - The `done` event carries `stopped` (always present); `silent` is true exactly when the answer was not stopped and
+    has no reference. `parseDone` never makes a stopped answer silent. A stopped answer keeps the text received so far,
+    its superscripts and references (when it has any), and is marked "Interrompida" / "Stopped" under the text; it is
+    never replaced by the silent sentence. The polite region says the answer, then "Interrompida".
+  - Lost connection: an `error` with no data while the stream reconnects shows "Conexão perdida. Tentando de novo…" /
+    "Connection lost. Trying again…" under the text (also said politely); the next `open` removes it. When the browser
+    gives up (`CLOSED`), the page reopens the stream itself from the last event id, waiting 1 s, 2 s, 4 s… up to 15 s.
+    The id goes as `?lastEventId=` (`turnEventsUrl(turnId, lastEventId)`), which the events relay forwards as
+    `Last-Event-ID` when the header is absent, with the same sequence check. An event whose id is not after the last
+    one is ignored, so no text repeats. After 2 minutes without an `open`, the line becomes "Não foi possível
+    reconectar." / "Could not reconnect." with "Tentar de novo", which reopens the stream.
+  - Failures: an `error` event's code has its own text, said at once by an assertive region (`role="alert"`).
+    `model.refused`: "O modelo recusou este pedido. Reformule a pergunta e envie de novo.", the question back in the
+    composer when it is empty, no retry. `model.truncated`: the partial text stays, followed by "A resposta foi cortada
+    antes do fim." and "Tentar de novo". `model.question_flagged` and `model.source_flagged` act like
+    `model.refused`, each with its own text (Story 2.8, below). Any other code (`model.unavailable`,
+    `job.provider_unavailable`, `job.attempts_exhausted`, `job.claim_lapsed`, …): "O serviço de IA está indisponível
+    agora." with "Tentar de novo". A refusal and an outage hide any partial text. "Tentar de novo" asks the same question again as a new turn,
+    in place of the failed one.
+- **Open the cited page in the source view (Story 2.7).** Public contract 1.14.0.
+  - The line of a reference that is not removed is a button named by its line; a removed one stays struck through and
+    opens nothing, and the superscripts stay plain text. Selecting it opens `SourceView`
+    (`src/components/SourceView.tsx`) at once with the empty frame and "p. N"; selecting another reference replaces its
+    page and its focus target.
+  - The page comes from `GET /api/v1/turns/{id}/references/{number}/pages/{page}` (`fetchReferencePage` in
+    `src/client/conversation.ts`) through the relay
+    `src/app/api/v1/turns/[id]/references/[number]/pages/[page]/route.ts` (same-origin check, `isId` and `isNumber`,
+    session; `referencePage` in `src/server/conversations.ts` through the typed client; no-store). Its picture comes
+    from `.../picture` through the picture relay (`relayReferencePicture` in `src/server/backend/picture-relay.ts`,
+    whose path is its ground). A malformed id or number answers "not found" without reaching the backend. The backend
+    checks the turn, its campaign and the reference, and serves the version the reference names.
+  - `PageView` takes the picture's address (`pictureSrc`) and `cited`, the reference's passage ids. On a picture page
+    each box of a cited passage is an SVG `<rect>` filled with `--color-passage-mark` (a translucent accent in every
+    theme), and the lines within a cited box sit in a group named "trecho citado" / "cited passage"; on a text page each
+    cited code-point `range` is a `<mark>` in such a group. A page without a cited passage marks nothing.
+  - A page that fails to load (404, 401, 5xx, no network: `fetchReferencePage` answers null) shows "Não foi possível
+    carregar esta página." / "This page could not be loaded." with "Tentar de novo" / "Try again", which loads the same
+    page again. An unreadable page with nothing on it (`picture` and `text` both null) shows `pageView.unopened`.
+  - The panel is a non-modal `<dialog>` named by its source line. On open focus goes to its close control; with focus in
+    it ← and → move one page, as the footer's controls do (disabled at the first and last page; a control that becomes
+    disabled hands focus to the other); with Alt, Ctrl, Meta or Shift the arrows are left to the browser. Esc or the
+    close control closes it and focus goes back to the reference; selecting the open reference again reopens it at its
+    cited page. The conversation's Esc listener skips a dialog, so that Esc never stops a running answer.
+  - The shell's panel slot is `ShellFrame` (`src/components/ShellPanel.tsx`), which the conversation fills from the
+    browser with `ShellPanel` (a portal; in place outside a shell). At 1280px and more it is a 560px column and the main
+    column narrows, with nothing inert; under 1280px it opens over the main column, which is inert while it is open
+    (`data-behind-panel`; `setInertBy` keeps the sidebar's and the panel's inert apart); under 768px it is a full-screen
+    sheet.
+  - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
+    with a text page whose cited range is marked.
+- **Text in a material is never an instruction (Story 2.8).** No contract change. `AnswerMarkdown` keeps every link's
+  address as written (`urlTransform`, `addressAsText`), so a `javascript:` link shows as "{text} (javascript:…)" like
+  any other instead of losing its address; links are still spans, never anchors, and image URLs are dropped. Guards:
+  `react/no-danger` is an error in `eslint.config.mjs` for every `js, jsx, mjs, cjs, ts, tsx, mts, cts` file, and
+  `test/boundaries.test.ts` fails on `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`,
+  `document.write`, `srcdoc`/`srcDoc`, `parseFromString`, `createContextualFragment` or `setHTMLUnsafe` in any such
+  file under `src/`, except the generated backend types (`src/server/backend/generated/`, also outside the lint).
+  Tests: a hostile answer (an autolink, a `javascript:` link, an `<iframe>`, a reference-style image, a link) renders
+  no `a`, `img`, `iframe` or `script` and nothing with `src` or `href` (`test/conversation.test.tsx`); HTML in a
+  material name or section path is text in `References` and the `SourceView` heading (`test/components.test.tsx`).
+  A provider's prompt filter has its own `error` codes (codes are opaque to the backend, so no contract change), each
+  shown like `model.refused` (the partial text hidden, no "Tentar de novo", the question back in the composer when it
+  is empty, said at once): `model.question_flagged` (Azure's jailbreak check flagged the question): "O filtro de
+  segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente.
+  Reformule a pergunta e envie de novo."; `model.source_flagged` (its indirect-attack check flagged a passage): "O
+  filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma
+  instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta." English in
+  `src/messages/en.json`. Deploy order: this frontend before or with the worker that sends these codes (the change is
+  backward compatible; an older frontend shows them as an outage with "Tentar de novo").
+- **The indexing notice.** Public contract 1.15.0; the failure line from 1.16.0.
+  - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
+    (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a
+    warning at the top of the main column says "Preparando as fontes para busca: faltam {remaining} trechos" /
+    "Preparing your sources for search: {remaining} passages left" (`notice.indexing`), on every signed-in page. The
+    backend counts; the frontend only shows the number. A conversation that cannot be loaded (no campaign: 404) shows
+    no notice.
+  - The notice is the client component `IndexingNotice` (`src/components/IndexingNotice.tsx`), given that first count.
+    It has no dismiss control (`Notice`'s `dismissible={false}`) and is not a live region (`live={false}` drops
+    `role="status"`), so its changing number is never announced again.
+  - It keeps its own count. Polling: while the tab is visible, every 5 s, it reads `indexing` through the same-site
+    relay `GET /api/v1/conversations/current` (`src/app/api/v1/conversations/current/route.ts`: same-origin check, the
+    session, `no-store`, `nosniff`) with `fetchIndexing` (`src/client/conversation.ts`), each read bounded to 4 s. A new
+    number replaces the shown one; null hides the notice and stops polling; a failed (or hung) read keeps the number and
+    changes nothing else; after 10 minutes of successful reads without a change polling stops and the line stays; a new
+    count from the page (the layout rendered again by another refresh) shows at once and starts polling again. It never
+    calls `router.refresh()`, so a page (the questions page's turns) is never re-rendered for it.
+  - The number is formatted for the language ("2.000" / "2,000"), and one passage left has its own sentence
+    (`notice.indexingOne`: "falta 1 trecho" / "1 passage left").
+  - The Shell's notice slot is a list (`notices`), one line each, in this order: a campaign that cannot be loaded
+    (danger), the newest material that needs review (warning, dismissible), then the indexing notice. A campaign error no
+    longer hides the needs-review notice.
+  - **Passages that could not be prepared (public contract 1.16.0).** The current conversation also carries
+    `indexingFailed`, `{passages, retrying}` or null: the in-scope passages whose index change failed, and whether the
+    backend will try one of them again (every 10 minutes, at most 3 times). The layout renders `IndexingNotice` when
+    either value is set, and it shows up to two stacked lines, the failure line second, neither dismissible nor live:
+    - while a retry remains, a warning: "Não foi possível preparar {count} trechos para busca; nova tentativa em alguns
+      minutos." / "Could not prepare {count} passages for search; trying again in a few minutes."
+      (`notice.indexingRetrying`, `notice.indexingRetryingOne` for one);
+    - after the last retry, an error (`Notice`'s `danger`, the word "Erro" / "Error"): "Não foi possível preparar
+      {count} trechos para busca." / "Could not prepare {count} passages for search." (`notice.indexingFailed`,
+      `notice.indexingFailedOne`).
+    `fetchIndexing` returns both values (`{kind: 'read', remaining, failed}`, each null when there is none, or
+    `{kind: 'failed'}`). The notice keeps polling, with the same 5 s and 4 s rules, while anything is pending or a retry
+    remains, and stops when only a final failure is left (that line stays) or nothing is (the notice goes). The
+    10-minute stall applies only while no failure is retrying; while one is, the notice polls until the state changes
+    (at most about 40 minutes over 3 retries).
+  - The stand-in backend answers `indexing: null` and `indexingFailed: null` (its sources are indexed), so a test-mode
+    shell shows no indexing notice and reads no count.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -331,8 +495,9 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
   the rules above.
 - The backdrop, `src/app/assets/backdrop.webp` (1280x720 pixel art, drawn without smoothing), was
   supplied by Dalton on 2026-11-16: a generated image with no third-party licence. Its brightest
-  pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 72%: 8.0:1 for the
-  text and 5.2:1 for the secondary text over that pixel.
+  pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 78% (Story 2.5, up
+  from 72%): accent text on the canvas, such as a citation superscript, keeps 4.82:1 over that pixel
+  (it was 3.85:1), and the text and the secondary text keep more than before.
 - DM Sans is bundled from `@fontsource-variable/dm-sans` into `/_next/static`; nothing loads from
   another host.
 
@@ -382,6 +547,35 @@ against a 1.3.0 backend).
 Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migration `V7__material_details.sql`
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
+
+From public contract 1.16.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.16.0 (indexing at worker start): the backend first (`indexingFailed` on the
+current conversation, the recipe route of internal contract 1.12.0, migration `V20__index_change_retries.sql`), then
+the frontend (its health check fails against a 1.15.0 backend), then the worker (it states its recipe at every check of
+a backend at 1.12.0 or later). The worker and the frontend do not depend on each other here. A rollback goes the other
+way.
+
+Deploy order for public contract 1.15.0 (the indexing notice): the backend first (`indexing` on the current
+conversation, no migration), then the frontend (its health check fails against a 1.14.0 backend). The worker does not
+change. A rollback goes the other way.
+
+Deploy order for public contract 1.14.0 (Story 2.7): the backend first (the reference page and picture routes, no
+migration), then the frontend (its health check fails against a 1.13.0 backend). The worker does not change. A
+rollback goes the other way.
+
+Deploy order for public contract 1.13.0 (Story 2.6): the backend first (its migration `V19__answer_stop.sql`, the
+stop route and `stopped` on `done`), then the worker (internal contract 1.11.0: it obeys the stop and reports an
+estimated usage), then the frontend (its health check fails against a 1.12.0 backend). A rollback goes the other way.
+
+Deploy order for public contract 1.12.0 (Story 2.5): the backend first (its migration `V18__turn_references.sql`
+and the references on `done`), then the frontend (its health check fails against a 1.11.0 backend). The worker does
+not change. A rollback goes the other way: the frontend first, back to the 2.4 release, then the backend.
+
+Deploy order for public contract 1.11.0 (Story 2.4): the backend first (its migration `V17__conversations.sql`, the
+conversation routes and the turn event stream), then the worker (internal contract 1.10.0: it answers
+`question.answer`), then the frontend (its health check fails against a 1.10.0 backend, and `/questions` reads the
+new routes).
 
 Deploy order for public contract 1.10.0 (Story 1.21): the backend first (its migration `V14__image_sets.sql`, the
 image set routes and a material's `imageSet`), then the frontend (its health check fails against a 1.9.0 backend, and

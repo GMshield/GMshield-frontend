@@ -57,6 +57,10 @@
   --illustrated-warning: #ffc857;
   --illustrated-success: #7bd88f;
 
+  /* Page pictures are printed paper in every theme (Story 2.7 follow-up): the edge of a cited passage's mark. Each
+     theme's --color-passage-mark-edge names it, so the role exists in every theme like the others. */
+  --paper-mark-edge: #5c3200;
+
   /* Typography: one family, DM Sans (bundled from @fontsource-variable/dm-sans) */
   --font-family: 'DM Sans Variable', system-ui, sans-serif;
   --font-display-size: 56px;
@@ -129,6 +133,9 @@
   --color-chip: var(--dark-chip);
   --color-chip-icon: var(--dark-chip-icon);
   --color-accent: var(--dark-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--dark-accent) 30%, transparent);
+  --color-passage-mark-edge: var(--paper-mark-edge);
   --color-danger: var(--dark-danger);
   --color-warning: var(--dark-warning);
   --color-success: var(--dark-success);
@@ -155,6 +162,9 @@
   --color-chip: var(--light-chip);
   --color-chip-icon: var(--light-chip-icon);
   --color-accent: var(--light-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--light-accent) 20%, transparent);
+  --color-passage-mark-edge: var(--paper-mark-edge);
   --color-danger: var(--light-danger);
   --color-warning: var(--light-warning);
   --color-success: var(--light-success);
@@ -169,8 +179,9 @@
 /*
  * The scrim is uniform over the whole backdrop. Its strength is set by the brightest pixel of the
  * backdrop (test/contrast.test.ts), so every crop at every width keeps text at 4.5:1 or better.
- * The brightest pixel of backdrop.webp is near white (#fffee0): at 72%, the text keeps 8.0:1 and
- * the secondary text 5.2:1 over it.
+ * The brightest pixel of backdrop.webp is near white (#fffee0). Story 2.5 raised the scrim from 72%
+ * to 78% so that accent-coloured text (citation superscripts, the reference numbers) keeps 4.82:1 over
+ * it; the text and the secondary text are higher than before.
  */
 :root[data-theme='illustrated'] {
   color-scheme: dark;
@@ -187,13 +198,16 @@
   --color-chip: var(--illustrated-chip);
   --color-chip-icon: var(--illustrated-chip-icon);
   --color-accent: var(--illustrated-accent);
+  /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
+  --color-passage-mark: color-mix(in srgb, var(--illustrated-accent) 30%, transparent);
+  --color-passage-mark-edge: var(--paper-mark-edge);
   --color-danger: var(--illustrated-danger);
   --color-warning: var(--illustrated-warning);
   --color-success: var(--illustrated-success);
   --color-solid: var(--illustrated-text);
   --color-on-solid: var(--illustrated-scrim);
   --color-on-status: var(--illustrated-scrim);
-  --color-scrim: color-mix(in srgb, var(--illustrated-scrim) 72%, transparent);
+  --color-scrim: color-mix(in srgb, var(--illustrated-scrim) 78%, transparent);
   --color-dim: color-mix(in srgb, var(--illustrated-scrim) 60%, transparent);
   --glass-blur: blur(16px);
   --font-answer-weight: 600;

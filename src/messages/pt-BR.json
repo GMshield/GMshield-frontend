@@ -64,7 +64,13 @@
       "warning": "Atenção",
       "success": "Pronto"
     },
-    "dismiss": "Dispensar aviso"
+    "dismiss": "Dispensar aviso",
+    "indexing": "Preparando as fontes para busca: faltam {remaining} trechos",
+    "indexingOne": "Preparando as fontes para busca: falta {remaining} trecho",
+    "indexingRetrying": "Não foi possível preparar {count} trechos para busca; nova tentativa em alguns minutos.",
+    "indexingRetryingOne": "Não foi possível preparar {count} trecho para busca; nova tentativa em alguns minutos.",
+    "indexingFailed": "Não foi possível preparar {count} trechos para busca.",
+    "indexingFailedOne": "Não foi possível preparar {count} trecho para busca."
   },
   "errors": {
     "categories": {
@@ -386,6 +392,48 @@
     "navigation": "Páginas",
     "extracted": "Texto extraído",
     "noText": "Nenhum texto foi extraído desta página.",
-    "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório."
+    "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório.",
+    "citedPassage": "trecho citado",
+    "loadFailed": "Não foi possível carregar esta página."
+  },
+  "conversation": {
+    "heading": "Consultas",
+    "turns": "Perguntas e respostas",
+    "question": "Pergunta",
+    "answer": "Resposta",
+    "composer": {
+      "label": "Sua pergunta",
+      "placeholder": "Pergunte sobre as regras da campanha",
+      "send": "Enviar"
+    },
+    "searching": "Procurando nas fontes…",
+    "answering": "Respondendo…",
+    "answerIn": "Resposta em {language}",
+    "languages": {
+      "pt-BR": "português",
+      "en": "inglês"
+    },
+    "link": "{text} ({address})",
+    "silent": "As fontes não dizem nada sobre isso.",
+    "references": "Fontes",
+    "citation": "fonte",
+    "sourceRemoved": "fonte removida",
+    "page": "p. {page}",
+    "stop": "Parar",
+    "stopped": "Interrompida",
+    "connectionLost": "Conexão perdida. Tentando de novo…",
+    "reconnectFailed": "Não foi possível reconectar.",
+    "retry": "Tentar de novo",
+    "refused": "O modelo recusou este pedido. Reformule a pergunta e envie de novo.",
+    "questionFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.",
+    "sourceFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta.",
+    "unavailable": "O serviço de IA está indisponível agora.",
+    "truncated": "A resposta foi cortada antes do fim.",
+    "empty": {
+      "noSources": "Esta campanha ainda não tem fontes aceitas.",
+      "upload": "Enviar um arquivo",
+      "review": "Revisar {name}"
+    },
+    "close": "Fechar a fonte"
   }
 }

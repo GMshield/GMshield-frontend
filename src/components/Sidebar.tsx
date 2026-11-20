@@ -9,11 +9,12 @@ import { sidebarCookieLine, type SidebarState } from '@/sidebar-cookie';
 import { ChevronLeftIcon, ChevronRightIcon, UploadIcon } from './Icons';
 import { LogoMark } from './Logo';
 import { LogoMenu } from './LogoMenu';
-import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
+import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, setInertBy, type EntryKey } from './shell-entries';
 import styles from './Sidebar.module.css';
 import type { Material } from './uploads/types';
 import { UploadDialog } from './uploads/UploadDialog';
 import { UploadTray } from './uploads/UploadTray';
+import { useUploads } from './uploads/UploadsProvider';
 
 /** At this width and above the sidebar sits beside the main column, and its state is remembered. */
 export const WIDE_QUERY = '(min-width: 1280px)';
@@ -62,7 +63,7 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
   const collapse = useRef<HTMLButtonElement>(null);
   const focusNext = useRef<'handle' | 'collapse' | null>(null);
   const addFile = useRef<HTMLButtonElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const { uploadOpen: uploading, openUpload, closeUpload } = useUploads();
   const focusAfterDialog = useRef(false);
 
   const toggle = useCallback(() => {
@@ -89,11 +90,11 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
   useEffect(() => {
     const behind = document.querySelectorAll(`[${BEHIND_SIDEBAR}]`);
     for (const element of behind) {
-      element.toggleAttribute('inert', narrowOpen);
+      setInertBy(element, 'sidebar', narrowOpen);
     }
     return () => {
       for (const element of behind) {
-        element.removeAttribute('inert');
+        setInertBy(element, 'sidebar', false);
       }
     };
   }, [narrowOpen]);
@@ -188,7 +189,7 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
           onClick={() => {
             // Under 1280px the sheet closes first: the dialog never stacks on it.
             setOpenedOn(null);
-            setUploading(true);
+            openUpload();
           }}
         >
           <UploadIcon />
@@ -199,7 +200,7 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
         open={uploading}
         onClose={() => {
           focusAfterDialog.current = true;
-          setUploading(false);
+          closeUpload();
         }}
       />
       <LogoMark className={styles.mark} />

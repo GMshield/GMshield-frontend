@@ -94,7 +94,12 @@ describe('the signed-in layout (Story 1.11)', () => {
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
-    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(['GET /api/v1/campaigns/current', MATERIALS, 'GET /api/v1/me']);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      'GET /api/v1/campaigns/current',
+      'GET /api/v1/conversations/current',
+      MATERIALS,
+      'GET /api/v1/me',
+    ]);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
       expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
@@ -150,9 +155,8 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html).toContain('Nenhuma campanha');
   });
 
-  it('every entry page names itself and says what will be there, in both languages', async () => {
+  it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
     const pages = {
-      questions: (await import('@/app/(signed-in)/questions/page')).default,
       rules: (await import('@/app/(signed-in)/rules/page')).default,
       campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
       systems: SystemsPage,
@@ -171,7 +175,48 @@ describe('the signed-in layout (Story 1.11)', () => {
         expect(messages.placeholder[key], `${language} ${key}`).not.toMatch(/!|\p{Extended_Pictographic}/u);
       }
     }
-    expect(ptBR.placeholder.questions).toBe('Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.');
+    expect(ptBR.placeholder.rules).toBe('Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.');
+  });
+
+  it('the questions page (Story 2.4) is the conversation: the composer, and with no source the empty state', async () => {
+    const conversation = { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: false };
+    const review = { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', kind: 'rulebook' }] };
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': { status: 200, body: conversation },
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: review },
+    });
+    requestHeaders = { 'x-gmshield-path': '/questions' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+
+    let html = await layoutHtml(await QuestionsPage());
+
+    expect(html).toContain('<h1');
+    expect(html).toContain('Consultas');
+    expect(html).toContain('aria-label="Enviar"');
+    expect(html).toContain('<textarea');
+    expect(html).toContain('Esta campanha ainda não tem fontes aceitas.');
+    expect(html).toContain('Enviar um arquivo');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
+    expect(html).toContain('Revisar Bestiário.pdf');
+    expect(html).not.toContain('style=');
+    const asked = server.calls.find((request) => request.url === '/api/v1/conversations/current');
+    expect(asked?.headers['x-session-token']).toBe(SESSION);
+
+    await backend?.close();
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': { status: 200, body: { ...conversation, hasSources: true } },
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: { items: [] } },
+    });
+    cookieJar = { ...cookieJar, '__Host-gmshield-lang': 'en' };
+    html = await layoutHtml(await QuestionsPage());
+    expect(html).toContain('aria-label="Send"');
+    expect(html).not.toContain('has no accepted sources');
   });
 });
 
@@ -641,13 +686,135 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     routes[MATERIALS] = { status: 200, body: { items: [{ id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] }] } };
     expect(await layoutHtml()).not.toContain('role="status"');
 
-    // A campaign notice already shown: no second notice.
+    // With a campaign notice, both show, one line each: the campaign's first.
     routes['GET /api/v1/campaigns/current'] = problem(503, 'server.unavailable');
     routes[MATERIALS] = { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: [] }] } };
     html = await layoutHtml();
-    expect(html).toContain('data-status="danger"');
-    expect(html).not.toContain('needs review.');
-    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html.match(/role="status"/g)).toHaveLength(2);
+    expect(html.indexOf('data-status="danger"')).toBeLessThan(html.indexOf('Antigo.pdf needs review.'));
+  });
+});
+
+describe('the indexing notice', () => {
+  const CONVERSATION = 'GET /api/v1/conversations/current';
+  const conversation = (
+    indexing: { remaining: number } | null,
+    indexingFailed: { passages: number; retrying: boolean } | null = null,
+  ) => ({
+    status: 200,
+    body: { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: true, indexing, indexingFailed },
+  });
+  /** The notices of the main column, in order: [status, text, live?]. */
+  const notices = (html: string) =>
+    [...html.matchAll(/<div ([^>]*)data-status="(\w+)"[^>]*>(.*?)<\/div>/g)].map((match) => [
+      match[2],
+      match[3]!.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      match[1]!.includes('role="status"'),
+    ]);
+
+  it('says how many passages are left, in both languages, with no dismiss control and no live role, on every signed-in page', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [CONVERSATION]: conversation({ remaining: 2000 }),
+    };
+    const server = await useBackend(routes);
+    let html = await layoutHtml(await SystemsPage());
+
+    // Matrix row "Indexing": the SRD's 2,000 passages pending.
+    expect(notices(html)).toEqual([['warning', 'Atenção Preparando as fontes para busca: faltam 2.000 trechos', false]]);
+    expect(html).not.toContain('Dispensar aviso');
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    expect(server.calls.find((call) => call.url === '/api/v1/conversations/current')?.headers['x-session-token']).toBe(SESSION);
+    // In the main column, before the page.
+    expect(html.indexOf('<main')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(html.indexOf('Preparando as fontes')).toBeLessThan(html.indexOf('<h1'));
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([['warning', 'Warning Preparing your sources for search: 2,000 passages left', false]]);
+    expect(html).not.toContain('Dismiss notice');
+
+    // Matrix row "Two versions": the backend adds them up; the layout shows its number as it is.
+    routes[CONVERSATION] = conversation({ remaining: 150 });
+    expect(notices(await layoutHtml())).toEqual([['warning', 'Warning Preparing your sources for search: 150 passages left', false]]);
+
+    // Matrix row "Nothing pending": no notice.
+    routes[CONVERSATION] = conversation(null);
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+    expect(html).not.toContain('Preparing your sources');
+  });
+
+  it('adds the failure line second: a warning while a retry remains, an error after, also with nothing pending', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [CONVERSATION]: conversation({ remaining: 50 }, { passages: 200, retrying: true }),
+    };
+    await useBackend(routes);
+
+    // Matrix row "Run fails": both lines, the failure second, neither dismissible nor live.
+    let html = await layoutHtml();
+    expect(notices(html)).toEqual([
+      ['warning', 'Atenção Preparando as fontes para busca: faltam 50 trechos', false],
+      ['warning', 'Atenção Não foi possível preparar 200 trechos para busca; nova tentativa em alguns minutos.', false],
+    ]);
+    expect(html).not.toContain('Dispensar aviso');
+    // Nothing pending, a retry to come: the failure line alone.
+    routes[CONVERSATION] = conversation(null, { passages: 1, retrying: true });
+    expect(notices(await layoutHtml())).toEqual([
+      ['warning', 'Atenção Não foi possível preparar 1 trecho para busca; nova tentativa em alguns minutos.', false],
+    ]);
+    // Matrix row "Retries used": an error line.
+    routes[CONVERSATION] = conversation(null, { passages: 200, retrying: false });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([['danger', 'Error Could not prepare 200 passages for search.', false]]);
+    expect(html).not.toContain('Dismiss notice');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+
+  it('no conversation (no campaign) or one that cannot be loaded: no notice', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(404, 'request.not_found'),
+      [CONVERSATION]: problem(404, 'request.not_found'),
+    };
+    await useBackend(routes);
+    let html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+    routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
+    routes[CONVERSATION] = problem(503, 'server.unavailable');
+    html = await layoutHtml();
+    expect(notices(html)).toEqual([]);
+  });
+
+  it('stacks under a campaign error and a material that needs review, one line each, in that order', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(503, 'server.unavailable'),
+      [MATERIALS]: { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', actions: [] }] } },
+      [CONVERSATION]: conversation({ remaining: 150 }),
+    };
+    await useBackend(routes);
+    let html = await layoutHtml();
+
+    expect(notices(html)).toEqual([
+      ['danger', 'Erro O serviço está indisponível agora. Tente de novo em instantes.', true],
+      ['warning', 'Atenção Bestiário.pdf precisa de revisão. Revisar', true],
+      ['warning', 'Atenção Preparando as fontes para busca: faltam 150 trechos', false],
+    ]);
+    // The first two can be dismissed; the indexing notice cannot.
+    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(2);
+    expect(html.lastIndexOf('Dispensar aviso')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+
+    // The campaign loads again: the review and indexing notices stay, in that order.
+    routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
+    html = await layoutHtml();
+    expect(notices(html).map(([status]) => status)).toEqual(['warning', 'warning']);
+    expect(html.indexOf('precisa de revisão')).toBeLessThan(html.indexOf('Preparando as fontes'));
   });
 });
 

@@ -25,3 +25,29 @@ export type EntryKey = PageEntryKey | typeof ADD_FILE.key;
  * them inert while it is open over them, under 1280px.
  */
 export const BEHIND_SIDEBAR = 'data-behind-sidebar';
+
+/**
+ * Story 2.7: marks the shell's part behind the source view (the context bar and main column): the source view makes it
+ * inert while it is open over it, under 1280px.
+ */
+export const BEHIND_PANEL = 'data-behind-panel';
+
+/** Who has made an element inert, so that one leaving never undoes another (the sidebar, the source view). */
+const INERT_BY = 'data-inert-by';
+
+/** Makes `element` inert for `by`, or no longer for `by`; it stays inert while anyone else still holds it. */
+export function setInertBy(element: Element, by: string, inert: boolean): void {
+  const holders = new Set((element.getAttribute(INERT_BY) ?? '').split(' ').filter((holder) => holder !== ''));
+  if (inert) {
+    holders.add(by);
+  } else {
+    holders.delete(by);
+  }
+  if (holders.size === 0) {
+    element.removeAttribute(INERT_BY);
+    element.removeAttribute('inert');
+  } else {
+    element.setAttribute(INERT_BY, [...holders].sort((a, b) => a.localeCompare(b)).join(' '));
+    element.setAttribute('inert', '');
+  }
+}

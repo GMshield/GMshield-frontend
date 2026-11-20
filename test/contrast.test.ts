@@ -109,6 +109,10 @@ function pairs(theme: Theme, page: Rgb): [string, Rgb, Rgb][] {
     ['text on surface', text, surface],
     ['muted text on surface', muted, surface],
     ['accent on surface', opaque(role(theme, 'accent')), surface],
+    // Story 2.5: citation superscripts and reference numbers are accent text on the canvas.
+    ['accent text on canvas', opaque(role(theme, 'accent')), page],
+    // Story 2.7: a cited passage of a text page is text over the passage mark, in the source view's surface.
+    ['text on a cited passage', text, over(role(theme, 'passage-mark'), surface)],
     ['text on active row', text, over(role(theme, 'surface-active'), surface)],
     ['text in field', text, over(role(theme, 'field'), page)],
     ['text on dialog over the dimmed canvas', text, dialog],
@@ -197,6 +201,20 @@ describe('contrast (WCAG 2.1 AA, 4.5:1)', () => {
       }
     }
     expectAA('illustrated', worst);
+  });
+
+  it('the edge of a cited passage on a page picture: 3:1 over white and over yellowed paper, in every theme', () => {
+    // A page picture is printed paper whatever the theme. The yellowed paper is the margin of a scanned 19th-century
+    // book page (a 636-page scan, p. 94) as the source view rendered it on 2026-11-19, sampled from a screenshot.
+    // The stroke is centred on the box, so each side is checked: the bare paper outside and the marked paper inside.
+    const papers: [string, Rgb][] = [['white paper', [255, 255, 255]], ['yellowed paper', hex('#a29570')]];
+    for (const theme of THEMES) {
+      const edge = opaque(role(theme, 'passage-mark-edge'));
+      for (const [name, paper] of papers) {
+        expect(ratio(edge, paper), `${theme}: mark edge on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+        expect(ratio(edge, over(role(theme, 'passage-mark'), paper)), `${theme}: mark edge on marked ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+      }
+    }
   });
 
   it('sharp loads (it measures the backdrop)', async () => {

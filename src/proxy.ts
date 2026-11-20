@@ -27,7 +27,8 @@ import { outgoingTraceparent, parseTraceparent, traceFrom } from '@/server/trace
  *
  * It does not run on `/api/v1/uploads/**` (Story 1.13, see {@link config}): when a proxy runs, Next.js keeps a copy of
  * up to 10 MB of the request body in memory, and an upload part is 64 MiB. That route checks the origin itself with
- * {@link isSameOrigin}, and sets `no-store` on its answers.
+ * {@link isSameOrigin}, and sets `no-store` on its answers. Nor on `/api/v1/turns/{id}/events` (Story 2.4), a turn's
+ * event stream, which stays open while the answer is written: that relay checks the origin and sets `no-store` too.
  */
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -223,6 +224,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  // Everything but Next.js's static files and the upload relay, whose bodies must stream (see above).
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/v1/uploads).*)'],
+  // Everything but Next.js's static files, the upload relay, whose bodies must stream, and a turn's event stream (Story
+  // 2.4), which lives as long as its answer (see above).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/v1/uploads|api/v1/turns/[^/]+/events).*)'],
 };
