@@ -827,6 +827,43 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     expect(alerted()).toBe(refusal);
   });
 
+  // Story 2.8: a provider's prompt filter that flagged the question or a source acts like a refusal, with its own text.
+  it.each([
+    {
+      code: 'model.question_flagged',
+      language: 'pt-BR' as const,
+      text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.',
+    },
+    {
+      code: 'model.source_flagged',
+      language: 'pt-BR' as const,
+      text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes desta campanha parece uma instrução ao assistente. Revise os arquivos da campanha ou reformule a pergunta.',
+    },
+    {
+      code: 'model.question_flagged',
+      language: 'en' as const,
+      text: "The AI provider's safety filter blocked this question because it seems to try to change the assistant's instructions. Rephrase the question and send it again.",
+    },
+    {
+      code: 'model.source_flagged',
+      language: 'en' as const,
+      text: "The AI provider's safety filter blocked this question because a passage in this campaign's sources looks like an instruction to the assistant. Review the campaign's files or rephrase the question.",
+    },
+  ])('shows $code in $language as a refusal of its own: no retry, the question back in the composer', async ({ code, language, text }) => {
+    view({ language });
+    const stream = await ask('How much damage does the Amber Blade deal?', 'en');
+    stream.emit('delta', { text: 'The Amber ' }, 1);
+
+    stream.emit('error', { code }, 2);
+
+    expect(turns().getByText(text)).toBeTruthy();
+    expect(turns().queryByText('The Amber')).toBeNull();
+    expect(turns().queryByText(language === 'en' ? 'The model declined this request. Rephrase the question and send it again.' : 'O modelo recusou este pedido. Reformule a pergunta e envie de novo.')).toBeNull();
+    expect(turns().queryByRole('button', { name: language === 'en' ? 'Try again' : 'Tentar de novo' })).toBeNull();
+    expect(composer().value).toBe('How much damage does the Amber Blade deal?');
+    expect(alerted()).toBe(text);
+  });
+
   it('re-asks an outage in place with Tentar de novo', async () => {
     view();
     const stream = await ask('Quanto dano causa Fire Bolt?');

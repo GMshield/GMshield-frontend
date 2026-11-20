@@ -425,6 +425,8 @@
     "reconnectFailed": "Could not reconnect.",
     "retry": "Try again",
     "refused": "The model declined this request. Rephrase the question and send it again.",
+    "questionFlagged": "The AI provider's safety filter blocked this question because it seems to try to change the assistant's instructions. Rephrase the question and send it again.",
+    "sourceFlagged": "The AI provider's safety filter blocked this question because a passage in this campaign's sources looks like an instruction to the assistant. Review the campaign's files or rephrase the question.",
     "unavailable": "The AI service is unavailable right now.",
     "truncated": "The answer was cut off before the end.",
     "empty": {

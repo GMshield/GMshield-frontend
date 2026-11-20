@@ -425,6 +425,8 @@
     "reconnectFailed": "Não foi possível reconectar.",
     "retry": "Tentar de novo",
     "refused": "O modelo recusou este pedido. Reformule a pergunta e envie de novo.",
+    "questionFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.",
+    "sourceFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes desta campanha parece uma instrução ao assistente. Revise os arquivos da campanha ou reformule a pergunta.",
     "unavailable": "O serviço de IA está indisponível agora.",
     "truncated": "A resposta foi cortada antes do fim.",
     "empty": {

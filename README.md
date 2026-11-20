@@ -414,6 +414,13 @@ they sit in `src/`.
   Tests: a hostile answer (an autolink, a `javascript:` link, an `<iframe>`, a reference-style image, a link) renders
   no `a`, `img`, `iframe` or `script` and nothing with `src` or `href` (`test/conversation.test.tsx`); HTML in a
   material name or section path is text in `References` and the `SourceView` heading (`test/components.test.tsx`).
+  A provider's prompt filter has its own `error` codes (codes are opaque to the backend, so no contract change), each
+  shown like `model.refused` (the partial text hidden, no "Tentar de novo", the question back in the composer when it
+  is empty, said at once): `model.question_flagged` (Azure's jailbreak check flagged the question): "O filtro de
+  segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente.
+  Reformule a pergunta e envie de novo."; `model.source_flagged` (its indirect-attack check flagged a passage): "O
+  filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes desta campanha parece uma
+  instrução ao assistente. Revise os arquivos da campanha ou reformule a pergunta." English in `src/messages/en.json`.
 - **The indexing notice.** Public contract 1.15.0; the failure line from 1.16.0.
   - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
     (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a

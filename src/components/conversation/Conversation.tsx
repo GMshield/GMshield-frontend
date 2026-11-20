@@ -30,8 +30,20 @@ type TurnStatus = 'sending' | 'searching' | 'answering' | 'done' | 'stopped' | '
 /** The statuses of an answer still running: the send button is Stop, and Enter sends nothing. */
 const RUNNING: ReadonlySet<TurnStatus> = new Set<TurnStatus>(['sending', 'searching', 'answering']);
 
-/** How an answer failed (Story 2.6), from its `error` event's code: each has its own text. */
-type Failure = 'refused' | 'unavailable' | 'truncated';
+/**
+ * How an answer failed (Story 2.6), from its `error` event's code: each has its own text. A provider's prompt filter
+ * that flagged the question or a source (Story 2.8) is a refusal of its own.
+ */
+type Failure = 'refused' | 'questionFlagged' | 'sourceFlagged' | 'unavailable' | 'truncated';
+/** The failures that act as a refusal: no retry, and the question goes back to the composer. */
+const REFUSALS: ReadonlySet<Failure> = new Set<Failure>(['refused', 'questionFlagged', 'sourceFlagged']);
+/** The `error` codes with a failure of their own; any other code is an outage. */
+const FAILURES: ReadonlyMap<string, Failure> = new Map<string, Failure>([
+  ['model.refused', 'refused'],
+  ['model.question_flagged', 'questionFlagged'],
+  ['model.source_flagged', 'sourceFlagged'],
+  ['model.truncated', 'truncated'],
+]);
 /** The state of a running answer's stream: open, lost while it reconnects, or given up (Story 2.6). */
 type Connection = 'open' | 'lost' | 'failed';
 
@@ -69,12 +81,9 @@ type Spoken = {
 /** A running answer's stream, as the page holds it: closed on leaving, reopened by "Tentar de novo". */
 type Follower = { readonly close: () => void; readonly reopen: () => void; readonly connection: () => Connection };
 
-/** The failure of an `error` event's code: a refusal, a truncation, or (any other code) an outage. */
+/** The failure of an `error` event's code: a refusal (or a flagged question or source), a truncation, or an outage. */
 function failureOf(code: string | null): Failure {
-  if (code === 'model.refused') {
-    return 'refused';
-  }
-  return code === 'model.truncated' ? 'truncated' : 'unavailable';
+  return (code === null ? undefined : FAILURES.get(code)) ?? 'unavailable';
 }
 
 /** The superscripts of a finished answer: each citation whose passage is in a reference, with its number. */
@@ -194,7 +203,8 @@ function sequenceOf(id: string): number | null {
  *   waiting 1 s, 2 s, 4 s… up to 15 s between tries. After 2 minutes without an `open`, the line says "Não foi possível
  *   reconectar." with "Tentar de novo", which reopens it.
  * - Story 2.6, failures: an `error` event's code has its own text, said at once by an assertive region. A refusal
- *   hides the partial text and puts the question back in an empty composer; an outage (any other code) hides it too
+ *   (Story 2.8: or a prompt filter that flagged the question or a source, each with its own text) hides the partial
+ *   text and puts the question back in an empty composer; an outage (any other code) hides it too
  *   and offers "Tentar de novo"; a truncation keeps it, with its own text and "Tentar de novo". "Tentar de novo" asks
  *   the same question again as a new turn, in place of the failed one.
  * - With no accepted source, a line above the composer says so, with the guided upload and the newest material to
@@ -440,7 +450,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             problem: { code, category: null },
           }));
           announce(t(`conversation.${failure}`));
-          if (failure === 'refused') {
+          if (REFUSALS.has(failure)) {
             restore(question);
           }
         });
@@ -664,7 +674,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
               {turn.status === 'failed' && turn.failure !== null ? (
                 <p className={styles.failed}>
                   <span>{t(`conversation.${turn.failure}`)}</span>
-                  {turn.failure === 'refused' ? null : (
+                  {REFUSALS.has(turn.failure) ? null : (
                     <button type="button" className={styles.retry} disabled={running} onClick={() => void ask(turn.question, turn.key)}>
                       {t('conversation.retry')}
                     </button>
