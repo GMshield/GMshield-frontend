@@ -45,6 +45,8 @@ type TreeNode = {
   data?: Record<string, unknown>;
 };
 
+// PHRASING and INLINE_CONTAINERS are complete only because remark-gfm is not enabled: adding GFM must extend them
+// for `delete` (strikethrough) and table cells.
 /** Nodes whose children are text and inline nodes: a mark inside one stays inline. */
 const PHRASING = new Set(['paragraph', 'heading', 'emphasis', 'strong']);
 
