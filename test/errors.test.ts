@@ -14,10 +14,11 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 // (Story 1.7), sign-in and sessions (Story 1.9, AccountProblems.java), and the renewal and the service
 // credential (Story 1.10, AccountProblems.java and ServiceCredentialFilter.java), the upload (Story 1.13,
 // UploadProblems.java; Story 1.21 adds the image set's two), the page routes (Story 1.19, PageProblems.java), and the
-// review actions (Story 1.20, MaterialProblems.java).
+// review actions (Story 1.20, MaterialProblems.java), and the systems (Story 3.1, LibraryProblems.java).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
-    'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required'],
+    'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required',
+    'system_name_invalid', 'system_edition_invalid', 'system_description_invalid', 'system_name_taken', 'stale_version'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
   session: ['required', 'renewal_required', 'already_renewed'],

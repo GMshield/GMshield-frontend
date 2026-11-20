@@ -1,0 +1,47 @@
+/* A list page's rows (Story 3.1): one per line, each a 44px target when it opens a page. */
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-height: var(--space-touch-target);
+  padding: var(--space-2) 0;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.link:hover .label,
+.link:focus-visible .label {
+  text-decoration: underline;
+}
+
+.label {
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* "Carregar mais": a pill under the list, never the solid one. */
+.more {
+  margin: var(--space-4) 0 0;
+}
+
+.error {
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+}

@@ -36,6 +36,34 @@
     "characters": "Here you will keep the characters of your campaigns.",
     "files": "Here you will see the files you have sent and the state of each one."
   },
+  "systems": {
+    "new": "New system",
+    "list": "Your systems",
+    "empty": "A system holds the campaigns and materials of one game.",
+    "loadMore": "Load more",
+    "edition": "Edition {edition}",
+    "form": {
+      "newTitle": "New system",
+      "editTitle": "Edit system",
+      "name": "Name",
+      "edition": "Edition (optional)",
+      "description": "Description (optional)",
+      "create": "Create system",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This system was changed elsewhere. The fields now show its current values: make your change again and save."
+    },
+    "page": {
+      "edit": "Edit",
+      "sections": "System sections",
+      "campaigns": "Campaigns",
+      "materials": "Materials",
+      "campaignList": "Campaigns of this system",
+      "materialList": "Materials of this system",
+      "noCampaigns": "This system has no campaigns yet.",
+      "noMaterials": "No material belongs to this system or its campaigns."
+    }
+  },
   "notFound": {
     "title": "Not found.",
     "home": "Go to the start"
@@ -98,7 +126,12 @@
         "sign_in_refused": "Google did not confirm the sign-in. Try again.",
         "username_taken": "This username is already in use.",
         "username_invalid": "Use {min} to {max} characters: letters a to z in upper or lower case, digits, \"_\", \".\" and \"-\".",
-        "terms_required": "Accept the terms of use and the privacy notice to continue."
+        "terms_required": "Accept the terms of use and the privacy notice to continue.",
+        "system_name_invalid": "The name needs {min} to {max} characters.",
+        "system_edition_invalid": "The edition can have at most {max} characters.",
+        "system_description_invalid": "The description can have at most {max} characters.",
+        "system_name_taken": "You already have a system with this name and edition.",
+        "stale_version": "This was changed elsewhere. Reload the page to see the current version."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",

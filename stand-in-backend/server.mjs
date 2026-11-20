@@ -11,7 +11,9 @@
 // image set (Story 1.21) is created with two images, and leaving one out answers it waiting. Story 2.4: the current
 // conversation has sources (all indexed: no indexing count), a question is recorded in Portuguese, and a turn's events
 // (text/event-stream) are a short cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose
-// passage it cites, and the page of reference 2 a text page with the cited passage's range.
+// passage it cites, and the page of reference 2 a text page with the cited passage's range. Story 3.1: the systems list
+// holds the starter system (no edition, no description, version 0), whose one campaign is the current campaign; a new
+// system is "D&D" 5.2.1, and an edit answers the starter system at version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -120,8 +122,31 @@ function templateToPattern(template) {
   return new RegExp(`^${pattern}$`);
 }
 
+/** Story 3.1: the starter system of a first sign-in, as the backend answers it, and its one campaign. */
+export const STARTER_SYSTEM = {
+  id: '0190a0b0-0000-7000-8000-000000000001',
+  name: 'Sistema sem nome',
+  edition: null,
+  description: null,
+  version: 0,
+};
+const STARTER_CAMPAIGN = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
+  'GET /api/v1/campaigns/current': { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM },
+  'GET /api/v1/campaigns/{id}': { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM },
+  'GET /api/v1/campaigns': { items: [STARTER_CAMPAIGN] },
+  'GET /api/v1/systems': { items: [STARTER_SYSTEM] },
+  'GET /api/v1/systems/{id}': STARTER_SYSTEM,
+  'POST /api/v1/systems': {
+    id: '0190a0b0-0000-7000-8000-000000000030',
+    name: 'D&D',
+    edition: '5.2.1',
+    description: 'As regras básicas, sem suplementos.',
+    version: 0,
+  },
+  'PATCH /api/v1/systems/{id}': { ...STARTER_SYSTEM, version: 1 },
   'GET /api/v1/materials': { items: [] },
   'GET /api/v1/materials/{id}': {
     id: '0190a0b0-0000-7000-8000-000000000003',

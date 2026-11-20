@@ -36,6 +36,34 @@
     "characters": "Aqui você vai guardar os personagens das suas campanhas.",
     "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um."
   },
+  "systems": {
+    "new": "Novo sistema",
+    "list": "Seus sistemas",
+    "empty": "Um sistema reúne as campanhas e os materiais de um jogo.",
+    "loadMore": "Carregar mais",
+    "edition": "Edição {edition}",
+    "form": {
+      "newTitle": "Novo sistema",
+      "editTitle": "Editar sistema",
+      "name": "Nome",
+      "edition": "Edição (opcional)",
+      "description": "Descrição (opcional)",
+      "create": "Criar sistema",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Este sistema foi alterado em outro lugar. Os campos agora mostram os valores atuais: faça sua alteração de novo e salve."
+    },
+    "page": {
+      "edit": "Editar",
+      "sections": "Seções do sistema",
+      "campaigns": "Campanhas",
+      "materials": "Materiais",
+      "campaignList": "Campanhas deste sistema",
+      "materialList": "Materiais deste sistema",
+      "noCampaigns": "Este sistema ainda não tem campanhas.",
+      "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas."
+    }
+  },
   "notFound": {
     "title": "Não encontrado.",
     "home": "Ir para o início"
@@ -98,7 +126,12 @@
         "sign_in_refused": "O Google não confirmou a entrada. Tente de novo.",
         "username_taken": "Este nome de usuário já está em uso.",
         "username_invalid": "Use de {min} a {max} caracteres: letras de a a z, maiúsculas ou minúsculas, números, \"_\", \".\" e \"-\".",
-        "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar."
+        "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar.",
+        "system_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "system_edition_invalid": "A edição pode ter até {max} caracteres.",
+        "system_description_invalid": "A descrição pode ter até {max} caracteres.",
+        "system_name_taken": "Você já tem um sistema com este nome e esta edição.",
+        "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",

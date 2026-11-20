@@ -5,6 +5,8 @@ export type Contract = { info: { version: string }; paths?: Record<string, Recor
 export type Answer = { status: number; type: string | null; body: unknown; headers?: Record<string, string> };
 
 export const EXAMPLES: Readonly<Record<string, unknown>>;
+/** Story 3.1: the starter system, as the systems list and the current campaign answer it. */
+export const STARTER_SYSTEM: { id: string; name: string; edition: null; description: null; version: number };
 export const PICTURE: Buffer;
 export type StandInReference = {
   number: number;

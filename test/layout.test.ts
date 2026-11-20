@@ -18,7 +18,8 @@ vi.mock('next/navigation', async (importOriginal) => ({
 const { createElement } = await import('react');
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
-const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
+// A page still to be built: the layout tests' plain page.
+const { default: CharactersPage } = await import('@/app/(signed-in)/characters/page');
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
@@ -82,14 +83,14 @@ describe('the signed-in layout (Story 1.11)', () => {
   it('loads the account and its current campaign with the session, and shows them in the shell', async () => {
     const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN });
     cookieJar['__Host-gmshield-lang'] = 'en';
-    const html = await layoutHtml(await SystemsPage());
+    const html = await layoutHtml(await CharactersPage());
 
     expect(html).toContain('Untitled system');
     expect(html).toContain('First campaign');
     expect(html).toContain('Signed in as Mestre_Ana');
     expect(html).toContain('<main');
     expect(html).toContain('<h1');
-    expect(html).toContain('Here you will see and organise your game systems.');
+    expect(html).toContain('Here you will keep the characters of your campaigns.');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
@@ -159,8 +160,7 @@ describe('the signed-in layout (Story 1.11)', () => {
     const pages = {
       rules: (await import('@/app/(signed-in)/rules/page')).default,
       campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
-      systems: SystemsPage,
-      characters: (await import('@/app/(signed-in)/characters/page')).default,
+      characters: CharactersPage,
       files: FilesPage,
     } as const;
     const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -719,7 +719,7 @@ describe('the indexing notice', () => {
       [CONVERSATION]: conversation({ remaining: 2000 }),
     };
     const server = await useBackend(routes);
-    let html = await layoutHtml(await SystemsPage());
+    let html = await layoutHtml(await CharactersPage());
 
     // Matrix row "Indexing": the SRD's 2,000 passages pending.
     expect(notices(html)).toEqual([['warning', 'Atenção Preparando as fontes para busca: faltam 2.000 trechos', false]]);

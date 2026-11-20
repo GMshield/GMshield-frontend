@@ -637,3 +637,115 @@ describe('HTML in a material name or section path is text (Story 2.8)', () => {
     expectNoElementFromText(container);
   });
 });
+
+describe('ItemList (Story 3.1)', () => {
+  const row = (id: string, label: string, href: string | null = null) => ({ id, label, detail: null, href, state: null });
+
+  it('shows the rows, each opening its page when it has one, and "Carregar mais" adds the next page under them on request', async () => {
+    const { ItemList } = await import('@/components/ItemList');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c')], nextCursor: 'c', error: null })
+      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c'), row('d', 'Quarto')], nextCursor: null, error: null });
+    const { container } = render(
+      <ItemList
+        label="Seus sistemas"
+        rows={[{ ...row('a', 'D&D', '/systems/a'), detail: '5.2.1' }, row('b', 'Segundo', '/systems/b')]}
+        nextCursor="b"
+        loadMore="Carregar mais"
+        action={action}
+        fields={{ system: 's' }}
+      />,
+    );
+    const list = screen.getByRole('list', { name: 'Seus sistemas' });
+    expect(within(list).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/systems/a', '/systems/b']);
+    expect(within(list).getAllByRole('link')[0]!.textContent).toBe('D&D5.2.1');
+
+    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
+    await screen.findByText('Terceiro');
+    const sent = action.mock.calls[0]?.[1] as FormData;
+    expect(sent.get('cursor')).toBe('b');
+    expect(sent.get('system')).toBe('s');
+    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
+    await screen.findByText('Quarto');
+    expect((action.mock.calls[1]?.[1] as FormData).get('cursor')).toBe('c');
+    // The last page: no more pill, and a row without a page opens nothing.
+    expect(screen.queryByRole('button', { name: 'Carregar mais' })).toBeNull();
+    expect(screen.getByText('Quarto').closest('a')).toBeNull();
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4);
+    expectNoStyleAttribute(container);
+  });
+
+  it('a refusal shows as an alert under the list, and the rows stay', async () => {
+    const { ItemList } = await import('@/components/ItemList');
+    const user = userEvent.setup();
+    const action = vi.fn().mockResolvedValueOnce({ rows: [], nextCursor: 'a', error: 'O serviço está indisponível agora.' });
+    render(<ItemList label="Lista" rows={[row('a', 'D&D')]} nextCursor="a" loadMore="Load more" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('O serviço está indisponível agora.');
+    expect(screen.getByText('D&D')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+  });
+});
+
+type SystemFormState = import('@/app/(signed-in)/systems/form-state').SystemFormState;
+
+describe('SystemForm (Story 3.1)', () => {
+  const labels = { name: 'Nome', edition: 'Edição (opcional)', description: 'Descrição (opcional)', submit: 'Salvar', cancel: 'Cancelar' };
+  const start = { values: { name: 'D&D', edition: '5.2.1', description: '' }, version: 3, error: null, field: null, stale: false };
+
+  it('labels its fields with their limits, has one solid pill and "Cancelar", and posts the id and version', async () => {
+    const { SystemForm } = await import('@/components/SystemForm');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: SystemFormState, form: FormData) => Promise<SystemFormState>>(async () => start);
+    const { container } = render(<SystemForm labels={labels} initial={start} id="s1" cancelHref="/systems/s1" action={action} />);
+    expect(screen.getByLabelText('Nome')).toHaveProperty('maxLength', 120);
+    expect(screen.getByLabelText('Edição (opcional)')).toHaveProperty('maxLength', 60);
+    expect(screen.getByLabelText('Descrição (opcional)').tagName).toBe('TEXTAREA');
+    expect(screen.getByLabelText('Descrição (opcional)')).toHaveProperty('maxLength', 2000);
+    expect(screen.getByRole('button', { name: 'Salvar' }).dataset.variant).toBe('solid');
+    expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/systems/s1');
+    expect(container.querySelectorAll('[data-variant="solid"]')).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const sent = action.mock.calls[0]![1];
+    expect(sent.get('id')).toBe('s1');
+    expect(sent.get('version')).toBe('3');
+    expect(sent.get('name')).toBe('D&D');
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a refusal under its field and keeps what was typed; a stale edit says so and shows the current values', async () => {
+    const { SystemForm } = await import('@/components/SystemForm');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ ...start, values: { ...start.values, name: 'd&d', edition: '2024' }, error: 'Você já tem um sistema com este nome e esta edição.', field: 'name' })
+      .mockResolvedValueOnce({ values: { name: 'D&D (casa)', edition: '', description: 'Novo.' }, version: 5, error: 'Este sistema foi alterado em outro lugar.', field: null, stale: true })
+      .mockResolvedValueOnce({ values: { name: 'D&D (casa)', edition: '', description: 'Novo.' }, version: 5, error: null, field: null, stale: false });
+    render(<SystemForm labels={labels} initial={start} id="s1" cancelHref="/systems/s1" action={action} />);
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    await user.clear(name);
+    await user.type(name, 'd&d');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Você já tem um sistema com este nome e esta edição.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe(alert.id);
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('d&d');
+    expect(screen.getByLabelText('Edição (opcional)').getAttribute('aria-invalid')).toBe('false');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const stale = await screen.findByText('Este sistema foi alterado em outro lugar.');
+    expect(stale.getAttribute('role')).toBe('alert');
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('D&D (casa)');
+    expect((screen.getByLabelText('Edição (opcional)') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Descrição (opcional)') as HTMLTextAreaElement).value).toBe('Novo.');
+    expect(screen.getByLabelText('Nome').getAttribute('aria-invalid')).toBe('false');
+    // The next save names the current version.
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
+  });
+});
