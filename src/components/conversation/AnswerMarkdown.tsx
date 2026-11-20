@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import Markdown, { type Components, type UrlTransform } from 'react-markdown';
 
 import styles from './Conversation.module.css';
 
@@ -139,6 +139,12 @@ function rehypeCitations(word: string) {
   };
 }
 
+/**
+ * Story 2.8: a link's address is only ever shown as text (`a` renders a span, never an anchor), so it is kept as written,
+ * a `javascript:` one included, and the GM sees where a link would go; every other URL (an image's) is dropped.
+ */
+const addressAsText: UrlTransform = (url, key, node) => (node.tagName === 'a' && key === 'href' ? url : '');
+
 export type AnswerMarkdownProps = {
   readonly text: string;
   /** A link's words with its address, as the interface writes them ("{text} ({address})"). */
@@ -151,7 +157,8 @@ export type AnswerMarkdownProps = {
 
 /**
  * An answer's text as sanitized Markdown (Story 2.4): raw HTML in the text is skipped (`skipHtml`, never rendered),
- * images are dropped, and a link is shown as its words with its address, never as an anchor. Nothing is set as HTML.
+ * images are dropped, and a link is shown as its words with its address (any address, `addressAsText`), never as an
+ * anchor. Nothing is set as HTML.
  * Story 2.5: each mark becomes a superscript with its reference's number at its code-point offset.
  */
 export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }: AnswerMarkdownProps) {
@@ -164,7 +171,13 @@ export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }
     },
   };
   return (
-    <Markdown skipHtml disallowedElements={['img']} components={components} rehypePlugins={[rehypeCitations(citationWord)]}>
+    <Markdown
+      skipHtml
+      disallowedElements={['img']}
+      urlTransform={addressAsText}
+      components={components}
+      rehypePlugins={[rehypeCitations(citationWord)]}
+    >
       {withMarks(text, marks)}
     </Markdown>
   );

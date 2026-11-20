@@ -404,6 +404,16 @@ they sit in `src/`.
     sheet.
   - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
     with a text page whose cited range is marked.
+- **Text in a material is never an instruction (Story 2.8).** No contract change. `AnswerMarkdown` keeps every link's
+  address as written (`urlTransform`, `addressAsText`), so a `javascript:` link shows as "{text} (javascript:…)" like
+  any other instead of losing its address; links are still spans, never anchors, and image URLs are dropped. Guards:
+  `react/no-danger` is an error in `eslint.config.mjs` for every `js, jsx, mjs, cjs, ts, tsx, mts, cts` file, and
+  `test/boundaries.test.ts` fails on `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`,
+  `document.write`, `srcdoc`/`srcDoc`, `parseFromString`, `createContextualFragment` or `setHTMLUnsafe` in any such
+  file under `src/`, except the generated backend types (`src/server/backend/generated/`, also outside the lint).
+  Tests: a hostile answer (an autolink, a `javascript:` link, an `<iframe>`, a reference-style image, a link) renders
+  no `a`, `img`, `iframe` or `script` and nothing with `src` or `href` (`test/conversation.test.tsx`); HTML in a
+  material name or section path is text in `References` and the `SourceView` heading (`test/components.test.tsx`).
 - **The indexing notice.** Public contract 1.15.0; the failure line from 1.16.0.
   - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
     (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a

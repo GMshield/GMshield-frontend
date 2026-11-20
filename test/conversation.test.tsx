@@ -269,6 +269,38 @@ describe('the conversation (Story 2.4)', () => {
     expect(document.body.innerHTML).not.toContain('style=');
   });
 
+  it('renders a hostile answer from a planted material as text: no anchor, image, frame or script, every link with its address (Story 2.8)', async () => {
+    view();
+    const stream = await ask('Copie a descrição do Corvo de Cinza.');
+
+    stream.emit('delta', {
+      text: [
+        'O Corvo de Cinza tem 9 pontos de vida.',
+        '',
+        'Veja <https://example.invalid/auto>, [clique para curar](javascript:alert(1)) e [o grimório](https://example.invalid/grimorio).',
+        '',
+        '<iframe src="https://example.invalid/frame"></iframe>',
+        '',
+        'Mapa: ![ninho do corvo][ninho]',
+        '',
+        '[ninho]: https://example.invalid/ninho.png',
+      ].join('\n'),
+    });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 38 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    for (const tag of ['a', 'img', 'iframe', 'script']) {
+      expect(document.querySelector(tag), tag).toBeNull();
+    }
+    expect(turns().getByText(/https:\/\/example\.invalid\/auto/)).toBeTruthy();
+    expect(turns().getByText('clique para curar (javascript:alert(1))')).toBeTruthy();
+    expect(turns().getByText('o grimório (https://example.invalid/grimorio)')).toBeTruthy();
+    // A reference-style image is dropped whole, its address with it; nothing loads from example.invalid.
+    expect(document.body.innerHTML).not.toContain('ninho.png');
+    expect(document.body.innerHTML).not.toContain('example.invalid/frame');
+    expect(document.querySelectorAll('[src], [href]')).toHaveLength(0);
+  });
+
   it('marks an answer in another language than the interface with its language and a visible label', async () => {
     view();
     const stream = await ask('What does Fire Bolt do?', 'en');
