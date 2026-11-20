@@ -13,7 +13,7 @@ function files(directory: string): string[] {
   });
 }
 
-const sources = files(join(ROOT, 'src')).filter((path) => /\.(ts|tsx|mts|mjs|js)$/.test(path) && !path.includes('/generated/'));
+const sources = files(join(ROOT, 'src')).filter((path) => /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/.test(path) && !path.includes('/generated/'));
 
 describe('boundaries', () => {
   it('every module under src/server starts with server-only', () => {
@@ -39,6 +39,16 @@ describe('boundaries', () => {
       } else {
         expect(text, relative(ROOT, path)).not.toMatch(/\bfetch\(/);
       }
+    }
+  });
+
+  it('no code under src sets raw HTML (Story 2.8)', () => {
+    expect(sources.length).toBeGreaterThan(0);
+    for (const path of sources) {
+      const text = readFileSync(path, 'utf8');
+      expect(text, relative(ROOT, path)).not.toMatch(
+        /dangerouslySetInnerHTML|\binnerHTML\b|\bouterHTML\b|\binsertAdjacentHTML\b|\bdocument\.write(ln)?\b|\bsrc[dD]oc\b|\bparseFromString\b|\bcreateContextualFragment\b|\bsetHTMLUnsafe\b/,
+      );
     }
   });
 

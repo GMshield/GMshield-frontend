@@ -369,9 +369,10 @@ they sit in `src/`.
   - Failures: an `error` event's code has its own text, said at once by an assertive region (`role="alert"`).
     `model.refused`: "O modelo recusou este pedido. Reformule a pergunta e envie de novo.", the question back in the
     composer when it is empty, no retry. `model.truncated`: the partial text stays, followed by "A resposta foi cortada
-    antes do fim." and "Tentar de novo". Any other code (`model.unavailable`, `job.provider_unavailable`,
-    `job.attempts_exhausted`, `job.claim_lapsed`, …): "O serviço de IA está indisponível agora." with "Tentar de
-    novo". A refusal and an outage hide any partial text. "Tentar de novo" asks the same question again as a new turn,
+    antes do fim." and "Tentar de novo". `model.question_flagged` and `model.source_flagged` act like
+    `model.refused`, each with its own text (Story 2.8, below). Any other code (`model.unavailable`,
+    `job.provider_unavailable`, `job.attempts_exhausted`, `job.claim_lapsed`, …): "O serviço de IA está indisponível
+    agora." with "Tentar de novo". A refusal and an outage hide any partial text. "Tentar de novo" asks the same question again as a new turn,
     in place of the failed one.
 - **Open the cited page in the source view (Story 2.7).** Public contract 1.14.0.
   - The line of a reference that is not removed is a button named by its line; a removed one stays struck through and
@@ -404,6 +405,25 @@ they sit in `src/`.
     sheet.
   - The stand-in backend answers reference 1 with the picture page of Story 1.19 and reference 2, added to its `done`,
     with a text page whose cited range is marked.
+- **Text in a material is never an instruction (Story 2.8).** No contract change. `AnswerMarkdown` keeps every link's
+  address as written (`urlTransform`, `addressAsText`), so a `javascript:` link shows as "{text} (javascript:…)" like
+  any other instead of losing its address; links are still spans, never anchors, and image URLs are dropped. Guards:
+  `react/no-danger` is an error in `eslint.config.mjs` for every `js, jsx, mjs, cjs, ts, tsx, mts, cts` file, and
+  `test/boundaries.test.ts` fails on `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`,
+  `document.write`, `srcdoc`/`srcDoc`, `parseFromString`, `createContextualFragment` or `setHTMLUnsafe` in any such
+  file under `src/`, except the generated backend types (`src/server/backend/generated/`, also outside the lint).
+  Tests: a hostile answer (an autolink, a `javascript:` link, an `<iframe>`, a reference-style image, a link) renders
+  no `a`, `img`, `iframe` or `script` and nothing with `src` or `href` (`test/conversation.test.tsx`); HTML in a
+  material name or section path is text in `References` and the `SourceView` heading (`test/components.test.tsx`).
+  A provider's prompt filter has its own `error` codes (codes are opaque to the backend, so no contract change), each
+  shown like `model.refused` (the partial text hidden, no "Tentar de novo", the question back in the composer when it
+  is empty, said at once): `model.question_flagged` (Azure's jailbreak check flagged the question): "O filtro de
+  segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente.
+  Reformule a pergunta e envie de novo."; `model.source_flagged` (its indirect-attack check flagged a passage): "O
+  filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma
+  instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta." English in
+  `src/messages/en.json`. Deploy order: this frontend before or with the worker that sends these codes (the change is
+  backward compatible; an older frontend shows them as an outage with "Tentar de novo").
 - **The indexing notice.** Public contract 1.15.0; the failure line from 1.16.0.
   - The signed-in layout (`src/app/(signed-in)/layout.tsx`) reads `GET /api/v1/conversations/current`
     (`currentConversation`) beside the account, the campaign and the tray. While its `indexing` is `{remaining}`, a

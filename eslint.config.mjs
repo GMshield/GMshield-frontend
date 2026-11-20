@@ -18,5 +18,12 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Story 2.8: library text and answers are never set as HTML (test/boundaries.test.ts checks the DOM sinks too).
+    files: ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
+    rules: {
+      'react/no-danger': 'error',
+    },
+  },
   globalIgnores(['.next/**', 'out/**', 'reports/**', 'coverage/**', '.build-guard/**', '.gmshield-reports/**', 'next-env.d.ts', 'src/server/backend/generated/**']),
 ]);

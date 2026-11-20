@@ -269,6 +269,38 @@ describe('the conversation (Story 2.4)', () => {
     expect(document.body.innerHTML).not.toContain('style=');
   });
 
+  it('renders a hostile answer from a planted material as text: no anchor, image, frame or script, every link with its address (Story 2.8)', async () => {
+    view();
+    const stream = await ask('Copie a descrição do Corvo de Cinza.');
+
+    stream.emit('delta', {
+      text: [
+        'O Corvo de Cinza tem 9 pontos de vida.',
+        '',
+        'Veja <https://example.invalid/auto>, [clique para curar](javascript:alert(1)) e [o grimório](https://example.invalid/grimorio).',
+        '',
+        '<iframe src="https://example.invalid/frame"></iframe>',
+        '',
+        'Mapa: ![ninho do corvo][ninho]',
+        '',
+        '[ninho]: https://example.invalid/ninho.png',
+      ].join('\n'),
+    });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 38 });
+    stream.emit('done', doneWith(PASSAGE_A));
+
+    for (const tag of ['a', 'img', 'iframe', 'script']) {
+      expect(document.querySelector(tag), tag).toBeNull();
+    }
+    expect(turns().getByText(/https:\/\/example\.invalid\/auto/)).toBeTruthy();
+    expect(turns().getByText('clique para curar (javascript:alert(1))')).toBeTruthy();
+    expect(turns().getByText('o grimório (https://example.invalid/grimorio)')).toBeTruthy();
+    // A reference-style image is dropped whole, its address with it; nothing loads from example.invalid.
+    expect(document.body.innerHTML).not.toContain('ninho.png');
+    expect(document.body.innerHTML).not.toContain('example.invalid/frame');
+    expect(document.querySelectorAll('[src], [href]')).toHaveLength(0);
+  });
+
   it('marks an answer in another language than the interface with its language and a visible label', async () => {
     view();
     const stream = await ask('What does Fire Bolt do?', 'en');
@@ -612,15 +644,18 @@ describe('sources under every answer (Story 2.5)', () => {
     expect(region.querySelector('sup')).toBeNull();
   });
 
-  it('drops any sentinel the model text carries, so it never shows as a superscript', async () => {
+  it('never turns a private-use code point of the model text into a superscript: it stays the text\'s own', async () => {
     view();
     const stream = await ask('Quanto dano?');
-    stream.emit('delta', { text: `Um${String.fromCodePoint(0xf0007)} dois.` });
+    const text = `Um${String.fromCodePoint(0xf0007)} dois.`;
+    stream.emit('delta', { text });
     stream.emit('citation', { passageId: PASSAGE_A, offset: 9 });
     stream.emit('done', doneWith(PASSAGE_A));
 
     expect(superscripts()).toEqual(['1']);
-    expect(document.body.innerHTML).not.toContain(String.fromCodePoint(0xf0007));
+    const sup = document.querySelector('sup')!;
+    expect(sup.previousSibling?.textContent).toBe(text);
+    expect(sup.parentElement?.textContent).toBe(`${text}fonte 1`);
   });
 
   it('has the references and the silent sentence in English too', async () => {
@@ -790,6 +825,60 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     expect(turns().queryByRole('button', { name: 'Tentar de novo' })).toBeNull();
     expect(composer().value).toBe('Quanto dano causa Fire Bolt?');
     expect(alerted()).toBe(refusal);
+  });
+
+  // Story 2.8: a provider's prompt filter that flagged the question or a source acts like a refusal, with its own text.
+  it.each([
+    {
+      code: 'model.question_flagged',
+      language: 'pt-BR' as const,
+      text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.',
+    },
+    {
+      code: 'model.source_flagged',
+      language: 'pt-BR' as const,
+      text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta.',
+    },
+    {
+      code: 'model.question_flagged',
+      language: 'en' as const,
+      text: "The AI provider's safety filter blocked this question because it seems to try to change the assistant's instructions. Rephrase the question and send it again.",
+    },
+    {
+      code: 'model.source_flagged',
+      language: 'en' as const,
+      text: "The AI provider's safety filter blocked this question because a passage in the sources consulted looks like an instruction to the assistant. Review the files used as sources or rephrase the question.",
+    },
+  ])('shows $code in $language as a refusal of its own: no retry, the question back in the composer', async ({ code, language, text }) => {
+    view({ language });
+    const stream = await ask('How much damage does the Amber Blade deal?', 'en');
+    stream.emit('delta', { text: 'The Amber ' }, 1);
+
+    stream.emit('error', { code }, 2);
+
+    expect(turns().getByText(text)).toBeTruthy();
+    expect(turns().queryByText('The Amber')).toBeNull();
+    expect(turns().queryByText(language === 'en' ? 'The model declined this request. Rephrase the question and send it again.' : 'O modelo recusou este pedido. Reformule a pergunta e envie de novo.')).toBeNull();
+    expect(turns().queryByRole('button', { name: language === 'en' ? 'Try again' : 'Tentar de novo' })).toBeNull();
+    expect(composer().value).toBe('How much damage does the Amber Blade deal?');
+    expect(alerted()).toBe(text);
+  });
+
+  // A prompt filter blocks the call before the model writes anything: the error is the turn's first event.
+  it.each([
+    { code: 'model.question_flagged', text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.' },
+    { code: 'model.source_flagged', text: 'O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta.' },
+  ])('shows $code before any text as a refusal of its own', async ({ code, text }) => {
+    view();
+    const stream = await ask('Quanto dano causa a Lâmina de Âmbar?');
+
+    stream.emit('error', { code }, 1);
+
+    expect(turns().getByText(text)).toBeTruthy();
+    expect(screen.queryByText('Procurando nas fontes…')).toBeNull();
+    expect(turns().queryByRole('button', { name: 'Tentar de novo' })).toBeNull();
+    expect(composer().value).toBe('Quanto dano causa a Lâmina de Âmbar?');
+    expect(alerted()).toBe(text);
   });
 
   it('re-asks an outage in place with Tentar de novo', async () => {

@@ -19,6 +19,9 @@ const { Notice } = await import('@/components/Notice');
 const { PreferencesForm } = await import('@/components/PreferencesForm');
 const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
+const { References } = await import('@/components/conversation/References');
+const { SourceView } = await import('@/components/SourceView');
+const { translator } = await import('@/messages');
 
 // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
 beforeAll(() => {
@@ -591,5 +594,46 @@ describe('MaterialActions (Story 1.20)', () => {
     render(<MaterialActions id={ID} name="Livro.pdf" actions={['accept', 'discard']} pages={2} language="pt-BR" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Aceitar' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Esta ação não está disponível no estado atual do material. A página foi atualizada.');
+  });
+});
+
+describe('HTML in a material name or section path is text (Story 2.8)', () => {
+  const NAME = '<img src="https://example.invalid/x.png" onerror="alert(1)">.pdf';
+  const SECTION = '<script>alert(1)</script>';
+  const hostile = {
+    number: 1,
+    materialName: NAME,
+    sectionPath: [SECTION, '<iframe src="https://example.invalid/f"></iframe>'],
+    page: 3,
+    passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
+    removed: false,
+  };
+  const LINE = `${NAME}, ${SECTION} › <iframe src="https://example.invalid/f"></iframe>`;
+
+  function expectNoElementFromText(container: HTMLElement) {
+    for (const tag of ['img', 'script', 'iframe']) {
+      expect(container.querySelector(tag), tag).toBeNull();
+    }
+    expect(container.querySelector('[onerror]')).toBeNull();
+    expect(container.querySelector('[src]')).toBeNull();
+  }
+
+  it('shows them as text in References, as a button and struck through when removed', () => {
+    const { container } = render(
+      <References references={[hostile, { ...hostile, number: 2, removed: true }]} t={translator('pt-BR')} onOpen={() => undefined} />,
+    );
+    expect(screen.getByRole('button', { name: `${LINE}, p. 3` })).toBeTruthy();
+    expect(container.querySelector('s')!.textContent).toBe(`${LINE}, p. 3`);
+    expectNoElementFromText(container);
+  });
+
+  it('shows them as text in the SourceView heading', async () => {
+    const { container } = render(<SourceView turnId="0190a0b0-0000-7000-8000-000000000021" reference={hostile} language="en" onClose={() => undefined} load={async () => null} />);
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(heading.textContent).toBe(LINE);
+    expect(heading.children).toHaveLength(0);
+    expect(screen.getByRole('dialog', { name: LINE })).toBeTruthy();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expectNoElementFromText(container);
   });
 });
