@@ -22,13 +22,15 @@ import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow, systemRow } from './r
 
 /** An id as the backend mints it; anything else is an item nowhere. */
 const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
-const VERSION = /^(?:0|[1-9]\d{0,15})$/;
+/** At most 15 digits: always a safe integer. */
+const VERSION = /^(?:0|[1-9]\d{0,14})$/;
 /** Far past every limit, so the backend still sees a value too long and names it; only a runaway post is cut. */
 const MOST = 10_000;
 
+/** A field as typed, its line breaks as LF: a textarea posts CRLF, which the backend would count and store twice. */
 function text(form: FormData, name: string): string {
   const value = form.get(name);
-  return typeof value === 'string' ? value.slice(0, MOST) : '';
+  return typeof value === 'string' ? value.replaceAll('\r\n', '\n').slice(0, MOST) : '';
 }
 
 function valuesOf(form: FormData): SystemFormValues {
@@ -125,7 +127,7 @@ async function more(
   if ('error' in loaded) {
     return { ...previous, error: errorText(loaded.error, language) };
   }
-  return { rows: [...previous.rows, ...loaded.rows], nextCursor: loaded.nextCursor, error: null };
+  return { rows: [...previous.rows, ...loaded.rows], nextCursor: loaded.nextCursor, error: null, added: loaded.rows.length };
 }
 
 /** "Carregar mais" under the list of systems. */

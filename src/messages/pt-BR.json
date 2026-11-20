@@ -41,6 +41,8 @@
     "list": "Seus sistemas",
     "empty": "Um sistema reúne as campanhas e os materiais de um jogo.",
     "loadMore": "Carregar mais",
+    "addedOne": "Mais 1 item na lista.",
+    "addedOther": "Mais {count} itens na lista.",
     "edition": "Edição {edition}",
     "form": {
       "newTitle": "Novo sistema",

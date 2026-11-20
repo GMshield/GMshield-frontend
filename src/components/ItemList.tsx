@@ -16,8 +16,16 @@ export type ListRow = {
   readonly state: { readonly state: PillState; readonly word: string } | null;
 };
 
-/** The rows "Carregar mais" added, the cursor of the next page (null on the last), and a refusal's text. */
-export type MoreState = { readonly rows: readonly ListRow[]; readonly nextCursor: string | null; readonly error: string | null };
+/**
+ * The rows "Carregar mais" added, the cursor of the next page (null on the last), a refusal's text, and how many rows
+ * the last page added (announced).
+ */
+export type MoreState = {
+  readonly rows: readonly ListRow[];
+  readonly nextCursor: string | null;
+  readonly error: string | null;
+  readonly added: number;
+};
 
 export type ItemListProps = {
   /** The list's accessible name. */
@@ -28,6 +36,8 @@ export type ItemListProps = {
   readonly nextCursor: string | null;
   /** "Carregar mais", in the interface's language. */
   readonly loadMore: string;
+  /** What is announced once a page is added, for one row and for `{count}` rows, in the interface's language. */
+  readonly added: { readonly one: string; readonly other: string };
   /** The Server Action that reads the next page. */
   readonly action: (previous: MoreState, form: FormData) => Promise<MoreState>;
   /** Fields the action needs besides the cursor, such as the system's id. */
@@ -37,11 +47,18 @@ export type ItemListProps = {
 /**
  * A list page's rows (Story 3.1): each row opens its page when it has one, with a muted detail (a system's edition) or
  * a material's state pill. While there is a next page, a "Carregar mais" pill under the list adds it on request,
- * never on scrolling; it posts the cursor to a Server Action, so it works without JavaScript too. A refusal shows as
- * an alert under the list, and the rows already there stay.
+ * never on scrolling; it posts the cursor to a Server Action, so it works without JavaScript too. A polite status,
+ * not shown, says how many rows the page added. A refusal shows as an alert under the list, and the rows already there
+ * stay.
  */
-export function ItemList({ label, rows, nextCursor, loadMore, action, fields = {} }: ItemListProps) {
-  const [state, formAction, pending] = useActionState(action, { rows: [], nextCursor, error: null });
+export function ItemList({ label, rows, nextCursor, loadMore, added, action, fields = {} }: ItemListProps) {
+  const [state, formAction, pending] = useActionState(action, { rows: [], nextCursor, error: null, added: 0 });
+  let announcement = '';
+  if (state.added === 1) {
+    announcement = added.one;
+  } else if (state.added > 1) {
+    announcement = added.other.replace('{count}', String(state.added));
+  }
   const shown = [...rows, ...state.rows];
   return (
     <>
@@ -78,6 +95,9 @@ export function ItemList({ label, rows, nextCursor, loadMore, action, fields = {
           </PillButton>
         </form>
       )}
+      <p role="status" className={styles.hidden}>
+        {announcement}
+      </p>
       {state.error === null ? null : (
         <p role="alert" className={styles.error}>
           {state.error}

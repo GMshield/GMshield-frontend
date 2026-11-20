@@ -36,10 +36,13 @@ export default async function SystemsPage() {
         <p className={styles.empty}>{t('systems.empty')}</p>
       ) : (
         <ItemList
+          // A new first page (another render in place) starts again without the rows added before.
+          key={`${page.data.items[0]?.id ?? ''}:${page.data.nextCursor ?? ''}`}
           label={t('systems.list')}
           rows={page.data.items.map(systemRow)}
           nextCursor={page.data.nextCursor ?? null}
           loadMore={t('systems.loadMore')}
+          added={{ one: t('systems.addedOne'), other: t('systems.addedOther') }}
           action={moreSystems}
         />
       )}

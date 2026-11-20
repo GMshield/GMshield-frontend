@@ -639,6 +639,7 @@ describe('HTML in a material name or section path is text (Story 2.8)', () => {
 });
 
 describe('ItemList (Story 3.1)', () => {
+  const ADDED = { one: 'Mais 1 item na lista.', other: 'Mais {count} itens na lista.' };
   const row = (id: string, label: string, href: string | null = null) => ({ id, label, detail: null, href, state: null });
 
   it('shows the rows, each opening its page when it has one, and "Carregar mais" adds the next page under them on request', async () => {
@@ -646,42 +647,47 @@ describe('ItemList (Story 3.1)', () => {
     const user = userEvent.setup();
     const action = vi
       .fn()
-      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c')], nextCursor: 'c', error: null })
-      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c'), row('d', 'Quarto')], nextCursor: null, error: null });
+      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c')], nextCursor: 'c', error: null, added: 1 })
+      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c'), row('d', 'Quarto'), row('e', 'Quinto')], nextCursor: null, error: null, added: 2 });
     const { container } = render(
       <ItemList
         label="Seus sistemas"
         rows={[{ ...row('a', 'D&D', '/systems/a'), detail: '5.2.1' }, row('b', 'Segundo', '/systems/b')]}
         nextCursor="b"
         loadMore="Carregar mais"
+        added={ADDED}
         action={action}
         fields={{ system: 's' }}
       />,
     );
     const list = screen.getByRole('list', { name: 'Seus sistemas' });
     expect(within(list).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/systems/a', '/systems/b']);
+    // The status is there, empty, before anything is added, so that what is added is announced.
+    expect(screen.getByRole('status').textContent).toBe('');
     expect(within(list).getAllByRole('link')[0]!.textContent).toBe('D&D5.2.1');
 
     await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
     await screen.findByText('Terceiro');
+    expect(screen.getByRole('status').textContent).toBe('Mais 1 item na lista.');
     const sent = action.mock.calls[0]?.[1] as FormData;
     expect(sent.get('cursor')).toBe('b');
     expect(sent.get('system')).toBe('s');
     await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
     await screen.findByText('Quarto');
+    expect(screen.getByRole('status').textContent).toBe('Mais 2 itens na lista.');
     expect((action.mock.calls[1]?.[1] as FormData).get('cursor')).toBe('c');
     // The last page: no more pill, and a row without a page opens nothing.
     expect(screen.queryByRole('button', { name: 'Carregar mais' })).toBeNull();
     expect(screen.getByText('Quarto').closest('a')).toBeNull();
-    expect(within(list).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
     expectNoStyleAttribute(container);
   });
 
   it('a refusal shows as an alert under the list, and the rows stay', async () => {
     const { ItemList } = await import('@/components/ItemList');
     const user = userEvent.setup();
-    const action = vi.fn().mockResolvedValueOnce({ rows: [], nextCursor: 'a', error: 'O serviço está indisponível agora.' });
-    render(<ItemList label="Lista" rows={[row('a', 'D&D')]} nextCursor="a" loadMore="Load more" action={action} />);
+    const action = vi.fn().mockResolvedValueOnce({ rows: [], nextCursor: 'a', error: 'O serviço está indisponível agora.', added: 0 });
+    render(<ItemList label="Lista" rows={[row('a', 'D&D')]} nextCursor="a" loadMore="Load more" added={ADDED} action={action} />);
     await user.click(screen.getByRole('button', { name: 'Load more' }));
     expect((await screen.findByRole('alert')).textContent).toBe('O serviço está indisponível agora.');
     expect(screen.getByText('D&D')).toBeTruthy();
@@ -695,15 +701,16 @@ describe('SystemForm (Story 3.1)', () => {
   const labels = { name: 'Nome', edition: 'Edição (opcional)', description: 'Descrição (opcional)', submit: 'Salvar', cancel: 'Cancelar' };
   const start = { values: { name: 'D&D', edition: '5.2.1', description: '' }, version: 3, error: null, field: null, stale: false };
 
-  it('labels its fields with their limits, has one solid pill and "Cancelar", and posts the id and version', async () => {
+  it('labels its fields, marks the name required, has one solid pill and "Cancelar", and posts the id and version', async () => {
     const { SystemForm } = await import('@/components/SystemForm');
     const user = userEvent.setup();
     const action = vi.fn<(previous: SystemFormState, form: FormData) => Promise<SystemFormState>>(async () => start);
     const { container } = render(<SystemForm labels={labels} initial={start} id="s1" cancelHref="/systems/s1" action={action} />);
-    expect(screen.getByLabelText('Nome')).toHaveProperty('maxLength', 120);
-    expect(screen.getByLabelText('Edição (opcional)')).toHaveProperty('maxLength', 60);
+    expect(screen.getByLabelText('Nome').getAttribute('aria-required')).toBe('true');
+    expect(screen.getByLabelText('Edição (opcional)').getAttribute('aria-required')).toBeNull();
     expect(screen.getByLabelText('Descrição (opcional)').tagName).toBe('TEXTAREA');
-    expect(screen.getByLabelText('Descrição (opcional)')).toHaveProperty('maxLength', 2000);
+    // No maxLength: the backend counts code points after trimming, and its field problem decides.
+    expect(container.querySelectorAll('[maxlength]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Salvar' }).dataset.variant).toBe('solid');
     expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/systems/s1');
     expect(container.querySelectorAll('[data-variant="solid"]')).toHaveLength(1);

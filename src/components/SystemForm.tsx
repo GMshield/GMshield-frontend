@@ -28,9 +28,6 @@ export type SystemFormProps = {
   readonly action: (previous: SystemFormState, form: FormData) => Promise<SystemFormState>;
 };
 
-/** The limits the backend checks, given to the fields as well (Story 3.1). */
-const MAX: Readonly<Record<SystemField, number>> = { name: 120, edition: 60, description: 2000 };
-
 /**
  * A system's form (Story 3.1), a page of its own in the main column: the name, the optional edition and description,
  * then "Criar sistema" or "Salvar" (the screen's one solid pill) and "Cancelar". A refusal comes back as a message under
@@ -47,7 +44,8 @@ export function SystemForm({ labels, initial, id, cancelHref, action }: SystemFo
     const common = {
       id: `${base}-${name}`,
       name,
-      maxLength: MAX[name],
+      // No maxLength: the backend counts code points after trimming, and its field problem decides.
+      'aria-required': name === 'name' ? true : undefined,
       defaultValue: state.values[name],
       'aria-invalid': invalid(name),
       'aria-describedby': invalid(name) ? errorId(name) : undefined,

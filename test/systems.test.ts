@@ -155,15 +155,17 @@ describe('the systems list (Story 3.1)', () => {
       [`GET /api/v1/systems?cursor=${STARTER}`]: { status: 200, body: { items: [{ ...DND, id: OTHER, edition: null }] } },
       [`GET /api/v1/systems?cursor=${OTHER}`]: problem(503, 'server.unavailable'),
     });
-    let state = await moreSystems({ rows: [], nextCursor: ID, error: null }, form({ cursor: ID }));
+    let state = await moreSystems({ rows: [], nextCursor: ID, error: null, added: 0 }, form({ cursor: ID }));
     expect(state).toEqual({
       rows: [{ id: STARTER, label: 'Sistema sem nome', detail: null, href: `/systems/${STARTER}`, state: null }],
       nextCursor: STARTER,
       error: null,
+      added: 1,
     });
     state = await moreSystems(state, form({ cursor: STARTER }));
     expect(state.rows.map((row) => row.id)).toEqual([STARTER, OTHER]);
     expect(state.nextCursor).toBeNull();
+    expect(state.added).toBe(1);
     const refused = await moreSystems(state, form({ cursor: OTHER }));
     expect(refused.rows).toEqual(state.rows);
     expect(refused.error).toBe('O serviço está indisponível agora. Tente de novo em instantes.');
@@ -184,7 +186,10 @@ describe('a new system (Story 3.1)', () => {
       for (const label of [messages.systems.form.name, messages.systems.form.edition, messages.systems.form.description]) {
         expect(html).toContain(`>${label}</label>`);
       }
-      expect(html).toMatch(/<input[^>]*name="name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*name="name"/i);
+      expect([...html.matchAll(/<input\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes('name="name"'))).toContain(
+        'aria-required="true"',
+      );
+      expect(html).not.toMatch(/maxlength/i);
       expect(html).toMatch(/<textarea[^>]*name="description"/);
       expect(solids(html)).toEqual([messages.systems.form.create]);
       expect(html).toMatch(new RegExp(`<a[^>]*href="/systems"[^>]*>${messages.systems.form.cancel}</a>`));
@@ -309,11 +314,12 @@ describe('a system page (Story 3.1)', () => {
       [`GET /api/v1/campaigns?system=${ID}&cursor=${CAMPAIGN}`]: { status: 200, body: { items: [{ id: OTHER, name: 'Segunda' }] } },
       [`${SYSTEM_MATERIALS}&cursor=${MATERIAL}`]: materials,
     });
-    const start = { rows: [], nextCursor: CAMPAIGN, error: null };
+    const start = { rows: [], nextCursor: CAMPAIGN, error: null, added: 0 };
     expect(await moreCampaigns(start, form({ cursor: CAMPAIGN, system: ID }))).toEqual({
       rows: [{ id: OTHER, label: 'Segunda', detail: null, href: null, state: null }],
       nextCursor: null,
       error: null,
+      added: 1,
     });
     expect((await moreMaterials(start, form({ cursor: MATERIAL, system: ID }))).rows).toEqual([
       { id: MATERIAL, label: 'SRD 5.2.1.pdf', detail: null, href: `/files/${MATERIAL}`, state: { state: 'ready', word: 'pronto' } },
@@ -378,9 +384,13 @@ describe('a system\'s edit page (Story 3.1)', () => {
       field: 'name',
       stale: false,
     });
-    // A malformed id or version never reaches the backend.
+    // A textarea's CRLF line breaks go as LF.
+    routes[`PATCH /api/v1/systems/${ID}`] = { status: 200, body: DND };
+    await thrownDigest(() => changeSystemAction(previous, form({ ...typed, description: 'Uma.\r\nDuas.\r\n' })));
+    expect(JSON.parse(server.calls.at(-1)!.body).description).toBe('Uma.\nDuas.\n');
+    // A malformed id or version (past 15 digits, no longer a safe integer) never reaches the backend.
     const calls = server.calls.length;
-    for (const fields of [{ ...typed, id: '../me' }, { ...typed, version: '-1' }, { ...typed, version: 'x' }]) {
+    for (const fields of [{ ...typed, id: '../me' }, { ...typed, version: '-1' }, { ...typed, version: 'x' }, { ...typed, version: '9'.repeat(16) }]) {
       expect((await changeSystemAction(previous, form(fields))).error).toBe('The request is not valid.');
     }
     expect(server.calls).toHaveLength(calls);

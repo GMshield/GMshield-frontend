@@ -41,6 +41,8 @@
     "list": "Your systems",
     "empty": "A system holds the campaigns and materials of one game.",
     "loadMore": "Load more",
+    "addedOne": "1 more item in the list.",
+    "addedOther": "{count} more items in the list.",
     "edition": "Edition {edition}",
     "form": {
       "newTitle": "New system",

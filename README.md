@@ -475,10 +475,13 @@ they sit in `src/`.
   - Lists (`src/components/ItemList.tsx`, a client component): the first page comes from the server; while the backend
     gives a `nextCursor`, a "Carregar mais" pill under the list posts it to a Server Action (`moreSystems`,
     `moreCampaigns`, `moreMaterials` in `src/app/(signed-in)/systems/actions.ts`) through `useActionState`, which adds
-    the next page under the rows already shown; never on scrolling, and it works without JavaScript. A refusal shows as
-    an alert under the list and the rows stay.
-  - `/systems/new` and `/systems/<id>/edit` are pages of the main column with `SystemForm`: Nome (at most 120
-    characters), Edição (opcional, 60) and Descrição (opcional, 2000), "Criar sistema" or "Salvar" (the screen's one
+    the next page under the rows already shown; never on scrolling, and it works without JavaScript. A polite status,
+    not shown, announces how many rows were added ("Mais 2 itens na lista."). A refusal shows as an alert under the
+    list and the rows stay. A list is keyed by its first page (or its tab), so a new first page starts without the rows
+    added before.
+  - `/systems/new` and `/systems/<id>/edit` are pages of the main column with `SystemForm`: Nome (`aria-required`),
+    Edição (opcional) and Descrição (opcional), with no `maxLength` (the backend counts code points after trimming:
+    120, 60 and 2000; CRLF line breaks are sent as LF), "Criar sistema" or "Salvar" (the screen's one
     solid pill) and "Cancelar". The backend checks every field; each of its field codes (`request.system_name_invalid`,
     `request.system_edition_invalid`, `request.system_description_invalid`, `request.system_name_taken`) comes back as
     text under that field (`role="alert"`, `aria-describedby`), with what was typed kept; any other problem under the

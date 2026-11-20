@@ -88,6 +88,7 @@ export default async function SystemPage({
           rows={page.rows}
           nextCursor={page.nextCursor}
           loadMore={t('systems.loadMore')}
+          added={{ one: t('systems.addedOne'), other: t('systems.addedOther') }}
           action={tab === 'campaigns' ? moreCampaigns : moreMaterials}
           fields={{ system: system.data.id }}
         />
