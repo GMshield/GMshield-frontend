@@ -60,6 +60,21 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
   });
 
+  it('answers the systems paths (Story 3.1): the starter system in the list, its campaign, a new system and an edit', () => {
+    const system = { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome', edition: null, description: null, version: 0 };
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+    expect(answer(contract, 'GET', '/api/v1/systems', 't')).toMatchObject({ status: 200, body: { items: [system] } });
+    expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
+    expect(answer(contract, 'GET', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: { ...campaign, system } });
+    expect(answer(contract, 'GET', '/api/v1/campaigns', 't')).toMatchObject({ status: 200, body: { items: [campaign] } });
+    expect(answer(contract, 'POST', '/api/v1/systems', 't')).toMatchObject({
+      status: 201,
+      body: { name: 'D&D', edition: '5.2.1', version: 0 },
+    });
+    expect(answer(contract, 'PATCH', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: { ...system, version: 1 } });
+    expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
+  });
+
   it('answers the upload paths (Story 1.13) with their tus headers, and a part with the offset it reaches', async () => {
     const created = answer(contract, 'POST', '/api/v1/uploads', 't');
     expect(created.status).toBe(201);

@@ -51,7 +51,8 @@ function isWide(): boolean {
  * Ctrl+B / ⌘B closes it to a handle "Abrir menu" and the logo mark, and the state is kept in a cookie. Under
  * 1280px it always starts closed: the handle opens it over the main column (768 to 1279px) or as a full-screen
  * sheet (under 768px), and it closes again after an entry is chosen. Which layout applies is CSS's decision;
- * this component only keeps the two states.
+ * this component only keeps the two states. An entry is marked current on its page and on every page below it
+ * (Story 3.1: "Sistemas" on `/systems/new` and `/systems/<id>`).
  */
 export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }: SidebarProps) {
   const pathname = usePathname();
@@ -139,11 +140,12 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [toggle, narrowOpen]);
 
+  // Outside the app router (a page rendered on its own) there is no path to compare.
   const entry = (key: EntryKey, href: string, className: string) => (
     <Link
       href={href}
       className={className}
-      aria-current={pathname === href ? 'page' : undefined}
+      aria-current={pathname === href || (pathname ?? '').startsWith(`${href}/`) ? 'page' : undefined}
       onClick={() => setOpenedOn(null)}
     >
       {labels.entries[key]}

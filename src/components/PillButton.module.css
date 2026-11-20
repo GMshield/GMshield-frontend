@@ -15,6 +15,7 @@
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
+  text-decoration: none;
   cursor: pointer;
 }
 

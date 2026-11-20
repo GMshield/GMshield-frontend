@@ -172,8 +172,9 @@ they sit in `src/`.
     logo and name opening a disclosure menu with the preferences form and "Sair", the current
     campaign, the entries Consultas `/questions`, Criação de Regras `/rules`, Minhas Mesas
     `/campaigns`, Sistemas `/systems`, Personagens `/characters`, Meus Arquivos `/files`, and
-    "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page says
-    what will be there.
+    "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page still to
+    be built says what will be there. An entry is marked current (`aria-current="page"`) on its page and on
+    every page below it (Story 3.1: Sistemas on `/systems/new` and `/systems/<id>`).
   - From 1280px its collapse control or Ctrl+B / ⌘B closes it to the handle "Abrir menu" and the
     logo mark; the state is kept in `__Host-gmshield-sidebar` (`open` | `closed`, a year, not
     `HttpOnly`: the sidebar writes it, the server reads it so nothing flashes). Under 1280px it always
@@ -463,6 +464,38 @@ they sit in `src/`.
     (at most about 40 minutes over 3 retries).
   - The stand-in backend answers `indexing: null` and `indexingFailed: null` (its sources are indexed), so a test-mode
     shell shows no indexing notice and reads no count.
+- **Systems (Story 3.1, part A).** Public contract 1.17.0. "Sistemas" lists, creates and edits the GM's systems;
+  deleting one is part B.
+  - `src/server/library.ts` gains `listSystems`, `getSystem`, `createSystem`, `changeSystem` (`PATCH` with the version
+    the form was read at) and `listCampaigns` (a system's campaigns); `listMaterials` takes `system` to list a system's
+    materials (attached to it or to one of its campaigns).
+  - `/systems`: the title "Sistemas", one solid pill "Novo sistema", and the systems newest first, each row its name
+    and edition, opening `/systems/<id>`. Empty, one sentence says what a system holds ("Um sistema reúne as campanhas e
+    os materiais de um jogo.") and "Novo sistema" is the only action.
+  - Lists (`src/components/ItemList.tsx`, a client component): the first page comes from the server; while the backend
+    gives a `nextCursor`, a "Carregar mais" pill under the list posts it to a Server Action (`moreSystems`,
+    `moreCampaigns`, `moreMaterials` in `src/app/(signed-in)/systems/actions.ts`) through `useActionState`, which adds
+    the next page under the rows already shown; never on scrolling, and it works without JavaScript. A polite status,
+    not shown, announces how many rows were added ("Mais 2 itens na lista."). A refusal shows as an alert under the
+    list and the rows stay. A list is keyed by its first page (or its tab), so a new first page starts without the rows
+    added before.
+  - `/systems/new` and `/systems/<id>/edit` are pages of the main column with `SystemForm`: Nome (`aria-required`),
+    Edição (opcional) and Descrição (opcional), with no `maxLength` (the backend counts code points after trimming:
+    120, 60 and 2000; CRLF line breaks are sent as LF), "Criar sistema" or "Salvar" (the screen's one
+    solid pill) and "Cancelar". The backend checks every field; each of its field codes (`request.system_name_invalid`,
+    `request.system_edition_invalid`, `request.system_description_invalid`, `request.system_name_taken`) comes back as
+    text under that field (`role="alert"`, `aria-describedby`), with what was typed kept; any other problem under the
+    form. A saved system opens its page. The edit sends every field with the version, so a cleared edition or
+    description is removed. A stale version (`request.stale_version`) brings the system's current values and version
+    into the form, which says above its fields that the system was changed elsewhere.
+  - `/systems/<id>`: the name, the edition ("Edição 5.2.1"), the description with its line breaks, "Editar" (the one
+    solid pill) and two tabs as links, campaigns (the default) and materials, chosen by `?tab=` and marked with
+    `aria-current="page"`. The campaigns tab lists the system's campaigns, which open nothing until Story 3.2; the
+    materials tab lists its materials in every state but `superseded` and `discarded`, each with its state pill and
+    opening `/files/<id>`. An empty tab says so in one sentence. Another owner's id, an unknown one or a malformed one
+    is the single "Não encontrado." page. A new name shows in the list and in the context bar on their next load.
+  - The stand-in backend lists the starter system (no edition, no description, version 0) with its one campaign,
+    creates "D&D" 5.2.1, and answers an edit with the starter system at version 1.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -548,7 +581,11 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.16.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.17.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.17.0 (Story 3.1, part A): the backend first (its migration
+`V21__system_details.sql` and the systems routes), then the frontend (its health check fails against a 1.16.0 backend,
+and `/systems` reads the new routes). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.16.0 (indexing at worker start): the backend first (`indexingFailed` on the
 current conversation, the recipe route of internal contract 1.12.0, migration `V20__index_change_retries.sql`), then

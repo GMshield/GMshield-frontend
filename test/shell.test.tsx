@@ -120,11 +120,18 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(container.querySelectorAll('[style]')).toHaveLength(0);
   });
 
-  it('marks the current entry, and only it', () => {
-    pathname = '/systems';
+  it('marks the current entry, and only it, on its page and every page below it (Story 3.1)', () => {
+    for (const path of ['/systems', '/systems/new', '/systems/0190a0b0-0000-7000-8000-000000000001', '/systems/0190a0b0-0000-7000-8000-000000000001/edit']) {
+      pathname = path;
+      const { unmount } = render(shell());
+      const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page');
+      expect(current.map((link) => link.textContent), path).toEqual(['Sistemas']);
+      unmount();
+    }
+    // A path that only starts with the same letters is another page.
+    pathname = '/systemsx';
     render(shell());
-    const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page');
-    expect(current.map((link) => link.textContent)).toEqual(['Sistemas']);
+    expect(screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page')).toEqual([]);
   });
 
   it('puts the sidebar, the context bar and the main column in that order, in the page and in Tab order', async () => {

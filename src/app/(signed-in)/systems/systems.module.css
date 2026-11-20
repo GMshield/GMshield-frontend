@@ -1,0 +1,74 @@
+/* The systems pages (Story 3.1): a title with its one main action, then the page's content. */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  margin: var(--space-8) 0 0;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
+  overflow-wrap: anywhere;
+}
+
+.edition {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* A description keeps the GM's line breaks. */
+.description {
+  max-width: 70ch;
+  margin: var(--space-4) 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+}
+
+.notice {
+  margin: var(--space-4) 0 0;
+}
+
+/* A system page's tabs: links to ?tab=, the current one marked in words (aria-current) and by a line under it. */
+.tabs {
+  margin: var(--space-6) 0 0;
+}
+
+.tabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}
+
+.tab[aria-current='page'] {
+  border-bottom-color: var(--color-text);
+  color: var(--color-text);
+}
