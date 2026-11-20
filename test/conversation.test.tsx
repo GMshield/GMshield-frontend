@@ -644,15 +644,18 @@ describe('sources under every answer (Story 2.5)', () => {
     expect(region.querySelector('sup')).toBeNull();
   });
 
-  it('drops any sentinel the model text carries, so it never shows as a superscript', async () => {
+  it('never turns a private-use code point of the model text into a superscript: it stays the text\'s own', async () => {
     view();
     const stream = await ask('Quanto dano?');
-    stream.emit('delta', { text: `Um${String.fromCodePoint(0xf0007)} dois.` });
+    const text = `Um${String.fromCodePoint(0xf0007)} dois.`;
+    stream.emit('delta', { text });
     stream.emit('citation', { passageId: PASSAGE_A, offset: 9 });
     stream.emit('done', doneWith(PASSAGE_A));
 
     expect(superscripts()).toEqual(['1']);
-    expect(document.body.innerHTML).not.toContain(String.fromCodePoint(0xf0007));
+    const sup = document.querySelector('sup')!;
+    expect(sup.previousSibling?.textContent).toBe(text);
+    expect(sup.parentElement?.textContent).toBe(`${text}fonte 1`);
   });
 
   it('has the references and the silent sentence in English too', async () => {

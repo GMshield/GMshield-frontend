@@ -20,24 +20,13 @@ function textOf(node: ReactNode): string {
 /** A reference's number shown as a superscript at a code-point offset of the answer's Markdown text (Story 2.5). */
 export type CitationMark = { readonly offset: number; readonly number: number };
 
-/**
- * A mark travels through the Markdown parser as one private-use code point (U+F0000 plus its number), which no
- * Markdown syntax reads and which the model's own text never keeps (`withMarks` drops any it carries).
- */
-const SENTINEL_FIRST = 0xf0000;
-const SENTINEL_LAST = 0xffffd;
-
-function isSentinel(point: number): boolean {
-  return point >= SENTINEL_FIRST && point <= SENTINEL_LAST;
-}
-
 /** Whitespace (line breaks included) and closing emphasis delimiters a mark is moved back over. */
 const MOVED_OVER = /^[\s*_~]$/u;
 
 /**
- * Where a mark goes: its offset (an offset past the end goes at the end), moved back over trailing whitespace and over
- * closing delimiters (`*`, `_`, `~`), so the superscript lands inside an emphasis that ends there and before a line
- * break (never before a block marker such as `#`, `-` or `1.` on the next line).
+ * Where a mark goes, in code points: its offset (an offset past the end goes at the end), moved back over trailing
+ * whitespace and over closing delimiters (`*`, `_`, `~`), so the superscript lands inside an emphasis that ends there and
+ * before a line break (never before a block marker such as `#`, `-` or `1.` on the next line).
  */
 function placeOf(points: readonly string[], offset: number): number {
   let at = Math.min(Math.max(0, Math.trunc(offset)), points.length);
@@ -47,40 +36,121 @@ function placeOf(points: readonly string[], offset: number): number {
   return at;
 }
 
+/** The few shapes of the Markdown tree (mdast) the citation step reads and writes; offsets are UTF-16 units. */
+type TreeNode = {
+  type: string;
+  value?: string;
+  children?: TreeNode[];
+  position?: { start: { offset?: number }; end: { offset?: number } };
+  data?: Record<string, unknown>;
+};
+
+/** Nodes whose children are text and inline nodes: a mark inside one stays inline. */
+const PHRASING = new Set(['paragraph', 'heading', 'emphasis', 'strong', 'delete', 'tableCell']);
+
+/** Inline nodes a mark enters; any other inline node (code, a link, an image) takes the mark right after it. */
+const INLINE_CONTAINERS = new Set(['emphasis', 'strong', 'delete']);
+
+/** A character reference (`&amp;`, `&#42;`, `&#x2A;`): one character of a text node's value, several of its source. */
+const REFERENCE = /^&(?:#\d{1,7}|#[xX][\da-fA-F]{1,6}|[A-Za-z][A-Za-z\d]{0,31});/u;
+
 /**
- * The text with each mark's sentinel at its place (`placeOf`; marks at the same place keep their order). Every
- * sentinel the text already carries is dropped, its code point still counted.
+ * Where each mark lands in the tree: inside a text node (at an index of its value), before a line break, after an inline
+ * node, at the start of an inline parent, in a paragraph after a block (a code block, a rule), or in a paragraph of an
+ * otherwise empty container. Numbers at one place keep their order.
  */
-export function withMarks(text: string, marks: readonly CitationMark[]): string {
-  const points = Array.from(text);
-  const at = new Map<number, number[]>();
-  for (const mark of marks) {
-    if (!Number.isInteger(mark.number) || mark.number < 1 || mark.number > SENTINEL_LAST - SENTINEL_FIRST) {
-      continue;
-    }
-    const offset = placeOf(points, mark.offset);
-    at.set(offset, [...(at.get(offset) ?? []), mark.number]);
-  }
-  let marked = '';
-  for (let index = 0; index <= points.length; index++) {
-    for (const number of at.get(index) ?? []) {
-      marked += String.fromCodePoint(SENTINEL_FIRST + number);
-    }
-    const point = points[index];
-    if (point !== undefined && !isSentinel(point.codePointAt(0) ?? 0)) {
-      marked += point;
-    }
-  }
-  return marked;
+type Places = {
+  readonly inText: Map<TreeNode, Map<number, number[]>>;
+  readonly before: Map<TreeNode, number[]>;
+  readonly after: Map<TreeNode, number[]>;
+  readonly first: Map<TreeNode, number[]>;
+  readonly below: Map<TreeNode, number[]>;
+  readonly alone: Map<TreeNode, number[]>;
+};
+
+function add<Key>(map: Map<Key, number[]>, key: Key, number: number): void {
+  map.set(key, [...(map.get(key) ?? []), number]);
 }
 
-/** The few shapes of the HTML tree (hast) the citation step reads and writes. */
-type TreeText = { type: 'text'; value: string };
-type TreeElement = { type: 'element'; tagName: string; properties: Record<string, unknown>; children: TreeNode[] };
-type TreeNode = TreeText | TreeElement | { type: string; children?: TreeNode[] };
+function startOf(node: TreeNode): number {
+  return node.position?.start.offset ?? -1;
+}
 
-/** The visually hidden word said before a superscript's number. */
-function hidden(word: string): TreeElement {
+function endOf(node: TreeNode): number {
+  return node.position?.end.offset ?? -1;
+}
+
+/**
+ * The index in a text node's value of the source offset `at` (inside the node's source): the source and the value are
+ * walked together, the source's own syntax (an escape's `\`, a container's `> ` or indentation, a reference's name)
+ * skipped.
+ */
+function indexIn(text: TreeNode, source: string, at: number): number {
+  const value = text.value ?? '';
+  if (at >= endOf(text)) {
+    return value.length;
+  }
+  let index = 0;
+  let cursor = startOf(text);
+  while (cursor < at && index < value.length) {
+    if (source[cursor] === value[index]) {
+      cursor += 1;
+      index += 1;
+      continue;
+    }
+    const reference = source[cursor] === '&' ? REFERENCE.exec(source.slice(cursor, cursor + 40)) : null;
+    if (reference === null) {
+      cursor += 1;
+    } else {
+      cursor += reference[0].length;
+      index += /[\uD800-\uDBFF]/u.test(value[index] ?? '') ? 2 : 1;
+    }
+  }
+  return index;
+}
+
+/** Records where a mark at the source offset `at` lands, looking from `parent` down. */
+function locate(parent: TreeNode, at: number, source: string, number: number, places: Places): void {
+  const children = parent.children ?? [];
+  const inline = PHRASING.has(parent.type);
+  // The first child holding the offset: at a boundary, the one the mark follows.
+  const child = children.find((node) => startOf(node) <= at && at <= endOf(node));
+  if (child === undefined) {
+    // Between children (a container's syntax): at the end of the one before, else at the start of the one after.
+    const preceding = children.findLast((node) => endOf(node) >= 0 && endOf(node) <= at);
+    const following = children.find((node) => startOf(node) >= at);
+    if (preceding !== undefined) {
+      locate(parent, endOf(preceding), source, number, places);
+    } else if (inline) {
+      add(places.first, parent, number);
+    } else if (following !== undefined) {
+      locate(parent, startOf(following), source, number, places);
+    } else {
+      add(places.alone, parent, number);
+    }
+    return;
+  }
+  if (inline) {
+    if (child.type === 'text') {
+      const marks = places.inText.get(child) ?? new Map<number, number[]>();
+      add(marks, indexIn(child, source, at), number);
+      places.inText.set(child, marks);
+    } else if (child.type === 'break') {
+      add(places.before, child, number);
+    } else if (INLINE_CONTAINERS.has(child.type)) {
+      locate(child, at, source, number, places);
+    } else {
+      add(places.after, child, number);
+    }
+  } else if (child.type !== 'code' && Array.isArray(child.children)) {
+    locate(child, at, source, number, places);
+  } else {
+    add(places.below, child, number);
+  }
+}
+
+/** The visually hidden word said before a superscript's number, as an HTML (hast) element. */
+function hidden(word: string) {
   return {
     type: 'element',
     tagName: 'span',
@@ -89,55 +159,98 @@ function hidden(word: string): TreeElement {
   };
 }
 
-/**
- * A text node's value split at its sentinels: text, then a superscript with a visually hidden word ("fonte ") and the
- * number, and so on.
- */
-function split(value: string, word: string): TreeNode[] {
+/** A superscript with a visually hidden word ("fonte ") and the number, in the reference's accent. */
+function superscripts(numbers: readonly number[], word: string): TreeNode[] {
+  return numbers.map((number) => ({
+    type: 'citation',
+    data: {
+      hName: 'sup',
+      hProperties: { className: [styles.citation] },
+      hChildren: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(number) }],
+    },
+  }));
+}
+
+/** A paragraph holding only superscripts. */
+function paragraphOf(numbers: readonly number[], word: string): TreeNode {
+  return { type: 'paragraph', children: superscripts(numbers, word) };
+}
+
+/** A text node split at its marks: text, the superscripts there, text, and so on (no empty text). */
+function split(text: TreeNode, marks: Map<number, number[]>, word: string): TreeNode[] {
+  const value = text.value ?? '';
   const nodes: TreeNode[] = [];
-  let run = '';
-  for (const point of value) {
-    const code = point.codePointAt(0) ?? 0;
-    if (!isSentinel(code)) {
-      run += point;
-      continue;
+  let from = 0;
+  for (const index of [...marks.keys()].sort((one, other) => one - other)) {
+    if (index > from) {
+      nodes.push({ type: 'text', value: value.slice(from, index) });
+      from = index;
     }
-    if (run !== '') {
-      nodes.push({ type: 'text', value: run });
-      run = '';
-    }
-    nodes.push({
-      type: 'element',
-      tagName: 'sup',
-      properties: { className: [styles.citation] },
-      children: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(code - SENTINEL_FIRST) }],
-    });
+    nodes.push(...superscripts(marks.get(index) ?? [], word));
   }
-  if (run !== '') {
-    nodes.push({ type: 'text', value: run });
+  if (value.length > from) {
+    nodes.push({ type: 'text', value: value.slice(from) });
   }
   return nodes;
 }
 
-function mark(node: TreeNode, word: string): void {
-  if (!('children' in node) || !Array.isArray(node.children)) {
+/** Puts every recorded superscript in the tree under `parent`. */
+function insert(parent: TreeNode, places: Places, word: string): void {
+  if (!Array.isArray(parent.children)) {
     return;
   }
-  node.children = node.children.flatMap((child) => {
-    if (child.type === 'text' && 'value' in child) {
-      return split(child.value, word);
+  const children: TreeNode[] = superscripts(places.first.get(parent) ?? [], word);
+  for (const child of parent.children) {
+    children.push(...superscripts(places.before.get(child) ?? [], word));
+    const marks = places.inText.get(child);
+    if (marks === undefined) {
+      insert(child, places, word);
+      children.push(child);
+    } else {
+      children.push(...split(child, marks, word));
     }
-    mark(child, word);
-    return [child];
-  });
+    children.push(...superscripts(places.after.get(child) ?? [], word));
+    const below = places.below.get(child);
+    if (below !== undefined) {
+      children.push(paragraphOf(below, word));
+    }
+  }
+  const alone = places.alone.get(parent);
+  if (alone !== undefined) {
+    children.push(paragraphOf(alone, word));
+  }
+  parent.children = children;
 }
 
-/** The rehype step that turns each sentinel into a `<sup>` with its number, in the reference's accent. */
-function rehypeCitations(word: string) {
+/**
+ * The remark step that places each mark in the parsed Markdown tree (the text itself is never changed): at its place
+ * (`placeOf`, in code points, turned into the tree's UTF-16 offsets) as a superscript after the text it follows. A mark
+ * on or inside a code block (fenced or indented, in any container, closed or not) goes in a paragraph right after the
+ * block, in the same container; one on or inside inline code or a link goes right after it. Marks at one place keep
+ * their order.
+ */
+function remarkCitations(text: string, marks: readonly CitationMark[], word: string) {
   return () => (tree: { type: string }) => {
-    mark(tree as TreeNode, word);
+    const points = Array.from(text);
+    const placed = marks
+      .filter((mark) => Number.isInteger(mark.number) && mark.number >= 1)
+      .map((mark) => ({ number: mark.number, at: points.slice(0, placeOf(points, mark.offset)).join('').length }))
+      .sort((one, other) => one.at - other.at);
+    const places: Places = {
+      inText: new Map(),
+      before: new Map(),
+      after: new Map(),
+      first: new Map(),
+      below: new Map(),
+      alone: new Map(),
+    };
+    for (const mark of placed) {
+      locate(tree as TreeNode, mark.at, text, mark.number, places);
+    }
+    insert(tree as TreeNode, places, word);
   };
 }
+
 
 /**
  * Story 2.8: a link's address is only ever shown as text (`a` renders a span, never an anchor), so it is kept as written,
@@ -159,7 +272,7 @@ export type AnswerMarkdownProps = {
  * An answer's text as sanitized Markdown (Story 2.4): raw HTML in the text is skipped (`skipHtml`, never rendered),
  * images are dropped, and a link is shown as its words with its address (any address, `addressAsText`), never as an
  * anchor. Nothing is set as HTML.
- * Story 2.5: each mark becomes a superscript with its reference's number at its code-point offset.
+ * Story 2.5: each mark becomes a superscript with its reference's number at its code-point offset (`remarkCitations`).
  */
 export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }: AnswerMarkdownProps) {
   const components: Components = {
@@ -176,9 +289,9 @@ export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }
       disallowedElements={['img']}
       urlTransform={addressAsText}
       components={components}
-      rehypePlugins={[rehypeCitations(citationWord)]}
+      remarkPlugins={[remarkCitations(text, marks, citationWord)]}
     >
-      {withMarks(text, marks)}
+      {text}
     </Markdown>
   );
 }
