@@ -253,7 +253,9 @@
       },
       "material": {
         "action_unavailable": "This action is not available in the material's current state. The page has been updated.",
-        "belonging_invalid": "Choose one of your campaigns or at least one of your systems."
+        "belonging_invalid": "Choose one of your campaigns or at least one of your systems.",
+        "version_in_progress": "This material already has a version on its way. Wait for it to finish, or accept, retry or discard it, before starting another one.",
+        "not_ready": "This material has no ready version to replace or reprocess."
       }
     }
   },
@@ -350,14 +352,21 @@
       "label": "Actions",
       "accept": "Accept",
       "reprocess": "Reprocess failed pages",
+      "reprocessReady": "Reprocess",
       "retry": "Try again",
-      "discard": "Discard"
+      "discard": "Discard",
+      "replace": "Replace"
     },
     "discard": {
       "title": "Discard «{name}»?",
       "pagesOne": "The page read from this file goes, with its picture and extracted text, the outline and the uploaded file. This cannot be undone.",
       "pagesOther": "The {pages} pages read from this file go, with their pictures and extracted text, the outline and the uploaded file. This cannot be undone.",
       "noPages": "The uploaded file goes, with everything read from it. This cannot be undone."
+    },
+    "serving": {
+      "pagesOne": "The previous version (1 page) stays in use while the new one is not accepted.",
+      "pagesOther": "The previous version ({pages} pages) stays in use while the new one is not accepted.",
+      "noPages": "The previous version stays in use while the new one is not accepted."
     },
     "notice": {
       "needsReview": "{name} needs review.",
@@ -392,6 +401,7 @@
   "upload": {
     "dialog": {
       "title": "Add files",
+      "replaceTitle": "Replace {name}",
       "step": "Step {step} of {total}",
       "close": "Close",
       "back": "Back",
@@ -414,7 +424,10 @@
         },
         "drop": "Drag your files here, or",
         "dropNow": "Drop to add",
-        "chosen": "Chosen files"
+        "chosen": "Chosen files",
+        "replaceQuestion": "What is the new version?",
+        "replaceLead": "Choose one file, or the photos that become the pages of the new version. It is read and reviewed like a new file, and the current version stays in use until you accept the new one.",
+        "replaceOne": "Choose a single file, or photos only."
       },
       "set": {
         "question": "What are the {count} photos?",

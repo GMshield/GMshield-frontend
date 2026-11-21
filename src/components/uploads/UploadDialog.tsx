@@ -78,9 +78,14 @@ export type UploadDialogProps = {
  * ("foto-2.jpg, página 3 de 5"). A thumbnail shows the images a browser can show; HEIC and TIFF get their format's
  * name. Past 500 images or 2 GB in all the set is refused here with the limit. "Enviar" confirms the order: it never
  * changes afterwards.
+ *
+ * Story 3.4: opened from a material's page with "Substituir" (`openUpload({replace})`), it sends a new version of that
+ * material: its title is "Substituir {name}", and it asks only for one file or one photo set (several photos are the
+ * pages of the new version, in the order step, with no name to give), then sends it. There is no kind, place or
+ * language step: the material keeps its own. The tray pairs the new version's row with the material, as for any upload.
  */
 export function UploadDialog({ open, onClose }: UploadDialogProps) {
-  const { texts, belonging, live, send, announce } = useUploads();
+  const { texts, belonging, live, send, replaceMaterial, replace, announce } = useUploads();
   const t = texts.upload.dialog;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -142,7 +147,9 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const imageItems = acceptedItems.filter((item) => imageFormatOf(item) !== null);
   const otherFiles = acceptedItems.filter((item) => imageFormatOf(item) === null).map((item) => item.file);
   const checking = chosen.some((item) => item.check === null);
-  const asSet = imageItems.length >= 2 && setMode === 'pages';
+  // Story 3.4: a new version is one file or one photo set, never both nor two files.
+  const mixed = replace !== null && (otherFiles.length > 1 || (otherFiles.length === 1 && imageItems.length > 0));
+  const asSet = imageItems.length >= 2 && (setMode === 'pages' || replace !== null);
   // The order the GM set, then any image chosen since, in the order chosen.
   const imageIds = imageItems.map((item) => item.id);
   const orderedIds = [...order.filter((id) => imageIds.includes(id)), ...imageIds.filter((id) => !order.includes(id))];
@@ -151,15 +158,12 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const setBytes = ordered.reduce((sum, item) => sum + item.file.size, 0);
   const tooMany = ordered.length > MAX_SET_IMAGES;
   const tooLarge = setBytes > MAX_SET_BYTES;
-  const nameMissing = name.trim() === '';
-  const steps: readonly StepName[] = [
-    'files',
-    ...(imageItems.length >= 2 ? (['set'] as const) : []),
-    ...(asSet ? (['order'] as const) : []),
-    'kind',
-    'belonging',
-    'language',
-  ];
+  // A new version keeps its material's name: there is none to give.
+  const nameMissing = replace === null && name.trim() === '';
+  const steps: readonly StepName[] =
+    replace === null
+      ? ['files', ...(imageItems.length >= 2 ? (['set'] as const) : []), ...(asSet ? (['order'] as const) : []), 'kind', 'belonging', 'language']
+      : ['files', ...(asSet ? (['order'] as const) : [])];
   const current: StepName | null = steps[step - 1] ?? null;
   const questions = steps.length;
 
@@ -226,7 +230,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   }
 
   const blocked =
-    (current === 'files' && (acceptedItems.length === 0 || checking)) ||
+    (current === 'files' && (acceptedItems.length === 0 || checking || mixed)) ||
     (current === 'order' && (tooMany || tooLarge || nameMissing)) ||
     (current === 'belonging' && place === null);
 
@@ -268,6 +272,14 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   }
 
   function onSend() {
+    if (replace !== null) {
+      // The new version's photos are one set, named as its material is.
+      const photos = asSet ? ordered : imageItems;
+      const sets = photos.length === 0 ? [] : [{ name: replace.name, files: photos.map((item) => item.file) }];
+      setBatch(replaceMaterial(replace, { files: otherFiles, sets }));
+      setStep(questions + 1);
+      return;
+    }
     const answers: Answers = { kind, belonging: place ?? { choice: 'none' }, language };
     // An image that is not a page of a set is a set of one, named as a file is.
     const sets = asSet
@@ -304,13 +316,15 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   );
 
   const sending = live.filter((upload) => batch !== null && upload.batch === batch);
+  // Story 3.4: the dialog names the material it sends a new version of.
+  const questionsTitle = replace === null ? t.title : fill(t.replaceTitle, { name: replace.name });
 
   return (
     <dialog ref={dialogRef} className={styles.dialog} aria-labelledby={titleId} onKeyDown={onKeyDown} onCancel={onNativeCancel}>
       <div className={styles.dialogHead}>
         <div>
           <h2 id={titleId} className={styles.title}>
-            {current === null ? t.progress.title : t.title}
+            {current === null ? t.progress.title : questionsTitle}
           </h2>
           {current === null ? null : (
             <>
@@ -336,9 +350,9 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
         {current === 'files' ? (
           <section aria-labelledby={`${titleId}-files`}>
             <h3 id={`${titleId}-files`} className={styles.legend}>
-              {t.files.question}
+              {replace === null ? t.files.question : t.files.replaceQuestion}
             </h3>
-            <p className={styles.lead}>{t.files.lead}</p>
+            <p className={styles.lead}>{replace === null ? t.files.lead : t.files.replaceLead}</p>
             <input ref={inputRef} type="file" multiple hidden accept={ACCEPT} onChange={onFiles} data-testid="upload-files" />
             {/* Files are dropped here or chosen with the button: the button alone does everything, so the keyboard needs no drag. */}
             <div
@@ -358,6 +372,11 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
                 {t.files.choose}
               </PillButton>
             </div>
+            {mixed ? (
+              <p className={styles.note} role="alert">
+                {t.files.replaceOne}
+              </p>
+            ) : null}
             {chosen.length === 0 ? (
               <p className={styles.note}>{t.files.none}</p>
             ) : (
@@ -399,19 +418,21 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
               {t.order.question}
             </h3>
             <p className={styles.lead}>{t.order.lead}</p>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>{t.order.name}</span>
-              <input
-                className={styles.text}
-                type="text"
-                value={name}
-                maxLength={255}
-                required
-                aria-invalid={nameMissing}
-                onChange={(event) => setSetName(event.target.value)}
-                data-step-focus=""
-              />
-            </label>
+            {replace !== null ? null : (
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>{t.order.name}</span>
+                <input
+                  className={styles.text}
+                  type="text"
+                  value={name}
+                  maxLength={255}
+                  required
+                  aria-invalid={nameMissing}
+                  onChange={(event) => setSetName(event.target.value)}
+                  data-step-focus=""
+                />
+              </label>
+            )}
             {nameMissing ? (
               <p className={styles.note} role="alert">
                 {t.order.nameRequired}
@@ -519,7 +540,11 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
             {t.next}
           </SolidPillButton>
         ) : null}
-        {current !== null && step === questions ? <SolidPillButton onClick={onSend}>{t.send}</SolidPillButton> : null}
+        {current !== null && step === questions ? (
+          <SolidPillButton disabled={blocked} onClick={onSend}>
+            {t.send}
+          </SolidPillButton>
+        ) : null}
         {current === null ? (
           <SolidPillButton data-step-focus="" onClick={onClose}>
             {t.close}

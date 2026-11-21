@@ -7,7 +7,7 @@ import { useUploads } from './uploads/UploadsProvider';
 export function AddFileButton({ label }: { readonly label: string }) {
   const { openUpload } = useUploads();
   return (
-    <SolidPillButton aria-haspopup="dialog" onClick={openUpload}>
+    <SolidPillButton aria-haspopup="dialog" onClick={() => openUpload()}>
       {label}
     </SolidPillButton>
   );

@@ -37,7 +37,7 @@ const CAMPAIGN = {
 const MATERIALS = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50';
 const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
 /** Story 3.3: a material's version and place, which every material of the contract carries (here: none). */
-const PLACE = { version: 0, belonging: { campaign: null, systems: [] } };
+const PLACE = { version: 0, belonging: { campaign: null, systems: [] }, serving: null };
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -683,13 +683,30 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Nenhuma seção foi encontrada no texto.');
     expect(html).not.toContain('Páginas ilegíveis');
 
-    // Accepted: the report, read-only, and the pill "pronto".
-    answer({ state: 'ready', actions: [], pages: reviewPages });
+    // Accepted: the report, read-only, and the pill "pronto". Story 3.4: "Substituir" and "Reprocessar", two plain pills,
+    // with no confirmation (nothing is removed).
+    answer({ state: 'ready', actions: ['reprocess'], pages: reviewPages });
     html = await page();
     expect(html).toContain('pronto');
     expect(html).toContain('Relatório de qualidade');
-    expect(buttons(html)).toEqual([]);
+    expect(buttons(html)).toEqual(['Substituir:default', 'Reprocessar:default']);
+    expect(html).not.toContain('Reprocessar páginas com falha');
     expect(html).not.toContain('<dialog');
+    expect(html).not.toContain('data-serving');
+
+    // Story 3.4: a new version under review, the ready one serving beside it.
+    answer({ state: 'needs_review', actions: ['accept', 'discard'], pages: { ...reviewPages, unreadable: 0 }, serving: { pages: 320, size: 1000 } });
+    html = await page();
+    expect(html).toContain('A versão anterior (320 páginas) continua em uso enquanto a nova não for aceita.');
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
+    answer({ state: 'uploading', actions: [], serving: { pages: 1, size: 1000 } });
+    expect(await page()).toContain('A versão anterior (1 página) continua em uso enquanto a nova não for aceita.');
+    answer({ state: 'waiting', actions: [], serving: { pages: null, size: null } });
+    html = await page();
+    expect(html).toContain('A versão anterior continua em uso enquanto a nova não for aceita.');
+    expect(buttons(html)).toEqual([]);
+    answer({ state: 'processing', actions: [], serving: { pages: 320, size: 1000 } });
+    expect(await page('en')).toContain('The previous version (320 pages) stays in use while the new one is not accepted.');
 
     // Failed: why, then Tentar de novo and Descartar.
     answer({ state: 'failed', failure: 'ingestion.step_failed', actions: ['retry', 'discard'] });
@@ -973,7 +990,7 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
   const IN_CAMPAIGN = { campaign: { id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D' } }, systems: [] };
   const pages = { done: 320, total: 320, text: { done: 320, total: 320 }, image: { done: 0, total: 0 }, readDirectly: 320, readByOcr: 0, unreadable: 0, reading: null };
   const files = [
-    { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready', actions: [], version: 1, size: 1234567, pages, belonging: IN_CAMPAIGN },
+    { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready', actions: [], version: 1, size: 1234567, pages, belonging: IN_CAMPAIGN, serving: null },
     {
       id: '0190a0b0-0000-7000-8000-000000000006',
       name: 'Bestiário.pdf',
@@ -983,8 +1000,9 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
       size: 2000,
       pages: { ...pages, total: 1 },
       belonging: { campaign: null, systems: [{ id: SYSTEM, name: 'D&D' }, { id: OTHER_SYSTEM, name: 'Pathfinder' }] },
+      serving: null,
     },
-    { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Solto.md', state: 'uploading', actions: [], version: 0, belonging: { campaign: null, systems: [] } },
+    { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Solto.md', state: 'uploading', actions: [], version: 0, belonging: { campaign: null, systems: [] }, serving: null },
   ];
 
   it('lists every material but a discarded one, each with its state, size, pages and place, opening its page', async () => {

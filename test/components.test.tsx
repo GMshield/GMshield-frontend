@@ -571,6 +571,29 @@ describe('MaterialActions (Story 1.20)', () => {
     expectNoStyleAttribute(container);
   });
 
+  it('a ready material shows "Substituir" and "Reprocessar", two plain pills; Reprocessar posts at once, with no confirmation (Story 3.4)', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container, rerender } = render(
+      <MaterialActions id={ID} name="Livro.pdf" actions={['reprocess']} pages={444} ready language="pt-BR" action={action} />,
+    );
+    const pills = within(container.querySelector('form')!).getAllByRole('button');
+    expect(pills.map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual(['Substituir:default', 'Reprocessar:default']);
+    expect(pills[0]!.getAttribute('aria-haspopup')).toBe('dialog');
+    // Outside the shell there is no guided upload to open: nothing is posted.
+    await user.click(pills[0]!);
+    expect(posted).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Reprocessar' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, action: 'reprocess' }]));
+    expect(container.querySelector('dialog')).toBeNull();
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={['reprocess']} pages={444} ready language="en" action={action} />);
+    expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => pill.textContent)).toEqual(['Replace', 'Reprocess']);
+    // A ready material whose backend offers no action still offers its replacement.
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={[]} pages={444} ready language="pt-BR" action={action} />);
+    expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => pill.textContent)).toEqual(['Substituir']);
+    expectNoStyleAttribute(container);
+  });
+
   it('Descartar opens a confirmation naming what goes, with its count; Esc keeps everything, the danger pill discards', async () => {
     const user = userEvent.setup();
     const { posted, action } = recorder();

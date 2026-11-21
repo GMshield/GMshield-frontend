@@ -47,6 +47,10 @@ import styles from './page.module.css';
  *
  * Third round: the report's outline and unreadable pages are paged (`?outline=`, `?unreadable=`), so a long book no
  * longer makes this page many screens long; the first page's preview is no taller than the window leaves room for.
+ *
+ * Story 3.4: the page shows the material's current version (the newest one not discarded). A ready material offers
+ * "Substituir" (the guided upload, for a new version) and "Reprocessar" ({@link MaterialActions}); while a new version is
+ * on its way, a line under the state says that the previous version (its pages) keeps serving until the GM accepts it.
  */
 export default async function MaterialPage({
   params,
@@ -86,13 +90,23 @@ export default async function MaterialPage({
     places.campaigns.length === 0 && places.systems.length === 0 && failed !== undefined && !failed.ok
       ? errorText(failed.problem, language)
       : null;
-  const { state, pages, failure } = material.data;
+  const { state, pages, failure, serving } = material.data;
   const actions = material.data.actions ?? [];
   const reviewed = state === 'needs_review' || state === 'ready';
   const report = reviewed ? await getReport(token ?? '', id) : null;
   const progress = state === 'processing' && pages !== undefined ? progressOf(pages) : null;
   const word = progress?.phase ? t(`material.phase.${progress.phase}`) : t(`material.state.${state}`);
   const detail = progress === null ? undefined : t('material.pages', { done: progress.done, total: progress.total });
+  // Story 3.4: while a new version is on its way, the ready one keeps serving. A backend before 1.23.0 sends no
+  // `serving` (a rollback): read as none.
+  let servingText: string | null = null;
+  if (serving !== null && serving !== undefined) {
+    if (serving.pages === null) {
+      servingText = t('material.serving.noPages');
+    } else {
+      servingText = serving.pages === 1 ? t('material.serving.pagesOne') : t('material.serving.pagesOther', { pages: serving.pages });
+    }
+  }
   const counts =
     pages !== undefined && state === 'processing'
       ? [
@@ -113,6 +127,11 @@ export default async function MaterialPage({
           <StatePill state={state} word={word} detail={detail} />
         </PageSubtitle>
       </PageHeader>
+      {servingText === null ? null : (
+        <p className={styles.serving} data-serving="">
+          {servingText}
+        </p>
+      )}
       {state === 'failed' ? (
         <Notice status="danger" language={language} message={failureText(failure, language)} dismissible={false} />
       ) : null}
@@ -121,6 +140,7 @@ export default async function MaterialPage({
         name={material.data.name}
         actions={actions}
         pages={pages?.done}
+        ready={state === 'ready'}
         language={language}
         action={materialAction}
       />

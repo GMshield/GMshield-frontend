@@ -92,6 +92,23 @@ describe('the material actions (Story 1.20)', () => {
     expect(refresh).toHaveBeenCalledTimes(3);
   });
 
+  it('a reprocess of a ready material that another version got to first says so in words (Story 3.4)', async () => {
+    await useBackend({
+      [`POST /api/v1/materials/${ID}/reprocess`]: {
+        status: 409,
+        body: { type: 'urn:gmshield:problem:material.version_in_progress', title: 'x', status: 409, category: 'material', code: 'material.version_in_progress', params: {}, traceId: 't' },
+      },
+    });
+    expect(await materialAction({ error: null }, form({ id: ID, action: 'reprocess' }))).toEqual({
+      error: 'Este material já tem uma versão a caminho. Espere ela terminar, ou aceite, tente de novo ou descarte essa versão, antes de começar outra.',
+    });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await materialAction({ error: null }, form({ id: ID, action: 'reprocess' }))).toEqual({
+      error: 'This material already has a version on its way. Wait for it to finish, or accept, retry or discard it, before starting another one.',
+    });
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
   it('an unknown action or a malformed id never reaches the backend', async () => {
     const server = await useBackend({});
     const refused: Record<string, string>[] = [{ id: ID, action: 'delete' }, { id: '../me', action: 'accept' }, { id: ID }, { action: 'accept' }];

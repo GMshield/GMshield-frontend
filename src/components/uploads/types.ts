@@ -9,7 +9,7 @@ import type { components } from '@/server/backend/generated/public';
  * A material as the tray shows it: the GM's actions (Story 1.20) are the material page's alone, and so are its version
  * and where it belongs (Story 3.3).
  */
-export type Material = Omit<components['schemas']['Material'], 'actions' | 'version' | 'size' | 'belonging'>;
+export type Material = Omit<components['schemas']['Material'], 'actions' | 'version' | 'size' | 'belonging' | 'serving'>;
 export type MaterialState = Material['state'];
 /** A material's pages once its page total is known: done of the total, by layer and by outcome (Story 1.17). */
 export type MaterialPages = NonNullable<Material['pages']>;
@@ -162,16 +162,31 @@ export function isImageFormat(format: string | null | undefined): format is Imag
 /** An image of a set as the GM chose it: its file name and size. */
 export type SetImage = { readonly name: string; readonly length: number };
 
-/** What "Enviar" sends to create a set (Story 1.21): its name, the answers and its images in their confirmed order. */
-export type ImageSetCreate = {
-  readonly name: string;
-  readonly kind: Kind;
-  readonly language: UploadLanguage;
-  readonly campaign?: string;
-  /** Story 3.3: one or more systems, never with a campaign. */
-  readonly systems?: readonly string[];
-  readonly images: readonly SetImage[];
-};
+/**
+ * What "Enviar" sends to create a set (Story 1.21): its name, the answers and its images in their confirmed order; from
+ * Story 3.4, for a new version of a material, its name, the material and the images, and nothing else.
+ */
+export type ImageSetCreate =
+  | {
+      readonly name: string;
+      readonly kind: Kind;
+      readonly language: UploadLanguage;
+      readonly campaign?: string;
+      /** Story 3.3: one or more systems, never with a campaign. */
+      readonly systems?: readonly string[];
+      readonly material?: undefined;
+      readonly images: readonly SetImage[];
+    }
+  | {
+      readonly name: string;
+      /** Story 3.4: the material the set replaces; it keeps its name, kind, language and place. */
+      readonly material: string;
+      readonly kind?: undefined;
+      readonly language?: undefined;
+      readonly campaign?: undefined;
+      readonly systems?: undefined;
+      readonly images: readonly SetImage[];
+    };
 
 /** A refusal of a set call, as plain fields: what `problemText` needs. */
 export type SetProblem = {
