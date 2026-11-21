@@ -99,7 +99,7 @@ export function ConfirmationDialog({
         <PillButton ref={cancelRef} onClick={onCancel}>
           {cancelLabel ?? messagesFor(language).dialog.cancel}
         </PillButton>
-        <PillButton variant="danger" onClick={onConfirm}>
+        <PillButton variant="danger" className={styles.confirm} onClick={onConfirm}>
           {confirmLabel}
         </PillButton>
       </div>

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { call, type CallOptions, type Result } from './accounts';
 import type { components, operations } from './backend/generated/public';
+import { everyPage, type Every } from './every-page';
 
 /**
  * The signed-in account's library through the backend (Story 1.11). The backend takes the owner from the session
@@ -84,35 +85,37 @@ export function listCampaigns(sessionToken: string, query: CampaignQuery = {}, o
   );
 }
 
-/** The most pages {@link listAllSystems} and {@link listAllCampaigns} read: 1,000 items, far past any library. */
-const MOST_PAGES = 20;
+/** Every system of the account, newest first, and whether the list was read to its end (the "Sistemas" pages). */
+export function everySystem(sessionToken: string, options: CallOptions = {}): Promise<Result<Every<GameSystem>>> {
+  return everyPage((cursor) => listSystems(sessionToken, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+}
 
-/** Every page of a list, read one after another (Story 3.3: the places a material can be given). */
-async function allPages<T>(load: (cursor: string | undefined) => Promise<Result<{ items: T[]; nextCursor?: string }>>): Promise<Result<T[]>> {
-  const items: T[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < MOST_PAGES; page++) {
-    const result = await load(cursor);
-    if (!result.ok) {
-      return result;
-    }
-    items.push(...result.data.items);
-    cursor = result.data.nextCursor;
-    if (cursor === undefined) {
-      break;
-    }
-  }
-  return { ok: true, data: items };
+/**
+ * Every campaign of the account that `query` asks for (of one system, the archived ones), newest first, and whether
+ * the list was read to its end (the pages of "Minhas Mesas" and of a system's campaigns).
+ */
+export function everyCampaign(
+  sessionToken: string,
+  query: Omit<CampaignQuery, 'limit' | 'cursor'> = {},
+  options: CallOptions = {},
+): Promise<Result<Every<CampaignSummary>>> {
+  return everyPage((cursor) => listCampaigns(sessionToken, { ...query, limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+}
+
+/** A whole list as its items alone. */
+async function itemsOf<T>(list: Promise<Result<Every<T>>>): Promise<Result<T[]>> {
+  const result = await list;
+  return result.ok ? { ok: true, data: result.data.items } : result;
 }
 
 /** Every system of the account, newest first (Story 3.3), 50 a page. */
 export function listAllSystems(sessionToken: string, options: CallOptions = {}): Promise<Result<GameSystem[]>> {
-  return allPages((cursor) => listSystems(sessionToken, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+  return itemsOf(everySystem(sessionToken, options));
 }
 
 /** Every campaign in use of the account (not archived), newest first (Story 3.3), 50 a page. */
 export function listAllCampaigns(sessionToken: string, options: CallOptions = {}): Promise<Result<CampaignSummary[]>> {
-  return allPages((cursor) => listCampaigns(sessionToken, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+  return itemsOf(everyCampaign(sessionToken, {}, options));
 }
 
 /** One of the account's campaigns, archived or not, with its system and version; `request.not_found` for any other id. */

@@ -13,7 +13,9 @@ export const viewport: Viewport = { width: 'device-width', initialScale: 1, inte
 
 export async function generateMetadata(): Promise<Metadata> {
   const messages = messagesFor((await currentPreferences()).language);
-  return { title: messages.app.title, description: messages.app.description };
+  // Usability pass (2026-11-21): a page names itself before the product ("Meus Arquivos · GMshield"), so a tab, a
+  // bookmark and a screen reader say where the GM is; a page without a name of its own is "GMshield".
+  return { title: { default: messages.app.title, template: `%s · ${messages.app.title}` }, description: messages.app.description };
 }
 
 // The theme and language come from the cookies (src/preferences.ts), so the server renders the

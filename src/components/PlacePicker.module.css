@@ -2,17 +2,25 @@
 .choices {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.choices > li + li {
-  border-top: 1px solid var(--color-rule);
+/* Each choice is a box of its own: the chosen one has a heavier edge and the active background. */
+.choices > li {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+}
+
+.choices > li:has(> .choice input:checked) {
+  border-color: var(--color-text);
 }
 
 .row {
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-field);
 }
 
 .row:has(> .choice input:checked) {
@@ -74,16 +82,21 @@
   max-width: 36rem;
   min-height: var(--space-touch-target);
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-border);
-  border-radius: var(--radius-full);
-  background-color: var(--color-control);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
   color: var(--color-text);
   font: inherit;
 }
 
+/*
+ * The systems to tick: in as many columns as fit, so a library of twenty systems is a few rows and not a column of
+ * twenty. It has no scroll of its own: the dialog's step, or the page, is the one thing that scrolls.
+ */
 .checks {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0 var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -93,7 +106,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
   min-height: var(--space-touch-target);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 

@@ -151,7 +151,7 @@ function PlaceFields({ places, from, texts, error, pending, onCancel }: PlaceFie
         </p>
       )}
       <div className={styles.actions}>
-        <PillButton type="submit" disabled={pending || picked === null || picked.choice === 'none'}>
+        <PillButton type="submit" disabled={pending || picked === null || picked.choice === 'none'} pending={pending}>
           {texts.save}
         </PillButton>
         <PillButton onClick={onCancel}>{texts.cancel}</PillButton>

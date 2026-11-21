@@ -19,7 +19,7 @@ const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
 const { default: NewSystemPage } = await import('@/app/(signed-in)/systems/new/page');
 const { default: SystemPage } = await import('@/app/(signed-in)/systems/[id]/page');
 const { default: EditSystemPage } = await import('@/app/(signed-in)/systems/[id]/edit/page');
-const { changeSystemAction, createSystemAction, deleteSystemAction, moreCampaigns, moreMaterials, moreSystems } = await import(
+const { changeSystemAction, createSystemAction, deleteSystemAction } = await import(
   '@/app/(signed-in)/systems/actions'
 );
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -36,8 +36,12 @@ const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const MATERIAL = '0190a0b0-0000-7000-8000-000000000003';
 const DND = { id: ID, name: 'D&D', edition: '5.2.1', description: 'As regras básicas.\nSem suplementos.', version: 3 };
 const UNTITLED = { id: STARTER, name: 'Sistema sem nome', edition: null, description: null, version: 0 };
-const SYSTEM_MATERIALS = `GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=failed&system=${ID}`;
+const SYSTEM_MATERIALS = `GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=failed&system=${ID}&limit=50`;
 const EMPTY = { status: 200, body: { items: [] } };
+/** The lists are read whole, 50 a call, and cut into pages here (usability pass, third round). */
+const SYSTEMS = 'GET /api/v1/systems?limit=50';
+const many = (count: number, from = 0) =>
+  Array.from({ length: count }, (_, index) => ({ id: `0190a0b0-0000-7000-8000-0000000002${String(from + index).padStart(2, '0')}`, name: `Sistema ${from + index + 1}`, edition: null, description: null, version: 0 }));
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -93,7 +97,7 @@ afterEach(async () => {
 
 describe('the systems list (Story 3.1)', () => {
   it('shows the systems with name and edition, each opening its page, under the title and one solid "Novo sistema", in both languages', async () => {
-    const server = await useBackend({ 'GET /api/v1/systems': { status: 200, body: { items: [DND, UNTITLED] } } });
+    const server = await useBackend({ [SYSTEMS]: { status: 200, body: { items: [DND, UNTITLED] } } });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
       const html = renderToStaticMarkup(await SystemsPage());
@@ -108,11 +112,12 @@ describe('the systems list (Story 3.1)', () => {
       expect(html).toContain('D&amp;D');
       expect(html).toContain('5.2.1');
       expect(html.indexOf('D&amp;D')).toBeLessThan(html.indexOf('Sistema sem nome'));
-      // A single page: no "Carregar mais".
-      expect(html).not.toContain(messages.systems.loadMore);
+      // A single page: how many there are, and no pager.
+      expect(html).toContain(language === 'en' ? '2 items' : '2 itens');
+      expect(html).not.toContain(`aria-label="${messages.paging.label}"`);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
-    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual(['GET /api/v1/systems', 'GET /api/v1/systems']);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([SYSTEMS, SYSTEMS]);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
       expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
@@ -120,7 +125,7 @@ describe('the systems list (Story 3.1)', () => {
   });
 
   it('empty: one sentence says what a system holds, and "Novo sistema" is the only action', async () => {
-    await useBackend({ 'GET /api/v1/systems': EMPTY });
+    await useBackend({ [SYSTEMS]: EMPTY });
     const html = renderToStaticMarkup(await SystemsPage());
 
     expect(html).toContain('Um sistema reúne as campanhas e os materiais de um jogo.');
@@ -134,45 +139,62 @@ describe('the systems list (Story 3.1)', () => {
     }
   });
 
-  it('a first page with more after it offers "Carregar mais" with its cursor; a list that cannot be loaded says why', async () => {
+  it('a long list is paged: ten rows, the rows shown of the total, and links to every page; a list that cannot be loaded says why', async () => {
+    const all = many(23);
     const routes: Record<string, { status: number; body: unknown }> = {
-      'GET /api/v1/systems': { status: 200, body: { items: [DND], nextCursor: ID } },
+      // The backend gives the list by cursor; the page reads it to its end.
+      [SYSTEMS]: { status: 200, body: { items: all.slice(0, 20), nextCursor: all[19]!.id } },
+      [`${SYSTEMS}&cursor=${all[19]!.id}`]: { status: 200, body: { items: all.slice(20) } },
     };
-    await useBackend(routes);
-    let html = renderToStaticMarkup(await SystemsPage());
-    expect(html).toContain('Carregar mais');
-    expect(html).toContain(`name="cursor" value="${ID}"`);
+    const server = await useBackend(routes);
+    const rows = (html: string) => [...html.matchAll(/href="\/systems\/(0190a0b0[^"]+)"/g)].map((match) => match[1]);
+    const page = async (number?: string) => renderToStaticMarkup(await SystemsPage({ searchParams: Promise.resolve(number === undefined ? {} : { page: number }) }));
 
-    routes['GET /api/v1/systems'] = problem(503, 'server.unavailable');
-    html = renderToStaticMarkup(await SystemsPage());
+    let html = await page();
+    expect(rows(html)).toEqual(all.slice(0, 10).map((system) => system.id));
+    expect(html).toContain('1–10 de 23');
+    expect(html).toContain('aria-label="Paginação"');
+    // The current page says so, the others are links, and "Anterior" leads nowhere on the first page.
+    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*>1<\/a>/);
+    expect(linkTo(html, '/systems?page=2')).toContain('rel="next"');
+    expect(linkTo(html, '/systems?page=3')).toContain('aria-label="Página 3"');
+    expect(html).toMatch(/<span[^>]*aria-disabled="true"[^>]*>.*?Anterior/s);
+    expect(html).not.toContain('Carregar mais');
+    expect(server.calls.map((call) => call.url)).toEqual(['/api/v1/systems?limit=50', `/api/v1/systems?limit=50&cursor=${all[19]!.id}`]);
+
+    html = await page('3');
+    expect(rows(html)).toEqual(all.slice(20).map((system) => system.id));
+    expect(html).toContain('21–23 de 23');
+    expect(linkTo(html, '/systems?page=2')).toContain('rel="prev"');
+    // The first page has no `page` field, so it has one address.
+    expect(linkTo(html, '/systems')).toContain('aria-label="Página 1"');
+    expect(html).toMatch(/<span[^>]*aria-disabled="true"[^>]*>.*?Próxima/s);
+    // A page past the end (rows were deleted since the link was made) is the last one; anything else is the first.
+    expect(rows(await page('99'))).toEqual(all.slice(20).map((system) => system.id));
+    for (const junk of ['0', '-1', '2.5', 'x', '02']) {
+      expect(rows(await page(junk)), junk).toEqual(all.slice(0, 10).map((system) => system.id));
+    }
+
+    routes[SYSTEMS] = problem(503, 'server.unavailable');
+    html = await page();
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
     expect(solids(html)).toEqual(['Novo sistema']);
   });
 
-  it('"Carregar mais" appends the next page to the rows already added, until the last; a refusal keeps them', async () => {
-    const server = await useBackend({
-      [`GET /api/v1/systems?cursor=${ID}`]: { status: 200, body: { items: [UNTITLED], nextCursor: STARTER } },
-      [`GET /api/v1/systems?cursor=${STARTER}`]: { status: 200, body: { items: [{ ...DND, id: OTHER, edition: null }] } },
-      [`GET /api/v1/systems?cursor=${OTHER}`]: problem(503, 'server.unavailable'),
-    });
-    let state = await moreSystems({ rows: [], nextCursor: ID, error: null, added: 0 }, form({ cursor: ID }));
-    expect(state).toEqual({
-      rows: [{ id: STARTER, label: 'Sistema sem nome', detail: null, href: `/systems/${STARTER}`, state: null }],
-      nextCursor: STARTER,
-      error: null,
-      added: 1,
-    });
-    state = await moreSystems(state, form({ cursor: STARTER }));
-    expect(state.rows.map((row) => row.id)).toEqual([STARTER, OTHER]);
-    expect(state.nextCursor).toBeNull();
-    expect(state.added).toBe(1);
-    const refused = await moreSystems(state, form({ cursor: OTHER }));
-    expect(refused.rows).toEqual(state.rows);
-    expect(refused.error).toBe('O serviço está indisponível agora. Tente de novo em instantes.');
-    // A malformed cursor never reaches the backend.
-    const calls = server.calls.length;
-    expect((await moreSystems(state, form({ cursor: '../me' }))).error).toBe('O pedido não é válido.');
-    expect(server.calls).toHaveLength(calls);
+  it('the view decides how many rows a page holds, and the pager is in English too', async () => {
+    const all = many(23);
+    await useBackend({ [SYSTEMS]: { status: 200, body: { items: all } } });
+    cookieJar['__Host-gmshield-view'] = 'systems:list:comfortable:1:20';
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    const html = renderToStaticMarkup(await SystemsPage());
+    expect([...html.matchAll(/href="\/systems\/0190a0b0/g)]).toHaveLength(20);
+    expect(html).toContain('1–20 of 23');
+    expect(html).toContain('aria-label="Pagination"');
+    expect(html).toContain('aria-label="Page 2"');
+    expect(html).not.toContain('aria-label="Page 3"');
+    for (const messages of [ptBR, en]) {
+      expect(JSON.stringify(messages.paging)).not.toMatch(/!|\p{Extended_Pictographic}/u);
+    }
   });
 });
 
@@ -266,7 +288,7 @@ describe('a system page (Story 3.1)', () => {
   };
 
   it('shows the name, edition and description, "Editar", and the campaigns tab by default, in both languages', async () => {
-    const server = await useBackend({ [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND }, [`GET /api/v1/campaigns?system=${ID}`]: campaigns });
+    const server = await useBackend({ [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND }, [`GET /api/v1/campaigns?system=${ID}&limit=50`]: campaigns });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
       const html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: query() }));
@@ -288,7 +310,7 @@ describe('a system page (Story 3.1)', () => {
     }
     // The counts of the delete's dialog are read with the tab's list; here the backend has none, so they are left out.
     expect(server.calls.map((call) => call.url).sort()).toEqual(
-      [`/api/v1/systems/${ID}`, `/api/v1/campaigns?system=${ID}`, `/api/v1/systems/${ID}/deletion`].flatMap((url) => [url, url]).sort(),
+      [`/api/v1/systems/${ID}`, `/api/v1/campaigns?system=${ID}&limit=50`, `/api/v1/systems/${ID}/deletion`].flatMap((url) => [url, url]).sort(),
     );
   });
 
@@ -313,7 +335,7 @@ describe('a system page (Story 3.1)', () => {
   it('an empty tab says so in one sentence, in both languages; a system with no edition or description shows neither', async () => {
     await useBackend({
       [`GET /api/v1/systems/${STARTER}`]: { status: 200, body: UNTITLED },
-      [`GET /api/v1/campaigns?system=${STARTER}`]: EMPTY,
+      [`GET /api/v1/campaigns?system=${STARTER}&limit=50`]: EMPTY,
       [SYSTEM_MATERIALS.replace(ID, STARTER)]: EMPTY,
     });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
@@ -336,25 +358,29 @@ describe('a system page (Story 3.1)', () => {
     }
   });
 
-  it('"Carregar mais" under each tab sends the system with the cursor', async () => {
-    const server = await useBackend({
-      [`GET /api/v1/campaigns?system=${ID}&cursor=${CAMPAIGN}`]: { status: 200, body: { items: [{ id: OTHER, name: 'Segunda' }] } },
-      [`${SYSTEM_MATERIALS}&cursor=${MATERIAL}`]: materials,
+  it('each tab is paged on its own, and its page links keep the tab', async () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => ({ id: `0190a0b0-0000-7000-8000-0000000003${String(index).padStart(2, '0')}`, name: `Mesa ${index + 1}` }));
+    await useBackend({
+      [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND },
+      [`GET /api/v1/campaigns?system=${ID}&limit=50`]: { status: 200, body: { items: twelve } },
+      [SYSTEM_MATERIALS]: materials,
     });
-    const start = { rows: [], nextCursor: CAMPAIGN, error: null, added: 0 };
-    expect(await moreCampaigns(start, form({ cursor: CAMPAIGN, system: ID }))).toEqual({
-      rows: [{ id: OTHER, label: 'Segunda', detail: null, href: `/campaigns/${OTHER}`, state: null }],
-      nextCursor: null,
-      error: null,
-      added: 1,
-    });
-    expect((await moreMaterials(start, form({ cursor: MATERIAL, system: ID }))).rows.slice(0, 1)).toEqual([
-      { id: MATERIAL, label: 'SRD 5.2.1.pdf', detail: 'Sistema', href: `/files/${MATERIAL}`, state: { state: 'ready', word: 'pronto' } },
-    ]);
-    const calls = server.calls.length;
-    expect((await moreCampaigns(start, form({ cursor: CAMPAIGN, system: '../x' }))).error).toBe('O pedido não é válido.');
-    expect((await moreMaterials(start, form({ cursor: CAMPAIGN }))).error).toBe('O pedido não é válido.');
-    expect(server.calls).toHaveLength(calls);
+    const paged = (tab: string, page?: string) => Promise.resolve(page === undefined ? { tab } : { tab, page });
+    let html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: paged('campaigns') }));
+    expect(html).toContain('1–10 de 12');
+    expect(html).toContain('Mesa 10');
+    expect(html).not.toContain('Mesa 11');
+    expect(linkTo(html, `/systems/${ID}?tab=campaigns&amp;page=2`)).toContain('rel="next"');
+    html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: paged('campaigns', '2') }));
+    expect(html).toContain('11–12 de 12');
+    expect(html).toContain('Mesa 12');
+    expect(html).not.toContain('Mesa 10<');
+    expect(linkTo(html, `/systems/${ID}?tab=campaigns`)).toBeTruthy();
+    // The materials tab starts from its own first page: three materials are one page, with their count and no pager.
+    html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: paged('materials', '2') }));
+    expect(html).toContain('3 itens');
+    expect(html).toContain('SRD 5.2.1.pdf');
+    expect(html).not.toContain('aria-label="Paginação"');
   });
 });
 
@@ -364,7 +390,7 @@ describe('deleting a system (Story 3.1 part B)', () => {
   it('"Excluir" is a danger pill next to "Editar", and its closed confirmation names the counts, in both languages', async () => {
     await useBackend({
       [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND },
-      [`GET /api/v1/campaigns?system=${ID}`]: EMPTY,
+      [`GET /api/v1/campaigns?system=${ID}&limit=50`]: EMPTY,
       [`GET /api/v1/systems/${ID}/deletion`]: counts,
     });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
@@ -392,7 +418,7 @@ describe('deleting a system (Story 3.1 part B)', () => {
   it('without the counts the confirmation names what goes in words', async () => {
     await useBackend({
       [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND },
-      [`GET /api/v1/campaigns?system=${ID}`]: EMPTY,
+      [`GET /api/v1/campaigns?system=${ID}&limit=50`]: EMPTY,
       [`GET /api/v1/systems/${ID}/deletion`]: problem(503, 'service.unavailable'),
     });
     const html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: query() }));

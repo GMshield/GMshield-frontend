@@ -3,6 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { LANGUAGES, languageFor, type Language } from '@/messages';
 
 import { SIDEBAR_COOKIE, sidebarFrom, type SidebarState } from './sidebar-cookie';
+import { VIEW_COOKIE, viewsFrom, type ListViews } from './view-cookie';
 
 /**
  * Theme and language before sign-in: two cookies, read by the server on every request, so the
@@ -55,6 +56,14 @@ export { SIDEBAR_COOKIE, SIDEBAR_STATES, sidebarFrom, type SidebarState } from '
 /** The sidebar's state of the request being rendered (Server Components only). */
 export async function currentSidebar(): Promise<SidebarState> {
   return sidebarFrom((await cookies()).get(SIDEBAR_COOKIE)?.value);
+}
+
+/**
+ * How each list is shown (usability pass, 2026-11-21): `__Host-gmshield-view`, defined in `./view-cookie` so that the
+ * "Exibição" menu, a client component, can write it. Server Components only.
+ */
+export async function currentViews(): Promise<ListViews> {
+  return viewsFrom((await cookies()).get(VIEW_COOKIE)?.value);
 }
 
 /** The preferences of the request being rendered (Server Components and Server Actions only). */

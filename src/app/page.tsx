@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { LogoMark } from '@/components/Logo';
 import { Notice } from '@/components/Notice';
 import { SolidPillButton } from '@/components/PillButton';
 import { PreferencesForm } from '@/components/PreferencesForm';
@@ -53,26 +54,36 @@ export default async function HomePage({ searchParams }: { readonly searchParams
 function SignInScreen({ preferences, notice }: { readonly preferences: Preferences; readonly notice: SignInNotice | null }) {
   const t = translator(preferences.language);
   return (
-    <main className={styles.main}>
-      {notice === null ? null : <SignInNoticeLine notice={notice} language={preferences.language} />}
-      <h1 className={styles.heading}>{t('home.heading')}</h1>
-      <p className={styles.lead}>{t('home.lead')}</p>
-      {/* A plain post answered with a 303: the browser always navigates in full to Google. */}
-      <form method="post" action="/sign-in/google" className={styles.signIn} aria-label={t('signIn.title')}>
-        <SolidPillButton type="submit">{t('signIn.google')}</SolidPillButton>
-        <p className={styles.legal}>
-          {t('signIn.legal')}{' '}
-          <Link className={styles.inlineLink} href="/terms">
-            {t('signIn.terms')}
-          </Link>
-          {' · '}
-          <Link className={styles.inlineLink} href="/privacy">
-            {t('signIn.privacy')}
-          </Link>
-        </p>
-      </form>
-      <PreferencesForm theme={preferences.theme} language={preferences.language} />
-    </main>
+    <>
+      {/* The theme and the language: settings of the screen, at its top right, apart from signing in. */}
+      <header className={styles.top}>
+        <PreferencesForm theme={preferences.theme} language={preferences.language} layout="inline" />
+      </header>
+      <main className={styles.main}>
+        <div className={styles.entry}>
+          {notice === null ? null : <SignInNoticeLine notice={notice} language={preferences.language} />}
+          <div className={styles.card}>
+            <LogoMark className={styles.mark} />
+            <h1 className={styles.heading}>{t('home.heading')}</h1>
+            <p className={styles.lead}>{t('home.lead')}</p>
+            {/* A plain post answered with a 303: the browser always navigates in full to Google. */}
+            <form method="post" action="/sign-in/google" className={styles.signIn} aria-label={t('signIn.title')}>
+              <SolidPillButton type="submit">{t('signIn.google')}</SolidPillButton>
+              <p className={styles.legal}>
+                {t('signIn.legal')}{' '}
+                <Link className={styles.inlineLink} href="/terms">
+                  {t('signIn.terms')}
+                </Link>
+                {' · '}
+                <Link className={styles.inlineLink} href="/privacy">
+                  {t('signIn.privacy')}
+                </Link>
+              </p>
+            </form>
+          </div>
+        </div>
+      </main>
+    </>
   );
 }
 

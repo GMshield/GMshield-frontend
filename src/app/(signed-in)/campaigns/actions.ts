@@ -4,19 +4,18 @@ import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import type { CampaignDeleteState } from '@/components/CampaignDeleteAction';
-import type { MoreState } from '@/components/ItemList';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { changeCampaign, chooseCampaign, createCampaign, deleteCampaign, getCampaign, listCampaigns } from '@/server/library';
+import { changeCampaign, chooseCampaign, createCampaign, deleteCampaign, getCampaign } from '@/server/library';
+import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import type { CampaignActionState, CampaignField, CampaignFormState, CampaignFormValues } from './form-state';
-import { campaignListRow } from './rows';
 
 /**
  * The Server Actions of the campaigns pages and of the campaign switcher (Story 3.2): a new campaign (it becomes the
- * current one, and its page opens), a rename, an archive or a restore, the choice of the current campaign, "Abrir" on a
- * campaign's conversation, and "Carregar mais" under Minhas Mesas. The backend checks every field; a refusal comes back
+ * current one, and its page opens), a rename, an archive or a restore, the choice of the current campaign, and "Abrir" on
+ * a campaign's conversation. The backend checks every field; a refusal comes back
  * as text under the field it is about (or under the form, or under the pill), never a code. A rename the backend finds
  * stale comes back with the campaign's current name and version, and says so. The current campaign is the backend's:
  * nothing about it is kept in the browser. A create, a rename and "Abrir" change what the shared signed-in layout
@@ -70,6 +69,7 @@ export async function createCampaignAction(_previous: CampaignFormState, form: F
   const token = (await currentSessionToken()) ?? '';
   const result = await createCampaign(token, { name: values.name, systemId: values.systemId });
   if (result.ok) {
+    await flash('success', translator(language)('feedback.campaignCreated', { name: result.data.name }));
     revalidatePath('/', 'layout');
     redirect(`/campaigns/${encodeURIComponent(result.data.id)}`);
   }
@@ -93,6 +93,7 @@ export async function renameCampaignAction(previous: CampaignFormState, form: Fo
   const token = (await currentSessionToken()) ?? '';
   const result = await changeCampaign(token, id, { version: Number(version), name: values.name });
   if (result.ok) {
+    await flash('success', translator(language)('feedback.campaignRenamed', { name: result.data.name }));
     revalidatePath('/', 'layout');
     redirect(`/campaigns/${encodeURIComponent(id)}`);
   }
@@ -126,6 +127,10 @@ export async function archiveCampaignAction(previous: CampaignActionState, form:
     return { ...previous, error: invalid(language) };
   }
   const result = await changeCampaign((await currentSessionToken()) ?? '', id, { version: Number(version), archived: archived === 'true' });
+  if (result.ok) {
+    const key = archived === 'true' ? 'feedback.campaignArchived' : 'feedback.campaignRestored';
+    await flash('success', translator(language)(key, { name: result.data.name }));
+  }
   refresh();
   return result.ok ? { error: null, done: previous.done + 1 } : { ...previous, error: errorText(result.problem, language) };
 }
@@ -142,6 +147,9 @@ export async function chooseCampaignAction(previous: CampaignActionState, form: 
     return { ...previous, error: invalid(language) };
   }
   const result = await chooseCampaign((await currentSessionToken()) ?? '', id);
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.campaignChosen', { name: result.data.name }));
+  }
   refresh();
   return result.ok ? { error: null, done: previous.done + 1 } : { ...previous, error: errorText(result.problem, language) };
 }
@@ -174,25 +182,9 @@ export async function deleteCampaignAction(_previous: CampaignDeleteState, form:
   }
   const result = await deleteCampaign((await currentSessionToken()) ?? '', id);
   if (result.ok) {
+    await flash('success', translator(language)('feedback.campaignDeleted'));
     revalidatePath('/', 'layout');
     redirect('/campaigns');
   }
   return { error: errorText(result.problem, language) };
-}
-
-/** "Carregar mais" under Minhas Mesas: the next page after `cursor`, of the archived campaigns when `archived` is true. */
-export async function moreCampaignsAction(previous: MoreState, form: FormData): Promise<MoreState> {
-  const { language } = await currentPreferences();
-  const cursor = form.get('cursor');
-  const archived = form.get('archived');
-  if (typeof cursor !== 'string' || !ID.test(cursor) || (archived !== 'true' && archived !== 'false')) {
-    return { ...previous, error: invalid(language) };
-  }
-  const t = translator(language);
-  const page = await listCampaigns((await currentSessionToken()) ?? '', { archived: archived === 'true', cursor });
-  if (!page.ok) {
-    return { ...previous, error: errorText(page.problem, language) };
-  }
-  const rows = page.data.items.map((campaign) => campaignListRow(campaign, t));
-  return { rows: [...previous.rows, ...rows], nextCursor: page.data.nextCursor ?? null, error: null, added: rows.length };
 }

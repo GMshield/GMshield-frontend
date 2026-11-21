@@ -1,21 +1,9 @@
-.heading {
-  margin: var(--space-8) 0 var(--space-4);
-  font-size: var(--font-title-size);
-  font-weight: var(--font-title-weight);
-  line-height: var(--font-title-line-height);
-  overflow-wrap: anywhere;
-}
-
-.back {
-  color: var(--color-text);
-}
-
 /* Previous and next: pills in the control colour, never the solid main action. */
 .nav {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin: var(--space-4) 0 0;
+  margin: 0;
 }
 
 .step {
@@ -33,18 +21,71 @@
   text-decoration: none;
 }
 
+.step:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
 /* Story 1.20: a picture page beside its extracted text, in the main column (at most 1080px). */
 .beside {
   display: grid;
-  grid-template-columns: minmax(0, var(--width-source-view)) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
 }
 
-@media (max-width: 900px) {
+/*
+ * Third round: from 901px the two sit side by side and both fit the window. The picture is as tall as the window
+ * leaves under the header (never under 22rem), keeping its shape, and the text scrolls within that height.
+ */
+@media (min-width: 901px) {
   .beside {
-    grid-template-columns: minmax(0, 1fr);
+    --page-height: max(22rem, calc(100dvh - 16.5rem));
+    grid-template-columns: fit-content(min(var(--width-source-view), 50vw)) minmax(0, 1fr);
   }
+
+  .beside .extracted {
+    display: flex;
+    flex-direction: column;
+    max-height: var(--page-height);
+  }
+
+  .beside .extractedText {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* Everything is in view and turned from the header: the links under the page are for one column. */
+  .beside ~ .nav {
+    display: none;
+  }
+}
+
+/* "Ir para a página": a number and "Ir", between the two page links. */
+.jump {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.jumpLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  white-space: nowrap;
+}
+
+.jumpInput {
+  width: 5.5rem;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 .extracted {
@@ -52,18 +93,17 @@
 }
 
 .extractedHeading {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: var(--font-label-size);
-  font-weight: var(--font-label-weight);
-  line-height: var(--font-label-line-height);
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
 }
 
 /* The lines' text as read: one line each, wrapped to the column, never HTML. */
 .extractedText {
   margin: 0;
   padding: var(--space-4);
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
   color: var(--color-text);
@@ -88,7 +128,7 @@
 .unopenedText {
   margin: 0;
   padding: var(--space-6) var(--space-4);
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
 }
@@ -98,4 +138,12 @@
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
+}
+
+/* A phone: the two page links on one row, the jump under them. */
+@media (max-width: 767px) {
+  .jump {
+    flex-basis: 100%;
+    order: 3;
+  }
 }

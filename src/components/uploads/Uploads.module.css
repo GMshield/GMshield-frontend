@@ -15,6 +15,7 @@
 /* --- the tray, above "Adicionar Arquivo" --- */
 
 .tray {
+  flex: none;
   margin: 0;
   padding: 0;
 }
@@ -25,30 +26,46 @@
   font-size: var(--font-meta-size);
   font-weight: var(--font-meta-weight);
   line-height: var(--font-meta-line-height);
-  text-align: center;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  max-height: 17rem;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-field-border) transparent;
 }
 
+/* One file on its way: a small card, its name over its state, then its progress. */
 .row {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  padding: var(--space-1) var(--space-3) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-hover);
 }
 
+/* The name on a line of its own (a long name keeps the row's width), its state under it. */
 .rowHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  gap: 0 var(--space-2);
   min-height: var(--space-touch-target);
+  padding-bottom: var(--space-1);
+}
+
+.rowHead > .name {
+  flex: 1 1 100%;
 }
 
 .name {
@@ -66,9 +83,10 @@
 .line {
   display: block;
   width: 100%;
-  height: 2px;
+  height: 4px;
+  overflow: hidden;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-full);
   background-color: color-mix(in srgb, var(--color-text) 20%, transparent);
   color: var(--color-text);
   appearance: none;
@@ -104,11 +122,18 @@
 }
 
 .note {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--font-meta-size);
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
   font-weight: 400;
-  line-height: var(--font-meta-line-height);
+  line-height: var(--font-body-line-height);
+}
+
+/* A note that says what is wrong is in the text colour, behind a danger bar. */
+.note[role='alert'] {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-danger);
+  color: var(--color-text);
 }
 
 .actions {
@@ -124,12 +149,38 @@
   max-width: none;
   max-height: calc(100dvh - 2 * var(--space-4));
   padding: var(--space-6);
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid var(--color-field-border);
   border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  background-color: var(--color-popover);
   color: var(--color-text);
-  backdrop-filter: var(--glass-blur);
+}
+
+/* Open, it is a column: the head, the step, and the actions at its bottom, so they stay put from step to step. */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  min-height: min(30rem, calc(100dvh - 2 * var(--space-4)));
+}
+
+/*
+ * Third round: the step is the part that scrolls when it is taller than the window (twenty files chosen, a long list
+ * of systems), so the title, the step count and the actions stay in view; the whole dialog used to scroll, and "Voltar"
+ * and "Continuar" went off the bottom. A plain box holds the step: a fieldset does not clip what overflows it. The room
+ * at its sides keeps a focus ring from being cut.
+ */
+.dialogBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--space-2)) var(--space-4);
+  padding: var(--space-1) var(--space-2);
+  overflow-y: auto;
+}
+
+.dialog[open] > .dialogHead,
+.dialog[open] > .dialogActions {
+  flex: none;
 }
 
 .dialog::backdrop {
@@ -154,9 +205,68 @@
 .step {
   margin: var(--space-1) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--font-meta-size);
-  font-weight: var(--font-meta-weight);
-  line-height: var(--font-meta-line-height);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* The step count, drawn: one mark a step, filled up to the current one. */
+.steps {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.stepMark {
+  width: var(--space-8);
+  height: var(--space-1);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-active);
+}
+
+.stepMark[data-done] {
+  background-color: var(--color-text);
+}
+
+/* Where files are dropped, with the button that chooses them: a dashed box that lights up while files are over it. */
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
+  border: 2px dashed var(--color-field-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-hover);
+  text-align: center;
+  transition:
+    border-color var(--motion-fade) ease-out,
+    background-color var(--motion-fade) ease-out;
+}
+
+.drop[data-over] {
+  border-color: var(--color-text);
+  background-color: var(--color-pressed);
+}
+
+/* Once files are chosen the drop area is one row, so the list under it has the room. */
+.drop:has(~ .files) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.dropIcon {
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+.dropText {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
 }
 
 .close {
@@ -172,6 +282,10 @@
   background: none;
   color: var(--color-text);
   cursor: pointer;
+}
+
+.close:hover {
+  background-color: var(--color-hover);
 }
 
 .question {
@@ -198,13 +312,24 @@
 .choices {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.choices > li + li {
-  border-top: 1px solid var(--color-rule);
+/* Each choice is a box of its own: the chosen one has a heavier edge and the active background. */
+.choices > li {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+}
+
+.choices > li:has(input:checked) {
+  border-color: var(--color-text);
+}
+
+.choices > li:hover {
+  border-color: var(--color-field-border);
 }
 
 /* The radio in the first column, beside its label and, below the label, its explanation. */
@@ -216,7 +341,8 @@
   row-gap: var(--space-1);
   width: 100%;
   min-height: var(--space-touch-target);
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-field);
   cursor: pointer;
 }
 
@@ -254,17 +380,70 @@
   list-style: none;
 }
 
+/* A chosen file: an icon, its name with its size and what the check said, and the control that removes it. */
 .file {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  min-height: calc(var(--space-touch-target) + var(--space-2));
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+}
+
+.file[data-check='refused'] {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger-soft);
+}
+
+.fileIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.file[data-check='refused'] .fileIcon {
+  color: var(--color-danger);
 }
 
 .refused {
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  padding: var(--space-1) 0;
   font-size: var(--font-label-size);
   line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* Inside a file's line the name wraps with the rest (in the tray it is cut with an ellipsis). */
+.refused .name {
+  overflow: visible;
+  white-space: normal;
+}
+
+.remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background-color: var(--color-hover);
+}
+
+.remove svg {
+  width: 18px;
+  height: 18px;
 }
 
 .refusedWord {
@@ -272,12 +451,25 @@
   font-weight: var(--font-label-weight);
 }
 
+/* The actions, at the bottom of the dialog under a rule: the way back on the left, the main action on the right. */
 .dialogActions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
-  margin-top: var(--space-6);
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.dialogActions > :first-child:not(:only-child) {
+  margin-right: auto;
+}
+
+/* A step fills the dialog's body; the body keeps the room above the actions. */
+.dialogBody > section,
+.dialogBody > fieldset {
+  margin-bottom: 0;
 }
 
 /* --- Story 1.21: the order of an image set's pages --- */
@@ -300,11 +492,15 @@
   width: 100%;
   min-height: var(--space-touch-target);
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-border);
-  border-radius: var(--radius-full);
-  background-color: var(--color-control);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
   color: var(--color-text);
   font: inherit;
+}
+
+.text:hover {
+  border-color: var(--color-text);
 }
 
 .pages {
@@ -316,7 +512,7 @@
 }
 
 .pages > li + li {
-  border-top: 1px solid var(--color-rule);
+  border-top: 1px solid var(--color-border);
 }
 
 /* One page: its thumbnail, its number and file name, and its two moves. Dragged by the whole row. */
@@ -360,7 +556,7 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface-active);
   color: var(--color-text);

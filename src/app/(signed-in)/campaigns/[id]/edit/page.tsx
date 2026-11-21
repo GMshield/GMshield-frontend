@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/PageHeader';
 import { notFoundFor } from '@/app/not-found';
 import { CampaignForm } from '@/components/CampaignForm';
 import { Notice } from '@/components/Notice';
@@ -6,7 +7,6 @@ import { currentPreferences } from '@/preferences';
 import { getCampaign } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import styles from '../../../systems/systems.module.css';
 import { renameCampaignAction } from '../../actions';
 
 /**
@@ -25,9 +25,10 @@ export default async function RenameCampaignPage({ params }: { readonly params: 
   const { name, version } = campaign.data;
   return (
     <>
-      <div className={styles.header}>
-        <h1 className={styles.heading}>{t('campaigns.form.renameTitle')}</h1>
-      </div>
+      <PageHeader
+        title={t('campaigns.form.renameTitle')}
+        back={{ href: `/campaigns/${encodeURIComponent(campaign.data.id)}`, label: name }}
+      />
       <CampaignForm
         labels={{
           name: t('campaigns.form.name'),

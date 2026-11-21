@@ -7,8 +7,13 @@ import { translator } from '@/messages';
 import type { Preferences } from '@/preferences';
 import type { SidebarState } from '@/sidebar-cookie';
 
+import { AccountMenu } from './AccountMenu';
+import accountStyles from './AccountMenu.module.css';
 import { CampaignSwitcher, type CampaignSwitcherLabels, type SwitcherCampaign } from './CampaignSwitcher';
 import { ContextBar } from './ContextBar';
+import { NamedIcon } from './Icons';
+import { NotificationCenter } from './notifications/NotificationCenter';
+import { NotificationsProvider, type NotificationInput } from './notifications/NotificationsProvider';
 import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
 import styles from './Shell.module.css';
@@ -32,6 +37,11 @@ export type ShellProps = {
    * Each element carries its own `key`.
    */
   readonly notices?: readonly ReactNode[];
+  /**
+   * What waits for the GM now (usability pass, 2026-11-21): the materials that need review or failed, listed first under
+   * the bell and counted on it.
+   */
+  readonly attention?: readonly (NotificationInput & { readonly id: string })[];
   /**
    * A right panel rendered on the server, when one is open: it narrows the main column. From Story 2.7 the source view
    * fills the same slot from the browser (`ShellPanel`).
@@ -57,6 +67,9 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * Story 2.7: the grid and its panel slot are `ShellFrame`'s, which a page's source view fills from the browser.
  * Story 3.2: the campaign switcher under the logo and on the context bar's campaign name; picking a campaign makes it
  * current through a Server Action, which refreshes the page.
+ * Usability pass (2026-11-21): the notifications are around everything (their toasts are told from any page and from
+ * the uploads), and the bar above the page holds the system and campaign on the left and, on the right, the bell and
+ * the account menu (the account, the theme and the language, "Sair").
  */
 export function Shell({
   preferences,
@@ -65,6 +78,7 @@ export function Shell({
   campaigns = [],
   sidebar,
   notices = [],
+  attention = [],
   panel,
   belonging = NO_PLACES,
   trayRows = [],
@@ -92,39 +106,54 @@ export function Shell({
     [...SIDEBAR_ENTRIES, ADD_FILE].map(({ key }) => [key, t(`shell.entries.${key}`)]),
   ) as Record<EntryKey, string>;
   return (
-    <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging} imageSets={IMAGE_SETS}>
-      <ShellFrame panel={panel}>
-        <Sidebar
-          labels={{
-            name: t('shell.name'),
-            menu: t('shell.menu'),
-            openMenu: t('shell.openMenu'),
-            closeMenu: t('shell.closeMenu'),
-            navigation: t('shell.navigation'),
-            currentCampaign: t('shell.currentCampaign'),
-            entries,
-          }}
-          campaign={switcher('sidebar')}
-          initialState={sidebar}
-          trayRows={trayRows}
-          menu={
-            <>
-              <p className={styles.signedInAs}>{t('shell.signedInAs', { username })}</p>
-              <PreferencesForm theme={preferences.theme} language={preferences.language} />
-              <form action={signOutAction}>
-                <PillButton type="submit">{t('shell.signOut')}</PillButton>
-              </form>
-            </>
-          }
-        />
-        <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
-          <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} />
-          <main className={styles.main}>
-            {notices}
-            {children}
-          </main>
-        </div>
-      </ShellFrame>
-    </UploadsProvider>
+    <NotificationsProvider language={preferences.language}>
+      <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging} imageSets={IMAGE_SETS}>
+        {/* The first stop of the keyboard: past the sidebar and the bar, straight to the page (WCAG 2.4.1). */}
+        <a className={styles.skip} href="#content">
+          {t('shell.skip')}
+        </a>
+        <ShellFrame panel={panel}>
+          <Sidebar
+            labels={{
+              name: t('shell.name'),
+              home: t('shell.home'),
+              openMenu: t('shell.openMenu'),
+              closeMenu: t('shell.closeMenu'),
+              navigation: t('shell.navigation'),
+              currentCampaign: t('shell.currentCampaign'),
+              entries,
+            }}
+            campaign={switcher('sidebar')}
+            initialState={sidebar}
+            trayRows={trayRows}
+          />
+          <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
+            <div className={styles.bar}>
+              <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} />
+              <div className={styles.barEnd}>
+                <NotificationCenter language={preferences.language} attention={attention} />
+                <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>
+                  <p className={accountStyles.account}>
+                    <span className={accountStyles.accountLabel}>{t('shell.signedInLabel')}</span>
+                    <span className={accountStyles.accountName}>{username}</span>
+                  </p>
+                  <PreferencesForm theme={preferences.theme} language={preferences.language} />
+                  <form action={signOutAction} className={accountStyles.signOut}>
+                    <PillButton type="submit">
+                      <NamedIcon name="signOut" size={18} />
+                      {t('shell.signOut')}
+                    </PillButton>
+                  </form>
+                </AccountMenu>
+              </div>
+            </div>
+            <main id="content" className={styles.main}>
+              {notices}
+              {children}
+            </main>
+          </div>
+        </ShellFrame>
+      </UploadsProvider>
+    </NotificationsProvider>
   );
 }

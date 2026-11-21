@@ -1,11 +1,15 @@
+/*
+ * The theme and the language (usability pass, 2026-11-21): two segmented controls, the current choice filled with the
+ * text colour and pressed in words (aria-pressed), each press applied at once.
+ */
 .form {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .group {
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
@@ -14,30 +18,78 @@
 .legend {
   margin-bottom: var(--space-2);
   padding: 0;
-  font-size: var(--font-label-size);
-  font-weight: var(--font-label-weight);
-  line-height: var(--font-label-line-height);
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.options {
+.segments {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 var(--space-6);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
 }
 
-.option {
+/* One choice: a 44px target with its own corners inside the control's edge. */
+.segment {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   min-width: var(--space-touch-target);
   min-height: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color var(--motion-fade) ease-out;
 }
 
-/* A chosen option uses the text colour, never the accent. */
-.option input {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--color-text);
+.segment:hover {
+  background-color: var(--color-hover);
+}
+
+.segment[aria-pressed='true'] {
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+}
+
+/* At the top of the sign-in screen: the two controls side by side, their labels spoken and not shown. */
+.form[data-layout='inline'] {
+  flex-flow: row wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+}
+
+.form[data-layout='inline'] .legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.form[data-layout='inline'] .segments {
+  flex-wrap: nowrap;
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+.form[data-layout='inline'] .segment {
+  flex: none;
 }

@@ -1,4 +1,8 @@
-/* The campaign switcher (Story 3.2): the current campaign's name as a disclosure button, and the list it opens. */
+/*
+ * The campaign switcher (Story 3.2). Usability pass (2026-11-21): the button looks like what it is, a control that
+ * opens a list (a chevron beside the name; in the sidebar, a bordered box across its width), and the list is a floating
+ * surface with an edge, the current campaign marked by a check and a word.
+ */
 .switcher {
   position: relative;
   display: flex;
@@ -7,7 +11,7 @@
 }
 
 .sidebar {
-  align-items: center;
+  align-items: stretch;
 }
 
 .bar {
@@ -17,45 +21,85 @@
 .trigger {
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   min-width: var(--space-touch-target);
   min-height: var(--space-touch-target);
   padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: none;
   color: inherit;
   font: inherit;
-  text-align: inherit;
-  overflow-wrap: anywhere;
+  text-align: start;
   cursor: pointer;
+  transition: border-color var(--motion-fade) ease-out;
 }
 
-.trigger:hover {
-  text-decoration: underline;
+.triggerName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+/* In the sidebar: a box across its width, as a field that offers a choice. */
+.sidebar .trigger {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-color: var(--color-control-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-control);
+  color: var(--color-text);
+}
+
+.sidebar .trigger:hover,
+.sidebar .trigger[aria-expanded='true'] {
+  border-color: var(--color-text);
+  background-color: var(--color-control);
 }
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
   margin-top: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background-color: var(--color-surface-active);
+  background-color: var(--color-popover);
   color: var(--color-text);
   text-align: start;
 }
 
-/* In the context bar the list opens over the page, under the name. */
-.bar .panel {
+/*
+ * The list floats over what is under the button, in the sidebar as in the bar (usability pass, fourth round): in the
+ * sidebar it used to open in place and push the navigation down, the fault the logo's menu had before it.
+ */
+.panel {
   position: absolute;
   top: 100%;
   left: 0;
   z-index: 12;
+}
+
+.bar .panel {
   width: min(22rem, calc(100vw - 2 * var(--space-4)));
-  border: 1px solid var(--color-control-border);
-  background-color: var(--color-canvas);
+}
+
+.sidebar .panel {
+  right: 0;
 }
 
 .panel[hidden] {
@@ -66,8 +110,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  max-height: min(50vh, 22rem);
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
 }
 
@@ -84,11 +130,15 @@
   min-height: var(--space-touch-target);
   padding: var(--space-2) var(--space-3);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--color-text);
   font: inherit;
   text-align: start;
+}
+
+.choice[aria-current='true'] {
+  background-color: var(--color-surface-active);
 }
 
 button.choice {
@@ -96,7 +146,7 @@ button.choice {
 }
 
 button.choice:hover {
-  background-color: var(--color-control);
+  background-color: var(--color-hover);
 }
 
 .name {
@@ -115,15 +165,27 @@ button.choice:hover {
   overflow-wrap: anywhere;
 }
 
-.error {
-  margin: 0;
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
   color: var(--color-text);
 }
 
+.error {
+  margin: 0;
+  padding: 0 var(--space-3);
+  color: var(--color-danger);
+}
+
+/* The two ways on, under a rule: every campaign, and a new one. */
 .links {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 
 .link {
@@ -131,9 +193,15 @@ button.choice:hover {
   align-items: center;
   min-height: var(--space-touch-target);
   padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
+  text-decoration: none;
+}
+
+.link:hover {
+  background-color: var(--color-hover);
   text-decoration: underline;
 }

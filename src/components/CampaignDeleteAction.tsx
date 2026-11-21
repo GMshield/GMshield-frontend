@@ -67,6 +67,7 @@ export function CampaignDeleteAction({ id, counts, language, action }: CampaignD
         variant="danger"
         aria-haspopup="dialog"
         aria-disabled={pending}
+        pending={pending}
         onClick={() => {
           if (!pending) {
             setConfirming(true);

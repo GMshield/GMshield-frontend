@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, t
 
 import { checkFile, type FileCheck } from '@/client/upload/sniff';
 
+import { CloseIcon, NamedIcon, UploadIcon } from '../Icons';
 import { PillButton, SolidPillButton } from '../PillButton';
 import { PlacePicker } from '../PlacePicker';
 import { StatePill } from '../StatePill';
@@ -64,6 +65,12 @@ export type UploadDialogProps = {
  * A chosen file is checked at once in the browser ({@link checkFile}); a refused one is named with its reason and the
  * accepted formats, announced at once, and never sent.
  *
+ * Usability pass (2026-11-21): the files step has a drop area (files dragged from the computer are added as the button
+ * adds them; it lights up while files are over it), the chosen files are a list of rows (an icon, the name, the size
+ * and what the check said, an icon button to remove one), the step count is also drawn as marks under the title, the
+ * actions sit at the bottom with "Voltar" on the left and the main action on the right, and a file being sent shows
+ * its percentage beside its state.
+ *
  * Story 1.21: with two or more images chosen, a step asks whether they are the pages of one material (the default) or
  * each a material; other files stay materials of their own. As pages, an order step follows: the material's name
  * (the first image's file name without its extension), and the images in a list the GM reorders by dragging them, by
@@ -91,6 +98,8 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const [order, setOrder] = useState<readonly number[]>([]);
   const [setName, setSetName] = useState<string | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
+  /** Whether files are being dragged over the drop area. */
+  const [over, setOver] = useState(false);
   const focusAfterMove = useRef<{ readonly id: number; readonly target: 'up' | 'down' } | null>(null);
   const nextId = useRef(0);
 
@@ -221,9 +230,32 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     (current === 'order' && (tooMany || tooLarge || nameMissing)) ||
     (current === 'belonging' && place === null);
 
-  async function onFiles(event: ChangeEvent<HTMLInputElement>) {
+  function onFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = [...(event.target.files ?? [])];
     event.target.value = '';
+    void addFiles(files);
+  }
+
+  /** Files dragged over the drop area: only then does it take the drop (text or a link dragged over it is not for it). */
+  function onFilesOver(event: DragEvent<HTMLDivElement>) {
+    if (event.dataTransfer.types.includes('Files')) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setOver(true);
+    }
+  }
+
+  function onFilesDrop(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes('Files')) {
+      return;
+    }
+    event.preventDefault();
+    setOver(false);
+    void addFiles([...event.dataTransfer.files]);
+  }
+
+  /** Adds the files chosen or dropped to the list, each checked at once in the browser. */
+  async function addFiles(files: readonly File[]) {
     const added = files.map((file) => ({ id: nextId.current++, file, check: null }));
     setChosen((all) => [...all, ...added]);
     for (const item of added) {
@@ -280,7 +312,17 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
           <h2 id={titleId} className={styles.title}>
             {current === null ? t.progress.title : t.title}
           </h2>
-          {current === null ? null : <p className={styles.step}>{fill(t.step, { step, total: questions })}</p>}
+          {current === null ? null : (
+            <>
+              <p className={styles.step}>{fill(t.step, { step, total: questions })}</p>
+              {/* The same count, drawn: one mark a step, filled up to the current one. The line above says it in words. */}
+              <span className={styles.steps} aria-hidden="true">
+                {steps.map((name, index) => (
+                  <span key={name} className={styles.stepMark} data-done={index < step ? 'true' : undefined} />
+                ))}
+              </span>
+            </>
+          )}
         </div>
         <button type="button" className={styles.close} aria-label={t.close} onClick={onClose}>
           <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16">
@@ -289,163 +331,186 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
         </button>
       </div>
 
-      {current === 'files' ? (
-        <section aria-labelledby={`${titleId}-files`}>
-          <h3 id={`${titleId}-files`} className={styles.legend}>
-            {t.files.question}
-          </h3>
-          <p className={styles.lead}>{t.files.lead}</p>
-          <input ref={inputRef} type="file" multiple hidden accept={ACCEPT} onChange={(event) => void onFiles(event)} data-testid="upload-files" />
-          <PillButton data-step-focus="" onClick={() => inputRef.current?.click()}>
-            {t.files.choose}
-          </PillButton>
-          {chosen.length === 0 ? (
-            <p className={styles.note}>{t.files.none}</p>
-          ) : (
-            <ul className={styles.files}>
-              {chosen.map((item) => (
-                <li key={item.id} className={styles.file}>
-                  <ChosenFile item={item} texts={t.files} language={texts.language} />
-                  <PillButton
-                    aria-label={fill(t.files.remove, { name: item.file.name })}
-                    onClick={() => setChosen((all) => all.filter((other) => other.id !== item.id))}
+      {/* The step: the one part of the dialog that scrolls, so its title and its actions stay in view. */}
+      <div className={styles.dialogBody}>
+        {current === 'files' ? (
+          <section aria-labelledby={`${titleId}-files`}>
+            <h3 id={`${titleId}-files`} className={styles.legend}>
+              {t.files.question}
+            </h3>
+            <p className={styles.lead}>{t.files.lead}</p>
+            <input ref={inputRef} type="file" multiple hidden accept={ACCEPT} onChange={onFiles} data-testid="upload-files" />
+            {/* Files are dropped here or chosen with the button: the button alone does everything, so the keyboard needs no drag. */}
+            <div
+              className={styles.drop}
+              data-over={over ? 'true' : undefined}
+              data-testid="upload-drop"
+              onDragEnter={onFilesOver}
+              onDragOver={onFilesOver}
+              onDragLeave={() => setOver(false)}
+              onDrop={onFilesDrop}
+            >
+              <span className={styles.dropIcon}>
+                <UploadIcon />
+              </span>
+              <p className={styles.dropText}>{over ? t.files.dropNow : t.files.drop}</p>
+              <PillButton data-step-focus="" onClick={() => inputRef.current?.click()}>
+                {t.files.choose}
+              </PillButton>
+            </div>
+            {chosen.length === 0 ? (
+              <p className={styles.note}>{t.files.none}</p>
+            ) : (
+              <ul className={styles.files} aria-label={t.files.chosen}>
+                {chosen.map((item) => (
+                  <li key={item.id} className={styles.file} data-check={item.check === null ? 'checking' : item.check.ok ? 'accepted' : 'refused'}>
+                    <span className={styles.fileIcon}>
+                      <NamedIcon name={item.check !== null && !item.check.ok ? 'error' : 'file'} />
+                    </span>
+                    <ChosenFile item={item} texts={t.files} language={texts.language} />
+                    <button
+                      type="button"
+                      className={styles.remove}
+                      aria-label={fill(t.files.remove, { name: item.file.name })}
+                      onClick={() => setChosen((all) => all.filter((other) => other.id !== item.id))}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
+
+        {current === 'set' ? (
+          <fieldset className={styles.question}>
+            <legend className={styles.legend}>{fill(t.set.question, { count: imageItems.length })}</legend>
+            <ul className={styles.choices}>
+              {choice('set', 'pages', setMode, setSetMode, t.set.pages.label, t.set.pages.description)}
+              {choice('set', 'separate', setMode, setSetMode, t.set.separate.label, t.set.separate.description)}
+            </ul>
+          </fieldset>
+        ) : null}
+
+        {current === 'order' ? (
+          <section aria-labelledby={`${titleId}-order`}>
+            <h3 id={`${titleId}-order`} className={styles.legend}>
+              {t.order.question}
+            </h3>
+            <p className={styles.lead}>{t.order.lead}</p>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>{t.order.name}</span>
+              <input
+                className={styles.text}
+                type="text"
+                value={name}
+                maxLength={255}
+                required
+                aria-invalid={nameMissing}
+                onChange={(event) => setSetName(event.target.value)}
+                data-step-focus=""
+              />
+            </label>
+            {nameMissing ? (
+              <p className={styles.note} role="alert">
+                {t.order.nameRequired}
+              </p>
+            ) : null}
+            {tooMany || tooLarge ? (
+              <p className={styles.note} role="alert">
+                {tooMany
+                  ? fill(t.order.tooMany, { count: ordered.length, limit: MAX_SET_IMAGES })
+                  : fill(t.order.tooLarge, { size: formatSize(setBytes, texts.language) })}
+              </p>
+            ) : null}
+            <ol className={styles.pages} aria-label={t.order.list}>
+              {ordered.map((item, index) => {
+                const format = imageFormatOf(item) ?? 'jpeg';
+                const fileName = item.file.name;
+                return (
+                  <li
+                    key={item.id}
+                    className={styles.pageRow}
+                    data-image-id={item.id}
+                    data-dragging={dragging === item.id ? 'true' : undefined}
+                    draggable
+                    aria-label={fill(t.order.row, { name: fileName, page: index + 1, total: ordered.length })}
+                    onKeyDown={(event) => onRowKeyDown(event, item.id, index)}
+                    onDragStart={(event) => onDragStart(event, item.id)}
+                    onDragOver={onDragOver}
+                    onDrop={(event) => onDrop(event, index)}
+                    onDragEnd={() => setDragging(null)}
                   >
-                    {t.files.removeShort}
-                  </PillButton>
-                </li>
+                    <Thumbnail file={item.file} format={format} />
+                    <span className={styles.pageText}>
+                      <span className={styles.pageNumber} id={`${titleId}-page-${item.id}`}>
+                        {fill(t.order.page, { page: index + 1 })}
+                      </span>
+                      <span className={styles.name}>{fileName}</span>
+                    </span>
+                    <span className={styles.moves}>
+                      <PillButton data-move="up" aria-label={fill(t.order.up, { name: fileName })} aria-describedby={`${titleId}-page-${item.id}`} disabled={index === 0} onClick={() => move(item.id, index - 1, index - 1 === 0 ? 'down' : 'up')}>
+                        {t.order.upShort}
+                      </PillButton>
+                      <PillButton
+                        data-move="down"
+                        aria-label={fill(t.order.down, { name: fileName })}
+                        aria-describedby={`${titleId}-page-${item.id}`}
+                        disabled={index === ordered.length - 1}
+                        onClick={() => move(item.id, index + 1, index + 1 === ordered.length - 1 ? 'up' : 'down')}
+                      >
+                        {t.order.downShort}
+                      </PillButton>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : null}
+
+        {current === 'kind' ? (
+          <fieldset className={styles.question}>
+            <legend className={styles.legend}>{t.kind.question}</legend>
+            <ul className={styles.choices}>
+              {KINDS.map((value) => choice('kind', value, kind, setKind, t.kind[value].label, t.kind[value].description))}
+            </ul>
+          </fieldset>
+        ) : null}
+
+        {current === 'belonging' ? (
+          <fieldset className={styles.question}>
+            <legend className={styles.legend}>{t.belonging.question}</legend>
+            <PlacePicker places={belonging} draft={draft} onChange={setDraft} texts={t.belonging} name="belonging" />
+            {place === null ? (
+              <p className={styles.note} role="alert">
+                {t.belonging.systemsRequired}
+              </p>
+            ) : null}
+          </fieldset>
+        ) : null}
+
+        {current === 'language' ? (
+          <fieldset className={styles.question}>
+            <legend className={styles.legend}>{t.language.question}</legend>
+            <ul className={styles.choices}>
+              {UPLOAD_LANGUAGES.map((value) => choice('language', value, language, setLanguage, t.language[value].label, t.language[value].description))}
+            </ul>
+          </fieldset>
+        ) : null}
+
+        {current === null ? (
+          <section>
+            <p className={styles.lead}>{t.progress.lead}</p>
+            <ul className={styles.files}>
+              {sending.map((upload) => (
+                <SendingFile key={upload.key} upload={upload} />
               ))}
             </ul>
-          )}
-        </section>
-      ) : null}
-
-      {current === 'set' ? (
-        <fieldset className={styles.question}>
-          <legend className={styles.legend}>{fill(t.set.question, { count: imageItems.length })}</legend>
-          <ul className={styles.choices}>
-            {choice('set', 'pages', setMode, setSetMode, t.set.pages.label, t.set.pages.description)}
-            {choice('set', 'separate', setMode, setSetMode, t.set.separate.label, t.set.separate.description)}
-          </ul>
-        </fieldset>
-      ) : null}
-
-      {current === 'order' ? (
-        <section aria-labelledby={`${titleId}-order`}>
-          <h3 id={`${titleId}-order`} className={styles.legend}>
-            {t.order.question}
-          </h3>
-          <p className={styles.lead}>{t.order.lead}</p>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>{t.order.name}</span>
-            <input
-              className={styles.text}
-              type="text"
-              value={name}
-              maxLength={255}
-              required
-              aria-invalid={nameMissing}
-              onChange={(event) => setSetName(event.target.value)}
-              data-step-focus=""
-            />
-          </label>
-          {nameMissing ? (
-            <p className={styles.note} role="alert">
-              {t.order.nameRequired}
-            </p>
-          ) : null}
-          {tooMany || tooLarge ? (
-            <p className={styles.note} role="alert">
-              {tooMany
-                ? fill(t.order.tooMany, { count: ordered.length, limit: MAX_SET_IMAGES })
-                : fill(t.order.tooLarge, { size: formatSize(setBytes, texts.language) })}
-            </p>
-          ) : null}
-          <ol className={styles.pages} aria-label={t.order.list}>
-            {ordered.map((item, index) => {
-              const format = imageFormatOf(item) ?? 'jpeg';
-              const fileName = item.file.name;
-              return (
-                <li
-                  key={item.id}
-                  className={styles.pageRow}
-                  data-image-id={item.id}
-                  data-dragging={dragging === item.id ? 'true' : undefined}
-                  draggable
-                  aria-label={fill(t.order.row, { name: fileName, page: index + 1, total: ordered.length })}
-                  onKeyDown={(event) => onRowKeyDown(event, item.id, index)}
-                  onDragStart={(event) => onDragStart(event, item.id)}
-                  onDragOver={onDragOver}
-                  onDrop={(event) => onDrop(event, index)}
-                  onDragEnd={() => setDragging(null)}
-                >
-                  <Thumbnail file={item.file} format={format} />
-                  <span className={styles.pageText}>
-                    <span className={styles.pageNumber} id={`${titleId}-page-${item.id}`}>
-                      {fill(t.order.page, { page: index + 1 })}
-                    </span>
-                    <span className={styles.name}>{fileName}</span>
-                  </span>
-                  <span className={styles.moves}>
-                    <PillButton data-move="up" aria-label={fill(t.order.up, { name: fileName })} aria-describedby={`${titleId}-page-${item.id}`} disabled={index === 0} onClick={() => move(item.id, index - 1, index - 1 === 0 ? 'down' : 'up')}>
-                      {t.order.upShort}
-                    </PillButton>
-                    <PillButton
-                      data-move="down"
-                      aria-label={fill(t.order.down, { name: fileName })}
-                      aria-describedby={`${titleId}-page-${item.id}`}
-                      disabled={index === ordered.length - 1}
-                      onClick={() => move(item.id, index + 1, index + 1 === ordered.length - 1 ? 'up' : 'down')}
-                    >
-                      {t.order.downShort}
-                    </PillButton>
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      ) : null}
-
-      {current === 'kind' ? (
-        <fieldset className={styles.question}>
-          <legend className={styles.legend}>{t.kind.question}</legend>
-          <ul className={styles.choices}>
-            {KINDS.map((value) => choice('kind', value, kind, setKind, t.kind[value].label, t.kind[value].description))}
-          </ul>
-        </fieldset>
-      ) : null}
-
-      {current === 'belonging' ? (
-        <fieldset className={styles.question}>
-          <legend className={styles.legend}>{t.belonging.question}</legend>
-          <PlacePicker places={belonging} draft={draft} onChange={setDraft} texts={t.belonging} name="belonging" />
-          {place === null ? (
-            <p className={styles.note} role="alert">
-              {t.belonging.systemsRequired}
-            </p>
-          ) : null}
-        </fieldset>
-      ) : null}
-
-      {current === 'language' ? (
-        <fieldset className={styles.question}>
-          <legend className={styles.legend}>{t.language.question}</legend>
-          <ul className={styles.choices}>
-            {UPLOAD_LANGUAGES.map((value) => choice('language', value, language, setLanguage, t.language[value].label, t.language[value].description))}
-          </ul>
-        </fieldset>
-      ) : null}
-
-      {current === null ? (
-        <section>
-          <p className={styles.lead}>{t.progress.lead}</p>
-          <ul className={styles.files}>
-            {sending.map((upload) => (
-              <SendingFile key={upload.key} upload={upload} />
-            ))}
-          </ul>
-        </section>
-      ) : null}
+          </section>
+        ) : null}
+      </div>
 
       <div className={styles.dialogActions}>
         {step > 1 && current !== null ? <PillButton onClick={() => setStep(step - 1)}>{t.back}</PillButton> : null}
@@ -547,12 +612,12 @@ const THUMBNAIL = 48;
 function SendingFile({ upload }: { readonly upload: LiveUpload }) {
   const { texts } = useUploads();
   const state = upload.phase === 'failed' ? 'failed' : upload.phase === 'waiting' ? 'waiting' : 'uploading';
-  const percent = upload.size > 0 ? Math.floor((upload.sent / upload.size) * 100) : 0;
+  const percent = upload.size > 0 ? Math.min(Math.max(Math.floor((upload.sent / upload.size) * 100), 0), 100) : 0;
   return (
     <li className={styles.row}>
       <div className={styles.rowHead}>
         <span className={styles.name}>{upload.name}</span>
-        <StatePill state={state} word={texts.states[state]} />
+        <StatePill state={state} word={texts.states[state]} detail={state === 'uploading' ? fill(texts.percent, { percent }) : undefined} />
       </div>
       <progress className={styles.line} value={upload.sent} max={Math.max(upload.size, 1)} aria-label={fill(texts.upload.tray.sent, { percent })} />
       {upload.phase === 'failed' ? <p className={styles.note}>{problemText(upload.problem, texts.errors)}</p> : null}

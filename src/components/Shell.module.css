@@ -1,29 +1,65 @@
 /*
- * Three columns: the sidebar (Sidebar.module.css places itself in `sidebar`), the main column, and one right
- * panel slot that narrows the main column when a panel is open. Only the middle one is always there. Story 2.7: the
- * source view fills the slot (`data-panel="source"`) at its own width, and opens over the main column under 1280px.
+ * Three columns: the sidebar, the main column, and one right panel slot that narrows the main column when a panel is
+ * open. Only the middle one is always there. Story 2.7: the source view fills the slot (`data-panel="source"`) at its
+ * own width, and opens over the main column under 1280px.
+ *
+ * The sidebar and the panel are fixed to the window, top to bottom, so they span its whole height whatever the page's
+ * length and whatever else the document holds; the grid only keeps their room (a track as wide as each one that is
+ * open beside the main column), and the page itself scrolls. (Before 2026-11-21 they were sticky inside the grid, and
+ * stopped short of the window's bottom when anything made the document taller than the grid.)
  */
 .shell {
+  --sidebar-track: 0px;
+  --panel-track: 0px;
+
   display: grid;
-  grid-template-areas: 'sidebar main panel';
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: var(--sidebar-track) minmax(0, 1fr) var(--panel-track);
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-.column {
-  grid-area: main;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-4) var(--space-4) var(--space-12);
+/* A panel the server rendered keeps its room at every width. */
+.shell[data-panel='open'] {
+  --panel-track: var(--width-panel);
 }
 
-/* Room for the closed sidebar's logo mark and handle on the left. */
+@media (min-width: 1280px) {
+  /* The sidebar's own element says whether it is open on a wide screen (Sidebar.tsx, `data-wide`). */
+  .shell:has(> [data-wide='open']) {
+    --sidebar-track: var(--width-sidebar);
+  }
+
+  .shell[data-panel='source'] {
+    --panel-track: var(--width-source-view);
+  }
+}
+
+/*
+ * The main column (usability pass, 2026-11-21): one gutter on every page (32px, 16px on a phone), a bar of a fixed
+ * height above the page, and one gap between the page's blocks, so a title, its tabs and its content sit at the same
+ * place and the same distance apart on every screen.
+ */
+.column {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 var(--space-8) var(--space-12);
+}
+
+/* A phone: the page takes the whole width; the menu button sits in the bar (Sidebar.module.css), which leaves it room. */
+/* Under 1280px the sidebar starts closed: the bar keeps the room of the menu button at its left. */
 @media (max-width: 1279px) {
+  .bar {
+    padding-left: calc(var(--space-touch-target) + var(--space-1));
+  }
+}
+
+@media (max-width: 767px) {
   .column {
-    padding-left: calc(var(--space-touch-target) + var(--space-8));
+    padding-right: var(--space-4);
+    padding-bottom: var(--space-8);
+    padding-left: var(--space-4);
   }
 }
 
@@ -33,19 +69,31 @@
   margin: 0 auto;
 }
 
+/* The bar above the page: where the GM is (system and campaign) on the left, the notifications on the right. */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--height-bar);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .main {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
+  padding-top: var(--space-6);
 }
 
 .panel {
-  grid-area: panel;
-  position: sticky;
+  position: fixed;
   top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
   width: var(--width-panel);
-  height: 100vh;
-  height: 100dvh;
   overflow-y: auto;
   border-radius: var(--radius-panel) 0 0 var(--radius-panel);
   background-color: var(--color-surface);
@@ -63,13 +111,7 @@
 @media (max-width: 1279px) {
   /* Over the main column, at the right (the main column behind it is inert); under the open sidebar. */
   .shell[data-panel='source'] .panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 15;
     max-width: 100%;
-    height: auto;
   }
 }
 
@@ -82,11 +124,43 @@
   }
 }
 
-.signedInAs {
-  margin: 0;
-  color: var(--color-text-muted);
+/* The right end of the bar: the bell, then the account menu. */
+.barEnd {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* A right panel is a sheet over the canvas: a line marks its edge in every theme. */
+.panel {
+  border-left: 1px solid var(--color-border);
+}
+
+/* "Pular para o conteúdo": out of sight until the keyboard reaches it, then a solid pill at the top left, over everything. */
+.skip {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-full);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
-  line-height: var(--font-label-line-height);
-  overflow-wrap: anywhere;
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-4)));
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+/* The page the skip link leads to starts under the bar, not behind it. */
+.main {
+  scroll-margin-top: var(--space-4);
 }

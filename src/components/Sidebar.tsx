@@ -6,9 +6,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { sidebarCookieLine, type SidebarState } from '@/sidebar-cookie';
 
-import { ChevronLeftIcon, ChevronRightIcon, UploadIcon } from './Icons';
-import { LogoMark } from './Logo';
-import { LogoMenu } from './LogoMenu';
+import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, NamedIcon, UploadIcon } from './Icons';
+import { LinkPending } from './LinkPending';
+import { Logo, LogoMark } from './Logo';
 import { ADD_FILE, BEHIND_SIDEBAR, SIDEBAR_ENTRIES, setInertBy, type EntryKey } from './shell-entries';
 import styles from './Sidebar.module.css';
 import type { Material } from './uploads/types';
@@ -21,7 +21,8 @@ export const WIDE_QUERY = '(min-width: 1280px)';
 
 export type SidebarLabels = {
   readonly name: string;
-  readonly menu: string;
+  /** The logo's spoken name: it leads to the conversation, the home screen. */
+  readonly home: string;
   readonly openMenu: string;
   readonly closeMenu: string;
   readonly navigation: string;
@@ -36,8 +37,6 @@ export type SidebarProps = {
   readonly campaign: ReactNode;
   /** The wide-screen state from `__Host-gmshield-sidebar`, read by the server, so the first render is right. */
   readonly initialState: SidebarState;
-  /** The logo menu's content. */
-  readonly menu: ReactNode;
   /** The tray's rows from the server (Story 1.14), merged in the tray with this tab's live uploads. */
   readonly trayRows?: readonly Material[];
 };
@@ -54,8 +53,12 @@ function isWide(): boolean {
  * this component only keeps the two states. An entry is marked current on its page and on every page below it
  * (Story 3.1: "Sistemas" on `/systems/new` and `/systems/<id>`; Story 3.2: "Minhas Mesas" on `/campaigns/<id>`). Under
  * the logo, the current campaign: from Story 3.2 the campaign switcher.
+ *
+ * Usability pass (2026-11-21): the logo is a link to the conversation, the home screen. The account, the theme, the
+ * language and "Sair" moved to the account menu at the right end of the bar above the page (`AccountMenu`): opened
+ * under the logo, they pushed the entries down and hid among the navigation.
  */
-export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }: SidebarProps) {
+export function Sidebar({ labels, campaign, initialState, trayRows = [] }: SidebarProps) {
   const pathname = usePathname();
   const [wideState, setWideState] = useState<SidebarState>(initialState);
   // Under 1280px: the path the sidebar was opened on. Navigating elsewhere closes it, with no effect to run.
@@ -149,7 +152,10 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
       aria-current={pathname === href || (pathname ?? '').startsWith(`${href}/`) ? 'page' : undefined}
       onClick={() => setOpenedOn(null)}
     >
-      {labels.entries[key]}
+      {key === ADD_FILE.key ? null : <NamedIcon name={key} />}
+      <span className={styles.entryName}>{labels.entries[key]}</span>
+      {/* A spinner at the row's end while the entry's page is on its way. */}
+      <LinkPending />
     </Link>
   );
 
@@ -157,9 +163,9 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
     <div className={styles.area} data-wide={wideState} data-narrow={narrowOpen ? 'open' : 'closed'}>
       <div className={styles.panel} id="sidebar" data-testid="sidebar">
         <div className={styles.header}>
-          <LogoMenu name={labels.name} label={labels.menu}>
-            {menu}
-          </LogoMenu>
+          <Link href="/questions" className={styles.home} aria-label={labels.home} onClick={() => setOpenedOn(null)}>
+            <Logo name={labels.name} />
+          </Link>
           <button
             ref={collapse}
             type="button"
@@ -216,7 +222,13 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
         aria-expanded="false"
         onClick={toggle}
       >
-        <ChevronRightIcon />
+        {/* A chevron on the tab at the left edge; under 768px the handle is a menu button at the top left. */}
+        <span className={styles.handleChevron}>
+          <ChevronRightIcon />
+        </span>
+        <span className={styles.handleMenu}>
+          <MenuIcon />
+        </span>
       </button>
     </div>
   );

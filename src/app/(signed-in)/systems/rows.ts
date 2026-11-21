@@ -5,7 +5,7 @@ import type { Language, Translate } from '@/messages';
 import type { CampaignSummary, GameSystem } from '@/server/library';
 import type { Material, MaterialState } from '@/server/materials';
 
-import { placeLabel } from '../files/rows';
+import { placeLabel, previewOf } from '../files/rows';
 
 /** The states a system's materials tab lists (Story 3.1): every one but those the GM has left behind. */
 export const SYSTEM_MATERIAL_STATES: readonly MaterialState[] = ['uploading', 'waiting', 'processing', 'needs_review', 'ready', 'failed'];
@@ -31,5 +31,6 @@ export function materialRow(material: Material, t: Translate, language: Language
     detail: placeLabel(material.belonging, t, language, system),
     href: `/files/${encodeURIComponent(material.id)}`,
     state: { state: material.state, word: t(`material.state.${material.state}`) },
+    ...previewOf(material),
   };
 }

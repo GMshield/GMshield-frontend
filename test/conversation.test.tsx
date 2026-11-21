@@ -250,6 +250,43 @@ describe('the conversation (Story 2.4)', () => {
     expect(document.querySelector('img')).toBeNull();
   });
 
+  it('brings a question just asked to the top of the window, and never moves the page while its answer is written', async () => {
+    // jsdom has no scrolling: the call is what is checked. The usability pass (third round) added it, because a new
+    // question used to land under the docked composer once the conversation was longer than the window.
+    const scrolled: { text: string; options: unknown }[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element, options?: unknown) {
+      scrolled.push({ text: this.textContent ?? '', options });
+    };
+    const motion = vi.fn((query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    vi.stubGlobal('matchMedia', motion);
+    try {
+      view();
+      const stream = await ask('Quanto dano causa Fire Bolt?');
+      expect(scrolled).toHaveLength(1);
+      expect(scrolled[0]!.text).toContain('Quanto dano causa Fire Bolt?');
+      expect(scrolled[0]!.options).toEqual({ block: 'start', behavior: 'smooth' });
+      // The answer arrives in pieces: the page stays where the reader put it.
+      stream.emit('delta', { text: 'Fire Bolt causa ' });
+      stream.emit('delta', { text: '1d10 de dano.' });
+      stream.emit('done', doneWith(PASSAGE_A));
+      expect(scrolled).toHaveLength(1);
+
+      // The next question moves the page again, to itself; with reduced motion it does not glide.
+      motion.mockImplementation((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => undefined, removeEventListener: () => undefined }));
+      postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
+      const user = userEvent.setup();
+      await user.type(composer(), 'E Fireball?{Enter}');
+      await waitFor(() => expect(scrolled).toHaveLength(2));
+      expect(scrolled[1]!.text).toContain('E Fireball?');
+      expect(scrolled[1]!.text).not.toContain('Quanto dano causa Fire Bolt?');
+      expect(scrolled[1]!.options).toEqual({ block: 'start', behavior: 'auto' });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('renders the answer as sanitized Markdown: no image, a link as its text and address, no raw HTML', async () => {
     view();
     const stream = await ask('Quais links?');

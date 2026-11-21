@@ -1,5 +1,6 @@
 /*
- * The sidebar (Story 1.11). From 1280px it is a column beside the main one, open or closed by its cookie;
+ * The sidebar (Story 1.11). It is fixed to the window's left edge, top to bottom (Shell.module.css keeps its room in
+ * the grid). From 1280px it is a column beside the main one, open or closed by its cookie;
  * under 1280px it starts closed and opens over the main column (768 to 1279px) or as a full-screen sheet
  * (under 768px). A hidden part is display: none, so it also leaves the Tab order.
  */
@@ -8,26 +9,30 @@
 }
 
 .panel {
-  grid-area: sidebar;
-  position: sticky;
+  position: fixed;
   top: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   width: var(--width-sidebar);
-  height: 100vh;
-  height: 100dvh;
-  padding: var(--space-4) var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-4) var(--space-5);
   overflow-y: auto;
-  border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
+  border-right: 1px solid var(--color-border);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   background-color: var(--color-surface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-field-border) transparent;
   color: var(--color-text);
   backdrop-filter: var(--glass-blur);
 }
 
+/* Never shrunk by the column: the open logo menu makes the header taller, and the sidebar scrolls instead. */
 .header {
   display: flex;
+  flex: none;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
@@ -49,21 +54,43 @@
   cursor: pointer;
 }
 
-/* The band under the logo: the current campaign, its switcher from Story 3.2. */
+.collapse:hover {
+  background-color: var(--color-hover);
+}
+
+/* The logo and the name: a link to the conversation, the home screen. */
+.home {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--space-touch-target);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-field);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.home:hover {
+  background-color: var(--color-hover);
+}
+
+/* The band under the logo: the current campaign, its switcher from Story 3.2. The label names the control under it. */
 .campaign {
   display: flex;
+  flex: none;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin: 0;
-  padding: var(--space-2) var(--space-2) 0;
-  text-align: center;
 }
 
 .campaignLabel {
+  padding: 0 var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--font-meta-size);
   font-weight: var(--font-meta-weight);
   line-height: var(--font-meta-line-height);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .campaignName {
@@ -78,41 +105,68 @@
 }
 
 .entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.entries li + li {
-  border-top: 1px solid var(--color-rule);
-}
-
-/* 44px rows, centred, with a hairline between them; the current one on the active background. */
+/*
+ * 44px rows, read from the left: an icon, then the entry's name. The current one is on the active background, in a
+ * heavier weight, with a bar on its left edge, so it is found by more than a change of tone.
+ */
 .entry {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-3);
   min-height: var(--space-touch-target);
-  padding: 0 var(--space-4);
-  color: var(--color-text);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-field);
+  color: var(--color-text-muted);
   font-size: var(--font-nav-size);
   font-weight: var(--font-nav-weight);
   line-height: var(--font-nav-line-height);
-  text-align: center;
   text-decoration: none;
+  transition: background-color var(--motion-fade) ease-out;
+}
+
+.entryName {
+  flex: 1;
+  min-width: 0;
+}
+
+.entry:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
 }
 
 .entry[aria-current='page'] {
   background-color: var(--color-surface-active);
+  color: var(--color-text);
+  font-weight: var(--font-label-weight);
 }
 
-/* "Adicionar Arquivo": a grey control pill with an upload icon, which opens the guided upload (Story 1.14). */
+.entry[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  left: 0;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-text);
+}
+
+/* "Adicionar Arquivo": an outlined pill across the sidebar's width, with an upload icon; it opens the guided upload (Story 1.14). */
 .add {
   display: inline-flex;
   align-items: center;
-  align-self: center;
   justify-content: center;
   gap: var(--space-2);
+  flex: none;
   min-width: var(--space-touch-target);
   min-height: var(--space-touch-target);
   padding: 0 var(--space-6);
@@ -126,38 +180,37 @@
   line-height: var(--font-label-line-height);
   text-decoration: none;
   cursor: pointer;
+  transition: border-color var(--motion-fade) ease-out;
 }
 
-/* Closed: the logo mark at the top left and the handle at mid-height on the left edge. */
+.add:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+/*
+ * Closed, at every width (usability pass, fourth round): the handle is a round menu button at the top left, in the bar
+ * above the page, where the control that closed the sidebar was a moment before; it scrolls away with the bar. It
+ * used to be a tab at mid-height on the left edge from 768px, far from where the sidebar was closed and easy to miss.
+ * The logo mark that stood there alone is not shown: the button has its place.
+ */
 .mark,
 .handle {
   display: none;
 }
 
-.mark {
-  position: fixed;
-  top: var(--space-4);
-  left: var(--space-4);
-  z-index: 10;
-}
-
 .handle {
-  position: fixed;
-  top: 50%;
-  left: 0;
+  position: absolute;
+  top: calc((var(--height-bar) - var(--space-touch-target)) / 2);
+  left: var(--space-3);
   z-index: 10;
-  width: var(--space-touch-target);
-  height: calc(2 * var(--space-touch-target));
-  transform: translateY(-50%);
-  border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
-  background-color: var(--color-surface);
-  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-control-border);
+  background-color: var(--color-control);
 }
 
-/* Light: the control grey with a white chevron, as drawn. */
-:root[data-theme='light'] .handle {
-  background-color: var(--color-chip);
-  color: var(--color-chip-icon);
+.handle:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
 }
 
 @media (min-width: 1280px) {
@@ -165,7 +218,6 @@
     display: none;
   }
 
-  .area[data-wide='closed'] .mark,
   .area[data-wide='closed'] .handle {
     display: inline-flex;
   }
@@ -174,10 +226,6 @@
 @media (max-width: 1279px) {
   /* Over the main column: it slides in when opened (no slide under reduced motion: --motion-slide is 0ms). */
   .panel {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
     transition: transform var(--motion-slide) ease-out;
   }
 
@@ -191,7 +239,6 @@
     display: none;
   }
 
-  .area:not([data-narrow='open']) .mark,
   .area:not([data-narrow='open']) .handle {
     display: inline-flex;
   }
@@ -203,4 +250,13 @@
     width: 100%;
     border-radius: 0;
   }
+}
+
+/* The handle's icon: the menu lines (the chevron of the old tab is no longer drawn). */
+.handleChevron {
+  display: none;
+}
+
+.handleMenu {
+  display: inline-flex;
 }

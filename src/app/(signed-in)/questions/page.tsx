@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+
 import { Conversation, NoCampaignConversation } from '@/components/conversation/Conversation';
 import { Notice } from '@/components/Notice';
 import { errorText, problemFields } from '@/messages';
@@ -5,6 +7,13 @@ import { currentPreferences } from '@/preferences';
 import { currentConversation } from '@/server/conversations';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
+
+import { sectionMetadata } from '../section-metadata';
+
+/** The page's title, after its sidebar entry (usability pass, 2026-11-21). */
+export function generateMetadata(): Promise<Metadata> {
+  return sectionMetadata('questions');
+}
 
 /**
  * The conversation screen (Story 2.4): the current campaign's conversation, with whether it has an accepted source,

@@ -182,6 +182,7 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
         language={language}
         cited={reference.passageIds}
         caption={false}
+        fit
       />
     );
   }

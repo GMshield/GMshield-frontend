@@ -1,10 +1,10 @@
+import { PageHeader } from '@/components/PageHeader';
 import { SystemForm } from '@/components/SystemForm';
 import { translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 
 import { createSystemAction } from '../actions';
 import { EMPTY_SYSTEM } from '../form-state';
-import styles from '../systems.module.css';
 
 /** "Novo sistema" (Story 3.1): the form as a page of the main column; the new system's page opens once it is saved. */
 export default async function NewSystemPage() {
@@ -12,9 +12,7 @@ export default async function NewSystemPage() {
   const t = translator(language);
   return (
     <>
-      <div className={styles.header}>
-        <h1 className={styles.heading}>{t('systems.form.newTitle')}</h1>
-      </div>
+      <PageHeader title={t('systems.form.newTitle')} back={{ href: '/systems', label: t('shell.entries.systems') }} />
       <SystemForm
         labels={{
           name: t('systems.form.name'),

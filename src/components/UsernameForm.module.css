@@ -23,11 +23,20 @@
   max-width: 24rem;
   min-height: var(--space-touch-target);
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-border);
-  border-radius: var(--radius-full);
-  background-color: var(--color-control);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
   color: var(--color-text);
   font: inherit;
+}
+
+.input:hover {
+  border-color: var(--color-text);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+  border-width: 2px;
 }
 
 .check {
@@ -64,4 +73,6 @@
 .error {
   margin: 0;
   color: var(--color-danger);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
 }

@@ -7,6 +7,7 @@ import type { PlaceFormState } from '@/components/MaterialPlace';
 import { placeOfBelonging } from '@/components/uploads/types';
 import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
+import { flash } from '@/server/flash';
 import { actOnMaterial, changeMaterial, getMaterial, MATERIAL_ACTIONS, type MaterialAction, type MaterialChange } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -37,6 +38,9 @@ export async function materialAction(_previous: MaterialActionState, form: FormD
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
   const token = await currentSessionToken();
   const result = await actOnMaterial(token ?? '', id, action);
+  if (result.ok) {
+    await flash('success', translator(language)(`feedback.material.${action}`, { name: result.data.name }));
+  }
   refresh();
   return { error: result.ok ? null : errorText(result.problem, language) };
 }

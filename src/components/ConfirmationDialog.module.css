@@ -1,12 +1,15 @@
+/*
+ * The confirmation of a destructive action: what goes, then the way out and the confirmation, the way out first.
+ * Usability pass (2026-11-21): an opaque floating surface with an edge, a title that reads as one, room around the text.
+ */
 .dialog {
   width: min(var(--width-dialog), calc(100vw - 2 * var(--space-4)));
   max-width: none;
   padding: var(--space-6);
   border: 1px solid var(--color-field-border);
   border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  background-color: var(--color-popover);
   color: var(--color-text);
-  backdrop-filter: var(--glass-blur);
 }
 
 .dialog::backdrop {
@@ -22,6 +25,7 @@
 
 .consequence {
   margin: 0 0 var(--space-6);
+  color: var(--color-text);
   font-size: var(--font-body-size);
   font-weight: var(--font-body-weight);
   line-height: var(--font-body-line-height);
@@ -32,4 +36,16 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
+}
+
+/* The confirmation itself: the danger pill, filled. It is the last step, so it is the heaviest thing in the dialog. */
+.dialog .confirm {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger);
+  background-image: none;
+  color: var(--color-on-status);
+}
+
+.dialog .confirm:hover {
+  opacity: 0.86;
 }
