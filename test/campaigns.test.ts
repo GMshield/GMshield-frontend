@@ -14,7 +14,8 @@ vi.mock('next/navigation', async (importOriginal) => ({
   useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
 }));
 const refresh = vi.fn();
-vi.mock('next/cache', () => ({ refresh: () => refresh() }));
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({ refresh: () => refresh(), revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { default: CampaignsPage } = await import('@/app/(signed-in)/campaigns/page');
@@ -91,6 +92,7 @@ const calls = (server: Scripted) => server.calls.map((call) => `${call.method} $
 beforeEach(() => {
   cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
   refresh.mockClear();
+  revalidatePath.mockClear();
 });
 
 afterEach(async () => {
@@ -231,6 +233,9 @@ describe('a new campaign (Story 3.2)', () => {
     const initial = { values: { name: '', systemId: DND_ID }, version: null, error: null, field: null, stale: false };
 
     expect(await thrownDigest(() => createCampaignAction(initial, form(typed)))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${ID};`));
+    // The shared layout (switcher, context bar) is rendered again with the new current campaign or name.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    revalidatePath.mockClear();
     expect(JSON.parse(server.calls[0]!.body)).toEqual(typed);
     expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
 
@@ -423,6 +428,9 @@ describe('a campaign\'s actions (Story 3.2)', () => {
     const routes: Record<string, { status: number; body: unknown }> = { 'PUT /api/v1/campaigns/current': { status: 200, body: THURSDAY } };
     const server = await useBackend(routes);
     expect(await thrownDigest(() => openConversationAction(START, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/questions;/);
+    // The shared layout (switcher, context bar) is rendered again with the new current campaign or name.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    revalidatePath.mockClear();
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignId: ID });
     routes['PUT /api/v1/campaigns/current'] = problem(404, 'request.not_found');
     expect(await openConversationAction(START, form({ id: ID }))).toEqual({ error: 'Não encontrado.', done: 0 });
@@ -456,6 +464,9 @@ describe('a campaign\'s rename page (Story 3.2)', () => {
     const typed = { id: ID, version: '2', name: 'Mesa de sexta' };
 
     expect(await thrownDigest(() => renameCampaignAction(previous, form(typed)))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${ID};`));
+    // The shared layout (switcher, context bar) is rendered again with the new current campaign or name.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    revalidatePath.mockClear();
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 2, name: 'Mesa de sexta' });
 
     // Matrix row "Stale rename": the page says it changed elsewhere and shows the current name.
