@@ -185,7 +185,7 @@ describe('the view cookie', () => {
 });
 
 describe('the state filters of "Meus Arquivos"', () => {
-  const FILES = (states: readonly string[]) => `GET /api/v1/materials?${states.map((state) => `state=${state}`).join('&')}&limit=50`;
+  const FILES = (states: readonly string[]) => `GET /api/v1/materials?${states.map((state) => `state=${state}`).join('&')}&limit=10`;
   const ready = { id: MATERIAL, name: 'Livro.pdf', state: 'ready', actions: [], version: 0, size: 1200000, pages: { done: 320, total: 320 }, belonging: NOWHERE };
 
   it('names five filters, each with the states it asks the backend for; anything else is every state', () => {
@@ -202,10 +202,10 @@ describe('the state filters of "Meus Arquivos"', () => {
   it('?state=ready asks for the ready ones alone, marks the filter current, and the pages stay within it', async () => {
     const many = Array.from({ length: 11 }, (_, index) => ({ ...ready, id: `0190a0b0-0000-7000-8000-0000000007${String(index).padStart(2, '0')}`, name: `Livro ${index + 1}.pdf` }));
     const server = await useBackend({
-      [FILES(['ready'])]: { status: 200, body: { items: many.slice(0, 6), nextCursor: MATERIAL } },
-      [`${FILES(['ready'])}&cursor=${MATERIAL}`]: { status: 200, body: { items: many.slice(6) } },
+      [FILES(['ready'])]: { status: 200, body: { items: many.slice(0, 10), nextCursor: many[9]!.id, total: 11 } },
+      [`${FILES(['ready'])}&offset=10`]: { status: 200, body: { items: many.slice(10), total: 11 } },
     });
-    const html = renderToStaticMarkup(await FilesPage({ searchParams: Promise.resolve({ state: 'ready' }) }));
+    let html = renderToStaticMarkup(await FilesPage({ searchParams: Promise.resolve({ state: 'ready' }) }));
     expect(html).toMatch(/<nav[^>]*aria-label="Filtrar por estado"/);
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/files\?state=ready"[^>]*>Prontos<\/a>|<a[^>]*href="\/files\?state=ready"[^>]*aria-current="page"[^>]*>Prontos<\/a>/);
     expect(html).toContain('href="/files"');
@@ -215,12 +215,15 @@ describe('the state filters of "Meus Arquivos"', () => {
     // The display options are there, as the cookie (none here) says: a comfortable list.
     expect(html).toMatch(/<ul[^>]*data-layout="list"[^>]*data-density="comfortable"|<ul[^>]*data-density="comfortable"[^>]*data-layout="list"/);
     expect(html).toContain('>Exibição');
-    // The backend filters, and the list is read to its end within the filter.
-    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([FILES(['ready']), `${FILES(['ready'])}&cursor=${MATERIAL}`]);
+    html = renderToStaticMarkup(await FilesPage({ searchParams: Promise.resolve({ state: 'ready', page: '2' }) }));
+    expect(html).toContain('11–11 de 11');
+    expect(html).toContain('Livro 11.pdf');
+    // The backend filters, counts and skips: one call a page, within the filter.
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([FILES(['ready']), `${FILES(['ready'])}&offset=10`]);
   });
 
   it('the view cookie decides how the server renders the list', async () => {
-    await useBackend({ [FILES(statesOf('all'))]: { status: 200, body: { items: [ready] } } });
+    await useBackend({ [FILES(statesOf('all'))]: { status: 200, body: { items: [ready], total: 1 } } });
     cookieJar[VIEW_COOKIE] = 'files:grid:compact:1';
     const html = renderToStaticMarkup(await FilesPage());
     expect(html).toMatch(/<ul[^>]*data-layout="grid"/);
@@ -231,8 +234,8 @@ describe('the state filters of "Meus Arquivos"', () => {
 
   it('a filter with nothing in it says so and leads back to every file; the list with nothing at all keeps its own sentence', async () => {
     await useBackend({
-      [FILES(['failed'])]: { status: 200, body: { items: [] } },
-      [FILES(statesOf('all'))]: { status: 200, body: { items: [] } },
+      [FILES(['failed'])]: { status: 200, body: { items: [], total: 0 } },
+      [FILES(statesOf('all'))]: { status: 200, body: { items: [], total: 0 } },
     });
     let html = renderToStaticMarkup(await FilesPage({ searchParams: Promise.resolve({ state: 'failed' }) }));
     expect(html).toContain('Nenhum arquivo neste estado.');

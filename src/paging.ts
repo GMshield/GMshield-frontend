@@ -14,8 +14,6 @@ export type Paging = {
   readonly total: number;
   readonly from: number;
   readonly to: number;
-  /** False when the list was longer than the server reads at once: `total` is then the part that was read. */
-  readonly complete: boolean;
 };
 
 /** A page number from 1: no sign, no leading zero, at most 6 digits. */
@@ -26,17 +24,36 @@ export function pageParam(value: unknown): number {
   return typeof value === 'string' && PAGE.test(value) ? Number(value) : 1;
 }
 
+/** How many pages a list of `total` rows has, `size` a page: at least one, so an empty list is one empty page. */
+export function pagesOf(total: number, size: number): number {
+  return Math.max(1, Math.ceil(total / size));
+}
+
 /**
- * Page `page` of `items`, `size` a page. A page past the end is the last one (a list that lost rows since the link was
- * made still shows something); an empty list is one empty page.
+ * Where a page stands in a list of `total` rows: `shown` rows from position `start` (from 0), `size` a page. This is
+ * how a list the backend pages (its `total` and an `offset`) is described to the pager.
  */
-export function pageOf<T>(items: readonly T[], page: number, size: number, complete = true): { readonly rows: readonly T[]; readonly paging: Paging } {
-  const total = items.length;
-  const pages = Math.max(1, Math.ceil(total / size));
+export function pagingOf(total: number, start: number, shown: number, size: number): Paging {
+  return {
+    page: Math.floor(start / size) + 1,
+    pages: pagesOf(total, size),
+    total,
+    from: shown === 0 ? 0 : start + 1,
+    to: start + shown,
+  };
+}
+
+/**
+ * Page `page` of `items`, `size` a page, cut here from a list already in hand (a material's outline). A page past the
+ * end is the last one (a list that lost rows since the link was made still shows something); an empty list is one
+ * empty page.
+ */
+export function pageOf<T>(items: readonly T[], page: number, size: number): { readonly rows: readonly T[]; readonly paging: Paging } {
+  const pages = pagesOf(items.length, size);
   const at = Math.min(Math.max(1, Math.trunc(page) || 1), pages);
   const start = (at - 1) * size;
   const rows = items.slice(start, start + size);
-  return { rows, paging: { page: at, pages, total, from: rows.length === 0 ? 0 : start + 1, to: start + rows.length, complete } };
+  return { rows, paging: pagingOf(items.length, start, rows.length, size) };
 }
 
 /**

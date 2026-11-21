@@ -680,7 +680,6 @@
     "range": "{from}–{to} de {total}",
     "totalOne": "1 item",
     "totalOther": "{total} itens",
-    "capped": "(os 1.000 mais recentes)",
     "go": "Ir",
     "goTo": "Ir para a página",
     "outline": "Páginas do sumário",

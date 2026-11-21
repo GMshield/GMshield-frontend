@@ -9,9 +9,9 @@ export const MOST_LIST_CALLS = 20;
 export type Every<T> = { readonly items: T[]; readonly complete: boolean };
 
 /**
- * Every page of a list the backend gives by cursor, read one after another, 50 a call. The backend's lists have no
- * total and no way to jump to a page, so the pages a screen turns ({@link import('../paging').pageOf}) are cut here
- * from the whole list. A refusal on the way is the answer.
+ * Every page of a list the backend gives by cursor, read one after another, 50 a call: for what needs a whole list
+ * (the campaigns and systems a material can be given, the campaign switcher). A screen that shows one page of a list
+ * asks for that page alone ({@link import('./list-page').listPage}). A refusal on the way is the answer.
  */
 export async function everyPage<T>(
   load: (cursor: string | undefined) => Promise<Result<{ items: T[]; nextCursor?: string }>>,

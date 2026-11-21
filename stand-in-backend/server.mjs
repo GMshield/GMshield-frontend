@@ -150,7 +150,7 @@ export const EXAMPLES = {
   'PUT /api/v1/campaigns/current': STARTER,
   'GET /api/v1/campaigns/{id}': STARTER,
   'PATCH /api/v1/campaigns/{id}': { ...STARTER, version: 1 },
-  'GET /api/v1/campaigns': { items: [STARTER_ROW] },
+  'GET /api/v1/campaigns': { items: [STARTER_ROW], total: 1 },
   'POST /api/v1/campaigns': {
     id: '0190a0b0-0000-7000-8000-000000000040',
     name: 'Mesa de quinta',
@@ -160,7 +160,7 @@ export const EXAMPLES = {
   },
   'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
-  'GET /api/v1/systems': { items: [STARTER_SYSTEM] },
+  'GET /api/v1/systems': { items: [STARTER_SYSTEM], total: 1 },
   'GET /api/v1/systems/{id}': STARTER_SYSTEM,
   'POST /api/v1/systems': {
     id: '0190a0b0-0000-7000-8000-000000000030',
@@ -171,7 +171,7 @@ export const EXAMPLES = {
   },
   'PATCH /api/v1/systems/{id}': { ...STARTER_SYSTEM, version: 1 },
   'GET /api/v1/systems/{id}/deletion': { campaigns: 1, conversations: 1, materials: 0 },
-  'GET /api/v1/materials': { items: [] },
+  'GET /api/v1/materials': { items: [], total: 0 },
   'GET /api/v1/materials/{id}': {
     id: '0190a0b0-0000-7000-8000-000000000003',
     name: 'Livro do Jogador.pdf',

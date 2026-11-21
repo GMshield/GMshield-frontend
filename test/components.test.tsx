@@ -882,7 +882,7 @@ describe('ItemList (Story 3.1)', () => {
       <ItemList
         label="Lista"
         rows={[row('a', 'D&D', '/systems/a')]}
-        pages={{ paging: { page: 2, pages: 3, total: 21, from: 11, to: 20, complete: true }, path: '/systems' }}
+        pages={{ paging: { page: 2, pages: 3, total: 21, from: 11, to: 20 }, path: '/systems' }}
         viewKey="systems"
         view={DEFAULT_VIEW}
         language="en"

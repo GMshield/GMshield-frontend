@@ -967,7 +967,7 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 });
 
 describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
-  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed&limit=50';
+  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed&limit=10';
   const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
   const OTHER_SYSTEM = '0190a0b0-0000-7000-8000-000000000030';
   const IN_CAMPAIGN = { campaign: { id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D' } }, systems: [] };
@@ -991,7 +991,7 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     const server = await useBackend({
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
-      [FILES]: { status: 200, body: { items: files } },
+      [FILES]: { status: 200, body: { items: files, total: 3 } },
     });
     requestHeaders = { 'x-gmshield-path': '/files' };
 
@@ -1012,7 +1012,7 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
   });
 
   it('an empty list says so in one sentence, with "Adicionar Arquivo" its only action; a list that cannot load says why', async () => {
-    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: [] } } });
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: [], total: 0 } } });
     let html = await layoutHtml(await FilesPage());
     expect(html).toContain('Os arquivos que você enviar aparecem aqui, com o estado de cada um.');
     expect(html).not.toContain('aria-label="Seus arquivos"');
@@ -1022,16 +1022,16 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
   });
 
-  it('a backend page left empty with more after it is read on: the rows show, not the empty sentence', async () => {
+  it('a page the backend left empty (every material on it was leaving) is not the empty sentence while the list has rows', async () => {
+    // A material whose every place is being deleted is counted but left out of its page until the deletion is done.
     await useBackend({
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
-      [FILES]: { status: 200, body: { items: [], nextCursor: MATERIAL_ID } },
-      [`${FILES}&cursor=${MATERIAL_ID}`]: { status: 200, body: { items: files.slice(2) } },
+      [FILES]: { status: 200, body: { items: [], total: 1 } },
     });
     const html = await layoutHtml(await FilesPage());
     expect(html).not.toContain('Os arquivos que você enviar aparecem aqui');
-    expect(html).toContain('Solto.md');
+    expect(html).toContain('aria-label="Seus arquivos"');
     expect(html).toContain('1 item');
   });
 
@@ -1041,7 +1041,12 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
       id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
       name: `Arquivo ${index + 1}.md`,
     }));
-    const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: twelve } } });
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: twelve.slice(0, 10), nextCursor: twelve[9]!.id, total: 12 } },
+      [`${FILES}&offset=10`]: { status: 200, body: { items: twelve.slice(10), total: 12 } },
+    });
     let html = await layoutHtml(await FilesPage());
     expect(html).toContain('1–10 de 12');
     expect(html).toContain('Arquivo 10.md');
@@ -1054,8 +1059,8 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toContain('11–12 de 12');
     expect(html).toContain('Arquivo 12.md');
     expect(html).not.toContain('Arquivo 10.md');
-    // One read of the whole list a render; a page number never reaches the backend.
-    expect(server.calls.map((call) => `${call.method} ${call.url}`).filter((call) => call.includes('state=ready'))).toEqual([FILES, FILES]);
+    // One call a page: its size, and its start from the second page on.
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).filter((call) => call.includes('state=ready'))).toEqual([FILES, `${FILES}&offset=10`]);
   });
 
   it('a material page says where it belongs, with "Alterar", reading the campaigns and systems it can be given', async () => {

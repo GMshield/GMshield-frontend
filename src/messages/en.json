@@ -680,7 +680,6 @@
     "range": "{from}–{to} of {total}",
     "totalOne": "1 item",
     "totalOther": "{total} items",
-    "capped": "(the newest 1,000)",
     "go": "Go",
     "goTo": "Go to page",
     "outline": "Pages of the outline",
