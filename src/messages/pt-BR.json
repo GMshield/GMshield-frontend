@@ -255,7 +255,8 @@
         "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada.",
         "belonging_invalid": "Escolha uma campanha ou pelo menos um sistema que você tenha.",
         "version_in_progress": "Este material já tem uma versão a caminho. Espere ela terminar, ou aceite, tente de novo ou descarte essa versão, antes de começar outra.",
-        "not_ready": "Este material não tem uma versão pronta para substituir ou reprocessar."
+        "not_ready": "Este material não tem uma versão pronta para substituir ou reprocessar.",
+        "version_not_removable": "Só uma versão anterior pode ser removida. A página foi atualizada."
       }
     }
   },
@@ -362,6 +363,29 @@
       "pagesOne": "Sai a página lida deste arquivo, com sua imagem e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
       "pagesOther": "Saem as {pages} páginas lidas deste arquivo, com suas imagens e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
       "noPages": "Sai o arquivo enviado, com tudo o que foi lido dele. Isso não pode ser desfeito."
+    },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir «{name}»?",
+      "consequence": "Vão junto: {versions} e {pages}, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "noPages": "Vão junto: {versions}, com o arquivo enviado e tudo o que foi lido dele. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "unknown": "Vão junto todas as versões deste arquivo e as páginas lidas delas, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "versionsOne": "1 versão",
+      "versionsOther": "{count} versões",
+      "pagesOne": "1 página lida",
+      "pagesOther": "{count} páginas lidas",
+      "confirm": "Excluir arquivo"
+    },
+    "superseded": {
+      "label": "Versões anteriores",
+      "row": "Enviada em {date}",
+      "remove": "Remover",
+      "removeLabel": "Remover a versão enviada em {date}",
+      "title": "Remover esta versão?",
+      "consequenceOne": "Sai a página lida desta versão, com a imagem e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "consequenceOther": "Saem as {pages} páginas lidas desta versão, com as imagens e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "consequenceNoPages": "Sai esta versão, com tudo o que foi lido dela. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "confirm": "Remover versão"
     },
     "serving": {
       "pagesOne": "A versão anterior (1 página) continua em uso enquanto a nova não for aceita.",
@@ -623,6 +647,8 @@
       "retry": "O processamento de «{name}» recomeçou.",
       "discard": "«{name}» descartado."
     },
+    "materialDeleted": "Arquivo «{name}» excluído.",
+    "versionRemoved": "Versão anterior removida.",
     "uploadDone": "«{name}» enviado. A leitura das páginas começou.",
     "uploadFailed": "O envio de «{name}» falhou.",
     "viewSaved": "Exibição salva neste navegador."

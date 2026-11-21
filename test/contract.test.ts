@@ -22,11 +22,12 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 3.4: a material's replacement, the reprocess of a ready one and the version serving, added in 1.23.0
-    // (1.22.0 added the lists' `total` and `offset`).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.23.0');
-    expect(meetsMinimum('1.23.0')).toBe(true);
-    expect(meetsMinimum('1.23.1')).toBe(true);
+    // Story 3.4 part B: a material's deletion, a superseded version's removal and `superseded`, added in 1.24.0
+    // (1.23.0 added a material's replacement, the reprocess of a ready one and the version serving).
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.24.0');
+    expect(meetsMinimum('1.24.0')).toBe(true);
+    expect(meetsMinimum('1.24.1')).toBe(true);
+    expect(meetsMinimum('1.23.0')).toBe(false);
     expect(meetsMinimum('1.22.0')).toBe(false);
     expect(meetsMinimum('1.21.0')).toBe(false);
     expect(meetsMinimum('1.20.0')).toBe(false);

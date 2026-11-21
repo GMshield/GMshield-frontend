@@ -255,7 +255,8 @@
         "action_unavailable": "This action is not available in the material's current state. The page has been updated.",
         "belonging_invalid": "Choose one of your campaigns or at least one of your systems.",
         "version_in_progress": "This material already has a version on its way. Wait for it to finish, or accept, retry or discard it, before starting another one.",
-        "not_ready": "This material has no ready version to replace or reprocess."
+        "not_ready": "This material has no ready version to replace or reprocess.",
+        "version_not_removable": "Only a previous version can be removed. The page has been updated."
       }
     }
   },
@@ -362,6 +363,29 @@
       "pagesOne": "The page read from this file goes, with its picture and extracted text, the outline and the uploaded file. This cannot be undone.",
       "pagesOther": "The {pages} pages read from this file go, with their pictures and extracted text, the outline and the uploaded file. This cannot be undone.",
       "noPages": "The uploaded file goes, with everything read from it. This cannot be undone."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete «{name}»?",
+      "consequence": "Going with it: {versions} and {pages}, with their pictures and extracted text. Answers that cited this file show «source removed». This cannot be undone.",
+      "noPages": "Going with it: {versions}, with the uploaded file and everything read from it. Answers that cited this file show «source removed». This cannot be undone.",
+      "unknown": "Going with it: every version of this file and the pages read from them, with their pictures and extracted text. Answers that cited this file show «source removed». This cannot be undone.",
+      "versionsOne": "1 version",
+      "versionsOther": "{count} versions",
+      "pagesOne": "1 page read",
+      "pagesOther": "{count} pages read",
+      "confirm": "Delete file"
+    },
+    "superseded": {
+      "label": "Previous versions",
+      "row": "Uploaded on {date}",
+      "remove": "Remove",
+      "removeLabel": "Remove the version uploaded on {date}",
+      "title": "Remove this version?",
+      "consequenceOne": "The page read from this version goes, with its picture and extracted text. Answers that cited it show «source removed». This cannot be undone.",
+      "consequenceOther": "The {pages} pages read from this version go, with their pictures and extracted text. Answers that cited it show «source removed». This cannot be undone.",
+      "consequenceNoPages": "This version goes, with everything read from it. Answers that cited it show «source removed». This cannot be undone.",
+      "confirm": "Remove version"
     },
     "serving": {
       "pagesOne": "The previous version (1 page) stays in use while the new one is not accepted.",
@@ -623,6 +647,8 @@
       "retry": "Processing of «{name}» started again.",
       "discard": "«{name}» discarded."
     },
+    "materialDeleted": "File «{name}» deleted.",
+    "versionRemoved": "Previous version removed.",
     "uploadDone": "«{name}» uploaded. Reading its pages has started.",
     "uploadFailed": "The upload of «{name}» failed.",
     "viewSaved": "Display saved in this browser."

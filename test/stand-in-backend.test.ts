@@ -140,6 +140,21 @@ describe('stand-in backend', () => {
     });
   });
 
+  it('answers a material with no superseded version, its deletion count, and both deletes with 202 (Story 3.4 part B)', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({ status: 200, body: { superseded: [] } });
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { versions: 1, pages: 444 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/materials/${id}`, 't')).toEqual({ status: 202, type: null, body: null });
+    expect(answer(contract, 'DELETE', `/api/v1/materials/${id}/versions/0190a0b0-0000-7000-8000-00000000000a`, 't')).toEqual({
+      status: 202,
+      type: null,
+      body: null,
+    });
+  });
+
   it('answers where a material belongs (Story 3.3): the starter campaign, and a change to its system at version 1', () => {
     const id = '0190a0b0-0000-7000-8000-000000000003';
     const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' } };

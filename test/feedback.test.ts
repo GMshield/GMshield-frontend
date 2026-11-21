@@ -31,7 +31,7 @@ const { DEFAULT_VIEW, DEFAULT_VIEWS, VIEW_COOKIE, viewCookieLine, viewsFrom, vie
 const { FILE_FILTERS, filterOf, statesOf } = await import('@/app/(signed-in)/files/filters');
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { previewPageAction } = await import('@/app/(signed-in)/files/actions');
-const { materialAction } = await import('@/app/(signed-in)/files/[id]/actions');
+const { deleteMaterialAction, materialAction, removeVersionAction } = await import('@/app/(signed-in)/files/[id]/actions');
 const { createSystemAction, deleteSystemAction } = await import('@/app/(signed-in)/systems/actions');
 const { archiveCampaignAction, chooseCampaignAction } = await import('@/app/(signed-in)/campaigns/actions');
 const { fileRow, previewOf } = await import('@/app/(signed-in)/files/rows');
@@ -157,6 +157,31 @@ describe('what an action says once it has succeeded', () => {
     expect((await materialAction({ error: null }, form({ id: MATERIAL, action: 'discard' }))).error).not.toBeNull();
     expect(flashed()).toBeNull();
   });
+
+  it('deleting a material names it, and removing a previous version says so; a refused removal says nothing (Story 3.4 part B)', async () => {
+    const version = '0190a0b0-0000-7000-8000-00000000000a';
+    const other = '0190a0b0-0000-7000-8000-00000000000b';
+    await useBackend({
+      [`GET /api/v1/materials/${MATERIAL}`]: { status: 200, body: { id: MATERIAL, name: 'Bestiário.pdf', state: 'ready', actions: [] } },
+      [`DELETE /api/v1/materials/${MATERIAL}`]: { status: 202, body: null },
+      [`DELETE /api/v1/materials/${MATERIAL}/versions/${version}`]: { status: 202, body: null },
+      [`DELETE /api/v1/materials/${MATERIAL}/versions/${other}`]: {
+        status: 409,
+        body: { type: 'x', title: 'x', status: 409, category: 'material', code: 'material.version_not_removable', params: {}, traceId: 't' },
+      },
+    });
+    await expect(deleteMaterialAction({ error: null }, form({ id: MATERIAL }))).rejects.toMatchObject({ digest: expect.stringContaining('/files') });
+    expect(flashed()?.flash).toEqual({ status: 'success', message: 'Arquivo «Bestiário.pdf» excluído.' });
+    setCalls = [];
+    expect((await removeVersionAction({ error: null }, form({ id: MATERIAL, versionId: version }))).error).toBeNull();
+    expect(flashed()?.flash).toEqual({ status: 'success', message: 'Versão anterior removida.' });
+    setCalls = [];
+    expect((await removeVersionAction({ error: null }, form({ id: MATERIAL, versionId: other }))).error).not.toBeNull();
+    expect(flashed()).toBeNull();
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect((await removeVersionAction({ error: null }, form({ id: MATERIAL, versionId: version }))).error).toBeNull();
+    expect(flashed()?.flash?.message).toBe('Previous version removed.');
+  });
 });
 
 describe('the view cookie', () => {
@@ -250,7 +275,7 @@ describe('the state filters of "Meus Arquivos"', () => {
 describe('thumbnails and previews', () => {
   const t = translator('pt-BR');
   const material = (state: string, pages?: { done: number; total: number }) =>
-    ({ id: MATERIAL, name: 'Livro.pdf', state, actions: [], version: 0, belonging: NOWHERE, serving: null, ...(pages === undefined ? {} : { pages }) }) as Parameters<typeof previewOf>[0];
+    ({ id: MATERIAL, name: 'Livro.pdf', state, actions: [], version: 0, belonging: NOWHERE, serving: null, superseded: [], ...(pages === undefined ? {} : { pages }) }) as Parameters<typeof previewOf>[0];
 
   it('a material shows its first page once it needs review or is ready and has pages, never before', () => {
     const picture = `/api/v1/materials/${MATERIAL}/pages/1/picture?ground=review`;

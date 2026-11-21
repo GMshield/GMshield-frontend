@@ -37,7 +37,7 @@ const CAMPAIGN = {
 const MATERIALS = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50';
 const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
 /** Story 3.3: a material's version and place, which every material of the contract carries (here: none). */
-const PLACE = { version: 0, belonging: { campaign: null, systems: [] }, serving: null };
+const PLACE = { version: 0, belonging: { campaign: null, systems: [] }, serving: null, superseded: [] };
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -629,9 +629,11 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
   };
   const numeral = (html: string, name: string) => new RegExp(`data-numeral="${name}"><dt[^>]*>[^<]*</dt><dd[^>]*>(\\d+)</dd>`).exec(html)?.[1];
+  // Story 3.4 part B: the page without its header, whose "Excluir" has a confirmation of its own.
+  const withoutHeader = (html: string) => html.replace(/<header[^>]*>.*?<\/header>/s, '');
   // The page's pills, before the (closed) confirmation dialog and its own pills; not "Onde pertence"'s (Story 3.3).
   const buttons = (html: string) =>
-    [...(html.replace(/<section[^>]*aria-labelledby="material-place".*?<\/section>/s, '').split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
+    [...(withoutHeader(html).replace(/<section[^>]*aria-labelledby="material-place".*?<\/section>/s, '').split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
 
   it('a material that needs review shows its report: numerals, warnings as facts, unreadable pages as links, the outline by level', async () => {
     const server = await useBackend({
@@ -691,7 +693,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Relatório de qualidade');
     expect(buttons(html)).toEqual(['Substituir:default', 'Reprocessar:default']);
     expect(html).not.toContain('Reprocessar páginas com falha');
-    expect(html).not.toContain('<dialog');
+    expect(withoutHeader(html)).not.toContain('<dialog');
     expect(html).not.toContain('data-serving');
 
     // Story 3.4: a new version under review, the ready one serving beside it.
@@ -1096,6 +1098,8 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
       [
         'GET /api/v1/campaigns?limit=50',
         `GET /api/v1/materials/${MATERIAL_ID}`,
+        // Story 3.4 part B: what "Excluir" would take, for its confirmation.
+        `GET /api/v1/materials/${MATERIAL_ID}/deletion`,
         // Usability pass: a ready material with pages shows its first page beside its facts.
         `GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`,
         `GET /api/v1/materials/${MATERIAL_ID}/report`,
@@ -1117,5 +1121,77 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toContain('Em nenhum lugar: nenhuma pergunta usa este arquivo.');
     expect(html).not.toMatch(/>Alterar<\/button>/);
     expect(html).toMatch(/aria-labelledby="material-place".*O serviço está indisponível agora\. Tente de novo em instantes\./s);
+  });
+});
+
+describe('deleting a material and its previous versions on its page (Story 3.4 part B)', () => {
+  const MATERIAL = `GET /api/v1/materials/${MATERIAL_ID}`;
+  const DELETION = `GET /api/v1/materials/${MATERIAL_ID}/deletion`;
+  const ready = { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'waiting', actions: [] };
+  const page = async (language?: 'en') => {
+    if (language === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = language;
+    }
+    return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+  };
+  const header = (html: string) => /<header[^>]*>.*?<\/header>/s.exec(html)?.[0] ?? '';
+
+  it('"Excluir" is a danger pill in the header, whose confirmation names the file, its versions and pages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [MATERIAL]: { status: 200, body: ready },
+      [DELETION]: { status: 200, body: { versions: 2, pages: 640 } },
+    };
+    const server = await useBackend(routes);
+    let html = await page();
+    expect(header(html)).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+    expect(header(html)).toContain('Excluir «Livro.pdf»?');
+    expect(header(html)).toContain('Vão junto: 2 versões e 640 páginas lidas, com as imagens e o texto extraído.');
+    expect(header(html)).toContain('>Excluir arquivo</button>');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === DELETION)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    html = await page('en');
+    expect(header(html)).toMatch(/<button[^>]*data-variant="danger"[^>]*>Delete<\/button>/);
+    expect(header(html)).toContain('Going with it: 2 versions and 640 pages read,');
+
+    // Without the counts, the confirmation names what goes in words.
+    routes[DELETION] = problem(503, 'server.unavailable');
+    html = await page();
+    expect(header(html)).toContain('Vão junto todas as versões deste arquivo e as páginas lidas delas,');
+    expect(html).not.toContain('server.unavailable');
+  });
+
+  it('"Versões anteriores" lists the superseded versions, newest first, each with "Remover"; no card without any', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [MATERIAL]: { status: 200, body: ready } };
+    await useBackend(routes);
+    let html = await page();
+    expect(html).not.toContain('Versões anteriores');
+
+    routes[MATERIAL] = {
+      status: 200,
+      body: {
+        ...ready,
+        superseded: [
+          { id: '0190a0b0-0000-7000-8000-00000000000b', createdAt: '2026-11-15T14:00:00Z', pages: 320, size: 134217728 },
+          { id: '0190a0b0-0000-7000-8000-00000000000a', createdAt: '2026-11-10T14:00:00Z', pages: null, size: null },
+        ],
+      },
+    };
+    html = await page();
+    expect(html).toContain('>Versões anteriores</h2>');
+    expect(html).toContain('Enviada em 15 de nov. de 2026 · 320 páginas · 134,2 MB');
+    expect(html.indexOf('15 de nov. de 2026')).toBeLessThan(html.indexOf('10 de nov. de 2026'));
+    expect(html.match(/<button[^>]*data-variant="danger"[^>]*>Remover<\/button>/g)).toHaveLength(2);
+    // After "Onde pertence", in the facts.
+    expect(html.indexOf('aria-labelledby="material-place"')).toBeLessThan(html.indexOf('Versões anteriores'));
+    expect(html).toContain('Remover esta versão?');
+    html = await page('en');
+    expect(html).toContain('>Previous versions</h2>');
+    expect(html).toContain('Uploaded on Nov 10, 2026');
+
+    // A backend before 1.24.0 sends no `superseded`: no card.
+    routes[MATERIAL] = { status: 200, body: Object.fromEntries(Object.entries(ready).filter(([key]) => key !== 'superseded')) };
+    expect(await page()).not.toContain('Versões anteriores');
   });
 });

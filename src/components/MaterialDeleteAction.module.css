@@ -1,0 +1,13 @@
+/* "Excluir" in a material's page header (Story 3.4 part B): the pill, and a refusal under it. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.error {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+}

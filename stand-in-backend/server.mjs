@@ -21,7 +21,9 @@
 // conversation and no material; a delete answers 202 with no body. Story 3.3: a material belongs to the starter
 // campaign (version 0, 134 MB), and a change of where it belongs answers it in the starter system at version 1.
 // Story 3.4: a material has no other version serving; once accepted (or moved) it is ready and may be reprocessed, and a
-// reprocess answers a new version waiting while the accepted one, its 444 pages, keeps serving.
+// reprocess answers a new version waiting while the accepted one, its 444 pages, keeps serving. Story 3.4 part B: a
+// material has no superseded version (`superseded: []`); its deletion takes its one version and its 444 pages, and a
+// delete of it, or of one of its versions, answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -189,7 +191,11 @@ export const EXAMPLES = {
     belonging: IN_STARTER_CAMPAIGN,
     // Story 3.4: no other version serves beside it.
     serving: null,
+    // Story 3.4 part B: and none was superseded.
+    superseded: [],
   },
+  // Story 3.4 part B: what the material's deletion takes.
+  'GET /api/v1/materials/{id}/deletion': { versions: 1, pages: 444 },
   // Story 1.20: the report of a book under review, and the book once accepted.
   'GET /api/v1/materials/{id}/report': {
     outline: [
@@ -214,6 +220,7 @@ export const EXAMPLES = {
     size: 134217728,
     belonging: IN_STARTER_CAMPAIGN,
     serving: null,
+    superseded: [],
   },
   // Story 3.4: the book reprocessed from its stored original: a new version waits, and the accepted one keeps serving.
   'POST /api/v1/materials/{id}/reprocess': {
@@ -227,6 +234,7 @@ export const EXAMPLES = {
     size: 134217728,
     belonging: IN_STARTER_CAMPAIGN,
     serving: { pages: 444, size: 134217728 },
+    superseded: [],
   },
   // Story 3.3: the book moved to the starter system.
   'PATCH /api/v1/materials/{id}': {
@@ -240,6 +248,7 @@ export const EXAMPLES = {
     size: 134217728,
     belonging: IN_STARTER_SYSTEM,
     serving: null,
+    superseded: [],
   },
   // Story 1.21: a set of two images, created with its order; the set once its failed image is left out.
   'POST /api/v1/image-sets': {

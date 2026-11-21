@@ -26,6 +26,8 @@ const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
 const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
+const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
+const { SupersededVersions } = await import('@/components/SupersededVersions');
 const { References } = await import('@/components/conversation/References');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
@@ -834,6 +836,164 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
     expect(document.activeElement).toBe(opener);
     expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('MaterialDeleteAction (Story 3.4 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000003';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the name and the counts; "Excluir arquivo" posts the material', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 2, pages: 640 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Livro.pdf»?' });
+    expect(dialog.textContent).toContain(
+      'Vão junto: 2 versões e 640 páginas lidas, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir arquivo' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, the versions alone when no page was read, and what goes in words without counts, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 1 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 versão e 1 página lida, com as imagens e o texto extraído.');
+    await user.keyboard('{Escape}');
+    // No page was read: its versions alone, with the uploaded file.
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 0 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto: 1 versão, com o arquivo enviado e tudo o que foi lido dele. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    expect(screen.getByRole('dialog').textContent).not.toContain('0 páginas');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 3, pages: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete «Livro.pdf»?' });
+    expect(dialog.textContent).toContain('Going with it: 3 versions, with the uploaded file and everything read from it.');
+    expect(within(dialog).getByRole('button', { name: 'Delete file' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto todas as versões deste arquivo e as páginas lidas delas,');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: every version of this file and the pages read from them,');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 2, pages: 1 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 2 versions and 1 page read, with their pictures and extracted text.');
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 3 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir arquivo' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe('SupersededVersions (Story 3.4 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000003';
+  const NEWER = { id: '0190a0b0-0000-7000-8000-00000000000b', createdAt: '2026-11-15T14:00:00Z', pages: 320, size: 134217728 };
+  const OLDER = { id: '0190a0b0-0000-7000-8000-00000000000a', createdAt: '2026-11-10T14:00:00Z', pages: 1, size: null };
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('is not shown when no version was superseded', () => {
+    const { container } = render(<SupersededVersions materialId={ID} versions={[]} language="pt-BR" action={recorder().action} />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('lists each version with its day, pages and size, and "Remover" opens one confirmation that posts that version', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<SupersededVersions materialId={ID} versions={[NEWER, OLDER]} language="pt-BR" action={action} />);
+    expect(screen.getByRole('heading', { name: 'Versões anteriores' })).toBeTruthy();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'Enviada em 15 de nov. de 2026 · 320 páginas · 134,2 MB',
+      'Enviada em 10 de nov. de 2026 · 1 página',
+    ]);
+    const removes = screen.getAllByRole('button', { name: /^Remover/ });
+    expect(removes).toHaveLength(2);
+    expect(removes.map((button) => button.textContent)).toEqual(['Remover', 'Remover']);
+    expect(removes[0]!.dataset.variant).toBe('danger');
+    expect(removes[1]!.getAttribute('aria-label')).toBe('Remover a versão enviada em 10 de nov. de 2026');
+    // One dialog for every row: dialogs never stack.
+    expect(container.querySelectorAll('dialog')).toHaveLength(1);
+
+    await user.click(removes[0]!);
+    const dialog = screen.getByRole('dialog', { name: 'Remover esta versão?' });
+    expect(dialog.textContent).toContain(
+      'Saem as 320 páginas lidas desta versão, com as imagens e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(removes[0]);
+    expect(posted).toEqual([]);
+
+    await user.click(removes[1]!);
+    expect(screen.getByRole('dialog').textContent).toContain('Sai a página lida desta versão,');
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Remover versão' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, versionId: OLDER.id }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('says the version goes in words when its pages are not known, in English too, and shows a refusal as an alert', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Only a previous version can be removed. The page has been updated.' });
+    render(<SupersededVersions materialId={ID} versions={[{ ...OLDER, pages: null, size: 2048 }]} language="en" action={action} />);
+    expect(screen.getByRole('heading', { name: 'Previous versions' })).toBeTruthy();
+    expect(screen.getByRole('listitem').querySelector('span')?.textContent).toBe('Uploaded on Nov 10, 2026 · 2 KB');
+    const remove = screen.getByRole('button', { name: 'Remove the version uploaded on Nov 10, 2026' });
+    await user.click(remove);
+    const dialog = screen.getByRole('dialog', { name: 'Remove this version?' });
+    expect(dialog.textContent).toContain('This version goes, with everything read from it.');
+    await user.click(within(dialog).getByRole('button', { name: 'Remove version' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Only a previous version can be removed. The page has been updated.');
+    expect(document.activeElement).toBe(remove);
   });
 });
 

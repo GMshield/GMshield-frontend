@@ -484,6 +484,13 @@
             "example" : "waiting",
             "type" : "string"
           },
+          "superseded" : {
+            "description" : "The material's superseded versions, newest first; a version whose removal is recorded is left out; empty when there is none (contract 1.24.0)",
+            "items" : {
+              "$ref" : "#/components/schemas/MaterialSuperseded"
+            },
+            "type" : "array"
+          },
           "upload" : {
             "$ref" : "#/components/schemas/MaterialUpload",
             "description" : "The unfinished upload, only while the state is uploading"
@@ -495,7 +502,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "actions", "belonging", "id", "name", "serving", "state", "version" ],
+        "required" : [ "actions", "belonging", "id", "name", "serving", "state", "superseded", "version" ],
         "type" : "object"
       },
       "MaterialBelonging" : {
@@ -578,6 +585,25 @@
           }
         },
         "required" : [ "belonging", "version" ],
+        "type" : "object"
+      },
+      "MaterialDeletion" : {
+        "description" : "What goes with a material if it is deleted (contract 1.24.0)",
+        "properties" : {
+          "pages" : {
+            "description" : "The sum of those versions' page totals (a total not known counts 0)",
+            "example" : 640,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "versions" : {
+            "description" : "Its versions that are not discarded",
+            "example" : 2,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "pages", "versions" ],
         "type" : "object"
       },
       "MaterialImageSet" : {
@@ -853,6 +879,37 @@
           }
         },
         "required" : [ "expiresAt", "length", "offset", "position", "state", "uploadId" ],
+        "type" : "object"
+      },
+      "MaterialSuperseded" : {
+        "description" : "A superseded version of the material, which the GM may remove (contract 1.24.0)",
+        "properties" : {
+          "createdAt" : {
+            "description" : "When the version was uploaded",
+            "example" : "2026-11-10T14:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The version's id: DELETE /api/v1/materials/{id}/versions/{versionId} removes it",
+            "example" : "0190a0b0-0000-7000-8000-00000000000a",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pages" : {
+            "description" : "Its page total; null when not known",
+            "example" : 320,
+            "format" : "int32",
+            "type" : [ "integer", "null" ]
+          },
+          "size" : {
+            "description" : "Its size in bytes; null when not known",
+            "example" : 134217728,
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          }
+        },
+        "required" : [ "createdAt", "id", "pages", "size" ],
         "type" : "object"
       },
       "MaterialUpload" : {
@@ -1488,7 +1545,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.23.0"
+    "version" : "1.24.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2281,6 +2338,43 @@
       }
     },
     "/api/v1/materials/{id}" : {
+      "delete" : {
+        "operationId" : "deleteMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion is recorded"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's materials with every version (contract 1.24.0; 202, no body): from now on it is gone from every list and count, and its passages from every scope; its pages, passages, files, index points and rows are removed in the background. A reference an answer stored reads as a removed source. A material already being deleted is answered the same, and nothing changes. Cannot be undone. request.not_found (404) for another owner's material, an unknown or malformed id, or one whose every place is being deleted; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      },
       "get" : {
         "operationId" : "getMaterial",
         "parameters" : [ {
@@ -2423,6 +2517,52 @@
           }
         },
         "summary" : "Accepts the current version of one of the account's materials: needs_review becomes ready, and a ready version of it before becomes superseded. Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getMaterialDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MaterialDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's materials if it is deleted (contract 1.24.0): how many of its versions are not discarded, and their pages. request.not_found (404) for another owner's material, an unknown or malformed id, one whose every place is being deleted, or one whose deletion is recorded already; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -2738,6 +2878,54 @@
           }
         },
         "summary" : "Starts again the failed current version of one of the account's materials, from its cleaned original or its uploaded file: it becomes processing. ingestion.too_many_steps (409) when a new step would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/versions/{versionId}" : {
+      "delete" : {
+        "operationId" : "removeMaterialVersion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The version's id",
+          "in" : "path",
+          "name" : "versionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The removal is recorded"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Removes a superseded version of one of the account's materials (contract 1.24.0; 202, no body): from now on it is gone from the material's superseded versions, and its pages, passages, files, index points and row are removed in the background; the material and its other versions stay. A reference an answer stored to it reads as a removed source and its page is not found. A version whose removal is recorded already is answered the same. material.version_not_removable (409) for a version in any other state (ready, in progress or discarded); request.not_found (404) for another owner's material or version, a version of another material, an unknown or malformed id, or a material whose every place is being deleted or whose deletion is recorded already; nothing changes then; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },

@@ -9,7 +9,7 @@ import type { components } from '@/server/backend/generated/public';
  * A material as the tray shows it: the GM's actions (Story 1.20) are the material page's alone, and so are its version
  * and where it belongs (Story 3.3).
  */
-export type Material = Omit<components['schemas']['Material'], 'actions' | 'version' | 'size' | 'belonging' | 'serving'>;
+export type Material = Omit<components['schemas']['Material'], 'actions' | 'version' | 'size' | 'belonging' | 'serving' | 'superseded'>;
 export type MaterialState = Material['state'];
 /** A material's pages once its page total is known: done of the total, by layer and by outcome (Story 1.17). */
 export type MaterialPages = NonNullable<Material['pages']>;

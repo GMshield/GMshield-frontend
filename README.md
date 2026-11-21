@@ -772,6 +772,25 @@ they sit in `src/`.
   - New codes `material.version_in_progress` and `material.not_ready`, in both catalogues. The stand-in backend's
     materials carry `serving: null`; an accepted (or moved) one is ready with `actions: ['reprocess']`, and a reprocess
     answers a new version `waiting` with the 444 pages of the accepted one serving.
+- **Delete a material, remove a previous version (Story 3.4, part B).** Public contract 1.24.0. `Material.superseded`
+  (`[{id, createdAt, pages, size}]`, newest first) names the material's superseded versions; read a missing one (a
+  backend before 1.24.0) as none. `src/server/materials.ts` adds `materialDeletion` (`{versions, pages}`),
+  `deleteMaterial` and `removeVersion` (both 202, no body).
+  - "Excluir" is a danger pill in the material page's `PageHeader` (`MaterialDeleteAction`, after `CampaignDeleteAction`):
+    its `ConfirmationDialog` is titled "Excluir «{name}»?", says "Vão junto: {versions} e {pages}, com as imagens e o
+    texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito." (one and
+    other forms, "1 página lida" / "{count} páginas lidas"; the versions alone, with the uploaded file, when no page was
+    read; in words when the count cannot be read) and confirms with "Excluir arquivo". `deleteMaterialAction`
+    reads the material for its name, deletes it, flashes "Arquivo «{name}» excluído.", revalidates the layout and
+    redirects to `/files`.
+  - "Versões anteriores" (`SupersededVersions`) is a card in the facts column, after "Onde pertence", shown only when
+    `superseded` is not empty: one row per version ("Enviada em {date} · {pages} páginas · {size}", the day in UTC so
+    the server and the browser agree), each with a danger pill "Remover" (its spoken name adds the day). One
+    `ConfirmationDialog` for every row ("Remover esta versão?", the pages that go, "Remover versão").
+    `removeVersionAction` removes it, flashes "Versão anterior removida." and refreshes the page;
+    `material.version_not_removable` comes back in words.
+  - The stand-in backend answers `superseded: []`, the material's deletion count (`{versions: 1, pages: 444}`) and both
+    deletes (202).
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -877,6 +896,11 @@ From public contract 1.22.0 back to 1.7.0, the entries below go newest first.
 Deploy order for public contract 1.22.0 (numbered pages): the backend first (no migration; its three lists answer
 `total` and take `offset`), then the frontend (its health check fails against a 1.21.0 backend, and its paged lists ask
 for one page each). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.24.0 (Story 3.4, part B): the backend first (its migration
+`V26__material_deletion.sql`, `Material.superseded`, `GET /api/v1/materials/{id}/deletion` and the two deletes), then the
+frontend (its health check fails against a 1.23.0 backend, and the material page offers "Excluir" and "Versões
+anteriores"). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.23.0 (Story 3.4, part A): the backend first (a material's replacement through tus
 `material` or `ImageSetRequest.material`, the reprocess of a `ready` material, the current version and `serving`; no
