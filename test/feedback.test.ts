@@ -250,7 +250,7 @@ describe('the state filters of "Meus Arquivos"', () => {
 describe('thumbnails and previews', () => {
   const t = translator('pt-BR');
   const material = (state: string, pages?: { done: number; total: number }) =>
-    ({ id: MATERIAL, name: 'Livro.pdf', state, actions: [], version: 0, belonging: NOWHERE, ...(pages === undefined ? {} : { pages }) }) as Parameters<typeof previewOf>[0];
+    ({ id: MATERIAL, name: 'Livro.pdf', state, actions: [], version: 0, belonging: NOWHERE, serving: null, ...(pages === undefined ? {} : { pages }) }) as Parameters<typeof previewOf>[0];
 
   it('a material shows its first page once it needs review or is ready and has pages, never before', () => {
     const picture = `/api/v1/materials/${MATERIAL}/pages/1/picture?ground=review`;

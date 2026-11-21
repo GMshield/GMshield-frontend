@@ -28,7 +28,7 @@ const BACKEND_CODES = {
     'file_checksum_mismatch', 'expired', 'metadata_invalid', 'set_too_large', 'image_not_failed'],
   ingestion: ['password_required', 'file_unreadable', 'too_many_steps'],
   page: ['ground_unknown'],
-  material: ['action_unavailable'],
+  material: ['action_unavailable', 'version_in_progress', 'not_ready'],
 } as const;
 
 function leaves(value: unknown): string[] {

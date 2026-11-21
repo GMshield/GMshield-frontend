@@ -253,7 +253,9 @@
       },
       "material": {
         "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada.",
-        "belonging_invalid": "Escolha uma campanha ou pelo menos um sistema que você tenha."
+        "belonging_invalid": "Escolha uma campanha ou pelo menos um sistema que você tenha.",
+        "version_in_progress": "Este material já tem uma versão a caminho. Espere ela terminar, ou aceite, tente de novo ou descarte essa versão, antes de começar outra.",
+        "not_ready": "Este material não tem uma versão pronta para substituir ou reprocessar."
       }
     }
   },
@@ -350,14 +352,21 @@
       "label": "Ações",
       "accept": "Aceitar",
       "reprocess": "Reprocessar páginas com falha",
+      "reprocessReady": "Reprocessar",
       "retry": "Tentar de novo",
-      "discard": "Descartar"
+      "discard": "Descartar",
+      "replace": "Substituir"
     },
     "discard": {
       "title": "Descartar «{name}»?",
       "pagesOne": "Sai a página lida deste arquivo, com sua imagem e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
       "pagesOther": "Saem as {pages} páginas lidas deste arquivo, com suas imagens e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
       "noPages": "Sai o arquivo enviado, com tudo o que foi lido dele. Isso não pode ser desfeito."
+    },
+    "serving": {
+      "pagesOne": "A versão anterior (1 página) continua em uso enquanto a nova não for aceita.",
+      "pagesOther": "A versão anterior ({pages} páginas) continua em uso enquanto a nova não for aceita.",
+      "noPages": "A versão anterior continua em uso enquanto a nova não for aceita."
     },
     "notice": {
       "needsReview": "{name} precisa de revisão.",
@@ -392,6 +401,7 @@
   "upload": {
     "dialog": {
       "title": "Adicionar arquivos",
+      "replaceTitle": "Substituir {name}",
       "step": "Passo {step} de {total}",
       "close": "Fechar",
       "back": "Voltar",
@@ -414,7 +424,10 @@
         },
         "drop": "Arraste os arquivos para cá, ou",
         "dropNow": "Solte para adicionar",
-        "chosen": "Arquivos escolhidos"
+        "chosen": "Arquivos escolhidos",
+        "replaceQuestion": "Qual é a nova versão?",
+        "replaceLead": "Escolha um arquivo, ou as fotos que viram as páginas da nova versão. Ela é lida e revisada como um arquivo novo, e a versão atual continua em uso até você aceitar a nova.",
+        "replaceOne": "Escolha um só arquivo, ou só fotos."
       },
       "set": {
         "question": "Como ficam as {count} fotos?",

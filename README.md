@@ -749,11 +749,29 @@ they sit in `src/`.
       room under 1280px, the page keeps the ordinary gutter, and the mark is not shown while the sidebar is closed.
     - **The campaign switcher in the sidebar.** Its list opened in place and pushed the navigation down, with a
       scroll area inside the sidebar's own. It floats under its button now, as the one in the bar does.
-- **Numbered pages from the backend.** Public contract 1.22.0, and the minimum this frontend works with: the three
+- **Numbered pages from the backend.** Public contract 1.22.0 (the minimum this frontend worked with until 1.23.0): the three
   lists answer `total` and take `offset`. "Meus Arquivos", "Sistemas", "Minhas Mesas" and a system's two tabs ask for
   one page each (`listPage`); nothing a user sees changes, except that a library of any size costs one call a page.
   The stand-in backend's lists carry a `total`. Deploy order: the backend first (its health check fails this frontend
   against a 1.21.0 backend).
+- **Replace a material (Story 3.4, part A).** Public contract 1.23.0. A material shows its current version (the newest
+  one not discarded); `Material.serving` (`{pages, size}`) is its ready version while a new one is on its way, else
+  null. Read a missing `serving` (a backend before 1.23.0) as null.
+  - A ready material's page offers two plain pills in `MaterialActions` (`ready`): "Substituir" opens the guided upload
+    in replace mode (`openUpload({replace: {materialId, name}})`, through `useOptionalUploads`) and "Reprocessar" posts
+    `reprocess` at once, with no confirmation (nothing is removed: the backend reads a new version from the stored
+    original while the accepted one keeps serving). "Reprocessar páginas com falha" stays the label while it needs
+    review. While `serving` is set, a line under the state says "A versão anterior (N páginas) continua em uso enquanto a
+    nova não for aceita." (`material.serving.*`).
+  - Replace mode (`UploadsProvider.replace`, `replaceMaterial`): the dialog's title is "Substituir {name}"; it asks for
+    one file or one photo set ("Escolha um só arquivo, ou só fotos." otherwise, and "Enviar" waits), several photos go
+    through the order step with no name to give, then it sends: a file through tus with the metadata `material` alone,
+    a photo set through `createImageSetAction` with `{name, material, images}` (which refuses a kind, language or place
+    beside it). There is no kind, place or language step; the material keeps its own. The tray pairs the new version's
+    row with the material as for any upload. Closing it gives focus back to "Substituir".
+  - New codes `material.version_in_progress` and `material.not_ready`, in both catalogues. The stand-in backend's
+    materials carry `serving: null`; an accepted (or moved) one is ready with `actions: ['reprocess']`, and a reprocess
+    answers a new version `waiting` with the 444 pages of the accepted one serving.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -859,6 +877,14 @@ From public contract 1.22.0 back to 1.7.0, the entries below go newest first.
 Deploy order for public contract 1.22.0 (numbered pages): the backend first (no migration; its three lists answer
 `total` and take `offset`), then the frontend (its health check fails against a 1.21.0 backend, and its paged lists ask
 for one page each). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.23.0 (Story 3.4, part A): the backend first (a material's replacement through tus
+`material` or `ImageSetRequest.material`, the reprocess of a `ready` material, the current version and `serving`; no
+migration), then the frontend (its health check fails against a 1.22.0 backend, and the material page offers
+"Substituir" and "Reprocessar" and reads `serving`). The worker does not change. A rollback goes the other way, but a
+backend rollback below 1.23.0 is not safe once a replacement exists: a 1.22 backend reads a discarded newest
+replacement as the material's state, and its refused-format path deletes the whole material, the serving version
+included. Nothing guards against it in code (see the backend README).
 
 Deploy order for public contract 1.21.0 (Story 3.3): the backend first (its migration `V25__material_belonging.sql`,
 the material's `version`, `size` and `belonging`, and `PATCH /api/v1/materials/{id}`), then the frontend (its health

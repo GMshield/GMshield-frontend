@@ -51,6 +51,13 @@
   line-height: var(--font-section-line-height);
 }
 
+/* The ready version that keeps serving while a new one is on its way (Story 3.4): plain text under the header. */
+.serving {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+}
+
 /* Why a report could not be read: plain text, never a code. */
 .failure {
   max-width: 60ch;

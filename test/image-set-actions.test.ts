@@ -92,6 +92,26 @@ describe('the image set actions (Story 1.21)', () => {
     expect(body).not.toHaveProperty('campaign');
   });
 
+  it('sends a new version of a material with the material alone, never a kind, language or place (Story 3.4)', async () => {
+    const server = await useBackend({ 'POST /api/v1/image-sets': { status: 201, body: { id: SET, materialId: MATERIAL, expiresAt: 'x', images: [] } } });
+    const replacing = { name: 'Livro.pdf', material: MATERIAL, images: request.images };
+
+    expect(await createImageSetAction(replacing)).toEqual({ ok: true, data: { id: SET, materialId: MATERIAL, images: [] } });
+
+    expect(JSON.parse(server.calls[0]!.body)).toEqual(replacing);
+    for (const mixed of [
+      { ...replacing, kind: 'rulebook' },
+      { ...replacing, language: 'detect' },
+      { ...replacing, campaign: CAMPAIGN },
+      { ...replacing, systems: [CAMPAIGN] },
+      { ...replacing, material: '../x' },
+      { ...replacing, material: 7 },
+    ]) {
+      expect(await createImageSetAction(mixed as never), JSON.stringify(mixed).slice(0, 80)).toMatchObject({ ok: false, problem: { code: 'request.invalid' } });
+    }
+    expect(server.calls).toHaveLength(1);
+  });
+
   it('replaces a failed image at its place and leaves one out, refreshing the tray after a drop', async () => {
     const server = await useBackend({
       [`POST /api/v1/image-sets/${SET}/images/2`]: { status: 201, body: { position: 2, uploadId: '0190a0b0-0000-7000-8000-000000000013', expiresAt: 'x' } },

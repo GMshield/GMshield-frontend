@@ -756,7 +756,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         {hasSources ? null : (
           <p className={styles.empty} data-testid="conversation-empty">
             <span>{t('conversation.empty.noSources')}</span>
-            <button type="button" className={styles.emptyAction} onClick={uploads.openUpload}>
+            <button type="button" className={styles.emptyAction} onClick={() => uploads.openUpload()}>
               {t('conversation.empty.upload')}
             </button>
             {review === null ? null : (

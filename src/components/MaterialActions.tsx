@@ -7,6 +7,7 @@ import { translator, type Language } from '@/messages';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import styles from './MaterialActions.module.css';
 import { PillButton, SolidPillButton } from './PillButton';
+import { useOptionalUploads } from './uploads/UploadsProvider';
 
 /** What an action left to say: the text of the backend's refusal, or nothing. */
 export type MaterialActionState = { readonly error: string | null };
@@ -23,6 +24,8 @@ export type MaterialActionsProps = {
   readonly actions: readonly ActionName[];
   /** The pages read, which a discard removes; undefined when none was counted. */
   readonly pages: number | undefined;
+  /** Story 3.4: the material is ready: "Substituir" opens the guided upload for a new version, "Reprocessar" reads it again. */
+  readonly ready?: boolean;
   readonly language: Language;
   readonly action: (previous: MaterialActionState, form: FormData) => Promise<MaterialActionState>;
 };
@@ -33,15 +36,20 @@ export type MaterialActionsProps = {
  * to the Server Action, which refreshes the page; "Descartar" first opens a confirmation that names what goes, with
  * its count. A refusal shows as an alert under the pills. Every action is a native button, so it works from the
  * keyboard, and without JavaScript every action but the confirmed discard still posts.
+ *
+ * Story 3.4: a ready material shows two plain pills, "Substituir", which opens the guided upload to send a new version of
+ * it, and "Reprocessar", which posts at once with no confirmation (nothing is removed: a new version is read from the
+ * stored original while this one keeps serving). "Reprocessar páginas com falha" stays the label while it needs review.
  */
-export function MaterialActions({ id, name, actions, pages, language, action }: MaterialActionsProps) {
+export function MaterialActions({ id, name, actions, pages, ready = false, language, action }: MaterialActionsProps) {
   const t = translator(language);
+  const uploads = useOptionalUploads();
   const [state, formAction, pending] = useActionState(action, INITIAL);
   const [confirming, setConfirming] = useState(false);
   // Which pill was pressed: it alone shows the spinner while the action runs (all of them are disabled meanwhile).
   const [pressed, setPressed] = useState<string | null>(null);
   const running = (name: string) => pending && pressed === name;
-  if (actions.length === 0) {
+  if (actions.length === 0 && !ready) {
     return null;
   }
   let consequence = t('material.discard.noPages');
@@ -72,9 +80,14 @@ export function MaterialActions({ id, name, actions, pages, language, action }: 
             {t('material.actions.retry')}
           </SolidPillButton>
         ) : null}
+        {ready ? (
+          <PillButton aria-haspopup="dialog" disabled={pending} onClick={() => uploads?.openUpload({ replace: { materialId: id, name } })}>
+            {t('material.actions.replace')}
+          </PillButton>
+        ) : null}
         {actions.includes('reprocess') ? (
           <PillButton type="submit" name="action" value="reprocess" disabled={pending} pending={running('reprocess')} onClick={() => setPressed('reprocess')}>
-            {t('material.actions.reprocess')}
+            {ready ? t('material.actions.reprocessReady') : t('material.actions.reprocess')}
           </PillButton>
         ) : null}
         {actions.includes('discard') ? (

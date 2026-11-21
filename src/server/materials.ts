@@ -18,9 +18,14 @@ export type MaterialAction = Material['actions'][number];
 /** Where a material belongs (Story 3.3): its campaign with its system, or its systems; both empty for none. */
 export type MaterialBelonging = Schemas['MaterialBelonging'];
 export type MaterialChange = Schemas['MaterialChange'];
+/** Story 3.4: the ready version that keeps serving while a new one is on its way (`Material.serving`). */
+export type MaterialServing = Schemas['MaterialServing'];
 type ListQuery = NonNullable<operations['listMaterials']['parameters']['query']>;
 
-/** The GM's actions on a material's newest version (Story 1.20), in the order the page shows them. */
+/**
+ * The GM's actions on a material's current version (Story 1.20), in the order the page shows them. From Story 3.4 the
+ * current version is the newest one not discarded, and `reprocess` on a ready material reads a new version.
+ */
 export const MATERIAL_ACTIONS: readonly MaterialAction[] = ['accept', 'reprocess', 'retry', 'discard'];
 
 /** The states the tray lists: everything not yet ready, and what needs the GM. */
@@ -95,9 +100,11 @@ export function getReport(sessionToken: string, id: string, options: CallOptions
 }
 
 /**
- * One of the GM's actions on a material's newest version (Story 1.20): the material as it is after it. A state that
+ * One of the GM's actions on a material's current version (Story 1.20): the material as it is after it. A state that
  * does not allow it is `material.action_unavailable`; too many steps for a reprocess or a retry is
- * `ingestion.too_many_steps`; another owner's material is `request.not_found`.
+ * `ingestion.too_many_steps`; another owner's material is `request.not_found`. From Story 3.4 a reprocess of a ready
+ * material answers it with a new version `waiting` and the ready one as `serving`; `material.version_in_progress` when
+ * another version got there first.
  */
 export function actOnMaterial(
   sessionToken: string,
@@ -129,7 +136,9 @@ export type UploadCompletion = Schemas['UploadCompletion'];
 
 /**
  * Creates an ordered set of images, its order confirmed (Story 1.21): one material whose pages they become, and one tus
- * upload per image, sent through the upload relay. Past 500 images or 2 GiB in all, `upload.set_too_large`.
+ * upload per image, sent through the upload relay. Past 500 images or 2 GiB in all, `upload.set_too_large`. From Story
+ * 3.4, with `material` (and no kind, language or place), the set is a new version of that material:
+ * `material.version_in_progress` or `material.not_ready` (409) when it cannot get one now.
  */
 export function createImageSet(sessionToken: string, body: ImageSetRequest, options: CallOptions = {}): Promise<Result<ImageSet>> {
   return call('materials.image_set', options, (client) =>

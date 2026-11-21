@@ -22,10 +22,12 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // The lists' `total` and `offset`, which the paged screens ask for, added in 1.22.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.22.0');
-    expect(meetsMinimum('1.22.0')).toBe(true);
-    expect(meetsMinimum('1.22.1')).toBe(true);
+    // Story 3.4: a material's replacement, the reprocess of a ready one and the version serving, added in 1.23.0
+    // (1.22.0 added the lists' `total` and `offset`).
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.23.0');
+    expect(meetsMinimum('1.23.0')).toBe(true);
+    expect(meetsMinimum('1.23.1')).toBe(true);
+    expect(meetsMinimum('1.22.0')).toBe(false);
     expect(meetsMinimum('1.21.0')).toBe(false);
     expect(meetsMinimum('1.20.0')).toBe(false);
     expect(meetsMinimum('1.19.0')).toBe(false);

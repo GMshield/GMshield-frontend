@@ -68,7 +68,7 @@ export function Sidebar({ labels, campaign, initialState, trayRows = [] }: Sideb
   const collapse = useRef<HTMLButtonElement>(null);
   const focusNext = useRef<'handle' | 'collapse' | null>(null);
   const addFile = useRef<HTMLButtonElement>(null);
-  const { uploadOpen: uploading, openUpload, closeUpload } = useUploads();
+  const { uploadOpen: uploading, openUpload, closeUpload, replace } = useUploads();
   const focusAfterDialog = useRef(false);
 
   const toggle = useCallback(() => {
@@ -208,7 +208,8 @@ export function Sidebar({ labels, campaign, initialState, trayRows = [] }: Sideb
       <UploadDialog
         open={uploading}
         onClose={() => {
-          focusAfterDialog.current = true;
+          // Story 3.4: opened by a material's "Substituir", the dialog gives focus back to it (the browser does).
+          focusAfterDialog.current = replace === null;
           closeUpload();
         }}
       />

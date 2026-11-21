@@ -63,6 +63,7 @@ const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { trayRows, REFRESH_MS } = await import('@/components/uploads/UploadTray');
 const { MaterialRefresher } = await import('@/components/MaterialRefresher');
 const { Conversation } = await import('@/components/conversation/Conversation');
+const { MaterialActions } = await import('@/components/MaterialActions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -1340,5 +1341,101 @@ describe('the upload id of an address (Story 1.14)', () => {
     expect(uploadIdOf('/api/v1/uploads/abc//')).toBe('abc');
     expect(uploadIdOf('')).toBe('');
     expect(uploadIdOf('/'.repeat(50_000))).toBe('');
+  });
+});
+
+describe('a new version of a material (Story 3.4)', () => {
+  const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
+  const postAction = vi.fn(async () => ({ error: null }));
+
+  /** The shell's provider and sidebar (the only dialog) beside a ready material's actions. */
+  function replaceView(sets?: ImageSetCalls) {
+    return render(
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()} {...(sets === undefined ? {} : { imageSets: sets })}>
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
+        <MaterialActions id={MATERIAL_ID} name="Livro.pdf" actions={['reprocess']} pages={10} ready language="pt-BR" action={postAction} />
+      </UploadsProvider>,
+    );
+  }
+
+  it('"Substituir" opens the guided upload for the material: one file, no kind, place or language, sent with the material only', async () => {
+    const user = userEvent.setup();
+    replaceView();
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+
+    const modal = screen.getByRole('dialog', { name: 'Substituir Livro.pdf' });
+    expect((modal as HTMLDialogElement).open).toBe(true);
+    expect(within(modal).getByText('Passo 1 de 1')).toBeTruthy();
+    expect(within(modal).getByRole('heading', { name: 'Qual é a nova versão?' })).toBeTruthy();
+    const send = within(modal).getByRole('button', { name: 'Enviar' }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(within(modal).queryByRole('button', { name: 'Próximo' })).toBeNull();
+
+    // A file beside photos, or two files, is not one new version.
+    await choose(pdf(), jpeg('foto.jpg'));
+    expect(within(modal).getByRole('alert').textContent).toBe('Escolha um só arquivo, ou só fotos.');
+    expect(send.disabled).toBe(true);
+    await user.click(within(modal).getByRole('button', { name: 'Remover foto.jpg' }));
+    await choose(pdf('Outro.pdf'));
+    expect(send.disabled).toBe(true);
+    await user.click(within(modal).getByRole('button', { name: 'Remover Outro.pdf' }));
+    expect(within(modal).queryByRole('alert')).toBeNull();
+    expect(send.disabled).toBe(false);
+
+    await user.click(send);
+
+    expect(within(modal).getByRole('heading', { name: 'Enviando' })).toBeTruthy();
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.file.name).toBe('Livro do Jogador.pdf');
+    expect(uploads[0]!.options.metadata).toEqual({ material: MATERIAL_ID });
+    expect(postAction).not.toHaveBeenCalled();
+  });
+
+  it('several photos are the pages of the new version, in their order, with no name to give', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    replaceView(sets);
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+    const modal = dialog();
+    await choose(jpeg('a.jpg'), png('b.png'));
+    expect(within(modal).getByText('Passo 1 de 2')).toBeTruthy();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 2 de 2')).toBeTruthy();
+    expect(within(modal).queryByLabelText('Nome do material')).toBeNull();
+    await user.click(within(modal).getByRole('button', { name: 'Descer a.jpg' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+
+    await vi.waitFor(() => expect(sets.created).toHaveLength(1));
+    expect(sets.created[0]).toEqual({
+      name: 'Livro.pdf',
+      material: MATERIAL_ID,
+      images: [
+        { name: 'b.png', length: 6000 },
+        { name: 'a.jpg', length: 6000 },
+      ],
+    });
+    await vi.waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]!.options.resumeUrl).toMatch(/upload-1-1$/);
+  });
+
+  it('one photo is a set of one under the material\'s name, and "Adicionar Arquivo" opens the usual dialog again', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    replaceView(sets);
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+    await choose(jpeg('a.jpg'));
+    await user.click(within(dialog()).getByRole('button', { name: 'Enviar' }));
+    await vi.waitFor(() => expect(sets.created).toEqual([{ name: 'Livro.pdf', material: MATERIAL_ID, images: [{ name: 'a.jpg', length: 6000 }] }]));
+    await user.keyboard('{Escape}');
+    expect(dialog().open).toBe(false);
+    // Opened by "Substituir", the dialog never sends focus to the sidebar's "Adicionar Arquivo".
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    expect(screen.getByRole('dialog', { name: 'Adicionar arquivos' })).toBeTruthy();
+    expect(within(dialog()).getByText('Passo 1 de 4')).toBeTruthy();
   });
 });

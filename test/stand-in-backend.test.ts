@@ -159,13 +159,32 @@ describe('stand-in backend', () => {
     }
   });
 
+  it('answers a reprocess of a ready material (Story 3.4) as a new version waiting while the accepted one serves', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'POST', `/api/v1/materials/${id}/reprocess`, 't')).toMatchObject({
+      status: 200,
+      body: { id, state: 'waiting', actions: [], serving: { pages: 444, size: 134217728 } },
+    });
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({ status: 200, body: { serving: null } });
+    // Every material answer carries serving, as the contract requires.
+    for (const [method, path] of [
+      ['POST', 'accept'],
+      ['POST', 'retry'],
+      ['POST', 'discard'],
+      ['PATCH', ''],
+    ] as const) {
+      const body = answer(contract, method, `/api/v1/materials/${id}${path === '' ? '' : `/${path}`}`, 't').body as Record<string, unknown>;
+      expect('serving' in body, `${method} ${path}`).toBe(true);
+    }
+  });
+
   it('answers the report and the actions (Story 1.20): an outline with its warnings, and a material for each action', () => {
     const id = '0190a0b0-0000-7000-8000-000000000003';
     expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({
       status: 200,
       body: { outline: [{ level: 1, title: 'Equipment', page: 92 }, { level: 2 }], unreadable: [{ firstPage: 40, lastPage: 41 }] },
     });
-    expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: [] } });
+    expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: ['reprocess'] } });
     for (const action of ['reprocess', 'retry', 'discard']) {
       const answered = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't');
       expect(answered.status, action).toBe(200);

@@ -54,6 +54,15 @@ export type LiveSet = { readonly key: string; readonly name: string; readonly id
 /** An image of a set the tray acts on (Story 1.21): the set, its material and name, and the image's place. */
 export type SetTarget = { readonly setId: string; readonly materialId: string; readonly setName: string; readonly position: number };
 
+/**
+ * Story 3.4: the material the guided upload replaces (its id and name), when it was opened from the material's page to
+ * send a new version of it.
+ */
+export type ReplaceTarget = { readonly materialId: string; readonly name: string };
+
+/** What the guided upload is opened for: new materials, or (Story 3.4) a new version of one. */
+export type UploadOpening = { readonly replace?: ReplaceTarget };
+
 /** A resume entry this browser keeps (tus-js-client's URL storage), as the tray reads it. */
 export type StoredUpload = {
   readonly storageKey: string;
@@ -75,7 +84,8 @@ type QueuedSet = {
   readonly kind: 'set';
   readonly key: string;
   readonly name: string;
-  readonly answers: Answers;
+  /** The dialog's answers; for a new version of a material (Story 3.4), that material, which keeps its own. */
+  readonly about: Answers | { readonly material: string };
   readonly members: readonly { readonly key: string; readonly file: UploadFile }[];
 };
 /** Story 1.21: a failed image's new upload to ask for, then to send. */
@@ -101,6 +111,11 @@ export type Uploads = {
    * (Story 1.21) one material whose pages are its images, in their order. Returns the sending.
    */
   send(plan: SendPlan, answers: Answers): number;
+  /**
+   * Story 3.4: queues a new version of the material `target`, one file or one set of images (its pages, in their order),
+   * sent as `send` sends; the material keeps its name, kind, language and place. Returns the sending.
+   */
+  replaceMaterial(target: ReplaceTarget, plan: SendPlan): number;
   /** Goes on with an upload the server has, from its offset: never a new upload. `member` names an image's set. */
   resume(uploadId: string, file: UploadFile, member?: SetTarget): void;
   /**
@@ -119,12 +134,22 @@ export type Uploads = {
   announce(text: string, urgent?: boolean): void;
   /** Story 2.4: whether the guided upload is open; the sidebar's control and the conversation's empty state open it. */
   readonly uploadOpen: boolean;
-  /** Opens the guided upload (Story 2.4: from the conversation's empty state too). */
-  openUpload(): void;
+  /** Story 3.4: the material the guided upload replaces while it is open for that; null otherwise. */
+  readonly replace: ReplaceTarget | null;
+  /**
+   * Opens the guided upload (Story 2.4: from the conversation's empty state too); from Story 3.4, with `replace`, to send
+   * a new version of that material (from its page).
+   */
+  openUpload(opening?: UploadOpening): void;
   closeUpload(): void;
 };
 
 const UploadsContext = createContext<Uploads | null>(null);
+
+/** The uploads of the shell, or null outside it (a component that also renders alone, as in its tests). */
+export function useOptionalUploads(): Uploads | null {
+  return useContext(UploadsContext);
+}
 
 export function useUploads(): Uploads {
   const value = useContext(UploadsContext);
@@ -232,7 +257,11 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   const [polite, setPolite] = useState('');
   const [urgent, setUrgent] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const openUpload = useCallback(() => setUploadOpen(true), []);
+  const [replace, setReplace] = useState<ReplaceTarget | null>(null);
+  const openUpload = useCallback((opening?: UploadOpening) => {
+    setReplace(opening?.replace ?? null);
+    setUploadOpen(true);
+  }, []);
   const closeUpload = useCallback(() => setUploadOpen(false), []);
   const queue = useRef<Queued[]>([]);
   const running = useRef(false);
@@ -362,14 +391,13 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
     async (item: QueuedSet) => {
       announce(stateWords(item.name, 'uploading'));
       let created: Awaited<ReturnType<ImageSetCalls['create']>>;
+      const chosen = item.members.map(({ file }) => ({ name: file.name, length: file.size }));
       try {
-        created = await imageSets.create({
-          name: item.name,
-          kind: item.answers.kind,
-          language: item.answers.language,
-          ...setPlace(item.answers),
-          images: item.members.map(({ file }) => ({ name: file.name, length: file.size })),
-        });
+        created = await imageSets.create(
+          'material' in item.about
+            ? { name: item.name, material: item.about.material, images: chosen }
+            : { name: item.name, kind: item.about.kind, language: item.about.language, ...setPlace(item.about), images: chosen },
+        );
       } catch {
         created = { ok: false, problem: thrown() };
       }
@@ -492,7 +520,28 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         const setKey = `set-${counter.current}`;
         // Added last first, so the live list (newest first) shows them in their order.
         const members = [...set.files].reverse().map((file) => ({ key: addLive(file, batch, null, null, { key: setKey, name: set.name, id: null, position: 0 }), file })).reverse();
-        queue.current.push({ kind: 'set', key: setKey, name: set.name, answers, members });
+        queue.current.push({ kind: 'set', key: setKey, name: set.name, about: answers, members });
+      }
+      void pump();
+      return batch;
+    },
+    [addLive, pump],
+  );
+
+  const replaceMaterial = useCallback(
+    (target: ReplaceTarget, plan: SendPlan) => {
+      counter.current += 1;
+      const batch = counter.current;
+      // Only the material is named: a kind, a language or a place with it is refused (Story 3.4).
+      for (const file of plan.files) {
+        const key = addLive(file, batch, null, null, null);
+        queue.current.push({ kind: 'file', key, file, metadata: { material: target.materialId } });
+      }
+      for (const set of plan.sets) {
+        counter.current += 1;
+        const setKey = `set-${counter.current}`;
+        const members = [...set.files].reverse().map((file) => ({ key: addLive(file, batch, null, null, { key: setKey, name: set.name, id: null, position: 0 }), file })).reverse();
+        queue.current.push({ kind: 'set', key: setKey, name: set.name, about: { material: target.materialId }, members });
       }
       void pump();
       return batch;
@@ -577,16 +626,18 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
       stored,
       dismissed,
       send,
+      replaceMaterial,
       resume,
       replaceImage,
       dropImage,
       dismiss,
       announce,
       uploadOpen,
+      replace,
       openUpload,
       closeUpload,
     }),
-    [texts, belonging, live, stored, dismissed, send, resume, replaceImage, dropImage, dismiss, announce, uploadOpen, openUpload, closeUpload],
+    [texts, belonging, live, stored, dismissed, send, replaceMaterial, resume, replaceImage, dropImage, dismiss, announce, uploadOpen, replace, openUpload, closeUpload],
   );
 
   return (
