@@ -964,6 +964,33 @@
         "required" : [ "version" ],
         "type" : "object"
       },
+      "SystemDeletion" : {
+        "properties" : {
+          "campaigns" : {
+            "description" : "How many campaigns of the system go with it",
+            "example" : 2,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "conversations" : {
+            "description" : "How many conversations of those campaigns go with it",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "materials" : {
+            "description" : "How many materials go with it: those of its campaigns, and those attached to it and to no other system",
+            "example" : 1,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "campaigns", "conversations", "materials" ],
+        "type" : "object"
+      },
       "SystemPage" : {
         "properties" : {
           "items" : {
@@ -1153,7 +1180,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.17.0"
+    "version" : "1.18.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2364,6 +2391,43 @@
       }
     },
     "/api/v1/systems/{id}" : {
+      "delete" : {
+        "operationId" : "deleteSystem",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's game systems (202, no body): from now on it and its campaigns are not found, and its campaigns, their conversations and the materials attached only to it are removed in the background; a material also attached to another system stays and only loses this attachment. Cannot be undone. request.not_found (404) for any other id, a system already being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
       "get" : {
         "operationId" : "getSystem",
         "parameters" : [ {
@@ -2460,6 +2524,52 @@
           }
         },
         "summary" : "Changes one of the account's game systems on the version it names: the system as stored, its version raised by one. request.stale_version (409) when the system has left that version, request.system_name_taken (409) when the account has another system with the new name and edition, the field problems (400) of a creation, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/systems/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getSystemDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SystemDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's game systems if it is deleted: how many campaigns, conversations and materials (those of its campaigns, and those attached to it and to no other system). request.not_found (404) for any other id, a system being deleted included; session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

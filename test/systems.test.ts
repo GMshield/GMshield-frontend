@@ -19,7 +19,7 @@ const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
 const { default: NewSystemPage } = await import('@/app/(signed-in)/systems/new/page');
 const { default: SystemPage } = await import('@/app/(signed-in)/systems/[id]/page');
 const { default: EditSystemPage } = await import('@/app/(signed-in)/systems/[id]/edit/page');
-const { changeSystemAction, createSystemAction, moreCampaigns, moreMaterials, moreSystems } = await import(
+const { changeSystemAction, createSystemAction, deleteSystemAction, moreCampaigns, moreMaterials, moreSystems } = await import(
   '@/app/(signed-in)/systems/actions'
 );
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -266,7 +266,10 @@ describe('a system page (Story 3.1)', () => {
       expect(html).not.toMatch(/<a[^>]*>[^<]*<span[^>]*>A Coroa Partida/);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
-    expect(server.calls.map((call) => call.url)).toEqual([`/api/v1/systems/${ID}`, `/api/v1/campaigns?system=${ID}`, `/api/v1/systems/${ID}`, `/api/v1/campaigns?system=${ID}`]);
+    // The counts of the delete's dialog are read with the tab's list; here the backend has none, so they are left out.
+    expect(server.calls.map((call) => call.url).sort()).toEqual(
+      [`/api/v1/systems/${ID}`, `/api/v1/campaigns?system=${ID}`, `/api/v1/systems/${ID}/deletion`].flatMap((url) => [url, url]).sort(),
+    );
   });
 
   it('the materials tab lists the system\'s materials with their state, each opening its page', async () => {
@@ -327,6 +330,72 @@ describe('a system page (Story 3.1)', () => {
     const calls = server.calls.length;
     expect((await moreCampaigns(start, form({ cursor: CAMPAIGN, system: '../x' }))).error).toBe('O pedido não é válido.');
     expect((await moreMaterials(start, form({ cursor: CAMPAIGN }))).error).toBe('O pedido não é válido.');
+    expect(server.calls).toHaveLength(calls);
+  });
+});
+
+describe('deleting a system (Story 3.1 part B)', () => {
+  const counts = { status: 200, body: { campaigns: 2, conversations: 3, materials: 1 } };
+
+  it('"Excluir" is a danger pill next to "Editar", and its closed confirmation names the counts, in both languages', async () => {
+    await useBackend({
+      [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND },
+      [`GET /api/v1/campaigns?system=${ID}`]: EMPTY,
+      [`GET /api/v1/systems/${ID}/deletion`]: counts,
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: query() }));
+
+      expect(solids(html)).toEqual([messages.systems.page.edit]);
+      expect(html).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*>${messages.systems.page.delete}</button>`));
+      expect(html.indexOf(messages.systems.page.edit)).toBeLessThan(html.indexOf(`>${messages.systems.page.delete}<`));
+      expect(html).toContain(messages.systems.delete.title);
+      expect(html).toContain(
+        language === 'en'
+          ? 'Going with it: 2 campaigns, 3 conversations and 1 material linked only to it. This cannot be undone.'
+          : 'Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito.',
+      );
+      expect(html).toContain(`>${messages.systems.delete.confirm}</button>`);
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    expect(ptBR.systems.delete.consequence).toBe('Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.');
+    for (const messages of [ptBR, en]) {
+      expect(JSON.stringify(messages.systems.delete)).not.toMatch(/!|\p{Extended_Pictographic}/u);
+    }
+  });
+
+  it('without the counts the confirmation names what goes in words', async () => {
+    await useBackend({
+      [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND },
+      [`GET /api/v1/campaigns?system=${ID}`]: EMPTY,
+      [`GET /api/v1/systems/${ID}/deletion`]: problem(503, 'service.unavailable'),
+    });
+    const html = renderToStaticMarkup(await SystemPage({ params: params(ID), searchParams: query() }));
+    expect(html).toContain(ptBR.systems.delete.unknown);
+    expect(html).toContain(`>${ptBR.systems.page.delete}</button>`);
+  });
+
+  it('"Excluir sistema" deletes and opens the list of systems; a refusal comes back as its text; a bad id is never sent', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = {
+      [`DELETE /api/v1/systems/${ID}`]: { status: 202 },
+    };
+    const server = await useBackend(routes);
+
+    expect(await thrownDigest(() => deleteSystemAction({ error: null }, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/systems;/);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([`DELETE /api/v1/systems/${ID}`]);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+
+    // Twice, or another owner's: not found, said in words.
+    routes[`DELETE /api/v1/systems/${ID}`] = problem(404, 'request.not_found');
+    expect(await deleteSystemAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Não encontrado.' });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await deleteSystemAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Not found.' });
+
+    const calls = server.calls.length;
+    for (const fields of [{ id: '../me' }, {}] as Record<string, string>[]) {
+      expect(await deleteSystemAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
+    }
     expect(server.calls).toHaveLength(calls);
   });
 });

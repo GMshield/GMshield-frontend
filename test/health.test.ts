@@ -27,7 +27,7 @@ describe('GET /api/health', () => {
 
   it('Healthy: 200 UP when the backend reports the minimum version or newer', async () => {
     const output = captureOutput();
-    for (const version of ['1.17.0', '1.17.2', '2.0.0']) {
+    for (const version of ['1.18.0', '1.18.2', '2.0.0']) {
       running = await startStandIn(version);
       const response = await health(running.url, `00-${TRACE_ID}-00f067aa0ba902b7-01`);
       expect(response.status).toBe(200);
@@ -55,7 +55,7 @@ describe('GET /api/health', () => {
       unit: 'server.health',
       event: 'health.backend_outdated',
       backendVersion: '1.9.0',
-      minimumVersion: '1.17.0',
+      minimumVersion: '1.18.0',
     });
   });
 

@@ -465,7 +465,7 @@ they sit in `src/`.
   - The stand-in backend answers `indexing: null` and `indexingFailed: null` (its sources are indexed), so a test-mode
     shell shows no indexing notice and reads no count.
 - **Systems (Story 3.1, part A).** Public contract 1.17.0. "Sistemas" lists, creates and edits the GM's systems;
-  deleting one is part B.
+  deleting one is part B (below).
   - `src/server/library.ts` gains `listSystems`, `getSystem`, `createSystem`, `changeSystem` (`PATCH` with the version
     the form was read at) and `listCampaigns` (a system's campaigns); `listMaterials` takes `system` to list a system's
     materials (attached to it or to one of its campaigns).
@@ -496,6 +496,23 @@ they sit in `src/`.
     is the single "Não encontrado." page. A new name shows in the list and in the context bar on their next load.
   - The stand-in backend lists the starter system (no edition, no description, version 0) with its one campaign,
     creates "D&D" 5.2.1, and answers an edit with the starter system at version 1.
+- **Delete a system (Story 3.1, part B).** Public contract 1.18.0. `src/server/library.ts` gains `systemDeletion`
+  (`GET /api/v1/systems/{id}/deletion`: `{campaigns, conversations, materials}`) and `deleteSystem` (`DELETE`, 202 with
+  no body, which `call` reads as ok).
+  - `/systems/<id>` reads the counts with the tab's list and shows "Excluir", a danger pill next to "Editar"
+    (`src/components/SystemActions.tsx`, a client component). It opens the `ConfirmationDialog`: "Excluir este
+    sistema?", "Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito." (each
+    count with its singular for one and its plural otherwise, zero included; `systems.delete.*` in both catalogues;
+    without the counts, it names what goes in words), "Cancelar" and the danger pill "Excluir sistema". Cancelar or Esc
+    closes it and focus goes back to "Excluir".
+  - "Excluir sistema" posts the id to the Server Action `deleteSystemAction` (`src/app/(signed-in)/systems/actions.ts`),
+    which deletes the system and opens `/systems` without it; the backend removes its campaigns, their conversations and
+    the materials attached only to it in the background (they leave every list at once, Meus Arquivos included). A
+    refusal (`request.not_found` for a system already deleted or another owner's) shows its `errorText` as an alert
+    under the pill; a malformed id never reaches the backend. Deleting the system of the only campaign leaves the shell
+    with no campaign: the conversation pages show their "no campaign" state, the composer disabled.
+  - The stand-in backend counts one campaign, one conversation and no material for the starter system, and answers a
+    delete with 202.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -581,7 +598,11 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.17.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.18.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.18.0 (Story 3.1, part B): the backend first (its migration
+`V22__system_deletion.sql` and the deletion routes), then the frontend (its health check fails against a 1.17.0
+backend, and a system's page reads the deletion counts). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.17.0 (Story 3.1, part A): the backend first (its migration
 `V21__system_details.sql` and the systems routes), then the frontend (its health check fails against a 1.16.0 backend,

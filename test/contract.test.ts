@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 3.1: the systems pages list, create and edit systems, added in 1.17.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.17.0');
-    expect(meetsMinimum('1.17.0')).toBe(true);
-    expect(meetsMinimum('1.17.1')).toBe(true);
+    // Story 3.1 part B: a system page deletes its system, added in 1.18.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.18.0');
+    expect(meetsMinimum('1.18.0')).toBe(true);
+    expect(meetsMinimum('1.18.1')).toBe(true);
+    expect(meetsMinimum('1.17.0')).toBe(false);
     expect(meetsMinimum('1.16.0')).toBe(false);
     expect(meetsMinimum('1.15.0')).toBe(false);
     expect(meetsMinimum('1.14.0')).toBe(false);
