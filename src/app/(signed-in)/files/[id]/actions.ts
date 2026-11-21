@@ -1,14 +1,26 @@
 'use server';
 
-import { refresh } from 'next/cache';
+import { refresh, revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 import type { MaterialActionState } from '@/components/MaterialActions';
+import type { MaterialDeleteState } from '@/components/MaterialDeleteAction';
 import type { PlaceFormState } from '@/components/MaterialPlace';
+import type { VersionRemoveState } from '@/components/SupersededVersions';
 import { placeOfBelonging } from '@/components/uploads/types';
 import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { flash } from '@/server/flash';
-import { actOnMaterial, changeMaterial, getMaterial, MATERIAL_ACTIONS, type MaterialAction, type MaterialChange } from '@/server/materials';
+import {
+  actOnMaterial,
+  changeMaterial,
+  deleteMaterial,
+  getMaterial,
+  MATERIAL_ACTIONS,
+  removeVersion,
+  type MaterialAction,
+  type MaterialChange,
+} from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 /** A material's id as the backend mints it; anything else is a material nowhere. */
@@ -115,4 +127,52 @@ export async function changePlaceAction(previous: PlaceFormState, form: FormData
     return { ...previous, error: errorText(current.problem, language), stale: false, saved: false, serial };
   }
   return { ...previous, error: errorText(result.problem, language), stale: false, saved: false, serial };
+}
+
+/**
+ * "Excluir arquivo" in a material's confirmation (Story 3.4 part B): the material is read for its name, the backend
+ * deletes it (its versions, pages, files and index points go in the background), the toast names it, the shared layout
+ * is rendered again, and Meus Arquivos opens without it. A refusal comes back as its text; a malformed id never reaches
+ * the backend. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
+ */
+export async function deleteMaterialAction(_previous: MaterialDeleteState, form: FormData): Promise<MaterialDeleteState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  if (typeof id !== 'string' || !ID.test(id)) {
+    return { error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const material = await getMaterial(token, id);
+  if (!material.ok) {
+    return { error: errorText(material.problem, language) };
+  }
+  const result = await deleteMaterial(token, id);
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.materialDeleted', { name: material.data.name }));
+    revalidatePath('/', 'layout');
+    redirect('/files');
+  }
+  return { error: errorText(result.problem, language) };
+}
+
+/**
+ * "Remover versão" in a superseded version's confirmation (Story 3.4 part B): the backend removes that version (its
+ * pages, files and index points go in the background; the material and its other versions stay), the toast says so,
+ * and the page is refreshed, so "Versões anteriores" no longer lists it. A refusal comes back as its text, and the page
+ * is refreshed too; a malformed id never reaches the backend.
+ */
+export async function removeVersionAction(_previous: VersionRemoveState, form: FormData): Promise<VersionRemoveState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  const versionId = form.get('versionId');
+  if (typeof id !== 'string' || !ID.test(id) || typeof versionId !== 'string' || !ID.test(versionId)) {
+    return { error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  const result = await removeVersion((await currentSessionToken()) ?? '', id, versionId);
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.versionRemoved'));
+  }
+  refresh();
+  return { error: result.ok ? null : errorText(result.problem, language) };
 }

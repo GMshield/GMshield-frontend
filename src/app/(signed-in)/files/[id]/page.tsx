@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
 import { MaterialActions } from '@/components/MaterialActions';
+import { MaterialDeleteAction } from '@/components/MaterialDeleteAction';
 import { MaterialPlace } from '@/components/MaterialPlace';
 import { MaterialRefresher } from '@/components/MaterialRefresher';
 import { PageHeader, PageSubtitle } from '@/components/PageHeader';
@@ -9,18 +10,19 @@ import { PageView, pictureUrl } from '@/components/PageView';
 import { Notice } from '@/components/Notice';
 import { OUTLINE_FIELD, QualityReport, UNREADABLE_FIELD } from '@/components/QualityReport';
 import { StatePill } from '@/components/StatePill';
+import { SupersededVersions } from '@/components/SupersededVersions';
 import { placeOfBelonging, progressOf } from '@/components/uploads/types';
 import { errorText, failureText, messagesFor, translator } from '@/messages';
 import { pageParam } from '@/paging';
 import { currentPreferences } from '@/preferences';
 import { listAllCampaigns, listAllSystems } from '@/server/library';
-import { getMaterial, getPage, getReport } from '@/server/materials';
+import { getMaterial, getPage, getReport, materialDeletion } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { systemLabel } from '../../campaigns/rows';
 import { belongingText } from '../rows';
 
-import { changePlaceAction, materialAction } from './actions';
+import { changePlaceAction, deleteMaterialAction, materialAction, removeVersionAction } from './actions';
 import styles from './page.module.css';
 
 /**
@@ -51,6 +53,10 @@ import styles from './page.module.css';
  * Story 3.4: the page shows the material's current version (the newest one not discarded). A ready material offers
  * "Substituir" (the guided upload, for a new version) and "Reprocessar" ({@link MaterialActions}); while a new version is
  * on its way, a line under the state says that the previous version (its pages) keeps serving until the GM accepts it.
+ *
+ * Story 3.4 part B: "Excluir" in the header ({@link MaterialDeleteAction}) deletes the material after a confirmation
+ * that names its versions and pages (read here with the material), then Meus Arquivos opens with the toast. A material
+ * with superseded versions lists them in "Versões anteriores" ({@link SupersededVersions}), each with "Remover".
  */
 export default async function MaterialPage({
   params,
@@ -67,10 +73,11 @@ export default async function MaterialPage({
   ]);
   const t = translator(language);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const [material, campaigns, systems] = await Promise.all([
+  const [material, campaigns, systems, deletion] = await Promise.all([
     getMaterial(token ?? '', id),
     listAllCampaigns(token ?? ''),
     listAllSystems(token ?? ''),
+    materialDeletion(token ?? '', id),
   ]);
   if (!material.ok) {
     notFoundFor(material.problem);
@@ -91,6 +98,8 @@ export default async function MaterialPage({
       ? errorText(failed.problem, language)
       : null;
   const { state, pages, failure, serving } = material.data;
+  // Story 3.4 part B: a backend before 1.24.0 sends no `superseded` (a rollback): read as none.
+  const superseded = material.data.superseded ?? [];
   const actions = material.data.actions ?? [];
   const reviewed = state === 'needs_review' || state === 'ready';
   const report = reviewed ? await getReport(token ?? '', id) : null;
@@ -121,7 +130,20 @@ export default async function MaterialPage({
   const pagesHref = `/files/${encodeURIComponent(material.data.id)}/pages/1`;
   return (
     <>
-      <PageHeader title={material.data.name} back={{ href: '/files', label: t('shell.entries.files') }}>
+      <PageHeader
+        title={material.data.name}
+        back={{ href: '/files', label: t('shell.entries.files') }}
+        actions={
+          <MaterialDeleteAction
+            key={`delete-${material.data.id}`}
+            id={material.data.id}
+            name={material.data.name}
+            counts={deletion.ok ? deletion.data : null}
+            language={language}
+            action={deleteMaterialAction}
+          />
+        }
+      >
         <PageSubtitle>
           <span className={styles.label}>{t('material.stateLabel')}</span>
           <StatePill state={state} word={word} detail={detail} />
@@ -163,6 +185,13 @@ export default async function MaterialPage({
               picker: messagesFor(language).upload.dialog.belonging,
             }}
             action={changePlaceAction}
+          />
+          <SupersededVersions
+            key={`superseded-${material.data.id}`}
+            materialId={material.data.id}
+            versions={superseded}
+            language={language}
+            action={removeVersionAction}
           />
           {counts.length === 0 ? null : (
             <section className={styles.counts} aria-labelledby="material-counts">

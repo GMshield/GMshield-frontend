@@ -9,9 +9,10 @@ vi.mock('next/headers', () => ({
   }),
 }));
 const refresh = vi.fn();
-vi.mock('next/cache', () => ({ refresh: () => refresh() }));
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({ refresh: () => refresh(), revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 
-const { changePlaceAction, materialAction } = await import('@/app/(signed-in)/files/[id]/actions');
+const { changePlaceAction, deleteMaterialAction, materialAction, removeVersionAction } = await import('@/app/(signed-in)/files/[id]/actions');
 const { NO_PLACE_ANSWER } = await import('@/components/MaterialPlace');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
@@ -40,7 +41,26 @@ function form(fields: Record<string, string>): FormData {
 beforeEach(() => {
   cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
   refresh.mockClear();
+  revalidatePath.mockClear();
 });
+
+/** The digest a `redirect()` call threw, or null. */
+async function thrownDigest(run: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await run();
+    return null;
+  } catch (error) {
+    const digest = String((error as { digest?: unknown }).digest ?? '');
+    if (digest === '') {
+      throw error;
+    }
+    return digest;
+  }
+}
+
+function problemOf(status: number, code: string) {
+  return { status, body: { type: `urn:gmshield:problem:${code}`, title: 'x', status, category: code.split('.')[0], code, params: {}, traceId: 't' } };
+}
 
 afterEach(async () => {
   await backend?.close();
@@ -202,5 +222,73 @@ describe('the change of where a material belongs (Story 3.3)', () => {
       expect((await changePlaceAction(NO_PLACE_ANSWER, form(fields))).error, JSON.stringify(fields)).toBe('O pedido não é válido.');
     }
     expect(server.calls).toHaveLength(calls);
+  });
+});
+
+describe('deleting a material and removing a previous version (Story 3.4 part B)', () => {
+  const VERSION = '0190a0b0-0000-7000-8000-00000000000a';
+
+  it('"Excluir arquivo" reads the material, deletes it, revalidates the layout and opens Meus Arquivos', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = {
+      [`GET /api/v1/materials/${ID}`]: { status: 200, body: { id: ID, name: 'Livro.pdf', state: 'ready', actions: ['reprocess'] } },
+      [`DELETE /api/v1/materials/${ID}`]: { status: 202 },
+    };
+    const server = await useBackend(routes);
+
+    expect(await thrownDigest(() => deleteMaterialAction({ error: null }, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/files;/);
+    // The shared layout (the tray, the bell) is rendered again without it.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([`GET /api/v1/materials/${ID}`, `DELETE /api/v1/materials/${ID}`]);
+    for (const call of server.calls) {
+      expect(call.headers['x-session-token']).toBe(SESSION);
+      expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    }
+    revalidatePath.mockClear();
+
+    // Another owner's or an unknown material: not found, in words, and nothing else happens.
+    routes[`GET /api/v1/materials/${ID}`] = problemOf(404, 'request.not_found');
+    expect(await deleteMaterialAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Não encontrado.' });
+    routes[`GET /api/v1/materials/${ID}`] = { status: 200, body: { id: ID, name: 'Livro.pdf', state: 'ready', actions: [] } };
+    routes[`DELETE /api/v1/materials/${ID}`] = problemOf(404, 'request.not_found');
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await deleteMaterialAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Not found.' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    const count = server.calls.length;
+    for (const fields of [{ id: '../x' }, {}] as Record<string, string>[]) {
+      expect(await deleteMaterialAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
+    }
+    expect(server.calls).toHaveLength(count);
+  });
+
+  it('"Remover versão" removes that version and refreshes the page; a refusal comes back in words', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = {
+      [`DELETE /api/v1/materials/${ID}/versions/${VERSION}`]: { status: 202 },
+    };
+    const server = await useBackend(routes);
+
+    expect(await removeVersionAction({ error: null }, form({ id: ID, versionId: VERSION }))).toEqual({ error: null });
+    expect(server.calls[0]!.method).toBe('DELETE');
+    expect(server.calls[0]!.url).toBe(`/api/v1/materials/${ID}/versions/${VERSION}`);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // A version that is not superseded (ready, in progress or discarded): said in words, and the page refreshed.
+    routes[`DELETE /api/v1/materials/${ID}/versions/${VERSION}`] = problemOf(409, 'material.version_not_removable');
+    expect(await removeVersionAction({ error: null }, form({ id: ID, versionId: VERSION }))).toEqual({
+      error: 'Só uma versão anterior pode ser removida. A página foi atualizada.',
+    });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await removeVersionAction({ error: null }, form({ id: ID, versionId: VERSION }))).toEqual({
+      error: 'Only a previous version can be removed. The page has been updated.',
+    });
+    routes[`DELETE /api/v1/materials/${ID}/versions/${VERSION}`] = problemOf(404, 'request.not_found');
+    expect(await removeVersionAction({ error: null }, form({ id: ID, versionId: VERSION }))).toEqual({ error: 'Not found.' });
+    expect(refresh).toHaveBeenCalledTimes(4);
+    const count = server.calls.length;
+    for (const fields of [{ id: ID, versionId: '../x' }, { id: '../x', versionId: VERSION }, { id: ID }, { versionId: VERSION }] as Record<string, string>[]) {
+      expect(await removeVersionAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
+    }
+    expect(server.calls).toHaveLength(count);
+    expect(refresh).toHaveBeenCalledTimes(4);
   });
 });

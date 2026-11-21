@@ -127,6 +127,42 @@ export function actOnMaterial(
   });
 }
 
+/** Story 3.4 part B: a superseded version of a material, which the GM may remove (`Material.superseded`). */
+export type MaterialSuperseded = Schemas['MaterialSuperseded'];
+/** Story 3.4 part B: what goes with a material if it is deleted: its versions not discarded, and their pages. */
+export type MaterialDeletion = Schemas['MaterialDeletion'];
+
+/** What goes with one of the account's materials if it is deleted (Story 3.4 part B); `request.not_found` for any other id. */
+export function materialDeletion(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<MaterialDeletion>> {
+  return call('materials.deletion', options, (client) =>
+    client.GET('/api/v1/materials/{id}/deletion', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } }),
+  );
+}
+
+/**
+ * Deletes one of the account's materials with every version (Story 3.4 part B; 202, no body: its pages, passages, files
+ * and index points go in the backend). It leaves every list and scope at once; answers that cited it show "fonte
+ * removida". A material already being deleted answers the same; `request.not_found` for any other id.
+ */
+export function deleteMaterial(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('materials.delete', options, (client) =>
+    client.DELETE('/api/v1/materials/{id}', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } }),
+  );
+}
+
+/**
+ * Removes a superseded version of one of the account's materials (Story 3.4 part B; 202, no body); the material and its
+ * other versions stay. `material.version_not_removable` for a version in any other state; `request.not_found` for
+ * another material's version or any other id.
+ */
+export function removeVersion(sessionToken: string, id: string, versionId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('materials.version_remove', options, (client) =>
+    client.DELETE('/api/v1/materials/{id}/versions/{versionId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { id, versionId } },
+    }),
+  );
+}
+
 /** An image set as the backend minted it (Story 1.21): its id, its material, its images' uploads in order. */
 export type ImageSet = Schemas['ImageSet'];
 export type ImageSetRequest = Schemas['ImageSetRequest'];
