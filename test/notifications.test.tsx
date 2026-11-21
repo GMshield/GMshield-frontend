@@ -404,7 +404,7 @@ describe('a list\'s display options, thumbnails and preview', () => {
     const user = userEvent.setup();
     router.replace.mockClear();
     router.refresh.mockClear();
-    const paging = (page: number) => ({ page, pages: 12, total: 115, from: (page - 1) * 10 + 1, to: page * 10, complete: true });
+    const paging = (page: number) => ({ page, pages: 12, total: 115, from: (page - 1) * 10 + 1, to: page * 10 });
     const list = (page: number) => (
       <ItemList label="Seus arquivos" rows={rows} pages={{ paging: paging(page), path: '/files', query: { state: 'ready' } }} viewKey="files" view={DEFAULT_VIEW} language="pt-BR" />
     );
@@ -443,15 +443,12 @@ describe('a list\'s display options, thumbnails and preview', () => {
   });
 
   it('a list of one page says how many rows it has, with no pager; an empty one says nothing', () => {
-    const one = { page: 1, pages: 1, total: 2, from: 1, to: 2, complete: true };
+    const one = { page: 1, pages: 1, total: 2, from: 1, to: 2 };
     const { rerender } = render(<ItemList label="Lista" rows={rows} pages={{ paging: one, path: '/files' }} viewKey="files" view={DEFAULT_VIEW} language="en" />);
     expect(screen.getByText('2 items')).toBeTruthy();
     expect(screen.queryByRole('navigation')).toBeNull();
     rerender(<ItemList label="Lista" rows={[rows[0]!]} pages={{ paging: { ...one, total: 1, to: 1 }, path: '/files' }} viewKey="files" view={DEFAULT_VIEW} language="en" />);
     expect(screen.getByText('1 item')).toBeTruthy();
-    // The server read only the newest 1,000: the count says so.
-    rerender(<ItemList label="Lista" rows={rows} pages={{ paging: { ...one, total: 1000, pages: 100, to: 10, complete: false }, path: '/files' }} viewKey="files" view={DEFAULT_VIEW} language="en" />);
-    expect(screen.getAllByText('(the newest 1,000)').length).toBeGreaterThan(0);
   });
 });
 

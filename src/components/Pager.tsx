@@ -65,10 +65,7 @@ export function Pager({ paging, path, query = {}, field = 'page', language, labe
   };
   return (
     <div className={styles.pager} data-compact={compact ? 'true' : undefined}>
-      <p className={styles.summary}>
-        {summary}
-        {paging.complete ? null : <span className={styles.capped}> {t('paging.capped')}</span>}
-      </p>
+      <p className={styles.summary}>{summary}</p>
       {pages === 1 ? null : (
         <nav aria-label={label ?? t('paging.label')}>
           <ul className={styles.steps}>

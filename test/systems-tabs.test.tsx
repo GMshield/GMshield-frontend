@@ -28,7 +28,10 @@ const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const ID = '0190a0b0-0000-7000-8000-000000000030';
 const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const MATERIAL = '0190a0b0-0000-7000-8000-000000000003';
-const MATERIALS = `GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=failed&system=${ID}&limit=50`;
+const MATERIALS = `GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=failed&system=${ID}&limit=10`;
+
+/** Twelve campaigns of the system: two pages of ten. */
+const CAMPAIGNS = [{ id: CAMPAIGN, name: 'A Coroa Partida' }, ...Array.from({ length: 11 }, (_, index) => ({ id: `0190a0b0-0000-7000-8000-0000000004${String(index).padStart(2, '0')}`, name: `Mesa ${index + 2}` }))];
 
 let backend: Server | undefined;
 
@@ -47,14 +50,13 @@ beforeEach(async () => {
   cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
   const url = await scripted({
     [`GET /api/v1/systems/${ID}`]: { status: 200, body: { id: ID, name: 'D&D', edition: '5.2.1', description: null, version: 0 } },
-    [`GET /api/v1/campaigns?system=${ID}&limit=50`]: {
-      status: 200,
-      body: { items: [{ id: CAMPAIGN, name: 'A Coroa Partida' }, ...Array.from({ length: 11 }, (_, index) => ({ id: `0190a0b0-0000-7000-8000-0000000004${String(index).padStart(2, '0')}`, name: `Mesa ${index + 2}` }))] },
-    },
+    [`GET /api/v1/campaigns?system=${ID}&limit=10`]: { status: 200, body: { items: CAMPAIGNS.slice(0, 10), nextCursor: CAMPAIGNS[9]!.id, total: 12 } },
+    [`GET /api/v1/campaigns?system=${ID}&limit=10&offset=10`]: { status: 200, body: { items: CAMPAIGNS.slice(10), total: 12 } },
     [MATERIALS]: {
       status: 200,
       body: {
         items: [{ id: MATERIAL, name: 'SRD.pdf', state: 'ready', actions: [], version: 0, belonging: { campaign: null, systems: [{ id: ID, name: 'D&D' }] } }],
+        total: 1,
       },
     },
   });

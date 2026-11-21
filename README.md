@@ -58,7 +58,8 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/components/ItemList.tsx`, `ViewMenu.tsx`, `Thumbnail.tsx`, `MaterialPreview.tsx` | a list's rows as a list or a grid, its "Exibição" menu, a material's first-page thumbnail, and the preview panel |
 | `src/flash-cookie.ts`, `src/server/flash.ts` | what a Server Action says once it has succeeded, carried to the next render in `__Host-gmshield-flash` |
 | `src/view-cookie.ts` | how each list is shown, remembered in `__Host-gmshield-view` |
-| `src/paging.ts`, `src/server/every-page.ts`, `src/components/Pager.tsx` | a list a page at a time: the page arithmetic, the read of a whole list from the backend's cursors, and the pager |
+| `src/paging.ts`, `src/server/list-page.ts`, `src/components/Pager.tsx` | a list a page at a time: the page arithmetic, the one call that asks the backend for a page and its total, and the pager |
+| `src/server/every-page.ts` | a whole list read through the backend's cursor, for what needs every campaign or system |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
 | `src/server` | server-only code: settings, logs, trace context, the backend client, the contract check. Every module starts with `import 'server-only'`, so `next build` fails when a client component imports one |
 | `src/server/backend` | the typed backend client; `generated/` holds the generated types (not committed) |
@@ -710,12 +711,13 @@ they sit in `src/`.
       end is the last one; anything that is not a page number is the first (`src/paging.ts`: `pageParam`, `pageOf`,
       `pageWindow`, `pageHref`). "Carregar mais" and its Server Actions (`moreFiles`, `moreSystems`, `moreCampaigns`,
       `moreMaterials`, `moreCampaignsAction`) are gone.
-    - **Where the pages come from.** The backend's lists have a cursor, at most 50 items a call, and no total or
-      offset. `everyPage` (`src/server/every-page.ts`) reads a list to its end, 50 a call (`everyMaterial`,
-      `everySystem`, `everyCampaign`), and the screen cuts its page out of it; that is what gives the pager a total and
-      numbered pages. It stops after 20 calls (1,000 items) and the count then says "(os 1.000 mais recentes)". The
-      layout already read every campaign and system this way. A total and a page offset from the backend would make
-      the walk unnecessary (noted in `docs/_bmad-output/implementation-artifacts/deferred-work.md`).
+    - **Where the pages come from.** One call a page since public contract 1.22.0: `listPage`
+      (`src/server/list-page.ts`) asks the list for `limit` (the page's size) and `offset` (its start; none on the
+      first page) and takes the list's `total` from the answer, so the pager numbers the pages without reading the
+      list. A page past the end is asked again as the last page; the furthest start is 100,000, the backend's limit.
+      Until that contract the screens read a whole list through its cursor to cut a page out of it; `everyPage`
+      (`src/server/every-page.ts`) remains for what needs a whole list: the campaigns and systems a material can be
+      given, and the campaign switcher.
     - **The quality report.** A book's outline has hundreds of sections and a poor scan dozens of unreadable runs, and
       the material's page listed them all. The outline shows 10 at a time and the unreadable pages 12 runs, each with a
       compact pager beside its heading (`?outline=`, `?unreadable=`; each keeps the other, and turning one does not
@@ -747,6 +749,11 @@ they sit in `src/`.
       room under 1280px, the page keeps the ordinary gutter, and the mark is not shown while the sidebar is closed.
     - **The campaign switcher in the sidebar.** Its list opened in place and pushed the navigation down, with a
       scroll area inside the sidebar's own. It floats under its button now, as the one in the bar does.
+- **Numbered pages from the backend.** Public contract 1.22.0, and the minimum this frontend works with: the three
+  lists answer `total` and take `offset`. "Meus Arquivos", "Sistemas", "Minhas Mesas" and a system's two tabs ask for
+  one page each (`listPage`); nothing a user sees changes, except that a library of any size costs one call a page.
+  The stand-in backend's lists carry a `total`. Deploy order: the backend first (its health check fails this frontend
+  against a 1.21.0 backend).
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -847,7 +854,11 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.21.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.22.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.22.0 (numbered pages): the backend first (no migration; its three lists answer
+`total` and take `offset`), then the frontend (its health check fails against a 1.21.0 backend, and its paged lists ask
+for one page each). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.21.0 (Story 3.3): the backend first (its migration `V25__material_belonging.sql`,
 the material's `version`, `size` and `belonging`, and `PATCH /api/v1/materials/{id}`), then the frontend (its health

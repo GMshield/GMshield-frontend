@@ -4,8 +4,9 @@ import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { errorText, translator } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageOf, pageParam } from '@/paging';
-import { everySystem } from '@/server/library';
+import { pageParam } from '@/paging';
+import { listSystems } from '@/server/library';
+import { listPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { systemRow } from './rows';
@@ -29,8 +30,8 @@ export default async function SystemsPage({
   ]);
   const t = translator(language);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const list = await everySystem(token ?? '');
-  const page = list.ok ? pageOf(list.data.items, pageParam(query.page), views.systems.size, list.data.complete) : null;
+  const list = await listPage((ask) => listSystems(token ?? '', ask), pageParam(query.page), views.systems.size);
+  const page = list.ok ? list.data : null;
   return (
     <>
       <PageHeader

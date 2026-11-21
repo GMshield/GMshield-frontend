@@ -109,9 +109,15 @@
             "example" : "0190a0b0-0000-7000-8000-000000000002",
             "format" : "uuid",
             "type" : "string"
+          },
+          "total" : {
+            "description" : "How many items the list has in all, whatever the page",
+            "example" : 4,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "items" ],
+        "required" : [ "items", "total" ],
         "type" : "object"
       },
       "CampaignSummary" : {
@@ -593,9 +599,15 @@
             "example" : "0190a0b0-0000-7000-8000-000000000003",
             "format" : "uuid",
             "type" : "string"
+          },
+          "total" : {
+            "description" : "How many materials the list has in all for the same states and system, whatever the page; it counts a material whose every place is being deleted until that deletion is done",
+            "example" : 61,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "items" ],
+        "required" : [ "items", "total" ],
         "type" : "object"
       },
       "MaterialPageCount" : {
@@ -1240,9 +1252,15 @@
             "example" : "0190a0b0-0000-7000-8000-000000000001",
             "format" : "uuid",
             "type" : "string"
+          },
+          "total" : {
+            "description" : "How many items the list has in all, whatever the page",
+            "example" : 3,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "items" ],
+        "required" : [ "items", "total" ],
         "type" : "object"
       },
       "SystemSummary" : {
@@ -1438,7 +1456,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.21.0"
+    "version" : "1.22.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1487,6 +1505,17 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -1510,7 +1539,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The account's campaigns, of one of its systems when system is given, newest first, each with its system; the archived ones only with archived=true, else the others. request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); request.invalid (400) for an archived other than true or false, a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "summary" : "The account's campaigns, of one of its systems when system is given, newest first, each with its system; the archived ones only with archived=true, else the others. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); request.invalid (400) for an archived other than true or false, a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
         "tags" : [ "library" ]
       },
       "post" : {
@@ -2181,6 +2210,17 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -2204,7 +2244,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The account's materials whose newest version is in one of the given states (every material without a state), newest first, with the upload's progress on those still uploading; with system, only those attached to that system or to one of its campaigns. A material whose every place is being deleted is left out, so a page may hold fewer than the limit. request.invalid (400) for an unknown state, a limit outside 1 to 50 or a malformed cursor; request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); session.required (401) without a session.",
+        "summary" : "The account's materials whose newest version is in one of the given states (every material without a state), newest first, with the upload's progress on those still uploading; with system, only those attached to that system or to one of its campaigns. A material whose every place is being deleted is left out, so a page may hold fewer than the limit. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.invalid (400) for an unknown state, a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -2909,6 +2949,17 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -2932,7 +2983,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The account's game systems, newest first. request.invalid (400) for a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "summary" : "The account's game systems, newest first. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.invalid (400) for a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
         "tags" : [ "library" ]
       },
       "post" : {

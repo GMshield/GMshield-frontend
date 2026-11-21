@@ -22,10 +22,11 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 3.3: where a material belongs, its change and "Meus Arquivos", added in 1.21.0.
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.21.0');
-    expect(meetsMinimum('1.21.0')).toBe(true);
-    expect(meetsMinimum('1.21.1')).toBe(true);
+    // The lists' `total` and `offset`, which the paged screens ask for, added in 1.22.0.
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.22.0');
+    expect(meetsMinimum('1.22.0')).toBe(true);
+    expect(meetsMinimum('1.22.1')).toBe(true);
+    expect(meetsMinimum('1.21.0')).toBe(false);
     expect(meetsMinimum('1.20.0')).toBe(false);
     expect(meetsMinimum('1.19.0')).toBe(false);
     expect(meetsMinimum('1.18.0')).toBe(false);

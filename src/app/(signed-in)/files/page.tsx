@@ -5,8 +5,9 @@ import { EmptyState, PageHeader, Tabs } from '@/components/PageHeader';
 import { PillLink } from '@/components/PillLink';
 import { errorText, translator } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageOf, pageParam } from '@/paging';
-import { everyMaterial } from '@/server/materials';
+import { pageParam } from '@/paging';
+import { listPage } from '@/server/list-page';
+import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { previewPageAction } from './actions';
@@ -43,8 +44,12 @@ export default async function FilesPage({
   const t = translator(language);
   const filter = filterOf(query.state);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const list = await everyMaterial(token ?? '', statesOf(filter));
-  const page = list.ok ? pageOf(list.data.items, pageParam(query.page), views.files.size, list.data.complete) : null;
+  const list = await listPage(
+    (ask) => listMaterials(token ?? '', statesOf(filter), ask),
+    pageParam(query.page),
+    views.files.size,
+  );
+  const page = list.ok ? list.data : null;
   const filters = (
     <Tabs
       variant="chips"

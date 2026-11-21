@@ -49,7 +49,7 @@ const THURSDAY = { id: ID, name: 'Mesa de quinta', system: DND, archived: false,
 const FIRST = { id: STARTER, name: 'Primeira campanha', system: UNTITLED, archived: false, version: 0 };
 const ROW = { id: ID, name: 'Mesa de quinta', system: { id: DND_ID, name: 'D&D', edition: '5.2.1' }, archived: false };
 const STARTER_ROW = { id: STARTER, name: 'Primeira campanha', system: { id: STARTER_SYSTEM, name: 'Sistema sem nome', edition: null }, archived: false };
-const EMPTY = { status: 200, body: { items: [] } };
+const EMPTY = { status: 200, body: { items: [], total: 0 } };
 const START = { error: null, done: 0 };
 
 let backend: Scripted | undefined;
@@ -109,7 +109,7 @@ afterEach(async () => {
 
 describe('Minhas Mesas (Story 3.2)', () => {
   it('lists the campaigns in use with their system, each opening its page, under one solid "Nova campanha", in both languages', async () => {
-    const server = await useBackend({ 'GET /api/v1/campaigns?archived=false&limit=50': { status: 200, body: { items: [ROW, STARTER_ROW] } } });
+    const server = await useBackend({ 'GET /api/v1/campaigns?archived=false&limit=10': { status: 200, body: { items: [ROW, STARTER_ROW], total: 2 } } });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
       const html = renderToStaticMarkup(await CampaignsPage({ searchParams: query() }));
@@ -134,7 +134,7 @@ describe('Minhas Mesas (Story 3.2)', () => {
       expect(html).not.toContain(`aria-label="${messages.paging.label}"`);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
-    expect(calls(server)).toEqual(['GET /api/v1/campaigns?archived=false&limit=50', 'GET /api/v1/campaigns?archived=false&limit=50']);
+    expect(calls(server)).toEqual(['GET /api/v1/campaigns?archived=false&limit=10', 'GET /api/v1/campaigns?archived=false&limit=10']);
     expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
     for (const messages of [ptBR, en]) {
       expect(JSON.stringify(messages.campaigns)).not.toMatch(/!|\p{Extended_Pictographic}/u);
@@ -143,8 +143,8 @@ describe('Minhas Mesas (Story 3.2)', () => {
 
   it('"Arquivadas" lists the archived campaigns; each filter has its own empty sentence', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
-      'GET /api/v1/campaigns?archived=true&limit=50': { status: 200, body: { items: [{ ...ROW, archived: true }] } },
-      'GET /api/v1/campaigns?archived=false&limit=50': EMPTY,
+      'GET /api/v1/campaigns?archived=true&limit=10': { status: 200, body: { items: [{ ...ROW, archived: true }], total: 1 } },
+      'GET /api/v1/campaigns?archived=false&limit=10': EMPTY,
     };
     await useBackend(routes);
     let html = renderToStaticMarkup(await CampaignsPage({ searchParams: query({ archived: 'true' }) }));
@@ -157,19 +157,20 @@ describe('Minhas Mesas (Story 3.2)', () => {
     expect(html).toContain(ptBR.campaigns.empty);
     expect(html).not.toContain('<ul aria-label');
     expect(solids(html)).toEqual(['Nova campanha']);
-    routes['GET /api/v1/campaigns?archived=true&limit=50'] = EMPTY;
+    routes['GET /api/v1/campaigns?archived=true&limit=10'] = EMPTY;
     cookieJar['__Host-gmshield-lang'] = 'en';
     html = renderToStaticMarkup(await CampaignsPage({ searchParams: query({ archived: 'true' }) }));
     expect(html).toContain('No archived campaign.');
     expect(ptBR.campaigns.empty).toBe('Uma campanha reúne as conversas e os materiais de uma mesa de jogo.');
   });
 
-  it('a long list is paged within its filter: the page links keep "Arquivadas", and every backend page is read', async () => {
+  it('a long list is paged within its filter: the page links keep "Arquivadas", and each page is one call', async () => {
     const row = (index: number) => ({ ...ROW, id: `0190a0b0-0000-7000-8000-0000000005${String(index).padStart(2, '0')}`, name: `Mesa ${index + 1}`, archived: true });
     const all = Array.from({ length: 53 }, (_, index) => row(index));
+    const ARCHIVED = 'GET /api/v1/campaigns?archived=true&limit=10';
     const server = await useBackend({
-      'GET /api/v1/campaigns?archived=true&limit=50': { status: 200, body: { items: all.slice(0, 50), nextCursor: all[49]!.id } },
-      [`GET /api/v1/campaigns?archived=true&limit=50&cursor=${all[49]!.id}`]: { status: 200, body: { items: all.slice(50) } },
+      [ARCHIVED]: { status: 200, body: { items: all.slice(0, 10), nextCursor: all[9]!.id, total: 53 } },
+      [`${ARCHIVED}&offset=50`]: { status: 200, body: { items: all.slice(50), total: 53 } },
     });
     let html = renderToStaticMarkup(await CampaignsPage({ searchParams: query({ archived: 'true' }) }));
     expect(html).toContain('1–10 de 53');
@@ -179,10 +180,6 @@ describe('Minhas Mesas (Story 3.2)', () => {
     // Six pages: every number shows; the last is a link.
     expect(linkTo(html, '/campaigns?archived=true&amp;page=6')).toContain('aria-label="Página 6"');
     expect(html).not.toContain('Carregar mais');
-    expect(calls(server)).toEqual([
-      'GET /api/v1/campaigns?archived=true&limit=50',
-      `GET /api/v1/campaigns?archived=true&limit=50&cursor=${all[49]!.id}`,
-    ]);
 
     html = renderToStaticMarkup(await CampaignsPage({ searchParams: query({ archived: 'true', page: '6' }) }));
     expect(html).toContain('51–53 de 53');
@@ -191,6 +188,8 @@ describe('Minhas Mesas (Story 3.2)', () => {
     // The first page has no `page` field: the same address as the filter itself.
     const first = [...html.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]).filter((tag) => tag.includes('href="/campaigns?archived=true"'));
     expect(first.some((tag) => tag.includes('aria-label="Página 1"'))).toBe(true);
+    // The filter goes with the page's size and start: the backend counts and skips within it.
+    expect(calls(server)).toEqual([ARCHIVED, `${ARCHIVED}&offset=50`]);
   });
 });
 

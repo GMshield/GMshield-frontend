@@ -20,9 +20,10 @@ vi.mock('next/navigation', async (importOriginal) => ({
 const { readFileSync } = await import('node:fs');
 const { join } = await import('node:path');
 const { renderToStaticMarkup } = await import('react-dom/server');
-const { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageHref, pageOf, pageParam, pageWindow } = await import('@/paging');
+const { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageHref, pageOf, pageParam, pageWindow, pagesOf, pagingOf } = await import('@/paging');
 const { everyPage, MOST_LIST_CALLS } = await import('@/server/every-page');
-const { everyMaterial } = await import('@/server/materials');
+const { MOST_OFFSET, listPage } = await import('@/server/list-page');
+const { listMaterials } = await import('@/server/materials');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { default: PagesIndex } = await import('@/app/(signed-in)/files/[id]/pages/page');
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
@@ -61,16 +62,26 @@ describe('the page arithmetic', () => {
   });
 
   it('cuts a page out of a list and says where it stands', () => {
-    expect(pageOf(items, 1, 10)).toEqual({ rows: items.slice(0, 10), paging: { page: 1, pages: 3, total: 23, from: 1, to: 10, complete: true } });
-    expect(pageOf(items, 3, 10)).toEqual({ rows: [21, 22, 23], paging: { page: 3, pages: 3, total: 23, from: 21, to: 23, complete: true } });
+    expect(pageOf(items, 1, 10)).toEqual({ rows: items.slice(0, 10), paging: { page: 1, pages: 3, total: 23, from: 1, to: 10 } });
+    expect(pageOf(items, 3, 10)).toEqual({ rows: [21, 22, 23], paging: { page: 3, pages: 3, total: 23, from: 21, to: 23 } });
     // Past the end is the last page; before the start, or not a number, the first.
     expect(pageOf(items, 9, 10).paging.page).toBe(3);
     expect(pageOf(items, 0, 10).paging.page).toBe(1);
     expect(pageOf(items, Number.NaN, 10).paging.page).toBe(1);
     // An exact multiple has no empty last page, and an empty list is one empty page.
     expect(pageOf(items.slice(0, 20), 2, 10).paging).toMatchObject({ pages: 2, from: 11, to: 20 });
-    expect(pageOf([], 1, 10)).toEqual({ rows: [], paging: { page: 1, pages: 1, total: 0, from: 0, to: 0, complete: true } });
-    expect(pageOf(items, 1, 10, false).paging.complete).toBe(false);
+    expect(pageOf([], 1, 10)).toEqual({ rows: [], paging: { page: 1, pages: 1, total: 0, from: 0, to: 0 } });
+  });
+
+  it('describes a page the backend cut: its start, the rows it holds and the list\'s total', () => {
+    expect(pagesOf(0, 10)).toBe(1);
+    expect(pagesOf(10, 10)).toBe(1);
+    expect(pagesOf(11, 10)).toBe(2);
+    expect(pagingOf(61, 20, 10, 10)).toEqual({ page: 3, pages: 7, total: 61, from: 21, to: 30 });
+    expect(pagingOf(61, 60, 1, 10)).toEqual({ page: 7, pages: 7, total: 61, from: 61, to: 61 });
+    // A page that holds fewer rows than its size (a material on it was leaving) says what it shows.
+    expect(pagingOf(61, 0, 9, 10)).toEqual({ page: 1, pages: 7, total: 61, from: 1, to: 9 });
+    expect(pagingOf(0, 0, 0, 10)).toEqual({ page: 1, pages: 1, total: 0, from: 0, to: 0 });
   });
 
   it('reads a page number from the address, and anything else is the first page', () => {
@@ -108,6 +119,75 @@ describe('the page arithmetic', () => {
   });
 });
 
+describe('one page of a list the backend pages', () => {
+  const answer = (items: number[], total: number) => ({ ok: true as const, data: { items, total } });
+
+  it('asks once, with the page\'s size and its start, and takes the total from the answer', async () => {
+    const asked: unknown[] = [];
+    const load = async (query: { limit: number; offset?: number }) => {
+      asked.push(query);
+      return answer([21, 22, 23], 23);
+    };
+    expect(await listPage(load, 3, 10)).toEqual({ ok: true, data: { rows: [21, 22, 23], paging: { page: 3, pages: 3, total: 23, from: 21, to: 23 } } });
+    expect(asked).toEqual([{ limit: 10, offset: 20 }]);
+    // The first page sends no offset; anything that is not a page is the first.
+    asked.length = 0;
+    for (const page of [1, 0, -4, Number.NaN]) {
+      await listPage(load, page, 20);
+    }
+    expect(asked).toEqual([{ limit: 20 }, { limit: 20 }, { limit: 20 }, { limit: 20 }]);
+  });
+
+  it('asks again for the last page when the one asked is past the end, and never past the backend\'s furthest start', async () => {
+    const asked: unknown[] = [];
+    const load = async (query: { limit: number; offset?: number }) => {
+      asked.push(query);
+      return answer(query.offset === 20 ? [21, 22, 23] : [], 23);
+    };
+    const page = await listPage(load, 99, 10);
+    expect(page.ok && page.data.paging).toEqual({ page: 3, pages: 3, total: 23, from: 21, to: 23 });
+    expect(asked).toEqual([{ limit: 10, offset: 980 }, { limit: 10, offset: 20 }]);
+    // An empty list is one call and one empty page; so is an empty first page.
+    asked.length = 0;
+    expect(await listPage(async (query) => (asked.push(query), answer([], 0)), 4, 10)).toEqual({
+      ok: true,
+      data: { rows: [], paging: { page: 1, pages: 1, total: 0, from: 0, to: 0 } },
+    });
+    expect(asked).toEqual([{ limit: 10, offset: 30 }]);
+    // The backend refuses a start past 100,000: the furthest page asked for starts there, on a page boundary.
+    asked.length = 0;
+    await listPage(async (query) => (asked.push(query), answer([1], 5_000_000)), 999_999, 50);
+    expect(asked).toEqual([{ limit: 50, offset: MOST_OFFSET }]);
+    asked.length = 0;
+    await listPage(async (query) => (asked.push(query), answer([1], 5_000_000)), 999_999, 20);
+    expect(asked[0]).toEqual({ limit: 20, offset: MOST_OFFSET });
+  });
+
+  it('a refusal is the answer, on the first call or on the second', async () => {
+    const refusal = { ok: false as const, status: 503, problem: { code: 'server.unavailable' } };
+    expect(await listPage<number>(async () => refusal, 2, 10)).toEqual(refusal);
+    let calls = 0;
+    expect(await listPage<number>(async () => (++calls === 1 ? answer([], 5) : refusal), 9, 10)).toEqual(refusal);
+    expect(calls).toBe(2);
+  });
+
+  it('sends the page\'s size and start to the backend with the list\'s own filters', async () => {
+    const system = '0190a0b0-0000-7000-8000-000000000001';
+    const material = (id: string) => ({ id, name: `${id}.pdf`, state: 'ready', actions: [], version: 0, belonging: NOWHERE });
+    const base = `GET /api/v1/materials?state=ready&system=${system}&limit=10`;
+    const server = await useBackend({
+      [base]: { status: 200, body: { items: [material('a')], total: 11 } },
+      [`${base}&offset=10`]: { status: 200, body: { items: [material('k')], total: 11 } },
+    });
+    const first = await listPage((ask) => listMaterials(SESSION, ['ready'], { system, ...ask }), 1, 10);
+    const second = await listPage((ask) => listMaterials(SESSION, ['ready'], { system, ...ask }), 2, 10);
+    expect(first.ok && first.data.paging).toEqual({ page: 1, pages: 2, total: 11, from: 1, to: 1 });
+    expect(second.ok && second.data.rows.map((row) => row.id)).toEqual(['k']);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([base, `${base}&offset=10`]);
+    expect(server.calls.every((call) => call.headers['x-session-token'] === SESSION)).toBe(true);
+  });
+});
+
 describe('a whole list from the backend\'s cursors', () => {
   it('reads to the end, stops at 1,000 items and says the list was longer, and a refusal is the answer', async () => {
     let calls = 0;
@@ -131,22 +211,6 @@ describe('a whole list from the backend\'s cursors', () => {
       cursor === undefined ? { ok: true, data: { items: [1], nextCursor: 'a' } } : { ok: false, status: 503, problem: { code: 'server.unavailable' } },
     );
     expect(refused).toEqual({ ok: false, status: 503, problem: { code: 'server.unavailable' } });
-  });
-
-  it('asks for the materials 50 at a time, with the states and the system, and follows the cursor', async () => {
-    const cursor = '0190a0b0-0000-7000-8000-000000000041';
-    const system = '0190a0b0-0000-7000-8000-000000000001';
-    const material = (id: string) => ({ id, name: `${id}.pdf`, state: 'ready', actions: [], version: 0, belonging: NOWHERE });
-    const first = `GET /api/v1/materials?state=ready&system=${system}&limit=50`;
-    const server = await useBackend({
-      [first]: { status: 200, body: { items: [material('a')], nextCursor: cursor } },
-      [`${first}&cursor=${cursor}`]: { status: 200, body: { items: [material('b')] } },
-    });
-    const all = await everyMaterial(SESSION, ['ready'], { system });
-    expect(all.ok && all.data.items.map((item) => item.id)).toEqual(['a', 'b']);
-    expect(all.ok && all.data.complete).toBe(true);
-    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([first, `${first}&cursor=${cursor}`]);
-    expect(server.calls.every((call) => call.headers['x-session-token'] === SESSION)).toBe(true);
   });
 });
 

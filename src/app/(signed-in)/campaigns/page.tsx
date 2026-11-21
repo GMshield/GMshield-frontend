@@ -4,8 +4,9 @@ import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { errorText, translator } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageOf, pageParam } from '@/paging';
-import { everyCampaign } from '@/server/library';
+import { pageParam } from '@/paging';
+import { listCampaigns } from '@/server/library';
+import { listPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { campaignListRow } from './rows';
@@ -26,8 +27,12 @@ export default async function CampaignsPage({
   const t = translator(language);
   const archived = query.archived === 'true';
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const list = await everyCampaign(token ?? '', { archived });
-  const page = list.ok ? pageOf(list.data.items, pageParam(query.page), views.campaigns.size, list.data.complete) : null;
+  const list = await listPage(
+    (ask) => listCampaigns(token ?? '', { archived, ...ask }),
+    pageParam(query.page),
+    views.campaigns.size,
+  );
+  const page = list.ok ? list.data : null;
   const filters = [
     { key: 'inUse', href: '/campaigns', on: !archived },
     { key: 'archived', href: '/campaigns?archived=true', on: archived },

@@ -6,9 +6,10 @@ import { PillLink } from '@/components/PillLink';
 import { SystemActions } from '@/components/SystemActions';
 import { errorText, translator } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageOf, pageParam } from '@/paging';
-import { everyCampaign, getSystem, systemDeletion } from '@/server/library';
-import { everyMaterial } from '@/server/materials';
+import { pageParam } from '@/paging';
+import { getSystem, listCampaigns, systemDeletion } from '@/server/library';
+import { listPage } from '@/server/list-page';
+import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { previewPageAction } from '../../files/actions';
@@ -57,21 +58,19 @@ export default async function SystemPage({
   const at = pageParam(query.page);
   const [page, deletion] = await Promise.all([
     tab === 'campaigns'
-      ? everyCampaign(token ?? '', { system: system.data.id }).then((result) =>
-          result.ok
-            ? { ok: true as const, ...pageOf(result.data.items.map(campaignRow), at, views.campaigns.size, result.data.complete) }
-            : result,
+      ? listPage((ask) => listCampaigns(token ?? '', { system: system.data.id, ...ask }), at, views.campaigns.size).then(
+          (result) => (result.ok ? { ok: true as const, rows: result.data.rows.map(campaignRow), paging: result.data.paging } : result),
         )
-      : everyMaterial(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id }).then((result) =>
+      : listPage(
+          (ask) => listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id, ...ask }),
+          at,
+          views.files.size,
+        ).then((result) =>
           result.ok
             ? {
                 ok: true as const,
-                ...pageOf(
-                  result.data.items.map((material) => materialRow(material, t, language, system.data.id)),
-                  at,
-                  views.files.size,
-                  result.data.complete,
-                ),
+                rows: result.data.rows.map((material) => materialRow(material, t, language, system.data.id)),
+                paging: result.data.paging,
               }
             : result,
         ),
