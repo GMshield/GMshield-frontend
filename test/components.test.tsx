@@ -754,6 +754,31 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     expect(screen.getByRole('dialog').textContent).toContain("Going with it: this campaign's conversations and materials. This cannot be undone.");
   });
 
+  it('"Excluir" ignores clicks while the delete runs, and takes them again once it ends', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: null }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(true);
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
     const user = userEvent.setup();
     const { action } = recorder({ error: 'Não encontrado.' });
