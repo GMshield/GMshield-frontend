@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import { parseCitation, parseDone, postQuestion, stopTurn, turnEventsUrl, type Citation, type SourceReference } from '@/client/conversation';
@@ -179,6 +180,46 @@ function newTurn(key: number, question: string): ShownTurn {
 /** A numeric event id, or null for one that is not a sequence. */
 function sequenceOf(id: string): number | null {
   return /^\d{1,18}$/.test(id) ? Number(id) : null;
+}
+
+/**
+ * The conversation screen with no campaign (Story 3.2): every campaign is archived or gone, so nothing can be asked. The
+ * composer is there but disabled, with the reason above it and a link to `/campaigns/new`; the reason names the
+ * disabled field (`aria-describedby`).
+ */
+export function NoCampaignConversation({ language }: { readonly language: Language }) {
+  const t = translator(language);
+  return (
+    <section className={styles.conversation} aria-label={t('conversation.heading')}>
+      <h1 className={styles.visuallyHidden}>{t('conversation.heading')}</h1>
+      <div className={styles.dock}>
+        <p className={styles.empty} id="conversation-no-campaign" data-testid="conversation-no-campaign">
+          <span>{t('conversation.noCampaign')}</span>
+          <Link className={styles.emptyAction} href="/campaigns/new">
+            {t('conversation.newCampaign')}
+          </Link>
+        </p>
+        <form className={styles.composer}>
+          <label className={styles.visuallyHidden} htmlFor="conversation-question">
+            {t('conversation.composer.label')}
+          </label>
+          <textarea
+            id="conversation-question"
+            className={styles.field}
+            rows={1}
+            placeholder={t('conversation.composer.placeholder')}
+            disabled
+            aria-describedby="conversation-no-campaign"
+          />
+          <button type="submit" className={styles.send} aria-label={t('conversation.composer.send')} disabled>
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24">
+              <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
+    </section>
+  );
 }
 
 /**

@@ -260,10 +260,9 @@ describe('a system page (Story 3.1)', () => {
       expect(linkTo(html, `/systems/${ID}?tab=materials`)).not.toContain('aria-current');
       expect(html).toContain(`>${messages.systems.page.campaigns}</a>`);
       expect(html).toContain(`>${messages.systems.page.materials}</a>`);
-      // Campaign rows open nothing yet (Story 3.2).
+      // Story 3.2: a campaign row opens the campaign's page.
       expect(html).toContain('A Coroa Partida');
-      expect(html).not.toContain(`href="/campaigns/${CAMPAIGN}"`);
-      expect(html).not.toMatch(/<a[^>]*>[^<]*<span[^>]*>A Coroa Partida/);
+      expect(html).toContain(`href="/campaigns/${CAMPAIGN}"`);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
     // The counts of the delete's dialog are read with the tab's list; here the backend has none, so they are left out.
@@ -319,7 +318,7 @@ describe('a system page (Story 3.1)', () => {
     });
     const start = { rows: [], nextCursor: CAMPAIGN, error: null, added: 0 };
     expect(await moreCampaigns(start, form({ cursor: CAMPAIGN, system: ID }))).toEqual({
-      rows: [{ id: OTHER, label: 'Segunda', detail: null, href: null, state: null }],
+      rows: [{ id: OTHER, label: 'Segunda', detail: null, href: `/campaigns/${OTHER}`, state: null }],
       nextCursor: null,
       error: null,
       added: 1,

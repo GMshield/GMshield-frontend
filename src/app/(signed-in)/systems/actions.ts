@@ -166,7 +166,7 @@ export async function moreCampaigns(previous: MoreState, form: FormData): Promis
     if (typeof system !== 'string' || !ID.test(system)) {
       return { error: { category: 'request', code: 'request.invalid' } };
     }
-    const page = await listCampaigns(token, system, { cursor });
+    const page = await listCampaigns(token, { system, cursor });
     return page.ok ? { rows: page.data.items.map(campaignRow), nextCursor: page.data.nextCursor ?? null } : { error: page.problem };
   });
 }

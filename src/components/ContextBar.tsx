@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import styles from './ContextBar.module.css';
 
@@ -8,17 +9,20 @@ export type ContextBarProps = {
   /** The current campaign and its system, or none (the words for none are shown instead). */
   readonly current: { readonly system: string; readonly campaign: string } | null;
   readonly none: string;
+  /** In place of the campaign's name: the campaign switcher (Story 3.2); without it, a link to Minhas Mesas. */
+  readonly switcher?: ReactNode;
 };
 
 /**
  * One line above the main column: "system › campaign" in the label style and the muted colour; under 768px the
- * campaign name only. The names lead to Sistemas and Minhas Mesas until the campaign switcher (Epic 3).
+ * campaign name only. The system's name leads to Sistemas; from Story 3.2 the campaign's name is the campaign switcher,
+ * which also opens when there is no campaign.
  */
-export function ContextBar({ label, current, none }: ContextBarProps) {
+export function ContextBar({ label, current, none, switcher }: ContextBarProps) {
   return (
     <nav className={styles.bar} aria-label={label}>
       {current === null ? (
-        <span className={styles.none}>{none}</span>
+        (switcher ?? <span className={styles.none}>{none}</span>)
       ) : (
         <>
           <Link className={`${styles.link} ${styles.system}`} href="/systems">
@@ -27,9 +31,11 @@ export function ContextBar({ label, current, none }: ContextBarProps) {
           <span className={styles.separator} aria-hidden="true">
             ›
           </span>
-          <Link className={styles.link} href="/campaigns">
-            {current.campaign}
-          </Link>
+          {switcher ?? (
+            <Link className={styles.link} href="/campaigns">
+              {current.campaign}
+            </Link>
+          )}
         </>
       )}
     </nav>

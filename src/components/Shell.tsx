@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 
+import { chooseCampaignAction } from '@/app/(signed-in)/campaigns/actions';
 import { createImageSetAction, dropSetImageAction, replaceSetImageAction } from '@/app/(signed-in)/image-set-actions';
 import { signOutAction } from '@/app/sign-in/actions';
 import { translator } from '@/messages';
 import type { Preferences } from '@/preferences';
 import type { SidebarState } from '@/sidebar-cookie';
 
+import { CampaignSwitcher, type CampaignSwitcherLabels, type SwitcherCampaign } from './CampaignSwitcher';
 import { ContextBar } from './ContextBar';
 import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
@@ -20,8 +22,10 @@ import { UploadsProvider } from './uploads/UploadsProvider';
 export type ShellProps = {
   readonly preferences: Preferences;
   readonly username: string;
-  /** The current campaign and its system, or null when the account has none. */
-  readonly current: { readonly system: string; readonly campaign: string } | null;
+  /** The current campaign (its id from Story 3.2) and its system, or null when the account has none. */
+  readonly current: { readonly id?: string; readonly system: string; readonly campaign: string } | null;
+  /** The campaigns in use the switcher offers (Story 3.2), newest first. */
+  readonly campaigns?: readonly SwitcherCampaign[];
   readonly sidebar: SidebarState;
   /**
    * Lines at the top of the main column, one each, in the order given, such as a failure to load the current campaign.
@@ -48,9 +52,39 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * (and so in Tab order), and room for one right panel. The main column is centred and never wider than the
  * reading width. Around it, the uploads of this tab (Story 1.14), which go on while the GM moves inside the app.
  * Story 2.7: the grid and its panel slot are `ShellFrame`'s, which a page's source view fills from the browser.
+ * Story 3.2: the campaign switcher under the logo and on the context bar's campaign name; picking a campaign makes it
+ * current through a Server Action, which refreshes the page.
  */
-export function Shell({ preferences, username, current, sidebar, notices = [], panel, belonging = null, trayRows = [], children }: ShellProps) {
+export function Shell({
+  preferences,
+  username,
+  current,
+  campaigns = [],
+  sidebar,
+  notices = [],
+  panel,
+  belonging = null,
+  trayRows = [],
+  children,
+}: ShellProps) {
   const t = translator(preferences.language);
+  const switcherLabels: CampaignSwitcherLabels = {
+    none: t('shell.noCampaign'),
+    panel: t('shell.switchCampaign'),
+    list: t('shell.campaignChoices'),
+    current: t('shell.currentMark'),
+    all: t('shell.allCampaigns'),
+    create: t('shell.newCampaign'),
+  };
+  const switcher = (placement: 'sidebar' | 'bar') => (
+    <CampaignSwitcher
+      labels={switcherLabels}
+      current={current === null ? null : { id: current.id ?? '', name: current.campaign }}
+      campaigns={campaigns}
+      placement={placement}
+      action={chooseCampaignAction}
+    />
+  );
   const entries = Object.fromEntries(
     [...SIDEBAR_ENTRIES, ADD_FILE].map(({ key }) => [key, t(`shell.entries.${key}`)]),
   ) as Record<EntryKey, string>;
@@ -67,7 +101,7 @@ export function Shell({ preferences, username, current, sidebar, notices = [], p
             currentCampaign: t('shell.currentCampaign'),
             entries,
           }}
-          campaign={current?.campaign ?? t('shell.noCampaign')}
+          campaign={switcher('sidebar')}
           initialState={sidebar}
           trayRows={trayRows}
           menu={
@@ -81,7 +115,7 @@ export function Shell({ preferences, username, current, sidebar, notices = [], p
           }
         />
         <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
-          <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} />
+          <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} />
           <main className={styles.main}>
             {notices}
             {children}

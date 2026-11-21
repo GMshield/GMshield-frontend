@@ -18,7 +18,8 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
     'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required',
-    'system_name_invalid', 'system_edition_invalid', 'system_description_invalid', 'system_name_taken', 'stale_version'],
+    'system_name_invalid', 'system_edition_invalid', 'system_description_invalid', 'system_name_taken', 'campaign_name_invalid',
+    'campaign_name_taken', 'stale_version'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
   session: ['required', 'renewal_required', 'already_renewed'],

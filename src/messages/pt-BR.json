@@ -18,6 +18,11 @@
     "currentCampaign": "Campanha atual",
     "noCampaign": "Nenhuma campanha",
     "context": "Sistema e campanha",
+    "switchCampaign": "Trocar de campanha",
+    "campaignChoices": "Suas campanhas",
+    "currentMark": "atual",
+    "allCampaigns": "Ver todas as mesas",
+    "newCampaign": "Nova campanha",
     "entries": {
       "questions": "Consultas",
       "rules": "Criação de Regras",
@@ -77,6 +82,54 @@
       "materialsOne": "1 material ligado só a ele",
       "materialsOther": "{count} materiais ligados só a ele",
       "confirm": "Excluir sistema"
+    }
+  },
+  "campaigns": {
+    "new": "Nova campanha",
+    "list": "Suas campanhas",
+    "archivedList": "Campanhas arquivadas",
+    "filters": "Quais campanhas",
+    "inUse": "Em uso",
+    "archived": "Arquivadas",
+    "empty": "Uma campanha reúne as conversas e os materiais de uma mesa de jogo.",
+    "emptyArchived": "Nenhuma campanha arquivada.",
+    "loadMore": "Carregar mais",
+    "addedOne": "Mais 1 item na lista.",
+    "addedOther": "Mais {count} itens na lista.",
+    "systemEdition": "{name} {edition}",
+    "form": {
+      "newTitle": "Nova campanha",
+      "renameTitle": "Renomear campanha",
+      "name": "Nome",
+      "system": "Sistema",
+      "create": "Criar campanha",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Esta campanha foi alterada em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve.",
+      "noSystem": "Uma campanha pertence a um sistema, e você ainda não tem nenhum.",
+      "createSystem": "Criar um sistema"
+    },
+    "page": {
+      "use": "Usar esta campanha",
+      "isCurrent": "Esta é a campanha atual.",
+      "rename": "Renomear",
+      "archive": "Arquivar",
+      "restore": "Restaurar",
+      "archived": "Arquivada",
+      "sections": "Seções da campanha",
+      "overview": "Visão geral",
+      "scope": "Escopo",
+      "conversations": "Conversas",
+      "name": "Nome",
+      "system": "Sistema",
+      "state": "Situação",
+      "scopeStarting": "Campanha: ligada · Sistema: ligado · Outros: desligado · Conhecimento do modelo: desligado",
+      "conversationList": "Conversas desta campanha",
+      "questionsOne": "1 pergunta",
+      "questionsOther": "{count} perguntas",
+      "open": "Abrir",
+      "restoreToOpen": "Restaure a campanha para abrir a conversa.",
+      "noConversation": "Esta campanha ainda não tem conversas."
     }
   },
   "notFound": {
@@ -146,6 +199,8 @@
         "system_edition_invalid": "A edição pode ter até {max} caracteres.",
         "system_description_invalid": "A descrição pode ter até {max} caracteres.",
         "system_name_taken": "Você já tem um sistema com este nome e esta edição.",
+        "campaign_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "campaign_name_taken": "Este sistema já tem uma campanha com este nome, talvez arquivada.",
         "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual."
       },
       "server": {
@@ -482,6 +537,8 @@
       "upload": "Enviar um arquivo",
       "review": "Revisar {name}"
     },
-    "close": "Fechar a fonte"
+    "close": "Fechar a fonte",
+    "noCampaign": "Não há campanha em uso: crie uma para fazer perguntas.",
+    "newCampaign": "Nova campanha"
   }
 }

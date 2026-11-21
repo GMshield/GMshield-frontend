@@ -20,8 +20,8 @@ type Tab = (typeof TABS)[number];
 
 /**
  * A system's page (Story 3.1): its name, edition and description, "Editar" (the one solid pill), and two tabs,
- * campaigns (the default) and materials, chosen by `?tab=`. The campaigns tab lists the system's campaigns, which open
- * nothing yet (Story 3.2); the materials tab lists the materials attached to the system or to one of its campaigns, each
+ * campaigns (the default) and materials, chosen by `?tab=`. The campaigns tab lists the system's campaigns in use, each
+ * opening its page (Story 3.2); the materials tab lists the materials attached to the system or to one of its campaigns, each
  * opening its page. Each tab adds rows with "Carregar mais", or says in one sentence that it is empty. Another owner's
  * id, an unknown one or a malformed one shows the single "Não encontrado." page.
  *
@@ -48,7 +48,7 @@ export default async function SystemPage({
   const here = `/systems/${encodeURIComponent(system.data.id)}`;
   const [page, deletion] = await Promise.all([
     tab === 'campaigns'
-      ? listCampaigns(token ?? '', system.data.id).then((result) =>
+      ? listCampaigns(token ?? '', { system: system.data.id }).then((result) =>
           result.ok ? { ok: true as const, rows: result.data.items.map(campaignRow), nextCursor: result.data.nextCursor ?? null } : result,
         )
       : listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id }).then((result) =>

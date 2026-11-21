@@ -142,7 +142,9 @@ describe('the signed-in shell (Story 1.11)', () => {
     const main = screen.getByRole('main');
     expect(sidebar.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(context.textContent).toBe('Untitled system›First campaign');
+    // Story 3.2: the campaign's name is the switcher's button; its list is closed (hidden).
+    expect(within(context).getByRole('link', { name: 'Untitled system' })).toBeTruthy();
+    expect(within(context).getByRole('button', { name: 'First campaign' }).getAttribute('aria-expanded')).toBe('false');
 
     // Tab from the top of the page until focus leaves the last control: every stop, by region.
     const visited: string[] = [];
@@ -344,11 +346,14 @@ describe('the signed-in shell (Story 1.11)', () => {
     render(shell({ language: 'en' }));
     const context = screen.getByRole('navigation', { name: en.shell.context });
     expect(within(context).getByRole('link', { name: 'Untitled system' }).getAttribute('href')).toBe('/systems');
-    expect(within(context).getByRole('link', { name: 'First campaign' }).getAttribute('href')).toBe('/campaigns');
+    // Story 3.2: the campaign's name opens the campaign switcher.
+    expect(within(context).getByRole('button', { name: 'First campaign' }).getAttribute('aria-expanded')).toBe('false');
     cleanup();
     render(shell({ current: null }));
-    expect(screen.getByRole('navigation', { name: ptBR.shell.context }).textContent).toBe(ptBR.shell.noCampaign);
-    expect(screen.getByTestId('sidebar').textContent).toContain(ptBR.shell.noCampaign);
+    const none = screen.getByRole('navigation', { name: ptBR.shell.context });
+    expect(within(none).getByRole('button', { name: ptBR.shell.noCampaign })).toBeTruthy();
+    expect(within(none).queryByRole('link', { name: 'Untitled system' })).toBeNull();
+    expect(within(screen.getByTestId('sidebar')).getByRole('button', { name: ptBR.shell.noCampaign })).toBeTruthy();
   });
 
   it('renders the page in the main column, and a right panel only when there is one', () => {

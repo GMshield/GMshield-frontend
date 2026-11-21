@@ -10,7 +10,7 @@ import { outgoingTraceparent, traceFrom } from './trace';
 /**
  * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
  * turn's answer as server-sent events, the GM's stop of an answer (Story 2.6), and a page a turn's source reference
- * names (Story 2.7). The backend takes the owner from
+ * names (Story 2.7), and from Story 3.2 a campaign's conversation with its question count. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -19,6 +19,7 @@ const UNIT = 'server.conversations';
 type Schemas = components['schemas'];
 export type CurrentConversation = Schemas['CurrentConversation'];
 export type Turn = Schemas['Turn'];
+export type CampaignConversation = Schemas['CampaignConversation'];
 /** A page a reference names (Story 2.7): the same shape as a material's page on the review ground. */
 export type ReferencePage = Schemas['MaterialPageView'];
 
@@ -35,6 +36,18 @@ export const EVENT_STREAM = 'text/event-stream';
 export function currentConversation(sessionToken: string, options: CallOptions = {}): Promise<Result<CurrentConversation>> {
   return call('conversations.current', options, (client) =>
     client.GET('/api/v1/conversations/current', { params: { header: { 'X-Session-Token': sessionToken } } }),
+  );
+}
+
+/**
+ * The campaign's conversation and how many questions it holds (Story 3.2); `request.not_found` when it has none or the
+ * campaign is not the account's.
+ */
+export function campaignConversation(sessionToken: string, campaignId: string, options: CallOptions = {}): Promise<Result<CampaignConversation>> {
+  return call('conversations.of_campaign', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/conversation', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
+    }),
   );
 }
 
