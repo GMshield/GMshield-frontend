@@ -572,6 +572,40 @@ they sit in `src/`.
     as an alert under the pill; a malformed id never reaches the backend.
   - The stand-in backend counts one conversation and no material for the starter campaign, and answers a delete with
     202.
+- **Where a material belongs (Story 3.3).** Public contract 1.21.0. A material belongs to one campaign or to one or
+  more systems; the GM can change it, and it applies from the next question. `src/server/materials.ts` gains
+  `changeMaterial` (`PATCH /api/v1/materials/{id}` `{version, belonging: {campaign} | {systems}}`) and `FILE_STATES`
+  (every state but `discarded`); a material now carries `version`, `size` (absent until known) and `belonging`
+  (`{campaign: {id, name, system} | null, systems: [{id, name}]}`). `src/server/library.ts` gains `listAllSystems` and
+  `listAllCampaigns` (50 a page, every page, at most 20).
+  - The pickers (`src/components/PlacePicker.tsx`, a client component) are three full-width choice rows, each with its
+    explanation and its picker: "Uma campanha" (a select of the campaigns in use, in `optgroup`s by system), "Um
+    sistema" (a select) and "Vários sistemas" (checkboxes, posted in the systems' order). A row shows only when it has
+    something to pick; with no campaign and no system, the one row is "Em nenhum lugar por enquanto". Picking in a row's
+    picker chooses that row, and each row keeps its value while another is chosen. An archived campaign is never
+    offered (the API still takes one). Texts: `upload.dialog.belonging.*`.
+  - The guided upload's "where it belongs" step uses them, fed by the signed-in layout with every campaign in use and
+    every system (`Belonging = {campaigns, systems, current}`), the current campaign chosen first. Several systems with
+    none ticked cannot go on ("Marque pelo menos um sistema."). A file sends `campaign` or `systems` (comma-separated
+    ids) as tus metadata; an image set sends `campaign` or `systems` (an array), which `createImageSetAction` checks (1
+    to 100 ids, never with a campaign).
+  - `/files` ("Meus Arquivos") is a list page in the shared shape: "Adicionar Arquivo" (`AddFileButton`, the one solid
+    pill) opens the guided upload; each row has the material's name, its state pill, then its size, pages and place
+    ("1,2 MB · 320 páginas · Campanha X", `files/rows.ts`), and opens `/files/{id}`; "Carregar mais" (`moreFiles`); an
+    empty list (no row and no next page) says so in one sentence.
+  - A material's page shows "Onde pertence" (`src/components/MaterialPlace.tsx`): the place in a sentence and
+    "Alterar", which opens the pickers on the current place; a place they cannot show (an archived campaign, a system
+    not offered) or no place opens with nothing picked, "Em nenhum lugar" is never offered, and "Salvar" waits for a
+    pick. When the campaigns and systems could not be loaded, the reason shows instead of "Alterar". "Salvar" posts to `changePlaceAction`
+    (`files/[id]/actions.ts`) on the version the page read, which refreshes the page; the form closes, focus goes back to
+    "Alterar" and a polite status says "Vale a partir da próxima pergunta.". A stale save (`request.stale_version`)
+    brings the current place and version with the stale line, the form open; any other refusal shows its text with the
+    choice kept. The form is posted from `onSubmit` in a transition, not through `action`, so React's reset after an
+    action never puts the selects back to their first option while the form stays open.
+  - The system page's materials tab names each row's place: "Sistema" (this system alone), "Campanha X", or the names
+    of its systems.
+  - New code `material.belonging_invalid`, in both catalogues. The stand-in backend's material belongs to the starter
+    campaign at version 0, and a change answers it in the starter system at version 1.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -657,7 +691,12 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.20.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.21.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.21.0 (Story 3.3): the backend first (its migration `V25__material_belonging.sql`,
+the material's `version`, `size` and `belonging`, and `PATCH /api/v1/materials/{id}`), then the frontend (its health
+check fails against a 1.20.0 backend, and "Meus Arquivos", the material page and the guided upload read the new
+fields). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.20.0 (Story 3.2, part B): the backend first (its migration
 `V24__campaign_deletion.sql` and the campaign deletion routes), then the frontend (its health check fails against a

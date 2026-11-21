@@ -18,7 +18,8 @@
 // the starter campaign (in use, version 0) is the only campaign, with its system; a new campaign is "Mesa de quinta" of
 // the starter system; a rename, archive or restore answers the starter campaign at version 1, a choice the starter
 // campaign, and its conversation holds one question. Story 3.2 part B: the starter campaign's deletion takes its one
-// conversation and no material; a delete answers 202 with no body.
+// conversation and no material; a delete answers 202 with no body. Story 3.3: a material belongs to the starter
+// campaign (version 0, 134 MB), and a change of where it belongs answers it in the starter system at version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -139,6 +140,9 @@ const STARTER_CAMPAIGN = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Pr
 /** Story 3.2: the starter campaign as a list row (its system's name and edition) and as one campaign (with its version). */
 const STARTER_ROW = { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name, edition: null }, archived: false };
 const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, version: 0 };
+/** Story 3.3: where the example material belongs, the starter campaign, and the same material moved to its system. */
+const IN_STARTER_CAMPAIGN = { campaign: { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name } }, systems: [] };
+const IN_STARTER_SYSTEM = { campaign: null, systems: [{ id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name }] };
 
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
@@ -177,6 +181,10 @@ export const EXAMPLES = {
     pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
     // Story 1.20: a processing material allows no action.
     actions: [],
+    // Story 3.3: its version, size and place.
+    version: 0,
+    size: 134217728,
+    belonging: IN_STARTER_CAMPAIGN,
   },
   // Story 1.20: the report of a book under review, and the book once accepted.
   'GET /api/v1/materials/{id}/report': {
@@ -197,6 +205,21 @@ export const EXAMPLES = {
     kind: 'rulebook',
     pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
     actions: [],
+    version: 0,
+    size: 134217728,
+    belonging: IN_STARTER_CAMPAIGN,
+  },
+  // Story 3.3: the book moved to the starter system.
+  'PATCH /api/v1/materials/{id}': {
+    id: '0190a0b0-0000-7000-8000-000000000003',
+    name: 'Livro do Jogador.pdf',
+    state: 'ready',
+    kind: 'rulebook',
+    pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
+    actions: [],
+    version: 1,
+    size: 134217728,
+    belonging: IN_STARTER_SYSTEM,
   },
   // Story 1.21: a set of two images, created with its order; the set once its failed image is left out.
   'POST /api/v1/image-sets': {

@@ -15,7 +15,7 @@ import styles from './Shell.module.css';
 import { ShellFrame } from './ShellPanel';
 import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
 import { Sidebar } from './Sidebar';
-import type { Belonging, Material } from './uploads/types';
+import { NO_PLACES, type Belonging, type Material } from './uploads/types';
 import { uploadTexts } from './uploads/upload-texts';
 import { UploadsProvider } from './uploads/UploadsProvider';
 
@@ -37,7 +37,10 @@ export type ShellProps = {
    * fills the same slot from the browser (`ShellPanel`).
    */
   readonly panel?: ReactNode;
-  /** The current campaign and its system with their ids, which the guided upload offers (Story 1.14). */
+  /**
+   * What the guided upload's "where it belongs" offers (Story 1.14; from Story 3.3 every campaign in use, every system
+   * and the current campaign).
+   */
   readonly belonging?: Belonging;
   /** The upload tray's rows from the server (Story 1.14). */
   readonly trayRows?: readonly Material[];
@@ -63,7 +66,7 @@ export function Shell({
   sidebar,
   notices = [],
   panel,
-  belonging = null,
+  belonging = NO_PLACES,
   trayRows = [],
   children,
 }: ShellProps) {

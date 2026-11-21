@@ -2,17 +2,22 @@ import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
 import { MaterialActions } from '@/components/MaterialActions';
+import { MaterialPlace } from '@/components/MaterialPlace';
 import { MaterialRefresher } from '@/components/MaterialRefresher';
 import { Notice } from '@/components/Notice';
 import { QualityReport } from '@/components/QualityReport';
 import { StatePill } from '@/components/StatePill';
-import { progressOf } from '@/components/uploads/types';
-import { errorText, failureText, translator } from '@/messages';
+import { placeOfBelonging, progressOf } from '@/components/uploads/types';
+import { errorText, failureText, messagesFor, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
+import { listAllCampaigns, listAllSystems } from '@/server/library';
 import { getMaterial, getReport } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { materialAction } from './actions';
+import { systemLabel } from '../../campaigns/rows';
+import { belongingText } from '../rows';
+
+import { changePlaceAction, materialAction } from './actions';
 import styles from './page.module.css';
 
 /**
@@ -27,16 +32,38 @@ import styles from './page.module.css';
  * and the actions the backend allows (Aceitar, Reprocessar páginas com falha, Descartar); a ready one shows the report
  * read-only; a failed one says why, then offers Tentar de novo and Descartar. The pages read directly, by OCR and still
  * waiting are listed while processing only.
+ *
+ * Story 3.3: "Onde pertence" says where the material belongs, in a sentence, and "Alterar" opens a form to change it
+ * ({@link MaterialPlace}): one of the campaigns in use, one system or several systems, read here with the material.
+ * Once saved, the page shows the new place and "Vale a partir da próxima pergunta.".
  */
 export default async function MaterialPage({ params }: { readonly params: Promise<{ readonly id: string }> }) {
   const [{ id }, { language }, token] = await Promise.all([params, currentPreferences(), currentSessionToken()]);
   const t = translator(language);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const material = await getMaterial(token ?? '', id);
+  const [material, campaigns, systems] = await Promise.all([
+    getMaterial(token ?? '', id),
+    listAllCampaigns(token ?? ''),
+    listAllSystems(token ?? ''),
+  ]);
   if (!material.ok) {
     notFoundFor(material.problem);
     return <Notice status="danger" language={language} message={errorText(material.problem, language)} />;
   }
+  const places = {
+    campaigns: campaigns.ok
+      ? campaigns.data.map((item) => ({ id: item.id, name: item.name, system: { id: item.system.id, name: systemLabel(item.system, t) } }))
+      : [],
+    systems: systems.ok ? systems.data.map((item) => ({ id: item.id, name: systemLabel(item, t) })) : [],
+    current: null,
+  };
+  const belongingTexts = messagesFor(language).material.belonging;
+  // Nothing to pick because the lists could not be loaded: the page says why instead of offering "Alterar".
+  const failed = [campaigns, systems].find((result) => !result.ok);
+  const unavailable =
+    places.campaigns.length === 0 && places.systems.length === 0 && failed !== undefined && !failed.ok
+      ? errorText(failed.problem, language)
+      : null;
   const { state, pages, failure } = material.data;
   const actions = material.data.actions ?? [];
   const reviewed = state === 'needs_review' || state === 'ready';
@@ -60,6 +87,24 @@ export default async function MaterialPage({ params }: { readonly params: Promis
         <span className={styles.label}>{t('material.stateLabel')}</span>
         <StatePill state={state} word={word} detail={detail} />
       </p>
+      <MaterialPlace
+        id={material.data.id}
+        version={material.data.version}
+        summary={belongingText(material.data.belonging, t, language)}
+        place={placeOfBelonging(material.data.belonging)}
+        places={places}
+        unavailable={unavailable}
+        texts={{
+          label: belongingTexts.label,
+          change: belongingTexts.change,
+          formLabel: belongingTexts.formLabel,
+          save: belongingTexts.save,
+          cancel: belongingTexts.cancel,
+          saved: belongingTexts.saved,
+          picker: messagesFor(language).upload.dialog.belonging,
+        }}
+        action={changePlaceAction}
+      />
       {counts.length === 0 ? null : (
         <section className={styles.counts} aria-labelledby="material-counts">
           <h2 id="material-counts" className={styles.label}>

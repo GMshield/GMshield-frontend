@@ -84,6 +84,37 @@ export function listCampaigns(sessionToken: string, query: CampaignQuery = {}, o
   );
 }
 
+/** The most pages {@link listAllSystems} and {@link listAllCampaigns} read: 1,000 items, far past any library. */
+const MOST_PAGES = 20;
+
+/** Every page of a list, read one after another (Story 3.3: the places a material can be given). */
+async function allPages<T>(load: (cursor: string | undefined) => Promise<Result<{ items: T[]; nextCursor?: string }>>): Promise<Result<T[]>> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < MOST_PAGES; page++) {
+    const result = await load(cursor);
+    if (!result.ok) {
+      return result;
+    }
+    items.push(...result.data.items);
+    cursor = result.data.nextCursor;
+    if (cursor === undefined) {
+      break;
+    }
+  }
+  return { ok: true, data: items };
+}
+
+/** Every system of the account, newest first (Story 3.3), 50 a page. */
+export function listAllSystems(sessionToken: string, options: CallOptions = {}): Promise<Result<GameSystem[]>> {
+  return allPages((cursor) => listSystems(sessionToken, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+}
+
+/** Every campaign in use of the account (not archived), newest first (Story 3.3), 50 a page. */
+export function listAllCampaigns(sessionToken: string, options: CallOptions = {}): Promise<Result<CampaignSummary[]>> {
+  return allPages((cursor) => listCampaigns(sessionToken, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+}
+
 /** One of the account's campaigns, archived or not, with its system and version; `request.not_found` for any other id. */
 export function getCampaign(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<Campaign>> {
   return call('library.campaign', options, (client) =>

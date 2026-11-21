@@ -15,6 +15,9 @@ export type MaterialState = Material['state'];
 export type MaterialPageView = Schemas['MaterialPageView'];
 export type MaterialReport = Schemas['MaterialReport'];
 export type MaterialAction = Material['actions'][number];
+/** Where a material belongs (Story 3.3): its campaign with its system, or its systems; both empty for none. */
+export type MaterialBelonging = Schemas['MaterialBelonging'];
+export type MaterialChange = Schemas['MaterialChange'];
 type ListQuery = NonNullable<operations['listMaterials']['parameters']['query']>;
 
 /** The GM's actions on a material's newest version (Story 1.20), in the order the page shows them. */
@@ -23,7 +26,13 @@ export const MATERIAL_ACTIONS: readonly MaterialAction[] = ['accept', 'reprocess
 /** The states the tray lists: everything not yet ready, and what needs the GM. */
 export const TRAY_STATES: readonly MaterialState[] = ['uploading', 'waiting', 'processing', 'needs_review', 'failed'];
 
-/** The account's materials whose newest version is in one of `states`, newest first. */
+/** The states "Meus Arquivos" lists (Story 3.3): every one but a discarded material's. */
+export const FILE_STATES: readonly MaterialState[] = ['uploading', 'waiting', 'processing', 'needs_review', 'ready', 'superseded', 'failed'];
+
+/**
+ * The account's materials whose newest version is in one of `states`, newest first. From Story 3.3 each carries its
+ * version, size and where it belongs, and a material whose every place is being deleted is left out.
+ */
 export function listMaterials(
   sessionToken: string,
   states: readonly MaterialState[],
@@ -41,6 +50,18 @@ export function listMaterials(
 export function getMaterial(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<Material>> {
   return call('materials.get', options, (client) =>
     client.GET('/api/v1/materials/{id}', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } } }),
+  );
+}
+
+/**
+ * Where one of the account's materials belongs, changed on the version it names (Story 3.3): one campaign or one or
+ * more systems; the material as stored, its version raised by one. `request.stale_version` when it changed elsewhere,
+ * `material.belonging_invalid` for a place that is not the account's (or both, or neither), `request.not_found` for
+ * any other material. It applies from the next question.
+ */
+export function changeMaterial(sessionToken: string, id: string, body: MaterialChange, options: CallOptions = {}): Promise<Result<Material>> {
+  return call('materials.change', options, (client) =>
+    client.PATCH('/api/v1/materials/{id}', { params: { header: { 'X-Session-Token': sessionToken }, path: { id } }, body }),
   );
 }
 

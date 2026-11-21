@@ -181,7 +181,7 @@ export async function moreMaterials(previous: MoreState, form: FormData): Promis
     const t = translator(language);
     const page = await listMaterials(token, SYSTEM_MATERIAL_STATES, { system, cursor });
     return page.ok
-      ? { rows: page.data.items.map((material) => materialRow(material, t)), nextCursor: page.data.nextCursor ?? null }
+      ? { rows: page.data.items.map((material) => materialRow(material, t, language, system)), nextCursor: page.data.nextCursor ?? null }
       : { error: page.problem };
   });
 }

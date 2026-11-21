@@ -11,7 +11,8 @@ vi.mock('next/headers', () => ({
 const refresh = vi.fn();
 vi.mock('next/cache', () => ({ refresh: () => refresh() }));
 
-const { materialAction } = await import('@/app/(signed-in)/files/[id]/actions');
+const { changePlaceAction, materialAction } = await import('@/app/(signed-in)/files/[id]/actions');
+const { NO_PLACE_ANSWER } = await import('@/components/MaterialPlace');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
@@ -99,5 +100,90 @@ describe('the material actions (Story 1.20)', () => {
     }
     expect(server.calls).toEqual([]);
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('the change of where a material belongs (Story 3.3)', () => {
+  const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+  const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+  const OTHER_SYSTEM = '0190a0b0-0000-7000-8000-000000000030';
+  const material = (version: number, belonging: unknown) => ({ id: ID, name: 'Livro.pdf', state: 'ready', actions: [], version, belonging });
+  const inSystems = { campaign: null, systems: [{ id: SYSTEM, name: 'D&D' }, { id: OTHER_SYSTEM, name: 'Pathfinder' }] };
+  const problem = (status: number, code: string) => ({
+    status,
+    body: { type: `urn:gmshield:problem:${code}`, title: 'x', status, category: code.split('.')[0], code, params: {}, traceId: 't' },
+  });
+  const several = () => {
+    const data = form({ id: ID, version: '2', belonging: 'systems', campaign: CAMPAIGN, system: SYSTEM });
+    data.append('systems', SYSTEM);
+    data.append('systems', OTHER_SYSTEM);
+    return data;
+  };
+
+  it('sends the chosen place on the version, with the session, refreshes the page and says it was saved', async () => {
+    const server = await useBackend({ [`PATCH /api/v1/materials/${ID}`]: { status: 200, body: material(3, inSystems) } });
+
+    const answer = await changePlaceAction(NO_PLACE_ANSWER, several());
+
+    expect(answer).toEqual({
+      version: 3,
+      place: { choice: 'systems', systems: [SYSTEM, OTHER_SYSTEM] },
+      error: null,
+      stale: false,
+      saved: true,
+      serial: 1,
+      reset: 1,
+    });
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 2, belonging: { systems: [SYSTEM, OTHER_SYSTEM] } });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // One campaign, and one system (sent as a list of one).
+    await changePlaceAction(answer, form({ id: ID, version: '3', belonging: 'campaign', campaign: CAMPAIGN, system: SYSTEM }));
+    await changePlaceAction(answer, form({ id: ID, version: '4', belonging: 'system', campaign: CAMPAIGN, system: SYSTEM }));
+    expect(server.calls.slice(1).map((call) => JSON.parse(call.body))).toEqual([
+      { version: 3, belonging: { campaign: CAMPAIGN } },
+      { version: 4, belonging: { systems: [SYSTEM] } },
+    ]);
+  });
+
+  it('a stale version brings the current place and version, with the stale line, and starts the pickers again', async () => {
+    await useBackend({
+      [`PATCH /api/v1/materials/${ID}`]: problem(409, 'request.stale_version'),
+      [`GET /api/v1/materials/${ID}`]: { status: 200, body: material(5, { campaign: { id: CAMPAIGN, name: 'Mesa', system: { id: SYSTEM, name: 'D&D' } }, systems: [] }) },
+    });
+
+    const answer = await changePlaceAction(NO_PLACE_ANSWER, several());
+
+    expect(answer).toEqual({
+      version: 5,
+      place: { choice: 'campaign', campaign: CAMPAIGN },
+      error: 'Este arquivo foi alterado em outro lugar. A escolha agora mostra onde ele fica: faça sua alteração de novo e salve.',
+      stale: true,
+      saved: false,
+      serial: 1,
+      reset: 1,
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('any other refusal comes back as text, the choice kept; a form without a place never reaches the backend', async () => {
+    const server = await useBackend({ [`PATCH /api/v1/materials/${ID}`]: problem(400, 'material.belonging_invalid') });
+
+    const refused = await changePlaceAction(NO_PLACE_ANSWER, several());
+
+    expect(refused).toMatchObject({ error: 'Escolha uma campanha ou pelo menos um sistema que você tenha.', saved: false, stale: false, reset: 0 });
+    const calls = server.calls.length;
+    const malformed: Record<string, string>[] = [
+      { id: ID, version: '1', belonging: 'none' },
+      { id: ID, version: '1', belonging: 'systems' },
+      { id: ID, version: '1', belonging: 'campaign', campaign: '../x' },
+      { id: '../x', version: '1', belonging: 'campaign', campaign: CAMPAIGN },
+      { id: ID, version: '-1', belonging: 'campaign', campaign: CAMPAIGN },
+      { id: ID, belonging: 'system', system: SYSTEM },
+    ];
+    for (const fields of malformed) {
+      expect((await changePlaceAction(NO_PLACE_ANSWER, form(fields))).error, JSON.stringify(fields)).toBe('O pedido não é válido.');
+    }
+    expect(server.calls).toHaveLength(calls);
   });
 });

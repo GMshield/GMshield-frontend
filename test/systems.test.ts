@@ -242,7 +242,28 @@ describe('a new system (Story 3.1)', () => {
 
 describe('a system page (Story 3.1)', () => {
   const campaigns = { status: 200, body: { items: [{ id: CAMPAIGN, name: 'A Coroa Partida' }] } };
-  const materials = { status: 200, body: { items: [{ id: MATERIAL, name: 'SRD 5.2.1.pdf', state: 'ready', actions: [] }] } };
+  // Story 3.3: each material says where it belongs: this system alone, one of its campaigns, or several systems.
+  const material = { id: MATERIAL, name: 'SRD 5.2.1.pdf', state: 'ready', actions: [], version: 0, belonging: { campaign: null, systems: [{ id: ID, name: 'D&D' }] } };
+  const materials = {
+    status: 200,
+    body: {
+      items: [
+        material,
+        {
+          ...material,
+          id: OTHER,
+          name: 'Notas.md',
+          belonging: { campaign: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: ID, name: 'D&D' } }, systems: [] },
+        },
+        {
+          ...material,
+          id: STARTER,
+          name: 'Bestiário.pdf',
+          belonging: { campaign: null, systems: [{ id: ID, name: 'D&D' }, { id: STARTER, name: 'Pathfinder' }] },
+        },
+      ],
+    },
+  };
 
   it('shows the name, edition and description, "Editar", and the campaigns tab by default, in both languages', async () => {
     const server = await useBackend({ [`GET /api/v1/systems/${ID}`]: { status: 200, body: DND }, [`GET /api/v1/campaigns?system=${ID}`]: campaigns });
@@ -283,6 +304,10 @@ describe('a system page (Story 3.1)', () => {
     expect(html).toContain('pronto');
     expect(html).toContain('aria-label="Materiais deste sistema"');
     expect(server.calls.map((call) => `${call.method} ${call.url}`)).toContain(SYSTEM_MATERIALS);
+    // Story 3.3: each row names its place.
+    expect(html).toMatch(/SRD 5\.2\.1\.pdf<\/span>.*?<span[^>]*>Sistema<\/span>/s);
+    expect(html).toContain('>Campanha A Coroa Partida</span>');
+    expect(html).toContain('>D&amp;D e Pathfinder</span>');
   });
 
   it('an empty tab says so in one sentence, in both languages; a system with no edition or description shows neither', async () => {
@@ -323,8 +348,8 @@ describe('a system page (Story 3.1)', () => {
       error: null,
       added: 1,
     });
-    expect((await moreMaterials(start, form({ cursor: MATERIAL, system: ID }))).rows).toEqual([
-      { id: MATERIAL, label: 'SRD 5.2.1.pdf', detail: null, href: `/files/${MATERIAL}`, state: { state: 'ready', word: 'pronto' } },
+    expect((await moreMaterials(start, form({ cursor: MATERIAL, system: ID }))).rows.slice(0, 1)).toEqual([
+      { id: MATERIAL, label: 'SRD 5.2.1.pdf', detail: 'Sistema', href: `/files/${MATERIAL}`, state: { state: 'ready', word: 'pronto' } },
     ]);
     const calls = server.calls.length;
     expect((await moreCampaigns(start, form({ cursor: CAMPAIGN, system: '../x' }))).error).toBe('O pedido não é válido.');
