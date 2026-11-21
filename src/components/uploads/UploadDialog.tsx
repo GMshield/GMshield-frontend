@@ -5,10 +5,13 @@ import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, t
 import { checkFile, type FileCheck } from '@/client/upload/sniff';
 
 import { PillButton, SolidPillButton } from '../PillButton';
+import { PlacePicker } from '../PlacePicker';
 import { StatePill } from '../StatePill';
 
 import {
+  draftOf,
   fill,
+  fitDraft,
   formatSize,
   isImageFormat,
   KINDS,
@@ -18,10 +21,11 @@ import {
   SHOWN_FORMATS,
   UPLOAD_LANGUAGES,
   withoutExtension,
+  placeOf,
   type Answers,
-  type BelongingChoice,
   type ImageFormat,
   type Kind,
+  type PlaceDraft,
   type UploadLanguage,
   type UploadTexts,
 } from './types';
@@ -51,10 +55,11 @@ export type UploadDialogProps = {
 
 /**
  * The guided upload (Story 1.14): a 560px modal dialog, one question per step with its count ("Passo N de 4"), each
- * choice a full-width row with its explanation: the files, what they are, where they belong (the current campaign or
- * its system), their language; then the progress. Built like `ConfirmationDialog`: `showModal()`, Tab kept inside,
- * Esc closes (and is marked handled, so the sidebar does not also close). It never opens another dialog. Closing it
- * never stops an upload: those belong to the provider.
+ * choice a full-width row with its explanation: the files, what they are, where they belong, their language; then the
+ * progress. From Story 3.3 "where it belongs" offers every campaign in use, one system or several systems
+ * ({@link PlacePicker}), the current campaign chosen first; with no campaign and no system, only "nowhere yet". Built
+ * like `ConfirmationDialog`: `showModal()`, Tab kept inside, Esc closes (and is marked handled, so the sidebar does not
+ * also close). It never opens another dialog. Closing it never stops an upload: those belong to the provider.
  *
  * A chosen file is checked at once in the browser ({@link checkFile}); a refused one is named with its reason and the
  * accepted formats, announced at once, and never sent.
@@ -76,9 +81,10 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const [step, setStep] = useState(1);
   const [chosen, setChosen] = useState<readonly Chosen[]>([]);
   const [kind, setKind] = useState<Kind>('rulebook');
-  const [chosenPlace, setPlace] = useState<BelongingChoice>(belonging === null ? 'none' : 'campaign');
-  // The campaign can come or go while the dialog stays mounted: the choice follows what there is to choose.
-  const place: BelongingChoice = belonging === null ? 'none' : chosenPlace === 'none' ? 'campaign' : chosenPlace;
+  const [chosenDraft, setDraft] = useState<PlaceDraft>(() => draftOf(belonging));
+  // Campaigns and systems can come or go while the dialog stays mounted: the choice follows what there is to choose.
+  const draft = fitDraft(chosenDraft, belonging);
+  const place = placeOf(draft);
   const [language, setLanguage] = useState<UploadLanguage>('detect');
   const [batch, setBatch] = useState<number | null>(null);
   const [setMode, setSetMode] = useState<SetMode>('pages');
@@ -112,6 +118,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
       setSetMode('pages');
       setOrder([]);
       setSetName(null);
+      setDraft(draftOf(belonging));
     }
   }
 
@@ -210,7 +217,9 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   }
 
   const blocked =
-    (current === 'files' && (acceptedItems.length === 0 || checking)) || (current === 'order' && (tooMany || tooLarge || nameMissing));
+    (current === 'files' && (acceptedItems.length === 0 || checking)) ||
+    (current === 'order' && (tooMany || tooLarge || nameMissing)) ||
+    (current === 'belonging' && place === null);
 
   async function onFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = [...(event.target.files ?? [])];
@@ -227,7 +236,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   }
 
   function onSend() {
-    const answers: Answers = { kind, belonging: place, language };
+    const answers: Answers = { kind, belonging: place ?? { choice: 'none' }, language };
     // An image that is not a page of a set is a set of one, named as a file is.
     const sets = asSet
       ? [{ name: name.trim(), files: ordered.map((item) => item.file) }]
@@ -409,14 +418,12 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
       {current === 'belonging' ? (
         <fieldset className={styles.question}>
           <legend className={styles.legend}>{t.belonging.question}</legend>
-          <ul className={styles.choices}>
-            {belonging === null
-              ? choice('belonging', 'none', place, setPlace, t.belonging.none.label, t.belonging.none.description)
-              : [
-                  choice('belonging', 'campaign', place, setPlace, fill(t.belonging.campaign.label, { campaign: belonging.campaign.name }), t.belonging.campaign.description),
-                  choice('belonging', 'system', place, setPlace, fill(t.belonging.system.label, { system: belonging.system.name }), t.belonging.system.description),
-                ]}
-          </ul>
+          <PlacePicker places={belonging} draft={draft} onChange={setDraft} texts={t.belonging} name="belonging" />
+          {place === null ? (
+            <p className={styles.note} role="alert">
+              {t.belonging.systemsRequired}
+            </p>
+          ) : null}
         </fieldset>
       ) : null}
 

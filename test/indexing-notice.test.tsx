@@ -4,6 +4,7 @@ import type { UrlStorage } from 'tus-js-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IndexingFailed, IndexingPoll } from '@/client/conversation';
+import { NO_PLACES } from '@/components/uploads/types';
 
 // The notice must never refresh the page: every router.refresh is counted.
 const refresh = vi.fn();
@@ -452,7 +453,7 @@ describe('the indexing notice on the questions page (matrix row "Questions page"
   it('reads its count while the turns stay on the screen, untouched', async () => {
     const streams: FakeStream[] = [];
     const { container } = render(
-      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={null} urlStorage={memoryStorage()}>
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
         <IndexingNotice remaining={2000} failed={null} language="pt-BR" />
         <Conversation
           language="pt-BR"

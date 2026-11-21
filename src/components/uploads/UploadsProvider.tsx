@@ -158,26 +158,36 @@ function unavailable(): SetCallResult<never> {
   return { ok: false, problem: thrown() };
 }
 
-/** The metadata of one sending: the answers, with the campaign's or the system's id. */
-export function metadataFor(answers: Answers, belonging: Belonging): Record<string, string> {
+/**
+ * The metadata of one sending: the answers, with the campaign's id or (Story 3.3) the systems' ids, comma-separated
+ * under `systems`; nothing for none.
+ */
+export function metadataFor(answers: Answers): Record<string, string> {
   const metadata: Record<string, string> = { kind: answers.kind, language: answers.language };
-  if (belonging !== null && answers.belonging === 'campaign') {
-    metadata.campaign = belonging.campaign.id;
-  } else if (belonging !== null && answers.belonging === 'system') {
-    metadata.system = belonging.system.id;
+  const place = answers.belonging;
+  if (place.choice === 'campaign') {
+    metadata.campaign = place.campaign;
+  } else if (place.choice === 'system') {
+    metadata.systems = place.system;
+  } else if (place.choice === 'systems') {
+    metadata.systems = place.systems.join(',');
   }
   return metadata;
 }
 
-/** Where a set belongs: the current campaign or its system, as the dialog's answer says (Story 1.21). */
-function setPlace(answers: Answers, belonging: Belonging): { campaign?: string; system?: string } {
-  if (belonging !== null && answers.belonging === 'campaign') {
-    return { campaign: belonging.campaign.id };
+/** Where a set belongs, as the dialog's answer says (Story 1.21; several systems from Story 3.3). */
+function setPlace(answers: Answers): { campaign?: string; systems?: readonly string[] } {
+  const place = answers.belonging;
+  switch (place.choice) {
+    case 'campaign':
+      return { campaign: place.campaign };
+    case 'system':
+      return { systems: [place.system] };
+    case 'systems':
+      return { systems: place.systems };
+    case 'none':
+      return {};
   }
-  if (belonging !== null && answers.belonging === 'system') {
-    return { system: belonging.system.id };
-  }
-  return {};
 }
 
 async function readStored(storage: UrlStorage): Promise<StoredUpload[]> {
@@ -339,7 +349,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
           name: item.name,
           kind: item.answers.kind,
           language: item.answers.language,
-          ...setPlace(item.answers, belonging),
+          ...setPlace(item.answers),
           images: item.members.map(({ file }) => ({ name: file.name, length: file.size })),
         });
       } catch {
@@ -385,7 +395,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         announce(stateWords(item.name, 'waiting'));
       }
     },
-    [addressOf, announce, belonging, change, failWith, imageSets, router, sendFile, stateWords],
+    [addressOf, announce, change, failWith, imageSets, router, sendFile, stateWords],
   );
 
   /** Story 1.21: a failed image's new upload at its place, then the file sent to it. */
@@ -454,7 +464,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
     (plan: SendPlan, answers: Answers) => {
       counter.current += 1;
       const batch = counter.current;
-      const metadata = metadataFor(answers, belonging);
+      const metadata = metadataFor(answers);
       for (const file of plan.files) {
         const key = addLive(file, batch, null, null, null);
         queue.current.push({ kind: 'file', key, file, metadata });
@@ -469,7 +479,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
       void pump();
       return batch;
     },
-    [addLive, belonging, pump],
+    [addLive, pump],
   );
 
   const resume = useCallback(

@@ -361,9 +361,17 @@
             "type" : "string"
           },
           "system" : {
-            "description" : "One of the account's systems it belongs to (never with campaign)",
+            "description" : "One of the account's systems it belongs to (never with campaign or systems)",
             "format" : "uuid",
             "type" : "string"
+          },
+          "systems" : {
+            "description" : "One to 100 of the account's systems it belongs to (never with campaign or system; contract 1.21.0)",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "required" : [ "images", "name" ],
@@ -411,6 +419,10 @@
             },
             "type" : "array"
           },
+          "belonging" : {
+            "$ref" : "#/components/schemas/MaterialBelonging",
+            "description" : "Where the material belongs (contract 1.21.0)"
+          },
           "failure" : {
             "description" : "Why the version failed (category.reason), only when the state is failed",
             "example" : "ingestion.password_required",
@@ -441,6 +453,12 @@
             "$ref" : "#/components/schemas/MaterialPages",
             "description" : "Pages done of the total, once the total is known"
           },
+          "size" : {
+            "description" : "The newest version's size in bytes, once known (contract 1.21.0)",
+            "example" : 134217728,
+            "format" : "int64",
+            "type" : "integer"
+          },
           "state" : {
             "description" : "The state of the material's newest version",
             "enum" : [ "uploading", "waiting", "processing", "needs_review", "ready", "superseded", "failed", "discarded" ],
@@ -450,9 +468,97 @@
           "upload" : {
             "$ref" : "#/components/schemas/MaterialUpload",
             "description" : "The unfinished upload, only while the state is uploading"
+          },
+          "version" : {
+            "description" : "The material's version: a change of where it belongs names it and raises it by one (contract 1.21.0)",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "actions", "id", "name", "state" ],
+        "required" : [ "actions", "belonging", "id", "name", "state", "version" ],
+        "type" : "object"
+      },
+      "MaterialBelonging" : {
+        "description" : "Where the material belongs (contract 1.21.0): one campaign, or one or more systems; both empty for a material uploaded with no place. Only places that are not being deleted are named",
+        "properties" : {
+          "campaign" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/MaterialCampaign"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "The campaign it belongs to; null when it belongs to systems or to nothing"
+          },
+          "systems" : {
+            "description" : "The systems it belongs to, oldest attachment first; empty when it belongs to a campaign or to nothing",
+            "items" : {
+              "$ref" : "#/components/schemas/MaterialPlace"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "campaign", "systems" ],
+        "type" : "object"
+      },
+      "MaterialBelongingChange" : {
+        "description" : "Exactly one of campaign and systems",
+        "properties" : {
+          "campaign" : {
+            "description" : "One of the account's campaigns (archived or not)",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "systems" : {
+            "description" : "One to 100 of the account's systems, at most 100 ids as sent; a repeated id is stored once",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 100,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MaterialCampaign" : {
+        "properties" : {
+          "id" : {
+            "description" : "The campaign's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The campaign's name",
+            "example" : "Primeira campanha",
+            "type" : "string"
+          },
+          "system" : {
+            "$ref" : "#/components/schemas/MaterialPlace",
+            "description" : "The campaign's system"
+          }
+        },
+        "required" : [ "id", "name", "system" ],
+        "type" : "object"
+      },
+      "MaterialChange" : {
+        "properties" : {
+          "belonging" : {
+            "$ref" : "#/components/schemas/MaterialBelongingChange",
+            "description" : "Where the material belongs from now on"
+          },
+          "version" : {
+            "description" : "The version the change was made on, as the material was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "belonging", "version" ],
         "type" : "object"
       },
       "MaterialImageSet" : {
@@ -606,6 +712,23 @@
           }
         },
         "required" : [ "done", "image", "readByOcr", "readDirectly", "reading", "text", "total", "unreadable" ],
+        "type" : "object"
+      },
+      "MaterialPlace" : {
+        "properties" : {
+          "id" : {
+            "description" : "The system's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The system's name",
+            "example" : "D&D 5e",
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "name" ],
         "type" : "object"
       },
       "MaterialReport" : {
@@ -1315,7 +1438,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.20.0"
+    "version" : "1.21.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1883,7 +2006,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "An ordered set of images that become the pages of one material, its order confirmed: the material, its version in uploading and one tus upload per image, each expiring after 6 hours. The first ingestion step starts by itself once every image is complete. upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name (the set's or an image's) or a kind, language, campaign or system that is not valid (it never says which); request.invalid (400) for a body without images or an image without a size of at least 1 byte; request.unsupported_media_type (415) for a body that is not JSON; session.required (401) without a session.",
+        "summary" : "An ordered set of images that become the pages of one material, its order confirmed: the material, its version in uploading and one tus upload per image, each expiring after 6 hours. The first ingestion step starts by itself once every image is complete. upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name (the set's or an image's) or a kind, language, campaign or system that is not valid, an empty list or more than 100 systems, or a campaign, system and systems given together (it never says which); request.invalid (400) for a body without images or an image without a size of at least 1 byte; request.unsupported_media_type (415) for a body that is not JSON; session.required (401) without a session.",
         "tags" : [ "image-sets" ]
       }
     },
@@ -2020,10 +2143,9 @@
             "type" : "string"
           }
         }, {
-          "description" : "A state of the newest version; repeat it for several",
+          "description" : "A state of the newest version; repeat it for several; absent: every state (contract 1.21.0)",
           "in" : "query",
           "name" : "state",
-          "required" : true,
           "schema" : {
             "items" : {
               "enum" : [ "uploading", "waiting", "processing", "needs_review", "ready", "superseded", "failed", "discarded" ],
@@ -2082,7 +2204,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The account's materials whose newest version is in one of the given states, newest first, with the upload's progress on those still uploading; with system, only those attached to that system or to one of its campaigns. request.invalid (400) without a state, for an unknown state, a limit outside 1 to 50 or a malformed cursor; request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); session.required (401) without a session.",
+        "summary" : "The account's materials whose newest version is in one of the given states (every material without a state), newest first, with the upload's progress on those still uploading; with system, only those attached to that system or to one of its campaigns. A material whose every place is being deleted is left out, so a page may hold fewer than the limit. request.invalid (400) for an unknown state, a limit outside 1 to 50 or a malformed cursor; request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -2129,6 +2251,60 @@
           }
         },
         "summary" : "One of the account's materials, with the state of its newest version. request.not_found (404) for any other id; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      },
+      "patch" : {
+        "operationId" : "changeMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MaterialChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Changes where one of the account's materials belongs, on the version it names (contract 1.21.0): one campaign, or one to 100 systems. It applies from the next question; nothing is processed again. Answers the material as stored, its version raised by one. request.stale_version (409) when the material has left that version; material.belonging_invalid (400) for both campaign and systems, neither, an empty or over-long list, or a campaign or system that is not the account's (unknown, another account's, malformed or being deleted); request.invalid (400) without a version or for a malformed body; request.not_found (404) for any other material id, one whose every place is being deleted included; nothing changes then; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -3254,7 +3430,7 @@
             "type" : "integer"
           }
         }, {
-          "description" : "tus metadata: comma-separated keys, each with its value in Base64. filename is required. Optional: kind (rulebook, supplement, homebrew, campaign_notes, other), language (pt-BR, en, detect), and campaign or system (the id of one of the account's, never both)",
+          "description" : "tus metadata: comma-separated keys, each with its value in Base64. filename is required. Optional: kind (rulebook, supplement, homebrew, campaign_notes, other), language (pt-BR, en, detect), and campaign (the id of one of the account's campaigns) or systems (one to 100 ids of the account's systems, comma-separated; contract 1.21.0), never both. The single key system still names one system",
           "in" : "header",
           "name" : "Upload-Metadata",
           "required" : true,
@@ -3306,7 +3482,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "tus 1.0.0 creation: a material, its version in uploading and an upload that expires after 6 hours. upload.too_large (413) outside 1 byte to 2 GiB; upload.metadata_invalid (400) without a valid filename, for a kind, language, campaign or system that is not valid, for a campaign or system that is not the account's, or for both at once (it never says which); request.invalid (400) for a missing or malformed Upload-Length; upload.tus_version (412) without Tus-Resumable: 1.0.0; session.required (401) without a session.",
+        "summary" : "tus 1.0.0 creation: a material, its version in uploading and an upload that expires after 6 hours. upload.too_large (413) outside 1 byte to 2 GiB; upload.metadata_invalid (400) without a valid filename, for a kind, language, campaign or system that is not valid, for a campaign or system that is not the account's, for more than 100 systems, or for a campaign with systems, or system with systems (it never says which); request.invalid (400) for a missing or malformed Upload-Length; upload.tus_version (412) without Tus-Resumable: 1.0.0; session.required (401) without a session.",
         "tags" : [ "uploads" ]
       }
     },

@@ -5,8 +5,11 @@ import type { components } from '@/server/backend/generated/public';
  * What the guided upload and the tray share (Story 1.14), with no message file and nothing server-only: the browser
  * gets its texts from the server as {@link UploadTexts}, already in the interface's language.
  */
-/** A material as the tray shows it: the GM's actions (Story 1.20) are the material page's alone. */
-export type Material = Omit<components['schemas']['Material'], 'actions'>;
+/**
+ * A material as the tray shows it: the GM's actions (Story 1.20) are the material page's alone, and so are its version
+ * and where it belongs (Story 3.3).
+ */
+export type Material = Omit<components['schemas']['Material'], 'actions' | 'version' | 'size' | 'belonging'>;
 export type MaterialState = Material['state'];
 /** A material's pages once its page total is known: done of the total, by layer and by outcome (Story 1.17). */
 export type MaterialPages = NonNullable<Material['pages']>;
@@ -14,18 +17,130 @@ export type Kind = NonNullable<Material['kind']>;
 export const KINDS: readonly Kind[] = ['rulebook', 'supplement', 'homebrew', 'campaign_notes', 'other'];
 export type UploadLanguage = 'pt-BR' | 'en' | 'detect';
 export const UPLOAD_LANGUAGES: readonly UploadLanguage[] = ['pt-BR', 'en', 'detect'];
-export type BelongingChoice = 'campaign' | 'system' | 'none';
+/** Story 3.3: the three ways a material can belong, and none for a GM with no campaign and no system. */
+export type BelongingChoice = 'campaign' | 'system' | 'systems' | 'none';
 
-/** The current campaign and its system, which the "where it belongs" step offers until Epic 3; null without one. */
+/** A system as the pickers offer it (Story 3.3). */
+export type PlaceOption = { readonly id: string; readonly name: string };
+/** A campaign as the pickers offer it, with its system, by which they are grouped (Story 3.3). */
+export type CampaignOption = PlaceOption & { readonly system: PlaceOption };
+
+/**
+ * What the "where it belongs" pickers offer (Story 3.3): every campaign in use (an archived one is never offered),
+ * every system, and the current campaign's id, which is chosen first; empty lists and null when there are none.
+ */
 export type Belonging = {
-  readonly campaign: { readonly id: string; readonly name: string };
-  readonly system: { readonly id: string; readonly name: string };
-} | null;
+  readonly campaigns: readonly CampaignOption[];
+  readonly systems: readonly PlaceOption[];
+  readonly current: string | null;
+};
+
+export const NO_PLACES: Belonging = { campaigns: [], systems: [], current: null };
+
+/** Where a material goes (Story 3.3): one campaign, one system, several systems, or none. */
+export type Place =
+  | { readonly choice: 'campaign'; readonly campaign: string }
+  | { readonly choice: 'system'; readonly system: string }
+  | { readonly choice: 'systems'; readonly systems: readonly string[] }
+  | { readonly choice: 'none' };
+
+/**
+ * The pickers' state (Story 3.3): which row is chosen (null for none yet) and each row's own value ('' for nothing
+ * picked), kept while another row is chosen so that going back to a row finds it as it was.
+ */
+export type PlaceDraft = {
+  readonly choice: BelongingChoice | null;
+  readonly campaign: string;
+  readonly system: string;
+  readonly systems: readonly string[];
+};
+
+/** The rows the pickers show: those with something to pick, or `none` alone when there is nothing. */
+export function placeChoices(places: Belonging): readonly BelongingChoice[] {
+  const choices: BelongingChoice[] = [];
+  if (places.campaigns.length > 0) {
+    choices.push('campaign');
+  }
+  if (places.systems.length > 0) {
+    choices.push('system', 'systems');
+  }
+  return choices.length === 0 ? ['none'] : choices;
+}
+
+/**
+ * The pickers' first state: the current campaign when there is one to offer (else the first campaign), else the first
+ * system, else none; `from`, a material's place, is shown instead when the pickers can show it. When they cannot (an
+ * archived campaign, a system not offered), nothing is picked: no row is chosen and the selects show no value, so that
+ * saving takes an explicit pick and never moves the material by itself. With `pickFirst` false (a material's page),
+ * a material with no place opens with nothing picked too.
+ */
+export function draftOf(places: Belonging, from: Place | null = null, pickFirst = true): PlaceDraft {
+  const firstCampaign = places.campaigns.find((campaign) => campaign.id === places.current)?.id ?? places.campaigns[0]?.id ?? '';
+  const firstSystem = places.systems[0]?.id ?? '';
+  const draft: PlaceDraft = { choice: placeChoices(places)[0] ?? 'none', campaign: firstCampaign, system: firstSystem, systems: [] };
+  const offered = (id: string) => places.systems.some((system) => system.id === id);
+  if (from?.choice === 'campaign' && places.campaigns.some((campaign) => campaign.id === from.campaign)) {
+    return { ...draft, choice: 'campaign', campaign: from.campaign };
+  }
+  if (from?.choice === 'system' && offered(from.system)) {
+    return { ...draft, choice: 'system', system: from.system, systems: [from.system] };
+  }
+  if (from?.choice === 'systems') {
+    const shown = from.systems.filter(offered);
+    if (shown.length > 0) {
+      return { ...draft, choice: 'systems', system: shown[0] ?? firstSystem, systems: shown };
+    }
+  }
+  return from === null && pickFirst ? draft : { choice: null, campaign: '', system: '', systems: [] };
+}
+
+/**
+ * The pickers' state against what can be picked now (the places can change while a dialog stays open): a row or a value
+ * no longer offered falls back to the first state's.
+ */
+export function fitDraft(draft: PlaceDraft, places: Belonging): PlaceDraft {
+  const first = draftOf(places);
+  const systemIds = new Set(places.systems.map((system) => system.id));
+  return {
+    choice: draft.choice !== null && placeChoices(places).includes(draft.choice) ? draft.choice : first.choice,
+    campaign: places.campaigns.some((campaign) => campaign.id === draft.campaign) ? draft.campaign : first.campaign,
+    system: systemIds.has(draft.system) ? draft.system : first.system,
+    systems: draft.systems.filter((id) => systemIds.has(id)),
+  };
+}
+
+/** The place the pickers' state stands for, or null when the chosen row has nothing picked. */
+export function placeOf(draft: PlaceDraft): Place | null {
+  switch (draft.choice) {
+    case 'campaign':
+      return draft.campaign === '' ? null : { choice: 'campaign', campaign: draft.campaign };
+    case 'system':
+      return draft.system === '' ? null : { choice: 'system', system: draft.system };
+    case 'systems':
+      return draft.systems.length === 0 ? null : { choice: 'systems', systems: [...draft.systems] };
+    case 'none':
+      return { choice: 'none' };
+    case null:
+      return null;
+  }
+}
+
+/** A material's place as the backend answers it (Story 3.3), as the pickers hold it; null for none. */
+export function placeOfBelonging(belonging: components['schemas']['MaterialBelonging']): Place | null {
+  if (belonging.campaign) {
+    return { choice: 'campaign', campaign: belonging.campaign.id };
+  }
+  const [only, ...more] = belonging.systems;
+  if (only === undefined) {
+    return null;
+  }
+  return more.length === 0 ? { choice: 'system', system: only.id } : { choice: 'systems', systems: belonging.systems.map((system) => system.id) };
+}
 
 /** The answers of the dialog, the same for every file of one sending. */
 export type Answers = {
   readonly kind: Kind;
-  readonly belonging: BelongingChoice;
+  readonly belonging: Place;
   readonly language: UploadLanguage;
 };
 
@@ -53,7 +168,8 @@ export type ImageSetCreate = {
   readonly kind: Kind;
   readonly language: UploadLanguage;
   readonly campaign?: string;
-  readonly system?: string;
+  /** Story 3.3: one or more systems, never with a campaign. */
+  readonly systems?: readonly string[];
   readonly images: readonly SetImage[];
 };
 

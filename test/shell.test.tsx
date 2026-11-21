@@ -521,16 +521,25 @@ describe('the shell hands the guided upload its campaign and system (Story 1.14)
       };
     }
   });
+  const CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000002';
+  const SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000001';
+  const OTHER_SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000030';
+  // Story 3.3: every campaign in use and every system; the current campaign is chosen first.
   const BELONGING = {
-    campaign: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign' },
-    system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system' },
+    campaigns: [{ id: CAMPAIGN_ID, name: 'First campaign', system: { id: SYSTEM_ID, name: 'Untitled system' } }],
+    systems: [
+      { id: OTHER_SYSTEM_ID, name: 'Pathfinder' },
+      { id: SYSTEM_ID, name: 'Untitled system' },
+    ],
+    current: CAMPAIGN_ID,
   };
 
-  for (const [choice, expected] of [
-    [/Só em First campaign/, { campaign: BELONGING.campaign.id }],
-    [/Em todas as campanhas de Untitled system/, { system: BELONGING.system.id }],
+  for (const [choice, ticked, expected] of [
+    [/Uma campanha/, [], { campaign: CAMPAIGN_ID }],
+    [/Um sistema/, [], { systems: OTHER_SYSTEM_ID }],
+    [/Vários sistemas/, ['Pathfinder', 'Untitled system'], { systems: `${OTHER_SYSTEM_ID},${SYSTEM_ID}` }],
   ] as const) {
-    it(`sends ${Object.keys(expected)[0]}'s id for that choice`, async () => {
+    it(`sends the place for ${String(choice)}`, async () => {
       startUpload.mockClear();
       const user = userEvent.setup();
       render(
@@ -547,6 +556,9 @@ describe('the shell hands the guided upload its campaign and system (Story 1.14)
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('radio', { name: choice }));
+      for (const name of ticked) {
+        await user.click(within(modal).getByRole('checkbox', { name }));
+      }
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
       expect(startUpload).toHaveBeenCalledOnce();

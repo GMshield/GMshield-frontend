@@ -143,6 +143,13 @@
       "confirm": "Delete campaign"
     }
   },
+  "files": {
+    "list": "Your files",
+    "empty": "The files you send show here, with the state of each one.",
+    "loadMore": "Load more",
+    "addedOne": "1 more item in the list.",
+    "addedOther": "{count} more items in the list."
+  },
   "notFound": {
     "title": "Not found.",
     "home": "Go to the start"
@@ -252,7 +259,8 @@
         "ground_unknown": "This page cannot be opened from here."
       },
       "material": {
-        "action_unavailable": "This action is not available in the material's current state. The page has been updated."
+        "action_unavailable": "This action is not available in the material's current state. The page has been updated.",
+        "belonging_invalid": "Choose one of your campaigns or at least one of your systems."
       }
     }
   },
@@ -361,6 +369,29 @@
     "notice": {
       "needsReview": "{name} needs review.",
       "review": "Review"
+    },
+    "place": {
+      "campaign": "Campaign {campaign}",
+      "system": "System {system}",
+      "thisSystem": "System",
+      "none": "No place"
+    },
+    "pageCount": {
+      "one": "1 page",
+      "other": "{count} pages"
+    },
+    "belonging": {
+      "label": "Where it belongs",
+      "campaign": "In the campaign {campaign}, of the system {system}.",
+      "system": "In every campaign of the system {system}.",
+      "systems": "In every campaign of the systems {systems}.",
+      "none": "Nowhere: no question uses this file.",
+      "change": "Change",
+      "formLabel": "Where this file belongs",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "It applies from the next question.",
+      "stale": "This file was changed elsewhere. The choice now shows where it belongs: make your change again and save."
     }
   },
   "upload": {
@@ -440,17 +471,26 @@
       "belonging": {
         "question": "Where does it belong?",
         "campaign": {
-          "label": "Only in {campaign}",
-          "description": "Answers in this campaign use it; other campaigns do not."
+          "label": "One campaign",
+          "description": "Only answers in this campaign use it; other campaigns, even of the same system, do not."
         },
         "system": {
-          "label": "In every campaign of {system}",
+          "label": "One system",
           "description": "Answers in any campaign of this system use it."
+        },
+        "systems": {
+          "label": "Several systems",
+          "description": "Answers in the campaigns of each system you tick use it."
         },
         "none": {
           "label": "Nowhere yet",
-          "description": "You have no campaign yet, so the file is kept without one."
-        }
+          "description": "You have no campaign and no system yet, so the file is kept without one."
+        },
+        "campaignField": "Campaign",
+        "systemField": "System",
+        "systemsField": "Systems",
+        "systemsRequired": "Tick at least one system.",
+        "pick": "Choose"
       },
       "language": {
         "question": "What language is it in?",

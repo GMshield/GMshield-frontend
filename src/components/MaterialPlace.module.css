@@ -1,0 +1,51 @@
+/* A material page's "Onde pertence" (Story 3.3): its label, the place in a sentence, then "Alterar" or the form. */
+.section {
+  margin: var(--space-6) 0 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.summary {
+  max-width: 60ch;
+  margin: var(--space-1) 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 560px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+/* Said politely once a change is saved; empty otherwise. */
+.status {
+  margin: var(--space-2) 0 0;
+}
+
+.status:empty {
+  margin: 0;
+}

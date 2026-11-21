@@ -8,7 +8,7 @@ import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
 import { currentConversation } from '@/server/conversations';
-import { currentCampaign, listCampaigns } from '@/server/library';
+import { currentCampaign, listAllCampaigns, listAllSystems } from '@/server/library';
 import { listMaterials, TRAY_STATES } from '@/server/materials';
 import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server/session-cookies';
 
@@ -40,6 +40,10 @@ import { systemLabel } from './campaigns/rows';
  * Story 3.2: the campaigns in use (the first 50, newest first) are read here too, for the campaign switcher under the
  * logo and in the context bar; when they cannot be loaded the switcher offers only "Ver todas as mesas" and "Nova
  * campanha". The current campaign is always the backend's.
+ *
+ * Story 3.3: every campaign in use and every system are read here (50 a page, all the pages), for the guided upload's
+ * "where it belongs", which chooses the current campaign first; the switcher still shows the first 50 campaigns. When
+ * the systems cannot be loaded the upload offers the campaigns alone, and with neither, "nowhere yet".
  */
 export default async function SignedInLayout({ children }: { readonly children: ReactNode }) {
   const token = await currentSessionToken();
@@ -47,12 +51,13 @@ export default async function SignedInLayout({ children }: { readonly children: 
     redirect('/');
   }
   const [preferences, sidebar, here] = await Promise.all([currentPreferences(), currentSidebar(), currentPath()]);
-  const [account, campaign, materials, conversation, campaigns] = await Promise.all([
+  const [account, campaign, materials, conversation, campaigns, systems] = await Promise.all([
     currentAccount(token),
     currentCampaign(token),
     listMaterials(token, TRAY_STATES, { limit: 50 }),
     currentConversation(token),
-    listCampaigns(token, { limit: 50 }),
+    listAllCampaigns(token),
+    listAllSystems(token),
   ]);
   for (const result of [account, campaign, materials]) {
     if (result.ok) {
@@ -98,15 +103,19 @@ export default async function SignedInLayout({ children }: { readonly children: 
   }
   const current = campaign.ok ? { id: campaign.data.id, system: campaign.data.system.name, campaign: campaign.data.name } : null;
   const choices = campaigns.ok
-    ? campaigns.data.items.map((item) => ({
+    ? campaigns.data.slice(0, 50).map((item) => ({
         id: item.id,
         name: item.name,
         system: systemLabel(item.system, t),
       }))
     : [];
-  const belonging = campaign.ok
-    ? { campaign: { id: campaign.data.id, name: campaign.data.name }, system: { id: campaign.data.system.id, name: campaign.data.system.name } }
-    : null;
+  const belonging = {
+    campaigns: campaigns.ok
+      ? campaigns.data.map((item) => ({ id: item.id, name: item.name, system: { id: item.system.id, name: systemLabel(item.system, t) } }))
+      : [],
+    systems: systems.ok ? systems.data.map((item) => ({ id: item.id, name: systemLabel(item, t) })) : [],
+    current: campaign.ok ? campaign.data.id : null,
+  };
   return (
     <Shell
       preferences={preferences}

@@ -36,6 +36,8 @@ const CAMPAIGN = {
 
 const MATERIALS = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50';
 const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
+/** Story 3.3: a material's version and place, which every material of the contract carries (here: none). */
+const PLACE = { version: 0, belonging: { campaign: null, systems: [] } };
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -101,6 +103,7 @@ describe('the signed-in layout (Story 1.11)', () => {
       'GET /api/v1/conversations/current',
       MATERIALS,
       'GET /api/v1/me',
+      'GET /api/v1/systems?limit=50',
     ]);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
@@ -144,10 +147,10 @@ describe('the signed-in layout (Story 1.11)', () => {
 
   it('no campaign: the shell says so; a campaign that cannot be loaded: a notice in the main column', async () => {
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
-    let html = await layoutHtml(await FilesPage());
+    let html = await layoutHtml(await CharactersPage());
     expect(html).toContain('Nenhuma campanha');
     expect(html).not.toContain('role="status"');
-    expect(html).toContain('Aqui você vai ver os arquivos que enviou e o estado de cada um.');
+    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
     await backend!.close();
 
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(503, 'server.unavailable') });
@@ -161,7 +164,6 @@ describe('the signed-in layout (Story 1.11)', () => {
     const pages = {
       rules: (await import('@/app/(signed-in)/rules/page')).default,
       characters: CharactersPage,
-      files: FilesPage,
     } as const;
     const ptBR = (await import('@/messages/pt-BR.json')).default;
     const en = (await import('@/messages/en.json')).default;
@@ -332,7 +334,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
 
   it('the material page shows the name and the state pill, in both languages', async () => {
     const server = await useBackend({
-      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'waiting' } },
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'waiting' } },
     });
     let html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
     expect(html).toContain('<h1');
@@ -350,7 +352,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const key = `GET /api/v1/materials/${MATERIAL_ID}`;
     const routes: Record<string, { status: number; body: unknown }> = {};
     const answer = (body: Record<string, unknown>) => {
-      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, ...body } };
     };
     const page = async (language?: 'en') => {
       if (language === undefined) {
@@ -394,7 +396,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const key = `GET /api/v1/materials/${MATERIAL_ID}`;
     const routes: Record<string, { status: number; body: unknown }> = {};
     const answer = (body: Record<string, unknown>) => {
-      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, ...body } };
     };
     const page = async (language?: 'en') => {
       if (language === undefined) {
@@ -502,7 +504,7 @@ describe('a page of a material (Story 1.19)', () => {
     const routes: Record<string, { status: number; body: unknown }> = {};
     await useBackend(routes);
     for (const state of ['needs_review', 'ready']) {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state } };
       const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
       expect(html, state).toContain(`href="/files/${MATERIAL_ID}/pages/1"`);
       expect(html).toContain('Ver páginas');
@@ -511,7 +513,7 @@ describe('a page of a material (Story 1.19)', () => {
     expect(renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }))).toContain('View pages');
     delete cookieJar['__Host-gmshield-lang'];
     for (const state of ['uploading', 'waiting', 'processing', 'failed']) {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state } };
       const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
       expect(html, state).not.toContain('/pages/');
     }
@@ -520,7 +522,7 @@ describe('a page of a material (Story 1.19)', () => {
   it('shows the page with its number, its name back to the material, and both page links in the middle', async () => {
     const server = await useBackend({
       [PAGE_13]: { status: 200, body: picturePage },
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review' } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'needs_review' } },
     });
     let html = await route('13');
     expect(server.calls.find((call) => `${call.method} ${call.url}` === PAGE_13)?.headers['x-session-token']).toBe(SESSION);
@@ -541,7 +543,7 @@ describe('a page of a material (Story 1.19)', () => {
 
   it('hides the previous link on the first page and the next link on the last', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready' } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'ready' } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`]: { status: 200, body: { ...picturePage, page: 1 } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/364?ground=review`]: { status: 200, body: { ...picturePage, page: 364 } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/2?ground=review`]: {
@@ -565,7 +567,7 @@ describe('a page of a material (Story 1.19)', () => {
   });
 
   it("a page the backend does not serve, another owner's, or a malformed number is the single not-found page", async () => {
-    await useBackend({ [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'processing' } } });
+    await useBackend({ [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'processing' } } });
     for (const page of ['13', '0', '013', 'x', '-1', '99999999']) {
       const thrown = await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page }) }).then(
         () => null,
@@ -621,13 +623,13 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
   };
   const numeral = (html: string, name: string) => new RegExp(`data-numeral="${name}"><dt[^>]*>[^<]*</dt><dd[^>]*>(\\d+)</dd>`).exec(html)?.[1];
-  // The page's pills, before the (closed) confirmation dialog and its own pills.
+  // The page's pills, before the (closed) confirmation dialog and its own pills; not "Onde pertence"'s (Story 3.3).
   const buttons = (html: string) =>
-    [...(html.split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
+    [...(html.replace(/<section[^>]*aria-labelledby="material-place".*?<\/section>/s, '').split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
 
   it('a material that needs review shows its report: numerals, warnings as facts, unreadable pages as links, the outline by level', async () => {
     const server = await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review', actions: ['accept', 'reprocess', 'discard'], pages: reviewPages } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'needs_review', actions: ['accept', 'reprocess', 'discard'], pages: reviewPages } },
       [REPORT]: { status: 200, body: report },
     });
     let html = await page();
@@ -665,7 +667,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     const routes: Record<string, { status: number; body: unknown }> = { [REPORT]: { status: 200, body: { outline: [], unreadable: [], warnings: [{ code: 'report.outline_empty', count: 0 }] } } };
     const server = await useBackend(routes);
     const answer = (body: Record<string, unknown>) => {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...body } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, ...body } };
     };
 
     // Nothing to reprocess.
@@ -709,7 +711,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
 
   it('a report that cannot be loaded is a sentence, never a code', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: ['accept', 'discard'], pages: reviewPages } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: ['accept', 'discard'], pages: reviewPages } },
       [REPORT]: problem(503, 'server.unavailable'),
     });
     const html = await page();
@@ -889,7 +891,7 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 
   it('a picture page sits beside "Texto extraído", which holds its lines, or says none was extracted', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: [] } },
       [at(13)]: {
         status: 200,
         body: {
@@ -924,7 +926,7 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 
   it('an unreadable page whose reading crashed says it could not be opened, with its number and both links', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: [] } },
       [at(9)]: { status: 200, body: { page: 9, pageTotal: 30, picture: null, lines: [], text: null, passages: [], outcome: 'unreadable' } },
     });
     const html = await route('9');
@@ -935,5 +937,126 @@ describe('a page beside its extracted text (Story 1.20)', () => {
     expect(html).not.toContain('Texto extraído');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/8"`);
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/10"`);
+  });
+});
+
+describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
+  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed';
+  const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+  const OTHER_SYSTEM = '0190a0b0-0000-7000-8000-000000000030';
+  const IN_CAMPAIGN = { campaign: { id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D' } }, systems: [] };
+  const pages = { done: 320, total: 320, text: { done: 320, total: 320 }, image: { done: 0, total: 0 }, readDirectly: 320, readByOcr: 0, unreadable: 0, reading: null };
+  const files = [
+    { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready', actions: [], version: 1, size: 1234567, pages, belonging: IN_CAMPAIGN },
+    {
+      id: '0190a0b0-0000-7000-8000-000000000006',
+      name: 'Bestiário.pdf',
+      state: 'needs_review',
+      actions: [],
+      version: 0,
+      size: 2000,
+      pages: { ...pages, total: 1 },
+      belonging: { campaign: null, systems: [{ id: SYSTEM, name: 'D&D' }, { id: OTHER_SYSTEM, name: 'Pathfinder' }] },
+    },
+    { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Solto.md', state: 'uploading', actions: [], version: 0, belonging: { campaign: null, systems: [] } },
+  ];
+
+  it('lists every material but a discarded one, each with its state, size, pages and place, opening its page', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: files, nextCursor: '0190a0b0-0000-7000-8000-000000000007' } },
+    });
+    requestHeaders = { 'x-gmshield-path': '/files' };
+
+    const html = await layoutHtml(await FilesPage());
+
+    expect(html).toMatch(/<h1[^>]*>Meus Arquivos<\/h1>/);
+    // "Adicionar Arquivo" is the page's one solid pill, and opens the guided upload.
+    expect(html).toMatch(/<main.*<button(?=[^>]*aria-haspopup="dialog")(?=[^>]*data-variant="solid")[^>]*>Adicionar Arquivo<\/button>/s);
+    expect(html).toContain('aria-label="Seus arquivos"');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
+    expect(html).toMatch(/Livro\.pdf<\/span><span[^>]*data-state="ready"[^>]*>.*?pronto.*?<span[^>]*>1,2 MB · 320 páginas · Campanha Mesa de sexta<\/span>/s);
+    expect(html).toContain('>2 KB · 1 página · D&amp;D e Pathfinder</span>');
+    expect(html).toContain('>Sem lugar</span>');
+    expect(html).toContain('Carregar mais');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === FILES)?.headers['x-session-token']).toBe(SESSION);
+  });
+
+  it('an empty list says so in one sentence, with "Adicionar Arquivo" its only action; a list that cannot load says why', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: [] } } });
+    let html = await layoutHtml(await FilesPage());
+    expect(html).toContain('Os arquivos que você enviar aparecem aqui, com o estado de cada um.');
+    expect(html).not.toContain('aria-label="Seus arquivos"');
+    await backend!.close();
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: problem(503, 'server.unavailable') });
+    html = await layoutHtml(await FilesPage());
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+  });
+
+  it('a first page the backend left empty with a next page offers "Carregar mais", not the empty sentence', async () => {
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: [], nextCursor: MATERIAL_ID } },
+    });
+    const html = await layoutHtml(await FilesPage());
+    expect(html).not.toContain('Os arquivos que você enviar aparecem aqui');
+    expect(html).toContain(`name="cursor" value="${MATERIAL_ID}"`);
+    expect(html).toContain('Carregar mais');
+  });
+
+  it('"Carregar mais" adds the next page after the cursor, and a malformed cursor never reaches the backend', async () => {
+    const { moreFiles } = await import('@/app/(signed-in)/files/actions');
+    const server = await useBackend({ [`${FILES}&cursor=${MATERIAL_ID}`]: { status: 200, body: { items: files.slice(2) } } });
+    const start = { rows: [], nextCursor: MATERIAL_ID, error: null, added: 0 };
+    const form = new FormData();
+    form.set('cursor', MATERIAL_ID);
+
+    expect(await moreFiles(start, form)).toEqual({
+      rows: [{ id: files[2]!.id, label: 'Solto.md', detail: 'Sem lugar', href: `/files/${files[2]!.id}`, state: { state: 'uploading', word: 'enviando' } }],
+      nextCursor: null,
+      error: null,
+      added: 1,
+    });
+    form.set('cursor', '../x');
+    expect((await moreFiles(start, form)).error).toBe('O pedido não é válido.');
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it('a material page says where it belongs, with "Alterar", reading the campaigns and systems it can be given', async () => {
+    const server = await useBackend({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: files[0] },
+      'GET /api/v1/campaigns?limit=50': { status: 200, body: { items: [{ id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D', edition: null }, archived: false }] } },
+      'GET /api/v1/systems?limit=50': { status: 200, body: { items: [{ id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }] } },
+    });
+    let html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('aria-labelledby="material-place"');
+    expect(html).toContain('>Onde pertence</h2>');
+    expect(html).toContain('Na campanha Mesa de sexta, do sistema D&amp;D.');
+    expect(html).toMatch(/<button[^>]*data-variant="default"[^>]*>Alterar<\/button>/);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(
+      [
+        'GET /api/v1/campaigns?limit=50',
+        `GET /api/v1/materials/${MATERIAL_ID}`,
+        `GET /api/v1/materials/${MATERIAL_ID}/report`,
+        'GET /api/v1/systems?limit=50',
+      ].sort(),
+    );
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('In the campaign Mesa de sexta, of the system D&amp;D.');
+  });
+
+  it('a material page whose campaigns and systems cannot be loaded says why instead of offering "Alterar"', async () => {
+    await useBackend({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: files[2] },
+      'GET /api/v1/campaigns?limit=50': problem(503, 'server.unavailable'),
+      'GET /api/v1/systems?limit=50': problem(503, 'server.unavailable'),
+    });
+    const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('Em nenhum lugar: nenhuma pergunta usa este arquivo.');
+    expect(html).not.toMatch(/>Alterar<\/button>/);
+    expect(html).toMatch(/aria-labelledby="material-place".*O serviço está indisponível agora\. Tente de novo em instantes\./s);
   });
 });

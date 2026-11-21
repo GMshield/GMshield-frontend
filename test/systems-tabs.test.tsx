@@ -54,7 +54,13 @@ beforeEach(async () => {
   const url = await scripted({
     [`GET /api/v1/systems/${ID}`]: { status: 200, body: { id: ID, name: 'D&D', edition: '5.2.1', description: null, version: 0 } },
     [`GET /api/v1/campaigns?system=${ID}`]: { status: 200, body: { items: [{ id: CAMPAIGN, name: 'A Coroa Partida' }], nextCursor: CAMPAIGN } },
-    [MATERIALS]: { status: 200, body: { items: [{ id: MATERIAL, name: 'SRD.pdf', state: 'ready', actions: [] }], nextCursor: MATERIAL } },
+    [MATERIALS]: {
+      status: 200,
+      body: {
+        items: [{ id: MATERIAL, name: 'SRD.pdf', state: 'ready', actions: [], version: 0, belonging: { campaign: null, systems: [{ id: ID, name: 'D&D' }] } }],
+        nextCursor: MATERIAL,
+      },
+    },
   });
   vi.stubEnv('GMSHIELD_MODE', '');
   vi.stubEnv('GMSHIELD_BACKEND_URL', url);

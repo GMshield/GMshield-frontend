@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import type { UrlStorage } from 'tus-js-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { NO_PLACES } from '@/components/uploads/types';
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
 type Ask = (campaignId: string, question: string) => Promise<unknown>;
@@ -90,7 +92,7 @@ function view(
   options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review?: { href: string; name: string } | null; loadPage?: LoadPage } = {},
 ) {
   return render(
-    <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={null} urlStorage={memoryStorage()}>
+    <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
       <Conversation
         language={options.language ?? 'pt-BR'}
         campaignId={CAMPAIGN}

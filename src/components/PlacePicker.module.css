@@ -1,0 +1,105 @@
+/* Where a material belongs (Story 3.3): three full-width choice rows, each with its picker under its explanation. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choices > li + li {
+  border-top: 1px solid var(--color-rule);
+}
+
+.row {
+  padding: var(--space-3) var(--space-2);
+}
+
+.row:has(> .choice input:checked) {
+  background-color: var(--color-surface-active);
+}
+
+/* The radio in the first column, beside its label and, below the label, its explanation. */
+.choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  width: 100%;
+  min-height: var(--space-touch-target);
+  cursor: pointer;
+}
+
+.choice input {
+  grid-row: 1 / span 2;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--color-text);
+}
+
+.choiceLabel {
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.choiceDescription {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: 400;
+  line-height: var(--font-body-line-height);
+}
+
+/* A row's picker, under its text: indented to the label's column. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0 calc(18px + var(--space-3));
+  padding: 0;
+  border: 0;
+}
+
+.pickerLabel {
+  padding: 0;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.select {
+  width: 100%;
+  max-width: 36rem;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--space-touch-target);
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-text);
+}

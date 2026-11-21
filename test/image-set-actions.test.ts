@@ -81,6 +81,17 @@ describe('the image set actions (Story 1.21)', () => {
     expect(JSON.parse(call.body)).toEqual(request);
   });
 
+  it('sends several systems in place of a campaign (Story 3.3)', async () => {
+    const server = await useBackend({ 'POST /api/v1/image-sets': { status: 201, body: { id: SET, materialId: MATERIAL, expiresAt: 'x', images: [] } } });
+    const systems = ['0190a0b0-0000-7000-8000-000000000001', '0190a0b0-0000-7000-8000-000000000030'];
+
+    expect((await createImageSetAction({ ...request, campaign: undefined, systems })).ok).toBe(true);
+
+    const body = JSON.parse(server.calls[0]!.body) as Record<string, unknown>;
+    expect(body.systems).toEqual(systems);
+    expect(body).not.toHaveProperty('campaign');
+  });
+
   it('replaces a failed image at its place and leaves one out, refreshing the tray after a drop', async () => {
     const server = await useBackend({
       [`POST /api/v1/image-sets/${SET}/images/2`]: { status: 201, body: { position: 2, uploadId: '0190a0b0-0000-7000-8000-000000000013', expiresAt: 'x' } },
@@ -119,7 +130,11 @@ describe('the image set actions (Story 1.21)', () => {
       { ...request, kind: 'poem' },
       { ...request, language: 'fr' },
       { ...request, campaign: '../x' },
-      { ...request, system: CAMPAIGN },
+      // Story 3.3: systems with a campaign, none, a malformed one, or more than 100.
+      { ...request, systems: [CAMPAIGN] },
+      { ...request, campaign: undefined, systems: [] },
+      { ...request, campaign: undefined, systems: ['../x'] },
+      { ...request, campaign: undefined, systems: Array.from({ length: 101 }, () => CAMPAIGN) },
       { ...request, images: [] },
       { ...request, images: [{ name: 'a.jpg', length: 0 }] },
       { ...request, images: [{ name: 'a.jpg', length: 2 * 1024 ** 3 + 1 }] },

@@ -4,7 +4,7 @@ import type { PreviousUpload, UrlStorage } from 'tus-js-client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UploadOptions, UploadResult } from '@/client/upload';
-import type { ImageSetCalls, ImageSetCreate, SetCallResult } from '@/components/uploads/types';
+import { NO_PLACES, type Belonging, type ImageSetCalls, type ImageSetCreate, type SetCallResult } from '@/components/uploads/types';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -66,9 +66,13 @@ const { Conversation } = await import('@/components/conversation/Conversation');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
-const BELONGING = {
-  campaign: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' },
-  system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' },
+const CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000002';
+const SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000001';
+/** Story 3.3: what the guided upload offers: the campaigns in use, the systems, the current campaign. */
+const BELONGING: Belonging = {
+  campaigns: [{ id: CAMPAIGN_ID, name: 'Primeira campanha', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } }],
+  systems: [{ id: SYSTEM_ID, name: 'Sistema sem nome' }],
+  current: CAMPAIGN_ID,
 };
 const LABELS = {
   name: 'GMshield',
@@ -134,7 +138,7 @@ function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unkn
 }
 
 function view(
-  options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: typeof BELONGING | null; sets?: ImageSetCalls } = {},
+  options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: Belonging; sets?: ImageSetCalls } = {},
 ) {
   const storage = options.storage ?? memoryStorage();
   const tree = (rows: Material[]) => (
@@ -240,8 +244,8 @@ describe('the guided upload (Story 1.14)', () => {
 
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getByText('Passo 3 de 4')).toBeTruthy();
-    expect(within(modal).getByRole('radio', { name: /Só em Primeira campanha/ })).toBeTruthy();
-    await user.click(within(modal).getByRole('radio', { name: /Em todas as campanhas de Sistema sem nome/ }));
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
+    await user.click(within(modal).getByRole('radio', { name: /Um sistema/ }));
 
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getByText('Passo 4 de 4')).toBeTruthy();
@@ -252,7 +256,7 @@ describe('the guided upload (Story 1.14)', () => {
     expect(within(modal).queryByText(/Passo/)).toBeNull();
     expect(within(modal).getByRole('heading', { name: 'Enviando' })).toBeTruthy();
     expect(uploads).toHaveLength(1);
-    expect(uploads[0]!.options.metadata).toEqual({ kind: 'supplement', language: 'pt-BR', system: BELONGING.system.id });
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'supplement', language: 'pt-BR', systems: SYSTEM_ID });
     expect(uploads[0]!.options.resumeUrl).toBeUndefined();
     expect(container.querySelectorAll('[style]')).toHaveLength(0);
   });
@@ -347,7 +351,7 @@ describe('the guided upload (Story 1.14)', () => {
     });
     expect(uploads.map((upload) => upload.file.name)).toEqual(['a.pdf', 'b.pdf', 'c.md']);
     for (const upload of uploads) {
-      expect(upload.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: BELONGING.campaign.id });
+      expect(upload.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
     }
     // The server's refusal shows in the progress step, and is said at once.
     expect(modal.textContent).toContain('Este formato não é aceito');
@@ -358,18 +362,66 @@ describe('the guided upload (Story 1.14)', () => {
 
   it('without a campaign offers only "nowhere yet", and sends no belonging', async () => {
     const user = userEvent.setup();
-    view({ belonging: null });
+    view({ belonging: NO_PLACES });
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     await choose(pdf());
     const modal = dialog();
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual([
-      'Em nenhum lugar por enquantoVocê ainda não tem campanha, então o arquivo fica guardado sem uma.',
+      'Em nenhum lugar por enquantoVocê ainda não tem campanha nem sistema, então o arquivo fica guardado sem um.',
     ]);
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
     expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect' });
+  });
+
+  it('offers every campaign in use grouped by system, one system or several systems, the current campaign first (Story 3.3)', async () => {
+    const user = userEvent.setup();
+    const PATHFINDER = '0190a0b0-0000-7000-8000-000000000030';
+    const places: Belonging = {
+      campaigns: [
+        { id: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } },
+        { id: '0190a0b0-0000-7000-8000-000000000041', name: 'Mesa de sábado', system: { id: PATHFINDER, name: 'Pathfinder' } },
+        { id: CAMPAIGN_ID, name: 'Primeira campanha', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } },
+      ],
+      systems: [
+        { id: PATHFINDER, name: 'Pathfinder' },
+        { id: SYSTEM_ID, name: 'Sistema sem nome' },
+      ],
+      current: CAMPAIGN_ID,
+    };
+    view({ belonging: places });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    const modal = dialog();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+
+    // Three full-width rows, each with its explanation; the current campaign is chosen first.
+    expect(within(modal).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)).toEqual(['campaign', 'system', 'systems']);
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
+    const campaign = within(modal).getByRole('combobox', { name: 'Campanha' }) as HTMLSelectElement;
+    expect(campaign.value).toBe(CAMPAIGN_ID);
+    expect([...campaign.querySelectorAll('optgroup')].map((group) => `${group.label}: ${[...group.querySelectorAll('option')].map((option) => option.textContent).join(', ')}`)).toEqual([
+      'Sistema sem nome: Mesa de quinta, Primeira campanha',
+      'Pathfinder: Mesa de sábado',
+    ]);
+    // Picking in a row's picker chooses that row.
+    await user.selectOptions(within(modal).getByRole('combobox', { name: 'Sistema' }), PATHFINDER);
+    expect((within(modal).getByRole('radio', { name: /Um sistema/ }) as HTMLInputElement).checked).toBe(true);
+    // Several systems with none ticked cannot go on.
+    await user.click(within(modal).getByRole('radio', { name: /Vários sistemas/ }));
+    const next = within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    expect(within(modal).getByRole('alert').textContent).toBe('Marque pelo menos um sistema.');
+    await user.click(within(modal).getByRole('checkbox', { name: 'Sistema sem nome' }));
+    await user.click(within(modal).getByRole('checkbox', { name: 'Pathfinder' }));
+    expect(next.disabled).toBe(false);
+    await user.click(next);
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    // In the systems' order, whatever the order ticked.
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', systems: `${PATHFINDER},${SYSTEM_ID}` });
   });
 
   it('under 1280px, opening it closes the sidebar sheet first, so no dialog sits on another', async () => {
@@ -399,22 +451,22 @@ describe('the guided upload (Story 1.14)', () => {
 
   it('follows a campaign that arrives while it stays mounted, and sends it', async () => {
     const user = userEvent.setup();
-    const tree = (belonging: typeof BELONGING | null) => (
+    const tree = (belonging: Belonging) => (
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={belonging} urlStorage={memoryStorage()}>
         <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
       </UploadsProvider>
     );
-    const { rerender } = render(tree(null));
+    const { rerender } = render(tree(NO_PLACES));
     rerender(tree(BELONGING));
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     await choose(pdf());
     const modal = dialog();
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
-    expect((within(modal).getByRole('radio', { name: /Só em Primeira campanha/ }) as HTMLInputElement).checked).toBe(true);
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
-    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: BELONGING.campaign.id });
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
   });
 
   it('speaks English', async () => {
@@ -791,7 +843,7 @@ describe('photos as the pages of one material (Story 1.21)', () => {
         name: 'Ficha do herói',
         kind: 'rulebook',
         language: 'detect',
-        campaign: BELONGING.campaign.id,
+        campaign: CAMPAIGN_ID,
         images: [
           { name: 'foto-1.jpg', length: 6000 },
           { name: 'foto-2.png', length: 6000 },
@@ -813,6 +865,47 @@ describe('photos as the pages of one material (Story 1.21)', () => {
     await settle();
     expect(polite()).toBe('Ficha do herói: aguardando.');
   });
+
+  for (const [choice, ticked, systems] of [
+    [/Um sistema/, [], [SYSTEM_ID]],
+    [/Vários sistemas/, ['Sistema sem nome', 'Pathfinder'], ['0190a0b0-0000-7000-8000-000000000030', SYSTEM_ID]],
+  ] as const) {
+    it(`sends a set to ${String(choice)} with its systems and no campaign (Story 3.3)`, async () => {
+      const user = userEvent.setup();
+      const sets = setCalls();
+      const places: Belonging = {
+        ...BELONGING,
+        systems: [
+          { id: '0190a0b0-0000-7000-8000-000000000030', name: 'Pathfinder' },
+          { id: SYSTEM_ID, name: 'Sistema sem nome' },
+        ],
+      };
+      view({ sets, belonging: places });
+      await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+      await choose(jpeg('foto-1.jpg'));
+      const modal = dialog();
+      await nextSteps(modal, 2);
+      await user.click(within(modal).getByRole('radio', { name: choice }));
+      if (choice.source === 'Um sistema') {
+        await user.selectOptions(within(modal).getByRole('combobox', { name: 'Sistema' }), SYSTEM_ID);
+      }
+      for (const name of ticked) {
+        await user.click(within(modal).getByRole('checkbox', { name }));
+      }
+      await nextSteps(modal, 1);
+      await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+      await settle();
+
+      expect(sets.created[0]).toEqual({
+        name: 'foto-1.jpg',
+        kind: 'rulebook',
+        language: 'detect',
+        systems,
+        images: [{ name: 'foto-1.jpg', length: 6000 }],
+      });
+      expect(sets.created[0]).not.toHaveProperty('campaign');
+    });
+  }
 
   it('reorders by Alt+arrows on a row and by its buttons, announcing each move politely, and sends that order', async () => {
     const user = userEvent.setup();
@@ -1133,7 +1226,7 @@ describe("the conversation's empty state (Story 2.4)", () => {
     render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()}>
         <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
-        <Conversation language="pt-BR" campaignId={BELONGING.campaign.id} hasSources={false} review={null} />
+        <Conversation language="pt-BR" campaignId={CAMPAIGN_ID} hasSources={false} review={null} />
       </UploadsProvider>,
     );
     expect(screen.queryByRole('dialog', { name: 'Adicionar arquivos' })).toBeNull();

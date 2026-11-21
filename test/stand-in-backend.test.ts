@@ -140,6 +140,25 @@ describe('stand-in backend', () => {
     });
   });
 
+  it('answers where a material belongs (Story 3.3): the starter campaign, and a change to its system at version 1', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' } };
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({
+      status: 200,
+      body: { version: 0, size: 134217728, belonging: { campaign, systems: [] } },
+    });
+    expect(answer(contract, 'PATCH', `/api/v1/materials/${id}`, 't')).toMatchObject({
+      status: 200,
+      body: { id, version: 1, belonging: { campaign: null, systems: [{ id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' }] } },
+    });
+    // Every other action's material carries a version and a place too, as the contract requires.
+    for (const action of ['reprocess', 'retry', 'discard']) {
+      const body = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't').body as { version?: unknown; belonging?: unknown };
+      expect(typeof body.version, action).toBe('number');
+      expect(body.belonging, action).toBeTruthy();
+    }
+  });
+
   it('answers the report and the actions (Story 1.20): an outline with its warnings, and a material for each action', () => {
     const id = '0190a0b0-0000-7000-8000-000000000003';
     expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({

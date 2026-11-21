@@ -45,11 +45,11 @@ export type ItemListProps = {
 };
 
 /**
- * A list page's rows (Story 3.1): each row opens its page when it has one, with a muted detail (a system's edition) or
- * a material's state pill. While there is a next page, a "Carregar mais" pill under the list adds it on request,
- * never on scrolling; it posts the cursor to a Server Action, so it works without JavaScript too. A polite status,
- * not shown, says how many rows the page added. A refusal shows as an alert under the list, and the rows already there
- * stay.
+ * A list page's rows (Story 3.1): each row opens its page when it has one, with a material's state pill and a muted
+ * detail (a system's edition; from Story 3.3 a material's size, pages and place, after its state). While there is a
+ * next page, a "Carregar mais" pill under the list adds it on request, never on scrolling; it posts the cursor to a
+ * Server Action, so it works without JavaScript too. A polite status, not shown, says how many rows the page added. A
+ * refusal shows as an alert under the list, and the rows already there stay.
  */
 export function ItemList({ label, rows, nextCursor, loadMore, added, action, fields = {} }: ItemListProps) {
   const [state, formAction, pending] = useActionState(action, { rows: [], nextCursor, error: null, added: 0 });
@@ -67,8 +67,8 @@ export function ItemList({ label, rows, nextCursor, loadMore, added, action, fie
           const content = (
             <>
               <span className={styles.label}>{row.label}</span>
-              {row.detail === null ? null : <span className={styles.detail}>{row.detail}</span>}
               {row.state === null ? null : <StatePill state={row.state.state} word={row.state.word} />}
+              {row.detail === null ? null : <span className={styles.detail}>{row.detail}</span>}
             </>
           );
           return (

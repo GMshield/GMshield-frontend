@@ -21,9 +21,10 @@ type Tab = (typeof TABS)[number];
 /**
  * A system's page (Story 3.1): its name, edition and description, "Editar" (the one solid pill), and two tabs,
  * campaigns (the default) and materials, chosen by `?tab=`. The campaigns tab lists the system's campaigns in use, each
- * opening its page (Story 3.2); the materials tab lists the materials attached to the system or to one of its campaigns, each
- * opening its page. Each tab adds rows with "Carregar mais", or says in one sentence that it is empty. Another owner's
- * id, an unknown one or a malformed one shows the single "Não encontrado." page.
+ * opening its page (Story 3.2); the materials tab lists the materials attached to the system or to one of its
+ * campaigns, each opening its page and naming where it belongs (Story 3.3: "Sistema", "Campanha X", or the names of its
+ * systems). Each tab adds rows with "Carregar mais", or says in one sentence that it is empty (no row and no next page).
+ * Another owner's id, an unknown one or a malformed one shows the single "Não encontrado." page.
  *
  * Story 3.1 part B: "Excluir", a danger pill next to "Editar" ({@link SystemActions}), whose confirmation names what
  * goes with the counts the backend gives for this system; without them it names what goes in words.
@@ -53,7 +54,11 @@ export default async function SystemPage({
         )
       : listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id }).then((result) =>
           result.ok
-            ? { ok: true as const, rows: result.data.items.map((material) => materialRow(material, t)), nextCursor: result.data.nextCursor ?? null }
+            ? {
+                ok: true as const,
+                rows: result.data.items.map((material) => materialRow(material, t, language, system.data.id)),
+                nextCursor: result.data.nextCursor ?? null,
+              }
             : result,
         ),
     systemDeletion(token ?? '', system.data.id),
@@ -93,7 +98,7 @@ export default async function SystemPage({
         <div className={styles.notice}>
           <Notice status="danger" language={language} message={errorText(page.problem, language)} dismissible={false} />
         </div>
-      ) : page.rows.length === 0 ? (
+      ) : page.rows.length === 0 && page.nextCursor === null ? (
         <p className={styles.empty}>{t(tab === 'campaigns' ? 'systems.page.noCampaigns' : 'systems.page.noMaterials')}</p>
       ) : (
         <ItemList

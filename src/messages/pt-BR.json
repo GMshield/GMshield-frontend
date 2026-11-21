@@ -143,6 +143,13 @@
       "confirm": "Excluir campanha"
     }
   },
+  "files": {
+    "list": "Seus arquivos",
+    "empty": "Os arquivos que você enviar aparecem aqui, com o estado de cada um.",
+    "loadMore": "Carregar mais",
+    "addedOne": "Mais 1 item na lista.",
+    "addedOther": "Mais {count} itens na lista."
+  },
   "notFound": {
     "title": "Não encontrado.",
     "home": "Ir para o início"
@@ -252,7 +259,8 @@
         "ground_unknown": "Esta página não pode ser aberta a partir daqui."
       },
       "material": {
-        "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada."
+        "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada.",
+        "belonging_invalid": "Escolha uma campanha ou pelo menos um sistema que você tenha."
       }
     }
   },
@@ -361,6 +369,29 @@
     "notice": {
       "needsReview": "{name} precisa de revisão.",
       "review": "Revisar"
+    },
+    "place": {
+      "campaign": "Campanha {campaign}",
+      "system": "Sistema {system}",
+      "thisSystem": "Sistema",
+      "none": "Sem lugar"
+    },
+    "pageCount": {
+      "one": "1 página",
+      "other": "{count} páginas"
+    },
+    "belonging": {
+      "label": "Onde pertence",
+      "campaign": "Na campanha {campaign}, do sistema {system}.",
+      "system": "Em todas as campanhas do sistema {system}.",
+      "systems": "Em todas as campanhas dos sistemas {systems}.",
+      "none": "Em nenhum lugar: nenhuma pergunta usa este arquivo.",
+      "change": "Alterar",
+      "formLabel": "Onde este arquivo fica",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "saved": "Vale a partir da próxima pergunta.",
+      "stale": "Este arquivo foi alterado em outro lugar. A escolha agora mostra onde ele fica: faça sua alteração de novo e salve."
     }
   },
   "upload": {
@@ -440,17 +471,26 @@
       "belonging": {
         "question": "Onde ele fica?",
         "campaign": {
-          "label": "Só em {campaign}",
-          "description": "As respostas desta campanha usam o arquivo; as outras campanhas não."
+          "label": "Uma campanha",
+          "description": "Só as respostas desta campanha usam o arquivo; as outras campanhas, mesmo do mesmo sistema, não."
         },
         "system": {
-          "label": "Em todas as campanhas de {system}",
+          "label": "Um sistema",
           "description": "As respostas de qualquer campanha deste sistema usam o arquivo."
+        },
+        "systems": {
+          "label": "Vários sistemas",
+          "description": "As respostas das campanhas de cada sistema marcado usam o arquivo."
         },
         "none": {
           "label": "Em nenhum lugar por enquanto",
-          "description": "Você ainda não tem campanha, então o arquivo fica guardado sem uma."
-        }
+          "description": "Você ainda não tem campanha nem sistema, então o arquivo fica guardado sem um."
+        },
+        "campaignField": "Campanha",
+        "systemField": "Sistema",
+        "systemsField": "Sistemas",
+        "systemsRequired": "Marque pelo menos um sistema.",
+        "pick": "Escolha"
       },
       "language": {
         "question": "Em que idioma ele está?",
