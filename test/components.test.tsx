@@ -670,13 +670,16 @@ describe('SystemActions (Story 3.1 part B)', () => {
     );
   });
 
-  it('shows a refusal as an alert under the pill', async () => {
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
     const user = userEvent.setup();
     const { action } = recorder({ error: 'Não encontrado.' });
     render(<SystemActions id={ID} counts={{ campaigns: 1, conversations: 0, materials: 0 }} language="pt-BR" action={action} />);
-    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
   });
 });
 

@@ -49,7 +49,8 @@ export function deletionConsequence(t: Translate, counts: SystemDeletionCounts |
  * "Excluir" on a system's page (Story 3.1 part B): a danger pill next to "Editar" that opens the confirmation, which
  * names what goes with its counts ("Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele."). "Excluir
  * sistema" posts the system to the Server Action, which deletes it and opens the list of systems; a refusal shows as
- * an alert under the pill. "Cancelar" or Esc closes the dialog, and focus goes back to "Excluir".
+ * an alert under the pill. "Cancelar" or Esc closes the dialog, and focus goes back to "Excluir", which stays focusable
+ * (`aria-disabled`, its clicks ignored) while the delete runs, so focus is still there when a refusal comes back.
  */
 export function SystemActions({ id, counts, language, action }: SystemActionsProps) {
   const t = translator(language);
@@ -63,7 +64,17 @@ export function SystemActions({ id, counts, language, action }: SystemActionsPro
   };
   return (
     <div className={styles.actions}>
-      <PillButton variant="danger" aria-haspopup="dialog" disabled={pending} onClick={() => setConfirming(true)}>
+      {/* aria-disabled, not disabled, while the delete runs: the dialog gives focus back here, and a refusal keeps it. */}
+      <PillButton
+        variant="danger"
+        aria-haspopup="dialog"
+        aria-disabled={pending}
+        onClick={() => {
+          if (!pending) {
+            setConfirming(true);
+          }
+        }}
+      >
         {t('systems.page.delete')}
       </PillButton>
       {state.error === null ? null : (
