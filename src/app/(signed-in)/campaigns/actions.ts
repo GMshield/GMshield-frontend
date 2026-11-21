@@ -1,6 +1,6 @@
 'use server';
 
-import { refresh } from 'next/cache';
+import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import type { MoreState } from '@/components/ItemList';
@@ -18,8 +18,10 @@ import { campaignListRow } from './rows';
  * campaign's conversation, and "Carregar mais" under Minhas Mesas. The backend checks every field; a refusal comes back
  * as text under the field it is about (or under the form, or under the pill), never a code. A rename the backend finds
  * stale comes back with the campaign's current name and version, and says so. The current campaign is the backend's:
- * nothing about it is kept in the browser. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before any of
- * these runs.
+ * nothing about it is kept in the browser. A create, a rename and "Abrir" change what the shared signed-in layout
+ * shows (the switcher and the context bar), so each revalidates the layout before it redirects: a redirect alone renders
+ * only the destination below that layout, which kept the previous campaign until the next load. The proxy
+ * (src/proxy.ts) and Next.js refuse a cross-origin post before any of these runs.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -64,6 +66,7 @@ export async function createCampaignAction(_previous: CampaignFormState, form: F
   const token = (await currentSessionToken()) ?? '';
   const result = await createCampaign(token, { name: values.name, systemId: values.systemId });
   if (result.ok) {
+    revalidatePath('/', 'layout');
     redirect(`/campaigns/${encodeURIComponent(result.data.id)}`);
   }
   // A system that is gone (deleted meanwhile, or another owner's) is said under its choice.
@@ -86,6 +89,7 @@ export async function renameCampaignAction(previous: CampaignFormState, form: Fo
   const token = (await currentSessionToken()) ?? '';
   const result = await changeCampaign(token, id, { version: Number(version), name: values.name });
   if (result.ok) {
+    revalidatePath('/', 'layout');
     redirect(`/campaigns/${encodeURIComponent(id)}`);
   }
   if (problemFields(result.problem).code === 'request.stale_version') {
@@ -147,6 +151,7 @@ export async function openConversationAction(previous: CampaignActionState, form
   }
   const result = await chooseCampaign((await currentSessionToken()) ?? '', id);
   if (result.ok) {
+    revalidatePath('/', 'layout');
     redirect('/questions');
   }
   return { ...previous, error: errorText(result.problem, language) };
