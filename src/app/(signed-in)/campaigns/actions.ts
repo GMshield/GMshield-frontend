@@ -3,10 +3,11 @@
 import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import type { CampaignDeleteState } from '@/components/CampaignDeleteAction';
 import type { MoreState } from '@/components/ItemList';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { changeCampaign, chooseCampaign, createCampaign, getCampaign, listCampaigns } from '@/server/library';
+import { changeCampaign, chooseCampaign, createCampaign, deleteCampaign, getCampaign, listCampaigns } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import type { CampaignActionState, CampaignField, CampaignFormState, CampaignFormValues } from './form-state';
@@ -22,6 +23,9 @@ import { campaignListRow } from './rows';
  * shows (the switcher and the context bar), so each revalidates the layout before it redirects: a redirect alone renders
  * only the destination below that layout, which kept the previous campaign until the next load. The proxy
  * (src/proxy.ts) and Next.js refuse a cross-origin post before any of these runs.
+ *
+ * Story 3.2 part B: the delete of a campaign, confirmed in its dialog, which revalidates the layout (the switcher and
+ * the context bar no longer show it; the current campaign has fallen back) and opens Minhas Mesas.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -155,6 +159,25 @@ export async function openConversationAction(previous: CampaignActionState, form
     redirect('/questions');
   }
   return { ...previous, error: errorText(result.problem, language) };
+}
+
+/**
+ * "Excluir campanha" in a campaign's confirmation: the backend deletes it (its conversation and its materials go in the
+ * background), the shared layout is rendered again (the switcher and the context bar no longer show it), and Minhas
+ * Mesas opens without it. A refusal comes back as its text; a malformed id never reaches the backend.
+ */
+export async function deleteCampaignAction(_previous: CampaignDeleteState, form: FormData): Promise<CampaignDeleteState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  if (typeof id !== 'string' || !ID.test(id)) {
+    return { error: invalid(language) };
+  }
+  const result = await deleteCampaign((await currentSessionToken()) ?? '', id);
+  if (result.ok) {
+    revalidatePath('/', 'layout');
+    redirect('/campaigns');
+  }
+  return { error: errorText(result.problem, language) };
 }
 
 /** "Carregar mais" under Minhas Mesas: the next page after `cursor`, of the archived campaigns when `archived` is true. */

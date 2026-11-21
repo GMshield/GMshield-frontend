@@ -115,6 +115,7 @@
       "rename": "Renomear",
       "archive": "Arquivar",
       "restore": "Restaurar",
+      "delete": "Excluir",
       "archived": "Arquivada",
       "sections": "Seções da campanha",
       "overview": "Visão geral",
@@ -130,6 +131,16 @@
       "open": "Abrir",
       "restoreToOpen": "Restaure a campanha para abrir a conversa.",
       "noConversation": "Esta campanha ainda não tem conversas."
+    },
+    "delete": {
+      "title": "Excluir esta campanha?",
+      "consequence": "Vão junto: {conversations} e {materials} desta campanha. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
+      "materialsOne": "1 material",
+      "materialsOther": "{count} materiais",
+      "confirm": "Excluir campanha"
     }
   },
   "notFound": {

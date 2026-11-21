@@ -76,6 +76,26 @@
         "required" : [ "id", "questions" ],
         "type" : "object"
       },
+      "CampaignDeletion" : {
+        "properties" : {
+          "conversations" : {
+            "description" : "How many conversations of the campaign go with it",
+            "example" : 1,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "materials" : {
+            "description" : "How many materials attached to the campaign go with it (those whose newest version is not discarded)",
+            "example" : 2,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "conversations", "materials" ],
+        "type" : "object"
+      },
       "CampaignPage" : {
         "properties" : {
           "items" : {
@@ -1295,7 +1315,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.19.0"
+    "version" : "1.20.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1601,6 +1621,43 @@
       }
     },
     "/api/v1/campaigns/{id}" : {
+      "delete" : {
+        "operationId" : "deleteCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's campaigns, archived, current or last (202, no body): from now on it is not found, the current campaign falls back to another (or there is none), its name is free in its system, and its conversation and the materials attached to it are removed in the background; nothing of its system or of the other campaigns changes. Cannot be undone. request.not_found (404) for any other id, a campaign already being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
       "get" : {
         "operationId" : "getCampaign",
         "parameters" : [ {
@@ -1697,6 +1754,52 @@
           }
         },
         "summary" : "Renames, archives or restores one of the account's campaigns on the version it names: the campaign as stored, its version raised by one. An archived campaign leaves the lists and the current position but keeps everything and still opens by id. request.stale_version (409) when the campaign has left that version, request.campaign_name_taken (409) when another campaign of its system has the new name (an archived campaign keeps its name), request.campaign_name_invalid (400) for a name outside its limits, request.invalid (400) without a version, with neither name nor archived, or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getCampaignDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's campaigns if it is deleted: how many conversations and materials (those attached to it). request.not_found (404) for any other id, a campaign being deleted included; session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

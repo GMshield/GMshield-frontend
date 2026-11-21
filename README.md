@@ -514,7 +514,8 @@ they sit in `src/`.
   - The stand-in backend counts one campaign, one conversation and no material for the starter system, and answers a
     delete with 202.
 - **Campaigns and the campaign switcher (Story 3.2, part A).** Public contract 1.19.0. "Minhas Mesas" lists, creates,
-  renames, archives and restores the GM's campaigns, and the switcher makes one current; deleting a campaign is part B.
+  renames, archives and restores the GM's campaigns, and the switcher makes one current; deleting a campaign is part B
+  (below).
   - `src/server/library.ts`: `listCampaigns(token, {system?, archived?, cursor?, limit?})` (every campaign of the
     account, or a system's; the archived ones with `archived: true`), `getCampaign`, `createCampaign` (it becomes the
     current campaign), `changeCampaign` (`{version, name?, archived?}`) and `chooseCampaign` (`PUT
@@ -554,6 +555,23 @@ they sit in `src/`.
     (`{min}`, `{max}`) and `request.campaign_name_taken`, in both catalogues.
   - The stand-in backend lists the starter campaign with its system, creates "Mesa de quinta", answers a change with the
     starter campaign at version 1 and a choice with the starter campaign, and its conversation holds one question.
+- **Delete a campaign (Story 3.2, part B).** Public contract 1.20.0. `src/server/library.ts` gains `campaignDeletion`
+  (`GET /api/v1/campaigns/{id}/deletion`: `{conversations, materials}`) and `deleteCampaign` (`DELETE`, 202 with no
+  body).
+  - `/campaigns/<id>` reads the counts with the campaign and shows "Excluir", a danger pill last in the header, for any
+    campaign (in use, current, archived or the last one) (`src/components/CampaignDeleteAction.tsx`, a client
+    component). It opens the `ConfirmationDialog`: "Excluir esta campanha?", "Vão junto: 1 conversa e 2 materiais desta
+    campanha. Isso não pode ser desfeito." (each count with its singular for one and its plural otherwise, zero
+    included; `campaigns.delete.*` in both catalogues; without the counts, it names what goes in words), "Cancelar" and
+    the danger pill "Excluir campanha". Cancelar or Esc closes it and focus goes back to "Excluir".
+  - "Excluir campanha" posts the id to the Server Action `deleteCampaignAction`
+    (`src/app/(signed-in)/campaigns/actions.ts`), which deletes the campaign, revalidates the shared layout (the switcher
+    and the context bar no longer show it; the current campaign has fallen back, or there is none and Consultas shows the
+    composer disabled) and opens `/campaigns` without it; the backend removes its conversation and its materials in the
+    background. A refusal (`request.not_found` for a campaign already deleted or another owner's) shows its `errorText`
+    as an alert under the pill; a malformed id never reaches the backend.
+  - The stand-in backend counts one conversation and no material for the starter campaign, and answers a delete with
+    202.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -639,7 +657,12 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.19.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.20.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.20.0 (Story 3.2, part B): the backend first (its migration
+`V24__campaign_deletion.sql` and the campaign deletion routes), then the frontend (its health check fails against a
+1.19.0 backend, and a campaign's page reads the deletion counts). The worker does not change. A rollback goes the other
+way.
 
 Deploy order for public contract 1.19.0 (Story 3.2, part A): the backend first (its migration
 `V23__campaign_management.sql` and the campaign routes), then the frontend (its health check fails against a 1.18.0

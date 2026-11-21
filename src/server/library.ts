@@ -18,6 +18,9 @@ import type { components, operations } from './backend/generated/public';
  * a new one (it becomes the current one), a rename, archive or restore by its version (`request.stale_version`,
  * `request.campaign_name_taken`, `request.campaign_name_invalid`), and the choice of the current campaign (an archived
  * one is `request.not_found`). The current campaign is the backend's: nothing about it is kept in the browser.
+ *
+ * Story 3.2 part B: what a campaign's deletion takes with it (`{conversations, materials}`), and the deletion itself
+ * (202, no body). From the delete on, the campaign is `request.not_found` everywhere, and the current campaign falls back.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -28,6 +31,7 @@ export type SystemChange = Schemas['SystemChange'];
 export type CampaignSummary = Schemas['CampaignSummary'];
 export type CampaignPage = Schemas['CampaignPage'];
 export type SystemDeletion = Schemas['SystemDeletion'];
+export type CampaignDeletion = Schemas['CampaignDeletion'];
 export type NewCampaign = Schemas['NewCampaign'];
 export type CampaignChange = Schemas['CampaignChange'];
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
@@ -122,5 +126,22 @@ export function systemDeletion(sessionToken: string, id: string, options: CallOp
 export function deleteSystem(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('library.system_delete', options, (client) =>
     client.DELETE('/api/v1/systems/{id}', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/** What goes with one of the account's campaigns if it is deleted; `request.not_found` for any other id. */
+export function campaignDeletion(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<CampaignDeletion>> {
+  return call('library.campaign_deletion', options, (client) =>
+    client.GET('/api/v1/campaigns/{id}/deletion', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/**
+ * Deletes one of the account's campaigns with its conversation and the materials attached to it (202, no body: the
+ * removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ */
+export function deleteCampaign(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('library.campaign_delete', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{id}', { params: { header: session(sessionToken), path: { id } } }),
   );
 }
