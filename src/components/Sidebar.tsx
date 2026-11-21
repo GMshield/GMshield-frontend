@@ -32,8 +32,8 @@ export type SidebarLabels = {
 export type SidebarProps = {
   /** Every text, in the interface's language (the server translates; no message file reaches the browser). */
   readonly labels: SidebarLabels;
-  /** The current campaign's name, or the words for none. */
-  readonly campaign: string;
+  /** The current campaign: the campaign switcher (Story 3.2), or its name as text (the words for none). */
+  readonly campaign: ReactNode;
   /** The wide-screen state from `__Host-gmshield-sidebar`, read by the server, so the first render is right. */
   readonly initialState: SidebarState;
   /** The logo menu's content. */
@@ -52,7 +52,8 @@ function isWide(): boolean {
  * 1280px it always starts closed: the handle opens it over the main column (768 to 1279px) or as a full-screen
  * sheet (under 768px), and it closes again after an entry is chosen. Which layout applies is CSS's decision;
  * this component only keeps the two states. An entry is marked current on its page and on every page below it
- * (Story 3.1: "Sistemas" on `/systems/new` and `/systems/<id>`).
+ * (Story 3.1: "Sistemas" on `/systems/new` and `/systems/<id>`; Story 3.2: "Minhas Mesas" on `/campaigns/<id>`). Under
+ * the logo, the current campaign: from Story 3.2 the campaign switcher.
  */
 export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }: SidebarProps) {
   const pathname = usePathname();
@@ -171,10 +172,10 @@ export function Sidebar({ labels, campaign, initialState, menu, trayRows = [] }:
             <ChevronLeftIcon />
           </button>
         </div>
-        <p className={styles.campaign}>
+        <div className={styles.campaign}>
           <span className={styles.campaignLabel}>{labels.currentCampaign}</span>
-          <span className={styles.campaignName}>{campaign}</span>
-        </p>
+          <div className={styles.campaignName}>{campaign}</div>
+        </div>
         <nav aria-label={labels.navigation} className={styles.nav}>
           <ul className={styles.entries}>
             {SIDEBAR_ENTRIES.map(({ key, href }) => (

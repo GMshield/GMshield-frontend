@@ -49,7 +49,7 @@
   cursor: pointer;
 }
 
-/* The band under the logo: the current campaign (the switcher comes with Epic 3). */
+/* The band under the logo: the current campaign, its switcher from Story 3.2. */
 .campaign {
   display: flex;
   flex-direction: column;

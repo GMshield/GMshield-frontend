@@ -1,4 +1,4 @@
-/* A system's form (Story 3.1): labelled fields one under the other, then the actions. */
+/* A system's form (Story 3.1) and a campaign's (Story 3.2): labelled fields one under the other, then the actions. */
 .form {
   display: flex;
   flex-direction: column;
@@ -28,6 +28,7 @@
 }
 
 .input,
+.select,
 .textarea {
   width: 100%;
   max-width: 36rem;
@@ -38,6 +39,13 @@
 }
 
 .input {
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+}
+
+/* A campaign's system (Story 3.2): a pill like the name's field. */
+.select {
   min-height: var(--space-touch-target);
   padding: 0 var(--space-4);
   border-radius: var(--radius-full);

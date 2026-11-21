@@ -14,9 +14,9 @@ export function systemRow(system: GameSystem): ListRow {
   return { id: system.id, label: system.name, detail: system.edition ?? null, href: `/systems/${encodeURIComponent(system.id)}`, state: null };
 }
 
-/** A campaign's row: its name only; it opens nothing until campaigns have pages (Story 3.2). */
+/** A campaign's row on its system's page: its name only; it opens the campaign's page (Story 3.2). */
 export function campaignRow(campaign: CampaignSummary): ListRow {
-  return { id: campaign.id, label: campaign.name, detail: null, href: null, state: null };
+  return { id: campaign.id, label: campaign.name, detail: null, href: `/campaigns/${encodeURIComponent(campaign.id)}`, state: null };
 }
 
 /** A material's row: its name and state; it opens the material's page. */

@@ -490,7 +490,7 @@ they sit in `src/`.
     into the form, which says above its fields that the system was changed elsewhere.
   - `/systems/<id>`: the name, the edition ("Edição 5.2.1"), the description with its line breaks, "Editar" (the one
     solid pill) and two tabs as links, campaigns (the default) and materials, chosen by `?tab=` and marked with
-    `aria-current="page"`. The campaigns tab lists the system's campaigns, which open nothing until Story 3.2; the
+    `aria-current="page"`. The campaigns tab lists the system's campaigns in use, each opening its page (Story 3.2); the
     materials tab lists its materials in every state but `superseded` and `discarded`, each with its state pill and
     opening `/files/<id>`. An empty tab says so in one sentence. Another owner's id, an unknown one or a malformed one
     is the single "Não encontrado." page. A new name shows in the list and in the context bar on their next load.
@@ -513,6 +513,47 @@ they sit in `src/`.
     with no campaign: the conversation pages show their "no campaign" state, the composer disabled.
   - The stand-in backend counts one campaign, one conversation and no material for the starter system, and answers a
     delete with 202.
+- **Campaigns and the campaign switcher (Story 3.2, part A).** Public contract 1.19.0. "Minhas Mesas" lists, creates,
+  renames, archives and restores the GM's campaigns, and the switcher makes one current; deleting a campaign is part B.
+  - `src/server/library.ts`: `listCampaigns(token, {system?, archived?, cursor?, limit?})` (every campaign of the
+    account, or a system's; the archived ones with `archived: true`), `getCampaign`, `createCampaign` (it becomes the
+    current campaign), `changeCampaign` (`{version, name?, archived?}`) and `chooseCampaign` (`PUT
+    /api/v1/campaigns/current`). `src/server/conversations.ts`: `campaignConversation` (`{id, questions}`). The current
+    campaign is the backend's: nothing about it is kept in the browser.
+  - `/campaigns`: the title "Minhas Mesas", one solid pill "Nova campanha", a filter of two links ("Em uso", the default,
+    and "Arquivadas", `?archived=true`, marked with `aria-current="page"`), and the campaigns newest first, each row its
+    name and its system ("D&D 5.2.1"), opening `/campaigns/<id>`. Empty, one sentence ("Uma campanha reúne as conversas
+    e os materiais de uma mesa de jogo." or "Nenhuma campanha arquivada."). "Carregar mais" posts the cursor and the
+    filter to `moreCampaignsAction` (`src/app/(signed-in)/campaigns/actions.ts`).
+  - `/campaigns/new` (`?system=` chooses the system, as a system's page can link it; otherwise the newest): `CampaignForm`
+    with Nome and a `<select>` of the account's systems (the first 50). Saved, the campaign is current and its page
+    opens. `request.campaign_name_invalid` and `request.campaign_name_taken` come back under the name, a system gone
+    meanwhile (`request.not_found`) under the system. With no system, one sentence ("Uma campanha pertence a um
+    sistema, e você ainda não tem nenhum.") and a link to `/systems/new`.
+  - `/campaigns/<id>`: the name; "Usar esta campanha" (the one solid pill, only when the campaign is in use and not the
+    current one; the current one says "Esta é a campanha atual."), "Renomear" (`/campaigns/<id>/edit`), and "Arquivar"
+    or "Restaurar" (reversible, so no confirmation; each posts the version the page was read at, and the page is
+    refreshed; a stale version says it changed elsewhere and the refresh shows the current values). Three tabs by
+    `?tab=`: overview (the default: name, the system linking to its page, "Arquivada" when archived), scope (the four
+    settings in words, read-only until Story 3.6), conversations (the campaign's conversation with its question count
+    and "Abrir", which makes the campaign current and opens Consultas; none for an archived campaign, which cannot be
+    current; one sentence when there is no conversation). An archived campaign still opens. Another owner's id is the
+    single "Não encontrado." page. `/campaigns/<id>/edit` renames on the version; a stale one brings the current name.
+  - The switcher (`src/components/CampaignSwitcher.tsx`, a client component, the disclosure pattern of `LogoMenu`)
+    replaces the static name under the logo and the context bar's campaign link (under 768px the bar still shows the
+    campaign name only). Its button is the current campaign's name ("Nenhuma campanha" with none); open, it lists the
+    campaigns in use (the first 50, read by the signed-in layout) with their system, the current one marked "atual"
+    in words (`aria-current`), then "Ver todas as mesas" and "Nova campanha". Picking one posts it to
+    `chooseCampaignAction`, which makes it current and refreshes the page (the conversation, the context bar and the
+    switcher act on it); the list closes on success and shows a refusal as an alert otherwise. Esc closes it, gives
+    focus back to the button and is marked handled, so the sidebar sheet stays open.
+  - Consultas with no campaign (every one archived or gone: `GET /api/v1/conversations/current` is 404) shows the
+    composer disabled (`NoCampaignConversation`), the reason above it ("Não há campanha em uso: crie uma para fazer
+    perguntas.", which the field names with `aria-describedby`) and a link "Nova campanha" to `/campaigns/new`.
+  - "Minhas Mesas" is marked current on `/campaigns` and every page below it. New codes: `request.campaign_name_invalid`
+    (`{min}`, `{max}`) and `request.campaign_name_taken`, in both catalogues.
+  - The stand-in backend lists the starter campaign with its system, creates "Mesa de quinta", answers a change with the
+    starter campaign at version 1 and a choice with the starter campaign, and its conversation holds one question.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -598,7 +639,12 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.18.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.19.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.19.0 (Story 3.2, part A): the backend first (its migration
+`V23__campaign_management.sql` and the campaign routes), then the frontend (its health check fails against a 1.18.0
+backend, and Minhas Mesas, the campaign pages and the switcher read the new routes). The worker does not change. A
+rollback goes the other way.
 
 Deploy order for public contract 1.18.0 (Story 3.1, part B): the backend first (its migration
 `V22__system_deletion.sql` and the deletion routes), then the frontend (its health check fails against a 1.17.0

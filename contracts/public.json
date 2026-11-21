@@ -3,6 +3,10 @@
     "schemas" : {
       "Campaign" : {
         "properties" : {
+          "archived" : {
+            "description" : "Whether the GM archived it (contract 1.19.0)",
+            "type" : "boolean"
+          },
           "id" : {
             "description" : "The campaign's id",
             "example" : "0190a0b0-0000-7000-8000-000000000002",
@@ -17,9 +21,59 @@
           "system" : {
             "$ref" : "#/components/schemas/System",
             "description" : "The campaign's system"
+          },
+          "version" : {
+            "description" : "The campaign's version: a rename, an archive or a restore names it and raises it by one; choosing the campaign does not (contract 1.19.0)",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "id", "name", "system" ],
+        "required" : [ "archived", "id", "name", "system", "version" ],
+        "type" : "object"
+      },
+      "CampaignChange" : {
+        "properties" : {
+          "archived" : {
+            "description" : "True archives the campaign, false restores it; absent or null: unchanged",
+            "example" : true,
+            "type" : "boolean"
+          },
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming; absent or null: unchanged",
+            "example" : "Mesa de sexta",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the edit was made on, as the campaign was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
+      "CampaignConversation" : {
+        "description" : "A campaign's conversation (contract 1.19.0)",
+        "properties" : {
+          "id" : {
+            "description" : "The conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "questions" : {
+            "description" : "How many questions it holds",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "id", "questions" ],
         "type" : "object"
       },
       "CampaignPage" : {
@@ -42,6 +96,10 @@
       },
       "CampaignSummary" : {
         "properties" : {
+          "archived" : {
+            "description" : "Whether the GM archived it (contract 1.19.0)",
+            "type" : "boolean"
+          },
           "id" : {
             "description" : "The campaign's id",
             "example" : "0190a0b0-0000-7000-8000-000000000002",
@@ -52,9 +110,13 @@
             "description" : "The campaign's name",
             "example" : "Primeira campanha",
             "type" : "string"
+          },
+          "system" : {
+            "$ref" : "#/components/schemas/SystemSummary",
+            "description" : "The campaign's system (contract 1.19.0)"
           }
         },
-        "required" : [ "id", "name" ],
+        "required" : [ "archived", "id", "name", "system" ],
         "type" : "object"
       },
       "CompleteSignIn" : {
@@ -92,6 +154,18 @@
           }
         },
         "required" : [ "version" ],
+        "type" : "object"
+      },
+      "CurrentCampaignChoice" : {
+        "properties" : {
+          "campaignId" : {
+            "description" : "The account's campaign to make current; not an archived one",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "campaignId" ],
         "type" : "object"
       },
       "CurrentConversation" : {
@@ -635,6 +709,25 @@
         "required" : [ "username" ],
         "type" : "object"
       },
+      "NewCampaign" : {
+        "properties" : {
+          "name" : {
+            "description" : "1 to 120 code points after trimming; unique within the system, whatever the case",
+            "example" : "Mesa de quinta",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "systemId" : {
+            "description" : "The account's system the campaign belongs to; it never changes",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "systemId" ],
+        "type" : "object"
+      },
       "NewSystem" : {
         "properties" : {
           "description" : {
@@ -1009,6 +1102,28 @@
         "required" : [ "items" ],
         "type" : "object"
       },
+      "SystemSummary" : {
+        "properties" : {
+          "edition" : {
+            "description" : "The system's edition, null when it has none",
+            "example" : "5.2.1",
+            "type" : [ "string", "null" ]
+          },
+          "id" : {
+            "description" : "The system's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The system's name",
+            "example" : "Sistema sem nome",
+            "type" : "string"
+          }
+        },
+        "required" : [ "edition", "id", "name" ],
+        "type" : "object"
+      },
       "Turn" : {
         "properties" : {
           "conversationId" : {
@@ -1180,7 +1295,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.18.0"
+    "version" : "1.19.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1195,13 +1310,20 @@
             "type" : "string"
           }
         }, {
-          "description" : "The system's id",
+          "description" : "Only this system's campaigns",
           "in" : "query",
           "name" : "system",
-          "required" : true,
           "schema" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        }, {
+          "description" : "true: only the archived campaigns; false (the default): only the others",
+          "in" : "query",
+          "name" : "archived",
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
           }
         }, {
           "description" : "At most this many, 1 to 50",
@@ -1245,7 +1367,52 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The campaigns of one of the account's systems, newest first. request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); request.invalid (400) without a system, for a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "summary" : "The account's campaigns, of one of its systems when system is given, newest first, each with its system; the archived ones only with archived=true, else the others. request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); request.invalid (400) for an archived other than true or false, a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "operationId" : "createCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewCampaign"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A new campaign of one of the account's systems (201), with the starting scope; it becomes the current campaign. request.campaign_name_invalid (400) for a name outside its limits (params min and max), request.campaign_name_taken (409) when the system has a campaign with the same name (trimmed, whatever the case; an archived campaign keeps its name), request.not_found (404) for a system that is not the account's (unknown, another account's, malformed or being deleted), request.invalid (400) without a systemId or for a malformed body; nothing is stored then; session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },
@@ -1282,8 +1449,99 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The current campaign with its system; session.required (401) without a session, request.not_found (404) when the account has no campaign",
+        "summary" : "The current campaign with its system: of the account's campaigns that are not archived, the one chosen last (PUT), else the oldest; session.required (401) without a session, request.not_found (404) when the account has no such campaign",
         "tags" : [ "library" ]
+      },
+      "put" : {
+        "operationId" : "chooseCurrentCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CurrentCampaignChoice"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Makes one of the account's campaigns the current one and answers it; its version does not change. request.not_found (404) for an archived campaign or any other id (unknown, another account's or malformed), request.invalid (400) without a campaignId or for a malformed body; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/conversation" : {
+      "get" : {
+        "operationId" : "getCampaignConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignConversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The campaign's conversation (a campaign has at most one) and how many questions it holds, for an archived campaign too; request.not_found (404) when the campaign has none or is not the account's (unknown, another account's or malformed)",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/campaigns/{campaignId}/turns" : {
@@ -1384,7 +1642,61 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One of the account's campaigns, with its system; request.not_found (404) for any other id",
+        "summary" : "One of the account's campaigns, with its system, archived or not; request.not_found (404) for any other id",
+        "tags" : [ "library" ]
+      },
+      "patch" : {
+        "operationId" : "changeCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CampaignChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames, archives or restores one of the account's campaigns on the version it names: the campaign as stored, its version raised by one. An archived campaign leaves the lists and the current position but keeps everything and still opens by id. request.stale_version (409) when the campaign has left that version, request.campaign_name_taken (409) when another campaign of its system has the new name (an archived campaign keeps its name), request.campaign_name_invalid (400) for a name outside its limits, request.invalid (400) without a version, with neither name nor archived, or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

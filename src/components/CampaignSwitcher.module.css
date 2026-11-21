@@ -1,0 +1,139 @@
+/* The campaign switcher (Story 3.2): the current campaign's name as a disclosure button, and the list it opens. */
+.switcher {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar {
+  align-items: center;
+}
+
+.bar {
+  align-items: flex-start;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--space-touch-target);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.trigger:hover {
+  text-decoration: underline;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-active);
+  color: var(--color-text);
+  text-align: start;
+}
+
+/* In the context bar the list opens over the page, under the name. */
+.bar .panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 12;
+  width: min(22rem, calc(100vw - 2 * var(--space-4)));
+  border: 1px solid var(--color-control-border);
+  background-color: var(--color-canvas);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.form {
+  margin: 0;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  width: 100%;
+  min-height: var(--space-touch-target);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+}
+
+button.choice {
+  cursor: pointer;
+}
+
+button.choice:hover {
+  background-color: var(--color-control);
+}
+
+.name {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  overflow-wrap: anywhere;
+}
+
+.system,
+.mark {
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: underline;
+}

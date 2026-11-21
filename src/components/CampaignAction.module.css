@@ -1,0 +1,13 @@
+/* An action on a campaign (Story 3.2): its pill, and a refusal under it. */
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.error {
+  max-width: 60ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-text);
+}

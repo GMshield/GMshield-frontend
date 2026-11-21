@@ -14,7 +14,10 @@
 // passage it cites, and the page of reference 2 a text page with the cited passage's range. Story 3.1: the systems list
 // holds the starter system (no edition, no description, version 0), whose one campaign is the current campaign; a new
 // system is "D&D" 5.2.1, and an edit answers the starter system at version 1. Story 3.1 part B: the starter system's
-// deletion takes its one campaign, its one conversation and no material; a delete answers 202 with no body.
+// deletion takes its one campaign, its one conversation and no material; a delete answers 202 with no body. Story 3.2:
+// the starter campaign (in use, version 0) is the only campaign, with its system; a new campaign is "Mesa de quinta" of
+// the starter system; a rename, archive or restore answers the starter campaign at version 1, a choice the starter
+// campaign, and its conversation holds one question.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -132,12 +135,25 @@ export const STARTER_SYSTEM = {
   version: 0,
 };
 const STARTER_CAMPAIGN = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+/** Story 3.2: the starter campaign as a list row (its system's name and edition) and as one campaign (with its version). */
+const STARTER_ROW = { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name, edition: null }, archived: false };
+const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, version: 0 };
 
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
-  'GET /api/v1/campaigns/current': { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM },
-  'GET /api/v1/campaigns/{id}': { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM },
-  'GET /api/v1/campaigns': { items: [STARTER_CAMPAIGN] },
+  'GET /api/v1/campaigns/current': STARTER,
+  'PUT /api/v1/campaigns/current': STARTER,
+  'GET /api/v1/campaigns/{id}': STARTER,
+  'PATCH /api/v1/campaigns/{id}': { ...STARTER, version: 1 },
+  'GET /api/v1/campaigns': { items: [STARTER_ROW] },
+  'POST /api/v1/campaigns': {
+    id: '0190a0b0-0000-7000-8000-000000000040',
+    name: 'Mesa de quinta',
+    system: STARTER_SYSTEM,
+    archived: false,
+    version: 0,
+  },
+  'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
   'GET /api/v1/systems': { items: [STARTER_SYSTEM] },
   'GET /api/v1/systems/{id}': STARTER_SYSTEM,
   'POST /api/v1/systems': {

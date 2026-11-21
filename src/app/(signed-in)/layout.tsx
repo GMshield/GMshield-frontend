@@ -8,9 +8,11 @@ import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
 import { currentConversation } from '@/server/conversations';
-import { currentCampaign } from '@/server/library';
+import { currentCampaign, listCampaigns } from '@/server/library';
 import { listMaterials, TRAY_STATES } from '@/server/materials';
 import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server/session-cookies';
+
+import { systemLabel } from './campaigns/rows';
 
 /**
  * Every signed-in page (Story 1.11): the shell around it, with the account and its current campaign. Signed out,
@@ -34,6 +36,10 @@ import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server
  *
  * The notices stack, one line each, in this order: a campaign that cannot be loaded, the material that needs review,
  * then the indexing notice.
+ *
+ * Story 3.2: the campaigns in use (the first 50, newest first) are read here too, for the campaign switcher under the
+ * logo and in the context bar; when they cannot be loaded the switcher offers only "Ver todas as mesas" and "Nova
+ * campanha". The current campaign is always the backend's.
  */
 export default async function SignedInLayout({ children }: { readonly children: ReactNode }) {
   const token = await currentSessionToken();
@@ -41,11 +47,12 @@ export default async function SignedInLayout({ children }: { readonly children: 
     redirect('/');
   }
   const [preferences, sidebar, here] = await Promise.all([currentPreferences(), currentSidebar(), currentPath()]);
-  const [account, campaign, materials, conversation] = await Promise.all([
+  const [account, campaign, materials, conversation, campaigns] = await Promise.all([
     currentAccount(token),
     currentCampaign(token),
     listMaterials(token, TRAY_STATES, { limit: 50 }),
     currentConversation(token),
+    listCampaigns(token, { limit: 50 }),
   ]);
   for (const result of [account, campaign, materials]) {
     if (result.ok) {
@@ -89,7 +96,14 @@ export default async function SignedInLayout({ children }: { readonly children: 
       <IndexingNotice key="indexing" remaining={remaining} failed={failed} language={preferences.language} />,
     );
   }
-  const current = campaign.ok ? { system: campaign.data.system.name, campaign: campaign.data.name } : null;
+  const current = campaign.ok ? { id: campaign.data.id, system: campaign.data.system.name, campaign: campaign.data.name } : null;
+  const choices = campaigns.ok
+    ? campaigns.data.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        system: systemLabel(item.system, t),
+      }))
+    : [];
   const belonging = campaign.ok
     ? { campaign: { id: campaign.data.id, name: campaign.data.name }, system: { id: campaign.data.system.id, name: campaign.data.system.name } }
     : null;
@@ -98,6 +112,7 @@ export default async function SignedInLayout({ children }: { readonly children: 
       preferences={preferences}
       username={account.data.username}
       current={current}
+      campaigns={choices}
       sidebar={sidebar}
       notices={notices}
       belonging={belonging}

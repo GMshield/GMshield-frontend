@@ -97,6 +97,7 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
     expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
       'GET /api/v1/campaigns/current',
+      'GET /api/v1/campaigns?limit=50',
       'GET /api/v1/conversations/current',
       MATERIALS,
       'GET /api/v1/me',
@@ -159,7 +160,6 @@ describe('the signed-in layout (Story 1.11)', () => {
   it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
     const pages = {
       rules: (await import('@/app/(signed-in)/rules/page')).default,
-      campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
       characters: CharactersPage,
       files: FilesPage,
     } as const;
@@ -217,6 +217,69 @@ describe('the signed-in layout (Story 1.11)', () => {
     html = await layoutHtml(await QuestionsPage());
     expect(html).toContain('aria-label="Send"');
     expect(html).not.toContain('has no accepted sources');
+  });
+});
+
+describe('the campaign switcher in the layout (Story 3.2)', () => {
+  it('lists the campaigns in use with their system, the current one marked "atual" and not a choice', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      'GET /api/v1/campaigns?limit=50': {
+        status: 200,
+        body: {
+          items: [
+            { id: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta', system: { id: '0190a0b0-0000-7000-8000-000000000030', name: 'D&D', edition: '5.2.1' }, archived: false },
+            { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system', edition: null }, archived: false },
+          ],
+        },
+      },
+    });
+    const html = await layoutHtml();
+
+    expect(server.calls.find((call) => call.url === '/api/v1/campaigns?limit=50')?.headers['x-session-token']).toBe(SESSION);
+    // Under the logo and in the context bar: one list each.
+    expect(html.match(/aria-label="Suas campanhas"/g)).toHaveLength(2);
+    expect(html).toContain('Mesa de quinta');
+    expect(html).toContain('D&amp;D 5.2.1');
+    expect(html).toContain('Untitled system');
+    // The other campaign is a choice: a submit button posting its id.
+    expect(html).toMatch(/<input type="hidden" name="id" value="0190a0b0-0000-7000-8000-000000000040"\/><button type="submit"[^>]*>.*?Mesa de quinta/);
+    // The current one is marked in words and is not a choice.
+    const marked = [...html.matchAll(/<span[^>]*aria-current="true"[^>]*>(.*?)<\/span><\/li>/g)].map((match) => match[1]!);
+    expect(marked).toHaveLength(2);
+    for (const item of marked) {
+      expect(item).toContain('First campaign');
+      expect(item).toContain('atual');
+    }
+    expect(html).not.toContain('name="id" value="0190a0b0-0000-7000-8000-000000000002"');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+});
+
+describe('the questions page with no campaign (Story 3.2)', () => {
+  it('shows the composer disabled with the reason and a link to a new campaign, not "Não encontrado."', async () => {
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(404, 'request.not_found'),
+      'GET /api/v1/campaigns?limit=50': { status: 200, body: { items: [] } },
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': problem(404, 'request.not_found'),
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: { items: [] } },
+    });
+    requestHeaders = { 'x-gmshield-path': '/questions' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+
+    const html = await layoutHtml(await QuestionsPage());
+
+    expect(html).toContain('Não há campanha em uso: crie uma para fazer perguntas.');
+    expect(html).toMatch(/<textarea[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*aria-label="Enviar"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Enviar"/);
+    expect(html).toContain('href="/campaigns/new"');
+    expect(html).not.toContain('Não encontrado.');
+    // The switcher says there is none, and still offers a new campaign.
+    expect(html).toContain('Nenhuma campanha');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
   });
 });
 

@@ -1,4 +1,4 @@
-/* The systems pages (Story 3.1): a title with its one main action, then the page's content. */
+/* The systems pages (Story 3.1) and the campaigns pages (Story 3.2): a title with its main action, then the page's content. */
 .header {
   display: flex;
   flex-wrap: wrap;
@@ -79,4 +79,59 @@
 .tab[aria-current='page'] {
   border-bottom-color: var(--color-text);
   color: var(--color-text);
+}
+
+/* A campaign's overview (Story 3.2): each field's name above its value. */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-6) 0 0;
+}
+
+.detail dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.detail dd {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* A campaign's conversations (Story 3.2): one row each, its area, its question count and "Abrir". */
+.conversations {
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.conversation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-height: var(--space-touch-target);
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.conversationName {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
 }

@@ -18,6 +18,11 @@
     "currentCampaign": "Current campaign",
     "noCampaign": "No campaign",
     "context": "System and campaign",
+    "switchCampaign": "Switch campaign",
+    "campaignChoices": "Your campaigns",
+    "currentMark": "current",
+    "allCampaigns": "See all tables",
+    "newCampaign": "New campaign",
     "entries": {
       "questions": "Questions",
       "rules": "Rule Creation",
@@ -77,6 +82,54 @@
       "materialsOne": "1 material linked only to it",
       "materialsOther": "{count} materials linked only to it",
       "confirm": "Delete system"
+    }
+  },
+  "campaigns": {
+    "new": "New campaign",
+    "list": "Your campaigns",
+    "archivedList": "Archived campaigns",
+    "filters": "Which campaigns",
+    "inUse": "In use",
+    "archived": "Archived",
+    "empty": "A campaign holds the conversations and materials of one game table.",
+    "emptyArchived": "No archived campaign.",
+    "loadMore": "Load more",
+    "addedOne": "1 more item in the list.",
+    "addedOther": "{count} more items in the list.",
+    "systemEdition": "{name} {edition}",
+    "form": {
+      "newTitle": "New campaign",
+      "renameTitle": "Rename campaign",
+      "name": "Name",
+      "system": "System",
+      "create": "Create campaign",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This campaign was changed elsewhere. The field now shows its current name: make your change again and save.",
+      "noSystem": "A campaign belongs to a system, and you have none yet.",
+      "createSystem": "Create a system"
+    },
+    "page": {
+      "use": "Use this campaign",
+      "isCurrent": "This is the current campaign.",
+      "rename": "Rename",
+      "archive": "Archive",
+      "restore": "Restore",
+      "archived": "Archived",
+      "sections": "Campaign sections",
+      "overview": "Overview",
+      "scope": "Scope",
+      "conversations": "Conversations",
+      "name": "Name",
+      "system": "System",
+      "state": "State",
+      "scopeStarting": "Campaign: on · System: on · Others: off · Model knowledge: off",
+      "conversationList": "Conversations of this campaign",
+      "questionsOne": "1 question",
+      "questionsOther": "{count} questions",
+      "open": "Open",
+      "restoreToOpen": "Restore the campaign to open the conversation.",
+      "noConversation": "This campaign has no conversations yet."
     }
   },
   "notFound": {
@@ -146,6 +199,8 @@
         "system_edition_invalid": "The edition can have at most {max} characters.",
         "system_description_invalid": "The description can have at most {max} characters.",
         "system_name_taken": "You already have a system with this name and edition.",
+        "campaign_name_invalid": "The name needs {min} to {max} characters.",
+        "campaign_name_taken": "This system already has a campaign with this name, perhaps an archived one.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version."
       },
       "server": {
@@ -482,6 +537,8 @@
       "upload": "Upload a file",
       "review": "Review {name}"
     },
-    "close": "Close the source"
+    "close": "Close the source",
+    "noCampaign": "There is no campaign in use: create one to ask questions.",
+    "newCampaign": "New campaign"
   }
 }
