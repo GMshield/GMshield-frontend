@@ -102,6 +102,12 @@ describe('stand-in backend', () => {
     });
     expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toEqual({ status: 202, type: null, body: null });
     expect(answer(contract, 'PUT', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
+    // Story 3.2 part B: what the starter campaign's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { conversations: 1, materials: 0 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/campaigns/${campaign.id}`, 't')).toEqual({ status: 202, type: null, body: null });
   });
 
   it('answers the upload paths (Story 1.13) with their tus headers, and a part with the offset it reaches', async () => {

@@ -20,6 +20,7 @@ const { PreferencesForm } = await import('@/components/PreferencesForm');
 const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
+const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
 const { References } = await import('@/components/conversation/References');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
@@ -677,6 +678,89 @@ describe('SystemActions (Story 3.1 part B)', () => {
     const opener = screen.getByRole('button', { name: 'Excluir' });
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('CampaignDeleteAction (Story 3.2 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000040';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the counts; Cancelar or Esc closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 3, materials: 2 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog.
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta campanha?' });
+    expect(dialog.textContent).toContain('Vão junto: 3 conversas e 2 materiais desta campanha. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, none, and what goes in words when the counts are missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 1 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 conversa e 1 material desta campanha.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 0, materials: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this campaign?' });
+    expect(dialog.textContent).toContain('Going with it: 0 conversations and 0 materials of this campaign. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete campaign' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 4 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 conversation and 4 materials of this campaign.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this campaign's conversations and materials. This cannot be undone.");
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
     expect(document.activeElement).toBe(opener);
     expect(opener.hasAttribute('disabled')).toBe(false);

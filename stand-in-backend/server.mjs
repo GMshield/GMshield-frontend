@@ -17,7 +17,8 @@
 // deletion takes its one campaign, its one conversation and no material; a delete answers 202 with no body. Story 3.2:
 // the starter campaign (in use, version 0) is the only campaign, with its system; a new campaign is "Mesa de quinta" of
 // the starter system; a rename, archive or restore answers the starter campaign at version 1, a choice the starter
-// campaign, and its conversation holds one question.
+// campaign, and its conversation holds one question. Story 3.2 part B: the starter campaign's deletion takes its one
+// conversation and no material; a delete answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -154,6 +155,7 @@ export const EXAMPLES = {
     version: 0,
   },
   'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+  'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
   'GET /api/v1/systems': { items: [STARTER_SYSTEM] },
   'GET /api/v1/systems/{id}': STARTER_SYSTEM,
   'POST /api/v1/systems': {

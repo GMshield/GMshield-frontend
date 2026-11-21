@@ -22,8 +22,15 @@ const { default: CampaignsPage } = await import('@/app/(signed-in)/campaigns/pag
 const { default: NewCampaignPage } = await import('@/app/(signed-in)/campaigns/new/page');
 const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]/page');
 const { default: RenameCampaignPage } = await import('@/app/(signed-in)/campaigns/[id]/edit/page');
-const { archiveCampaignAction, chooseCampaignAction, createCampaignAction, moreCampaignsAction, openConversationAction, renameCampaignAction } =
-  await import('@/app/(signed-in)/campaigns/actions');
+const {
+  archiveCampaignAction,
+  chooseCampaignAction,
+  createCampaignAction,
+  deleteCampaignAction,
+  moreCampaignsAction,
+  openConversationAction,
+  renameCampaignAction,
+} = await import('@/app/(signed-in)/campaigns/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 const { startScripted } = await import('./support/servers');
@@ -298,7 +305,9 @@ describe('a campaign page (Story 3.2)', () => {
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
     expect(calls(server).sort()).toEqual(
-      [`GET /api/v1/campaigns/${ID}`, 'GET /api/v1/campaigns/current'].flatMap((call) => [call, call]).sort(),
+      [`GET /api/v1/campaigns/${ID}`, 'GET /api/v1/campaigns/current', `GET /api/v1/campaigns/${ID}/deletion`]
+        .flatMap((call) => [call, call])
+        .sort(),
     );
   });
 
@@ -434,6 +443,71 @@ describe('a campaign\'s actions (Story 3.2)', () => {
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignId: ID });
     routes['PUT /api/v1/campaigns/current'] = problem(404, 'request.not_found');
     expect(await openConversationAction(START, form({ id: ID }))).toEqual({ error: 'Não encontrado.', done: 0 });
+  });
+});
+
+describe('deleting a campaign (Story 3.2 part B)', () => {
+  it('"Excluir" is a danger pill in the header, last, for a campaign in use, the current one and an archived one, in both languages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [`GET /api/v1/campaigns/${ID}`]: { status: 200, body: THURSDAY },
+      'GET /api/v1/campaigns/current': { status: 200, body: FIRST },
+      [`GET /api/v1/campaigns/${ID}/deletion`]: { status: 200, body: { conversations: 1, materials: 2 } },
+    };
+    const server = await useBackend(routes);
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+      const pill = new RegExp(`<button[^>]*data-variant="danger"[^>]*>${messages.campaigns.page.delete}</button>`);
+      expect(html).toMatch(pill);
+      expect(html).toMatch(new RegExp(`<button[^>]*aria-haspopup="dialog"[^>]*>${messages.campaigns.page.delete}</button>`));
+      // The dialog is rendered closed, already naming the counts of this campaign.
+      expect(html).toContain(language === 'en' ? 'Going with it: 1 conversation and 2 materials of this campaign.' : 'Vão junto: 1 conversa e 2 materiais desta campanha.');
+      expect(html.indexOf(`>${messages.campaigns.page.archive}</button>`)).toBeLessThan(html.indexOf(`>${messages.campaigns.page.delete}</button>`));
+      expect(solids(html)).toEqual([messages.campaigns.page.use]);
+    }
+    expect(server.calls.filter((call) => call.url === `/api/v1/campaigns/${ID}/deletion`)[0]!.headers['x-session-token']).toBe(SESSION);
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    routes['GET /api/v1/campaigns/current'] = { status: 200, body: THURSDAY };
+    expect(renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }))).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+    routes[`GET /api/v1/campaigns/${ID}`] = { status: 200, body: { ...THURSDAY, archived: true } };
+    routes['GET /api/v1/campaigns/current'] = { status: 200, body: FIRST };
+    expect(renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }))).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+  });
+
+  it('without the counts, the dialog names what goes in words', async () => {
+    await useBackend({
+      [`GET /api/v1/campaigns/${ID}`]: { status: 200, body: THURSDAY },
+      'GET /api/v1/campaigns/current': { status: 200, body: FIRST },
+      [`GET /api/v1/campaigns/${ID}/deletion`]: problem(503, 'backend.unavailable'),
+    });
+    const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+    expect(html).toContain('Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.');
+    expect(html).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+  });
+
+  it('"Excluir campanha" deletes it, revalidates the layout and opens Minhas Mesas; a refusal comes back as its text', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = { [`DELETE /api/v1/campaigns/${ID}`]: { status: 202 } };
+    const server = await useBackend(routes);
+
+    expect(await thrownDigest(() => deleteCampaignAction({ error: null }, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/campaigns;/);
+    // The shared layout (switcher, context bar) is rendered again without it.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    expect(server.calls[0]!.method).toBe('DELETE');
+    expect(server.calls[0]!.url).toBe(`/api/v1/campaigns/${ID}`);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    revalidatePath.mockClear();
+
+    // Matrix row "Twice": already deleting, or another owner's.
+    routes[`DELETE /api/v1/campaigns/${ID}`] = problem(404, 'request.not_found');
+    expect(await deleteCampaignAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Não encontrado.' });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await deleteCampaignAction({ error: null }, form({ id: ID }))).toEqual({ error: 'Not found.' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    const count = server.calls.length;
+    for (const fields of [{ id: '../x' }, {}] as Record<string, string>[]) {
+      expect(await deleteCampaignAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
+    }
+    expect(server.calls).toHaveLength(count);
   });
 });
 

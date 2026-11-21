@@ -115,6 +115,7 @@
       "rename": "Rename",
       "archive": "Archive",
       "restore": "Restore",
+      "delete": "Delete",
       "archived": "Archived",
       "sections": "Campaign sections",
       "overview": "Overview",
@@ -130,6 +131,16 @@
       "open": "Open",
       "restoreToOpen": "Restore the campaign to open the conversation.",
       "noConversation": "This campaign has no conversations yet."
+    },
+    "delete": {
+      "title": "Delete this campaign?",
+      "consequence": "Going with it: {conversations} and {materials} of this campaign. This cannot be undone.",
+      "unknown": "Going with it: this campaign's conversations and materials. This cannot be undone.",
+      "conversationsOne": "1 conversation",
+      "conversationsOther": "{count} conversations",
+      "materialsOne": "1 material",
+      "materialsOther": "{count} materials",
+      "confirm": "Delete campaign"
     }
   },
   "notFound": {

@@ -2,16 +2,17 @@ import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
 import { CampaignAction } from '@/components/CampaignAction';
+import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { campaignConversation } from '@/server/conversations';
-import { currentCampaign, getCampaign } from '@/server/library';
+import { campaignDeletion, currentCampaign, getCampaign } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import styles from '../../systems/systems.module.css';
-import { archiveCampaignAction, chooseCampaignAction, openConversationAction } from '../actions';
+import { archiveCampaignAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
 import { systemLabel } from '../rows';
 
 const TABS = ['overview', 'scope', 'conversations'] as const;
@@ -32,6 +33,10 @@ function tabOf(value: unknown): Tab {
  *   sentence when there is none.
  * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
  * "Não encontrado." page.
+ *
+ * Story 3.2 part B: "Excluir", a danger pill last in the header ({@link CampaignDeleteAction}), for any campaign
+ * (archived, current or the last one), whose confirmation names what goes with the counts the backend gives for this
+ * campaign; without them it names what goes in words.
  */
 export default async function CampaignPage({
   params,
@@ -44,7 +49,11 @@ export default async function CampaignPage({
   const t = translator(language);
   const tab = tabOf(query.tab);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const [campaign, current] = await Promise.all([getCampaign(token ?? '', id), currentCampaign(token ?? '')]);
+  const [campaign, current, deletion] = await Promise.all([
+    getCampaign(token ?? '', id),
+    currentCampaign(token ?? ''),
+    campaignDeletion(token ?? '', id),
+  ]);
   if (!campaign.ok) {
     notFoundFor(campaign.problem);
     return <Notice status="danger" language={language} message={errorText(campaign.problem, language)} dismissible={false} />;
@@ -73,6 +82,13 @@ export default async function CampaignPage({
             label={t(archived ? 'campaigns.page.restore' : 'campaigns.page.archive')}
             fields={{ id: campaignId, version: String(version), archived: archived ? 'false' : 'true' }}
             action={archiveCampaignAction}
+          />
+          <CampaignDeleteAction
+            key={`delete-${campaignId}`}
+            id={campaignId}
+            counts={deletion.ok ? deletion.data : null}
+            language={language}
+            action={deleteCampaignAction}
           />
         </div>
       </div>
