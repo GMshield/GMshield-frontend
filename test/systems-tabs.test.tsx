@@ -17,12 +17,15 @@ vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/navigation')>()),
   useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
 }));
-// "Carregar mais" posts to these; the tabs' first pages come from the scripted backend.
+// "Carregar mais" posts to these; the tabs' first pages come from the scripted backend. "Excluir" (Story 3.1 part B)
+// posts to its own, which these tests never call.
 const moreCampaigns = vi.fn();
 const moreMaterials = vi.fn();
+const deleteSystemAction = vi.fn();
 vi.mock('@/app/(signed-in)/systems/actions', () => ({
   moreCampaigns: (...args: unknown[]) => moreCampaigns(...args),
   moreMaterials: (...args: unknown[]) => moreMaterials(...args),
+  deleteSystemAction: (...args: unknown[]) => deleteSystemAction(...args),
 }));
 
 const { default: SystemPage } = await import('@/app/(signed-in)/systems/[id]/page');

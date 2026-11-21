@@ -72,7 +72,13 @@ describe('stand-in backend', () => {
       body: { name: 'D&D', edition: '5.2.1', version: 0 },
     });
     expect(answer(contract, 'PATCH', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: { ...system, version: 1 } });
-    expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
+    // Story 3.1 part B: what the starter system's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/systems/${system.id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { campaigns: 1, conversations: 1, materials: 0 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toEqual({ status: 202, type: null, body: null });
+    expect(answer(contract, 'PUT', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
   });
 
   it('answers the upload paths (Story 1.13) with their tus headers, and a part with the offset it reaches', async () => {

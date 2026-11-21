@@ -3,9 +3,10 @@
 import { redirect } from 'next/navigation';
 
 import type { ListRow, MoreState } from '@/components/ItemList';
+import type { SystemDeleteState } from '@/components/SystemActions';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { changeSystem, createSystem, getSystem, listCampaigns, listSystems } from '@/server/library';
+import { changeSystem, createSystem, deleteSystem, getSystem, listCampaigns, listSystems } from '@/server/library';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -18,6 +19,8 @@ import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow, systemRow } from './r
  * form), never a code, with what was typed kept. A new or edited system opens its page. An edit that the backend finds
  * stale (`request.stale_version`) comes back with the system's current values and version, and says so. The proxy
  * (src/proxy.ts) and Next.js refuse a cross-origin post before any of these runs.
+ *
+ * Story 3.1 part B: the delete of a system, confirmed in its dialog, which opens the list of systems.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -110,6 +113,24 @@ export async function changeSystemAction(previous: SystemFormState, form: FormDa
     return { values, version: Number(version), error: errorText(current.problem, language), field: null, stale: false };
   }
   return { values, version: Number(version), error: errorText(result.problem, language), field: fieldOf(result.problem), stale: false };
+}
+
+/**
+ * "Excluir sistema" in a system's confirmation: the backend deletes it (its campaigns, their conversations and the
+ * materials attached only to it go in the background) and the list of systems opens without it. A refusal comes back
+ * as its text; a malformed id never reaches the backend.
+ */
+export async function deleteSystemAction(_previous: SystemDeleteState, form: FormData): Promise<SystemDeleteState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  if (typeof id !== 'string' || !ID.test(id)) {
+    return { error: invalid(language) };
+  }
+  const result = await deleteSystem((await currentSessionToken()) ?? '', id);
+  if (result.ok) {
+    redirect('/systems');
+  }
+  return { error: errorText(result.problem, language) };
 }
 
 /** The next page of a list after `cursor`, appended to the rows already added; the rows stay when it is refused. */

@@ -4,13 +4,14 @@ import { notFoundFor } from '@/app/not-found';
 import { ItemList } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
+import { SystemActions } from '@/components/SystemActions';
 import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { getSystem, listCampaigns } from '@/server/library';
+import { getSystem, listCampaigns, systemDeletion } from '@/server/library';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { moreCampaigns, moreMaterials } from '../actions';
+import { deleteSystemAction, moreCampaigns, moreMaterials } from '../actions';
 import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow } from '../rows';
 import styles from '../systems.module.css';
 
@@ -23,6 +24,9 @@ type Tab = (typeof TABS)[number];
  * nothing yet (Story 3.2); the materials tab lists the materials attached to the system or to one of its campaigns, each
  * opening its page. Each tab adds rows with "Carregar mais", or says in one sentence that it is empty. Another owner's
  * id, an unknown one or a malformed one shows the single "Não encontrado." page.
+ *
+ * Story 3.1 part B: "Excluir", a danger pill next to "Editar" ({@link SystemActions}), whose confirmation names what
+ * goes with the counts the backend gives for this system; without them it names what goes in words.
  */
 export default async function SystemPage({
   params,
@@ -42,16 +46,18 @@ export default async function SystemPage({
   }
   const { name, edition, description } = system.data;
   const here = `/systems/${encodeURIComponent(system.data.id)}`;
-  const page =
+  const [page, deletion] = await Promise.all([
     tab === 'campaigns'
-      ? await listCampaigns(token ?? '', system.data.id).then((result) =>
+      ? listCampaigns(token ?? '', system.data.id).then((result) =>
           result.ok ? { ok: true as const, rows: result.data.items.map(campaignRow), nextCursor: result.data.nextCursor ?? null } : result,
         )
-      : await listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id }).then((result) =>
+      : listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id }).then((result) =>
           result.ok
             ? { ok: true as const, rows: result.data.items.map((material) => materialRow(material, t)), nextCursor: result.data.nextCursor ?? null }
             : result,
-        );
+        ),
+    systemDeletion(token ?? '', system.data.id),
+  ]);
   return (
     <>
       <div className={styles.header}>
@@ -59,9 +65,17 @@ export default async function SystemPage({
           <h1 className={styles.heading}>{name}</h1>
           {edition ? <p className={styles.edition}>{t('systems.edition', { edition })}</p> : null}
         </div>
-        <PillLink href={`${here}/edit`} solid>
-          {t('systems.page.edit')}
-        </PillLink>
+        <div className={styles.headerActions}>
+          <PillLink href={`${here}/edit`} solid>
+            {t('systems.page.edit')}
+          </PillLink>
+          <SystemActions
+            id={system.data.id}
+            counts={deletion.ok ? deletion.data : null}
+            language={language}
+            action={deleteSystemAction}
+          />
+        </div>
       </div>
       {description ? <p className={styles.description}>{description}</p> : null}
       <nav className={styles.tabs} aria-label={t('systems.page.sections')}>

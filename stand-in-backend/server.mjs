@@ -13,7 +13,8 @@
 // (text/event-stream) are a short cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose
 // passage it cites, and the page of reference 2 a text page with the cited passage's range. Story 3.1: the systems list
 // holds the starter system (no edition, no description, version 0), whose one campaign is the current campaign; a new
-// system is "D&D" 5.2.1, and an edit answers the starter system at version 1.
+// system is "D&D" 5.2.1, and an edit answers the starter system at version 1. Story 3.1 part B: the starter system's
+// deletion takes its one campaign, its one conversation and no material; a delete answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -147,6 +148,7 @@ export const EXAMPLES = {
     version: 0,
   },
   'PATCH /api/v1/systems/{id}': { ...STARTER_SYSTEM, version: 1 },
+  'GET /api/v1/systems/{id}/deletion': { campaigns: 1, conversations: 1, materials: 0 },
   'GET /api/v1/materials': { items: [] },
   'GET /api/v1/materials/{id}': {
     id: '0190a0b0-0000-7000-8000-000000000003',

@@ -10,6 +10,9 @@ import type { components, operations } from './backend/generated/public';
  * Story 3.1: the list of systems by page, one system, a new one, an edit by its version (`request.stale_version` when
  * the system changed elsewhere, `request.system_name_taken` for a name and edition the account has, a field's own
  * `request.system_*_invalid`), and a system's campaigns by page.
+ *
+ * Story 3.1 part B: what a system's deletion takes with it (`{campaigns, conversations, materials}`), and the deletion
+ * itself (202, no body). From the delete on, the system and its campaigns are `request.not_found` everywhere.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -19,6 +22,7 @@ export type NewSystem = Schemas['NewSystem'];
 export type SystemChange = Schemas['SystemChange'];
 export type CampaignSummary = Schemas['CampaignSummary'];
 export type CampaignPage = Schemas['CampaignPage'];
+export type SystemDeletion = Schemas['SystemDeletion'];
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
@@ -67,5 +71,22 @@ export function listCampaigns(
 ): Promise<Result<CampaignPage>> {
   return call('library.campaigns', options, (client) =>
     client.GET('/api/v1/campaigns', { params: { header: session(sessionToken), query: { system, ...query } } }),
+  );
+}
+
+/** What goes with one of the account's systems if it is deleted; `request.not_found` for any other id. */
+export function systemDeletion(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<SystemDeletion>> {
+  return call('library.system_deletion', options, (client) =>
+    client.GET('/api/v1/systems/{id}/deletion', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/**
+ * Deletes one of the account's systems with its campaigns, their conversations and the materials attached only to it
+ * (202, no body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ */
+export function deleteSystem(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('library.system_delete', options, (client) =>
+    client.DELETE('/api/v1/systems/{id}', { params: { header: session(sessionToken), path: { id } } }),
   );
 }

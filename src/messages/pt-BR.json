@@ -57,6 +57,7 @@
     },
     "page": {
       "edit": "Editar",
+      "delete": "Excluir",
       "sections": "Seções do sistema",
       "campaigns": "Campanhas",
       "materials": "Materiais",
@@ -64,6 +65,18 @@
       "materialList": "Materiais deste sistema",
       "noCampaigns": "Este sistema ainda não tem campanhas.",
       "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas."
+    },
+    "delete": {
+      "title": "Excluir este sistema?",
+      "consequence": "Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele. Isso não pode ser desfeito.",
+      "campaignsOne": "1 campanha",
+      "campaignsOther": "{count} campanhas",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
+      "materialsOne": "1 material ligado só a ele",
+      "materialsOther": "{count} materiais ligados só a ele",
+      "confirm": "Excluir sistema"
     }
   },
   "notFound": {

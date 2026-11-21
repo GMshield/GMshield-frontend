@@ -19,6 +19,7 @@ const { Notice } = await import('@/components/Notice');
 const { PreferencesForm } = await import('@/components/PreferencesForm');
 const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
+const { SystemActions } = await import('@/components/SystemActions');
 const { References } = await import('@/components/conversation/References');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
@@ -594,6 +595,88 @@ describe('MaterialActions (Story 1.20)', () => {
     render(<MaterialActions id={ID} name="Livro.pdf" actions={['accept', 'discard']} pages={2} language="pt-BR" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Aceitar' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Esta ação não está disponível no estado atual do material. A página foi atualizada.');
+  });
+});
+
+describe('SystemActions (Story 3.1 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000030';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the counts; Cancelar or Esc closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(
+      <SystemActions id={ID} counts={{ campaigns: 2, conversations: 3, materials: 1 }} language="pt-BR" action={action} />,
+    );
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog.
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir este sistema?' });
+    expect(dialog.textContent).toContain(
+      'Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, none, and what goes in words when the counts are missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(
+      <SystemActions id={ID} counts={{ campaigns: 1, conversations: 1, materials: 1 }} language="pt-BR" action={action} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 campanha, 1 conversa e 1 material ligado só a ele.');
+    await user.keyboard('{Escape}');
+    rerender(<SystemActions id={ID} counts={{ campaigns: 0, conversations: 0, materials: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this system?' });
+    expect(dialog.textContent).toContain(
+      'Going with it: 0 campaigns, 0 conversations and 0 materials linked only to it. This cannot be undone.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Delete system' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<SystemActions id={ID} counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele.',
+    );
+  });
+
+  it('shows a refusal as an alert under the pill', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<SystemActions id={ID} counts={{ campaigns: 1, conversations: 0, materials: 0 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
   });
 });
 
