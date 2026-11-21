@@ -113,7 +113,10 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(add.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(nav.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The logo and name come first, then the current campaign.
-    const logo = within(sidebar).getByRole('button', { name: 'GMshield' });
+    // Usability pass: the logo is a link to the conversation, the home screen; it opens no menu.
+    const logo = within(sidebar).getByRole('link', { name: ptBR.shell.home });
+    expect(logo.getAttribute('href')).toBe('/questions');
+    expect(logo.textContent).toBe('GMshield');
     expect(logo.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(sidebar).getByText('First campaign')).toBeTruthy();
     expect(within(sidebar).getByText(ptBR.shell.currentCampaign)).toBeTruthy();
@@ -140,6 +143,10 @@ describe('the signed-in shell (Story 1.11)', () => {
     const sidebar = screen.getByTestId('sidebar');
     const context = screen.getByRole('navigation', { name: ptBR.shell.context });
     const main = screen.getByRole('main');
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(bell.getAttribute('aria-expanded')).toBe('false');
+    const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
+    const skip = screen.getByRole('link', { name: ptBR.shell.skip });
     expect(sidebar.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Story 3.2: the campaign's name is the switcher's button; its list is closed (hidden).
@@ -154,10 +161,26 @@ describe('the signed-in shell (Story 1.11)', () => {
       if (focused === null || focused === document.body) {
         break;
       }
-      visited.push(area().contains(focused) ? 'sidebar' : context.contains(focused) ? 'context' : main.contains(focused) ? 'main' : 'other');
+      let place = 'other';
+      if (area().contains(focused)) {
+        place = 'sidebar';
+      } else if (context.contains(focused)) {
+        place = 'context';
+      } else if (main.contains(focused)) {
+        place = 'main';
+      } else if (focused === bell || focused === account) {
+        place = 'bar end';
+      } else if (focused === skip) {
+        place = 'skip';
+      }
+      visited.push(place);
     }
     const regions = visited.filter((place, index) => index === 0 || visited[index - 1] !== place);
-    expect(regions).toEqual(['sidebar', 'context', 'main']);
+    // Usability pass: "Pular para o conteúdo" is the first stop; the bell and the account menu close the bar above the
+    // page, after the context bar and before the main column.
+    expect(regions).toEqual(['skip', 'sidebar', 'context', 'bar end', 'main']);
+    expect(skip.getAttribute('href')).toBe('#content');
+    expect(main.id).toBe('content');
     expect(visited.filter((place) => place === 'sidebar').length).toBeGreaterThanOrEqual(9);
   });
 
@@ -229,8 +252,8 @@ describe('the signed-in shell (Story 1.11)', () => {
         <a href="/questions#start">início</a>
       </Shell>,
     );
-    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
-    const column = context.parentElement!;
+    // Usability pass: the context bar and the bell share the bar above the page; the column holds the bar and the main.
+    const column = screen.getByRole('main').parentElement!;
     const panel = screen.getByRole('complementary');
     expect(column.hasAttribute('inert')).toBe(false);
     expect(panel.hasAttribute('inert')).toBe(false);
@@ -255,7 +278,7 @@ describe('the signed-in shell (Story 1.11)', () => {
   it('at 1280px and more the page beside the sidebar is never inert', async () => {
     const user = userEvent.setup();
     render(shell());
-    const column = screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+    const column = screen.getByRole('main').parentElement!;
     await user.keyboard('{Control>}b{/Control}');
     await user.keyboard('{Control>}b{/Control}');
     expect(column.hasAttribute('inert')).toBe(false);
@@ -297,45 +320,58 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(ptBR.shell.openMenu).toBe('Abrir menu');
   });
 
-  it('the logo menu holds the preferences and "Sair"; Esc closes it and gives focus back to the logo', async () => {
+  // Usability pass (2026-11-21): the account, the theme, the language and "Sair" are in the bar above the page.
+  it('the account menu, in the bar, holds the account, the preferences and "Sair"; Esc closes it and gives focus back', async () => {
     const user = userEvent.setup();
     render(shell());
-    const logo = screen.getByRole('button', { name: 'GMshield' });
-    expect(logo.getAttribute('aria-expanded')).toBe('false');
-    const menu = document.getElementById(logo.getAttribute('aria-controls')!)!;
+    const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
+    // In the bar above the page, after the bell, never in the sidebar; its mark is the username's initial.
+    expect(screen.getByTestId('sidebar').contains(account)).toBe(false);
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(bell.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(account.textContent).toBe('M');
+    expect(account.getAttribute('aria-expanded')).toBe('false');
+    const menu = document.getElementById(account.getAttribute('aria-controls')!)!;
     expect(menu.hidden).toBe(true);
 
-    await user.click(logo);
-    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    await user.click(account);
+    expect(account.getAttribute('aria-expanded')).toBe('true');
     expect(menu.hidden).toBe(false);
-    const group = screen.getByRole('group', { name: ptBR.shell.menu });
-    expect(within(group).getByRole('button', { name: 'Sair' })).toBeTruthy();
-    expect(within(group).getByRole('radio', { name: ptBR.preferences.themes.dark })).toBeTruthy();
-    expect(within(group).getByText('Conectado como Mestre_Ana')).toBeTruthy();
+    const group = screen.getByRole('group', { name: ptBR.shell.accountMenu });
+    expect(within(group).getByRole('button', { name: 'Sair' })).toHaveProperty('type', 'submit');
+    expect(within(group).getByRole('button', { name: ptBR.preferences.themes.dark }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(group).getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('false');
+    expect(group.textContent).toContain('Conectado comoMestre_Ana');
     // No Account or Administration entry yet.
     expect(within(group).queryByRole('link')).toBeNull();
 
-    await user.click(within(group).getByRole('radio', { name: ptBR.preferences.themes.light }));
     await user.keyboard('{Escape}');
     expect(menu.hidden).toBe(true);
-    expect(document.activeElement).toBe(logo);
+    expect(document.activeElement).toBe(account);
     // Esc in the menu is the menu's: the sidebar stays as it was.
     expect(area().dataset.wide).toBe('open');
+
+    // A press outside closes it too.
+    await user.click(account);
+    expect(menu.hidden).toBe(false);
+    await user.click(screen.getByRole('heading', { name: 'Página' }));
+    expect(menu.hidden).toBe(true);
   });
 
-  it('under 1280px, Esc in the open logo menu closes the menu only; the next Esc closes the sidebar', async () => {
+  it('under 1280px, Esc in a menu open inside the sidebar closes that menu only; the next Esc closes the sidebar', async () => {
     const user = userEvent.setup();
     atWidth(1000);
     render(shell());
     await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
     expect(area().dataset.narrow).toBe('open');
-    const logo = screen.getByRole('button', { name: 'GMshield' });
-    await user.click(logo);
-    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    // The campaign switcher under the logo (the logo itself is a link since the usability pass).
+    const switcher = within(screen.getByTestId('sidebar')).getByRole('button', { name: 'First campaign' });
+    await user.click(switcher);
+    expect(switcher.getAttribute('aria-expanded')).toBe('true');
 
     await user.keyboard('{Escape}');
-    expect(logo.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(logo);
+    expect(switcher.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(switcher);
     expect(area().dataset.narrow).toBe('open');
 
     await user.keyboard('{Escape}');
@@ -391,7 +427,7 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
     });
   }
   const frame = () => area().parentElement!;
-  const column = () => screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+  const column = () => screen.getByRole('main', { hidden: true }).parentElement!;
 
   it('at 1280px and more takes the 560px column beside the main one, and nothing is inert', () => {
     const view = render(page(false));
@@ -488,7 +524,15 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
   it('sizes the slot in CSS: 560px, over the main column under 1280px, a full-screen sheet under 768px', () => {
     const css = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
     expect(css).toMatch(/\.shell\[data-panel='source'\] \.panel \{\s*width: var\(--width-source-view\);/);
-    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*position: fixed;/);
+    // Usability pass: the panel is fixed to the window at every width (it spans its whole height whatever the page's
+    // length); from 1280px the grid keeps its room beside the main column, under it the panel lies over the column.
+    expect(css).toMatch(/\n\.panel \{\s*position: fixed;\s*top: 0;\s*right: 0;\s*bottom: 0;/);
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{[^@]*\.shell\[data-panel='source'\] \{\s*--panel-track: var\(--width-source-view\);/);
+    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*max-width: 100%;/);
+    // The sidebar too: fixed top to bottom, its room kept by the grid while it is open on a wide screen.
+    const sidebarCss = readFileSync(join(process.cwd(), 'src/components/Sidebar.module.css'), 'utf8');
+    expect(sidebarCss).toMatch(/\n\.panel \{\s*position: fixed;\s*top: 0;\s*bottom: 0;\s*left: 0;/);
+    expect(css).toMatch(/\.shell:has\(> \[data-wide='open'\]\) \{\s*--sidebar-track: var\(--width-sidebar\);/);
     expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*left: 0;\s*width: 100%;/);
   });
   it('keeps the source view header and footer in view while the panel itself scrolls (keys scroll from any control)', () => {

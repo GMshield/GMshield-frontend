@@ -2,6 +2,7 @@ import 'server-only';
 
 import { call, type CallOptions, type Result } from './accounts';
 import type { components, operations } from './backend/generated/public';
+import { everyPage, type Every } from './every-page';
 
 /**
  * The signed-in account's materials through the backend (Story 1.14): the list behind the upload tray and one
@@ -44,6 +45,19 @@ export function listMaterials(
       params: { header: { 'X-Session-Token': sessionToken }, query: { state: [...states], ...query } },
     }),
   );
+}
+
+/**
+ * Every material of the account in one of `states` (of one system with `system`), newest first, and whether the list
+ * was read to its end: what the pages of "Meus Arquivos" and of a system's materials are cut from.
+ */
+export function everyMaterial(
+  sessionToken: string,
+  states: readonly MaterialState[],
+  query: Pick<ListQuery, 'system'> = {},
+  options: CallOptions = {},
+): Promise<Result<Every<Material>>> {
+  return everyPage((cursor) => listMaterials(sessionToken, states, { ...query, limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
 }
 
 /** One of the account's materials; `request.not_found` for any other id. */

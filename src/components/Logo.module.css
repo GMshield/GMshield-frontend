@@ -6,13 +6,14 @@
 
 .mark {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   color: var(--color-text);
 }
 
 .name {
-  font-size: var(--font-title-size);
-  font-weight: var(--font-label-weight);
-  line-height: var(--font-title-line-height);
+  font-size: var(--font-section-size);
+  font-weight: var(--font-page-title-weight);
+  line-height: var(--font-section-line-height);
+  letter-spacing: -0.01em;
 }

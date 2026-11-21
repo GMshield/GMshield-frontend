@@ -13,9 +13,25 @@
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
+}
+
+/*
+ * A page that fits its room (third round of the usability pass): no wider than its column and no taller than the
+ * `--page-height` its screen sets, keeping its shape, so a whole page is in view and a cited passage is never under
+ * the fold. Its SVG carries a size of its own (PageView.tsx), which these two limits bring down.
+ */
+.view[data-fit='room'] {
+  align-items: center;
+}
+
+.view[data-fit='room'] .page {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--page-height, none);
 }
 
 /* Shown until the picture arrives, and behind a picture with transparent parts. */
@@ -33,7 +49,7 @@
 .text {
   margin: 0;
   padding: var(--space-4);
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
   color: var(--color-text);

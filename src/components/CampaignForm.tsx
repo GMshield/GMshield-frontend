@@ -107,7 +107,7 @@ export function CampaignForm({ labels, initial, systems, id, cancelHref, action 
         </p>
       ) : null}
       <div className={styles.actions}>
-        <SolidPillButton type="submit" disabled={pending}>
+        <SolidPillButton type="submit" disabled={pending} pending={pending}>
           {labels.submit}
         </SolidPillButton>
         <PillLink href={cancelHref}>{labels.cancel}</PillLink>

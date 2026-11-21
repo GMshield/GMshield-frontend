@@ -6,10 +6,56 @@
 }
 
 .heading {
-  margin: 0 0 var(--space-4);
-  font-size: var(--font-title-size);
-  font-weight: var(--font-title-weight);
-  line-height: var(--font-title-line-height);
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-page-title-size);
+  font-weight: var(--font-page-title-weight);
+  line-height: var(--font-page-title-line-height);
+  letter-spacing: -0.01em;
+}
+
+/*
+ * The sign-in screen (usability pass, 2026-11-21): the theme and the language at the top right of the window, as the
+ * settings of the screen, and one card in the middle with the mark, the name, what GMshield is and the one way in.
+ */
+.top {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+.mark {
+  width: var(--space-12);
+  height: var(--space-12);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 767px) {
+  .top {
+    justify-content: center;
+  }
+
+  .card {
+    padding: var(--space-6) var(--space-4);
+  }
 }
 
 .lead {
@@ -26,19 +72,29 @@
 .signIn {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--space-4);
-  margin: 0 0 var(--space-12);
+  margin: 0;
 }
 
 .legal {
   margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-body-line-height);
 }
 
+/* A link inside a sentence: it stays in the line, and its padding makes the target 44px tall without moving the text. */
 .inlineLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--space-touch-target);
+  padding-block: var(--space-3);
   color: var(--color-text);
+  font-weight: var(--font-label-weight);
+}
+
+/* The one way on from a card that is not a form (the not-found page). */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
 }

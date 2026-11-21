@@ -1,12 +1,18 @@
-/* A state pill (Story 1.14): the word in the text colour, its status colour in the mark beside it. */
+/*
+ * A state pill (Story 1.14): the word in the text colour, its status colour in the mark beside it, never instead of it.
+ * Usability pass (2026-11-21): the pill is tinted with its status, has room around the word, and is set in the label
+ * size, so a state can be found by scanning a list.
+ */
 .pill {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--space-1);
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-rule);
+  gap: var(--space-2);
+  min-height: var(--space-6);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
+  background-color: var(--color-hover);
   color: var(--color-text);
   font-size: var(--font-meta-size);
   font-weight: var(--font-meta-weight);
@@ -15,18 +21,34 @@
 }
 
 .mark {
+  flex: none;
   width: var(--space-2);
   height: var(--space-2);
   border-radius: var(--radius-full);
-  background-color: var(--color-text);
+  background-color: var(--color-text-muted);
+}
+
+.pill[data-state='ready'] {
+  border-color: var(--color-success);
+  background-color: var(--color-success-soft);
 }
 
 .pill[data-state='ready'] .mark {
   background-color: var(--color-success);
 }
 
+.pill[data-state='needs_review'] {
+  border-color: var(--color-warning);
+  background-color: var(--color-warning-soft);
+}
+
 .pill[data-state='needs_review'] .mark {
   background-color: var(--color-warning);
+}
+
+.pill[data-state='failed'] {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger-soft);
 }
 
 .pill[data-state='failed'] .mark {

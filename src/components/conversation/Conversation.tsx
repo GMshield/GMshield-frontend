@@ -11,6 +11,8 @@ import { SourceView, type LoadPage } from '../SourceView';
 import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark } from './AnswerMarkdown';
+import { NamedIcon } from '../Icons';
+
 import styles from './Conversation.module.css';
 import { References, referenceLine } from './References';
 
@@ -585,6 +587,20 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     }
   }, [activeKey, sendStop]);
 
+  // Usability pass, third round: a question that was just asked comes to the top of the window with its answer under
+  // it. The turns only grow, so without this a new question landed below the docked composer once the conversation was
+  // longer than the window, and the GM had to scroll down to read what they had just asked for. Only a new turn moves
+  // the page (never a delta of the answer), so reading back while an answer is written is not interrupted.
+  const lastTurn = useRef<HTMLLIElement | null>(null);
+  const shownTurns = useRef(0);
+  useEffect(() => {
+    if (turns.length > shownTurns.current) {
+      const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      lastTurn.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    }
+    shownTurns.current = turns.length;
+  }, [turns.length]);
+
   useEffect(() => {
     if (!running) {
       return undefined;
@@ -659,8 +675,17 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   return (
     <section className={styles.conversation} aria-label={t('conversation.heading')}>
       <h1 className={styles.visuallyHidden}>{t('conversation.heading')}</h1>
+      {turns.length === 0 ? (
+        <div className={styles.intro} data-testid="conversation-intro">
+          <span className={styles.introIcon}>
+            <NamedIcon name="questions" size={28} />
+          </span>
+          <p className={styles.introTitle}>{t('conversation.intro.title')}</p>
+          <p className={styles.introText}>{t('conversation.intro.text')}</p>
+        </div>
+      ) : null}
       <ol className={styles.turns} aria-label={t('conversation.turns')}>
-        {turns.map((turn) => {
+        {turns.map((turn, index) => {
           const foreign = turn.language !== null && turn.language !== language;
           const languageName = turn.language === 'pt-BR' || turn.language === 'en' ? t(`conversation.languages.${turn.language}`) : turn.language;
           const finished = turn.status === 'done' || turn.status === 'stopped';
@@ -669,7 +694,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
           const hidden = turn.status === 'failed' && turn.failure !== 'truncated';
           const turnId = turn.id;
           return (
-            <li key={turn.key} className={styles.turn}>
+            <li key={turn.key} className={styles.turn} ref={index === turns.length - 1 ? lastTurn : undefined}>
               <p className={styles.question}>
                 <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
                 {turn.question}

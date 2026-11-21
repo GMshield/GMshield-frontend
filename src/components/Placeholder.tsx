@@ -1,7 +1,7 @@
 import { translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
 
-import styles from './Placeholder.module.css';
+import { EmptyState, PageHeader } from './PageHeader';
 import type { PageEntryKey } from './shell-entries';
 
 /** The page of an entry built in a later story: its name, and one sentence saying what will be there. */
@@ -9,8 +9,8 @@ export function Placeholder({ entry, language }: { readonly entry: PageEntryKey;
   const t = translator(language);
   return (
     <>
-      <h1 className={styles.heading}>{t(`shell.entries.${entry}`)}</h1>
-      <p className={styles.text}>{t(`placeholder.${entry}`)}</p>
+      <PageHeader title={t(`shell.entries.${entry}`)} />
+      <EmptyState icon={entry} text={t(`placeholder.${entry}`)} />
     </>
   );
 }

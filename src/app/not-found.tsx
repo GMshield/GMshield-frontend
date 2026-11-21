@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { PillLink } from '@/components/PillLink';
 import { problemFields, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 
@@ -14,10 +14,16 @@ export default async function NotFound() {
   const t = translator((await currentPreferences()).language);
   return (
     <main className={styles.main}>
-      <h1 className={styles.heading}>{t('notFound.title')}</h1>
-      <Link className={styles.link} href="/">
-        {t('notFound.home')}
-      </Link>
+      <div className={styles.entry}>
+        <div className={styles.card}>
+          <h1 className={styles.heading}>{t('notFound.title')}</h1>
+          <p className={styles.actions}>
+            <PillLink href="/" solid>
+              {t('notFound.home')}
+            </PillLink>
+          </p>
+        </div>
+      </div>
     </main>
   );
 }

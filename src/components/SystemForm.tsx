@@ -85,7 +85,7 @@ export function SystemForm({ labels, initial, id, cancelHref, action }: SystemFo
         </p>
       ) : null}
       <div className={styles.actions}>
-        <SolidPillButton type="submit" disabled={pending}>
+        <SolidPillButton type="submit" disabled={pending} pending={pending}>
           {labels.submit}
         </SolidPillButton>
         <PillLink href={cancelHref}>{labels.cancel}</PillLink>

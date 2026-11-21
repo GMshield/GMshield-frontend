@@ -1,0 +1,103 @@
+/* The account menu (usability pass, 2026-11-21): a round button at the right end of the bar, and its panel under it. */
+.menu {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: var(--space-touch-target);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background-color: var(--color-hover);
+}
+
+/* The username's initial, in the solid pair (the text colour and the canvas). */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-full);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+}
+
+.chevron {
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(23rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+/* Who is signed in: a small label over the username. */
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.accountLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.accountName {
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* The way out, under a rule, across the panel's width. */
+.signOut {
+  display: flex;
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.signOut > button {
+  flex: 1;
+}

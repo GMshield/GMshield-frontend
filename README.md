@@ -51,7 +51,14 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
 | `src/components/QualityReport.tsx`, `MaterialActions.tsx` | a material's quality report and the GM's actions on it (Story 1.20); the Server Action is `src/app/(signed-in)/files/[id]/actions.ts` |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
-| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
+| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm`; the page parts every page is built from (`PageHeader.tsx`: `PageHeader`, `PageSubtitle`, `Tabs`, `Card`, `EmptyState`, with `Page.module.css`) |
+| `src/components/notifications` | the notifications (usability pass): `NotificationsProvider` (toasts, the flash cookie's reader) and `NotificationCenter` (the bell and its list) |
+| `src/components/AccountMenu.tsx`, `useDisclosure.ts` | the account menu in the bar above the page (the account, theme, language, "Sair"), and the open, Esc and press-outside behaviour it shares with the bell and "Exibição" |
+| `src/components/Spinner.tsx`, `LinkPending.tsx`, `ErrorScreen.tsx` | a busy button's or link's spinner, and what a page shows when it could not be built (`error.tsx`) |
+| `src/components/ItemList.tsx`, `ViewMenu.tsx`, `Thumbnail.tsx`, `MaterialPreview.tsx` | a list's rows as a list or a grid, its "Exibição" menu, a material's first-page thumbnail, and the preview panel |
+| `src/flash-cookie.ts`, `src/server/flash.ts` | what a Server Action says once it has succeeded, carried to the next render in `__Host-gmshield-flash` |
+| `src/view-cookie.ts` | how each list is shown, remembered in `__Host-gmshield-view` |
+| `src/paging.ts`, `src/server/every-page.ts`, `src/components/Pager.tsx` | a list a page at a time: the page arithmetic, the read of a whole list from the backend's cursors, and the pager |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
 | `src/server` | server-only code: settings, logs, trace context, the backend client, the contract check. Every module starts with `import 'server-only'`, so `next build` fails when a client component imports one |
 | `src/server/backend` | the typed backend client; `generated/` holds the generated types (not committed) |
@@ -98,8 +105,9 @@ they sit in `src/`.
   them on every request and renders `<html lang data-theme>`, so no client script runs and the
   wrong theme never flashes. A value off the allowlist is ignored: the theme falls back to
   `illustrated` and the language to the browser's `Accept-Language` (Portuguese by default).
-  `PreferencesForm` (two radio groups and "Aplicar") posts to the Server Action
-  `savePreferences`, which sets both cookies. Nothing is stored in the backend yet (Epic 8).
+  `PreferencesForm` (two segmented controls of submit buttons; a press applies that one choice at
+  once, since the second usability pass) posts to the Server Action `savePreferences`, which sets the
+  cookie of the choice posted. Nothing is stored in the backend yet (Epic 8).
   Browsers keep `__Host-` (`Secure`) cookies only over HTTPS or on localhost: over plain HTTP on
   another host the choice is silently dropped. Production is reached only through the HTTPS tunnel.
 - **Sign-in with Google (Story 1.9).** The backend alone talks to Google; the frontend relays.
@@ -169,7 +177,8 @@ they sit in `src/`.
   order, the sidebar, the context bar ("system › campaign"; the campaign only under 768px) and the
   main column (centred, at most `--width-reading`), with a slot for one right panel.
   - The sidebar (`Sidebar.tsx`, a client component; its texts come translated from the server): the
-    logo and name opening a disclosure menu with the preferences form and "Sair", the current
+    logo and name (a link to `/questions`; until the usability pass of 2026-11-21 it opened a menu with
+    the preferences and "Sair", now the account menu in the bar above the page), the current
     campaign, the entries Consultas `/questions`, Criação de Regras `/rules`, Minhas Mesas
     `/campaigns`, Sistemas `/systems`, Personagens `/characters`, Meus Arquivos `/files`, and
     "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page still to
@@ -276,8 +285,9 @@ they sit in `src/`.
   - The page route shows a picture page beside a "Texto extraído" column holding its lines' text, or "Nenhum texto
     foi extraído desta página."; an unreadable page whose reading crashed (no picture and no text) says it could not
     be opened, with its number and the page links.
-  - The signed-in layout shows a dismissible warning notice "{name} precisa de revisão." linking to the newest
-    material that needs review, from the tray's list, unless the campaign notice is already shown.
+  - The signed-in layout showed a dismissible warning notice "{name} precisa de revisão." linking to the newest
+    material that needs review. Since the usability pass of 2026-11-21 that is the bell's: every material that needs
+    review or failed is listed under it, and a toast says so when one appears during the visit.
 - **Photos as the pages of one material (Story 1.21).** Public contract 1.10.0.
   - The dialog's step count follows its questions. With two or more images chosen (JPG, PNG, WebP, TIFF, BMP or HEIC,
     as the browser's check found them), a step asks "Páginas de um material" (the default) or "Cada imagem é um
@@ -445,8 +455,8 @@ they sit in `src/`.
   - The number is formatted for the language ("2.000" / "2,000"), and one passage left has its own sentence
     (`notice.indexingOne`: "falta 1 trecho" / "1 passage left").
   - The Shell's notice slot is a list (`notices`), one line each, in this order: a campaign that cannot be loaded
-    (danger), the newest material that needs review (warning, dismissible), then the indexing notice. A campaign error no
-    longer hides the needs-review notice.
+    (danger), then the indexing notice. (A material that needs review was a line here until the usability pass of
+    2026-11-21; it is now under the bell.)
   - **Passages that could not be prepared (public contract 1.16.0).** The current conversation also carries
     `indexingFailed`, `{passages, retrying}` or null: the in-scope passages whose index change failed, and whether the
     backend will try one of them again (every 10 minutes, at most 3 times). The layout renders `IndexingNotice` when
@@ -472,13 +482,9 @@ they sit in `src/`.
   - `/systems`: the title "Sistemas", one solid pill "Novo sistema", and the systems newest first, each row its name
     and edition, opening `/systems/<id>`. Empty, one sentence says what a system holds ("Um sistema reúne as campanhas e
     os materiais de um jogo.") and "Novo sistema" is the only action.
-  - Lists (`src/components/ItemList.tsx`, a client component): the first page comes from the server; while the backend
-    gives a `nextCursor`, a "Carregar mais" pill under the list posts it to a Server Action (`moreSystems`,
-    `moreCampaigns`, `moreMaterials` in `src/app/(signed-in)/systems/actions.ts`) through `useActionState`, which adds
-    the next page under the rows already shown; never on scrolling, and it works without JavaScript. A polite status,
-    not shown, announces how many rows were added ("Mais 2 itens na lista."). A refusal shows as an alert under the
-    list and the rows stay. A list is keyed by its first page (or its tab), so a new first page starts without the rows
-    added before.
+  - Lists (`src/components/ItemList.tsx`, a client component): the server gives the rows of one page, and `Pager`
+    under them (and a small one in the toolbar) links to the others (`?page=`). Until the third round of the usability
+    pass (2026-11-21) a "Carregar mais" pill added the backend's next page under the rows; see "Third pass" below.
   - `/systems/new` and `/systems/<id>/edit` are pages of the main column with `SystemForm`: Nome (`aria-required`),
     Edição (opcional) and Descrição (opcional), with no `maxLength` (the backend counts code points after trimming:
     120, 60 and 2000; CRLF line breaks are sent as LF), "Criar sistema" or "Salvar" (the screen's one
@@ -524,8 +530,8 @@ they sit in `src/`.
   - `/campaigns`: the title "Minhas Mesas", one solid pill "Nova campanha", a filter of two links ("Em uso", the default,
     and "Arquivadas", `?archived=true`, marked with `aria-current="page"`), and the campaigns newest first, each row its
     name and its system ("D&D 5.2.1"), opening `/campaigns/<id>`. Empty, one sentence ("Uma campanha reúne as conversas
-    e os materiais de uma mesa de jogo." or "Nenhuma campanha arquivada."). "Carregar mais" posts the cursor and the
-    filter to `moreCampaignsAction` (`src/app/(signed-in)/campaigns/actions.ts`).
+    e os materiais de uma mesa de jogo." or "Nenhuma campanha arquivada."). The list is paged within its filter
+    (`?archived=true&page=2`).
   - `/campaigns/new` (`?system=` chooses the system, as a system's page can link it; otherwise the newest): `CampaignForm`
     with Nome and a `<select>` of the account's systems (the first 50). Saved, the campaign is current and its page
     opens. `request.campaign_name_invalid` and `request.campaign_name_taken` come back under the name, a system gone
@@ -540,7 +546,7 @@ they sit in `src/`.
     and "Abrir", which makes the campaign current and opens Consultas; none for an archived campaign, which cannot be
     current; one sentence when there is no conversation). An archived campaign still opens. Another owner's id is the
     single "Não encontrado." page. `/campaigns/<id>/edit` renames on the version; a stale one brings the current name.
-  - The switcher (`src/components/CampaignSwitcher.tsx`, a client component, the disclosure pattern of `LogoMenu`)
+  - The switcher (`src/components/CampaignSwitcher.tsx`, a client component, the disclosure pattern `useDisclosure` now shares)
     replaces the static name under the logo and the context bar's campaign link (under 768px the bar still shows the
     campaign name only). Its button is the current campaign's name ("Nenhuma campanha" with none); open, it lists the
     campaigns in use (the first 50, read by the signed-in layout) with their system, the current one marked "atual"
@@ -591,8 +597,8 @@ they sit in `src/`.
     to 100 ids, never with a campaign).
   - `/files` ("Meus Arquivos") is a list page in the shared shape: "Adicionar Arquivo" (`AddFileButton`, the one solid
     pill) opens the guided upload; each row has the material's name, its state pill, then its size, pages and place
-    ("1,2 MB · 320 páginas · Campanha X", `files/rows.ts`), and opens `/files/{id}`; "Carregar mais" (`moreFiles`); an
-    empty list (no row and no next page) says so in one sentence.
+    ("1,2 MB · 320 páginas · Campanha X", `files/rows.ts`), and opens `/files/{id}`; the list is paged (`?page=`); an
+    empty list says so in one sentence.
   - A material's page shows "Onde pertence" (`src/components/MaterialPlace.tsx`): the place in a sentence and
     "Alterar", which opens the pickers on the current place; a place they cannot show (an archived campaign, a system
     not offered) or no place opens with nothing picked, "Em nenhum lugar" is never offered, and "Salvar" waits for a
@@ -606,6 +612,141 @@ they sit in `src/`.
     of its systems.
   - New code `material.belonging_invalid`, in both catalogues. The stand-in backend's material belongs to the starter
     campaign at version 0, and a change answers it in the starter system at version 1.
+- **The usability pass (2026-11-21).** No contract change. Dalton asked for a review of every screen against UI and UX
+  practice (hierarchy and contrast, spacing, feedback after actions, one notification system, file previews, view
+  options), with the prototype as a starting point and not a limit. DESIGN.md and EXPERIENCE.md were revised with it.
+  - **Page structure.** Every signed-in page starts with `PageHeader`: the way back to the list or the item it belongs
+    to (a link above the title), the title (the page's one `<h1>`, in the page-title size), muted lines under it, and
+    its actions on the right. Under it come `Tabs` (a page's sections on a rule, or a list's filters as chips), cards
+    (`Card`, and the cards of the material page) and `EmptyState` (an icon, one sentence, at most one action). The main
+    column sets one gutter (32px, 16px on a phone) and one gap between a page's blocks (24px), so no page part carries a
+    margin of its own. A bar of a fixed height above the page holds the context bar on the left and the bell on the
+    right.
+  - **The sidebar.** 296px wide. Entries read from the left, each with an icon; the current one has the active
+    background, a heavier weight and a bar on its left edge. The campaign switcher is a bordered box with a chevron
+    under its label. Under 768px the handle is a round menu button at the top left, in the bar, and the page keeps its
+    whole width; from 768px to 1279px it was still a tab at mid-height on the left edge until the fourth pass (below).
+  - **Buttons and fields.** A pill is outlined (`default`), filled with the text colour (`solid`, the one main action),
+    outlined in the danger colour (`danger`, a destructive action; the confirmation dialog fills its own) or without an
+    outline (`quiet`). Every one has hover, pressed and disabled states. A field is a bordered box in the field colour
+    with a 12px radius, never the control colour of a button; an invalid one has a 2px danger edge and its text under it.
+  - **Feedback after actions.** A Server Action that succeeds calls `flash(status, text)` (`src/server/flash.ts`) before
+    its `redirect` or `refresh`: creating, changing and deleting a system; creating, renaming, archiving, restoring,
+    choosing and deleting a campaign; accepting, reprocessing, retrying and discarding a material. The text, already
+    translated, goes in `__Host-gmshield-flash` (`Secure`, `SameSite=Lax`, `Path=/`, 30 seconds, not `HttpOnly`: the
+    page reads it). It holds a status and at most 300 characters, never an identifier or a secret. A refusal sets
+    nothing: the form or the control says it, as before.
+  - **Notifications.** `NotificationsProvider` wraps the shell. `useNotifications().notify({ status, message, link })`
+    shows a toast at the top of the window, in the middle, and keeps a line in the bell's list for the visit (in
+    memory only, 30 at most). A toast goes after 6 seconds (10 for a warning), waits while the pointer or the focus is
+    on it, and an error stays until dismissed; three show at most. Each is a live region (`status`, or `alert` for an
+    error) with its status as a word beside its icon. After every render and on every change of page the provider reads
+    the flash cookie once, tells it and clears it. The uploads tell the end and the failure of an upload the same way
+    (`quiet`: their own live region already announces it). The bell (`NotificationCenter`) counts what waits and what is
+    new, and its list shows first what waits for the GM (every material that needs review or failed, from the layout),
+    then the visit's notifications with their time; opening it marks them seen and takes the toasts away, "Limpar"
+    empties the visit's list.
+  - **View options.** A list's toolbar holds its filters on the left and "Exibição" (`ViewMenu`) on the right: list or
+    grid, comfortable or compact, and for lists with thumbnails, whether they show. A choice applies at once and is
+    written to `__Host-gmshield-view` (`files:grid:compact:1|campaigns:…|systems:…`, a year, not `HttpOnly`), which the
+    server reads (`currentViews`), so the next render already has it. "Meus Arquivos" filters by state through
+    `?state=` (`all`, `ready`, `review`, `progress`, `failed`; `files/filters.ts`): the backend filters, and the page
+    links keep the filter. There is no sorting: the backend lists newest first only.
+  - **File previews.** A material that needs review or is ready and has pages carries its first page's picture address
+    in its row (`previewOf`, `files/rows.ts`): `Thumbnail` shows it (a plain lazy `<img>` from the picture relay, which
+    needs the session cookie; the list's icon when there is no picture). "Pré-visualizar" beside the row opens
+    `MaterialPreview` in the shell's right panel slot: the material's pages from the first, read one at a time through
+    the Server Action `previewPageAction` and shown with `PageView`, with previous and next (← and →), "Abrir arquivo"
+    and Esc to close; focus goes back to the control that opened it. The material's own page shows its first page beside
+    its facts, with "Ver páginas" under it.
+  - **The conversation.** The column is 800px wide at most. With nothing asked yet, the middle of the screen says what
+    it is for; the composer stays at the bottom of the window. A question heads its turn in a heavier weight behind a
+    bar, and Send is the solid main action.
+  - **Second pass, same day**, after Dalton's review of the first: the sidebar did not reach the bottom of a long
+    page, the theme and language controls were badly placed, and the upload still had problems.
+    - **Sidebar and panel height.** Both were `position: sticky` inside the shell's grid, so they stopped short of the
+      window's bottom whenever the document was taller than the grid (in development, Next.js's own indicator adds
+      46px under it). They are now `position: fixed`, top to bottom, and the grid keeps their room through two custom
+      properties (`--sidebar-track`, set by `.shell:has(> [data-wide='open'])` from 1280px; `--panel-track`, set by
+      `data-panel`). The page itself still scrolls.
+    - **Account menu.** `AccountMenu` (a round button with the username's initial, at the right end of the bar) holds
+      who is signed in, `PreferencesForm` and "Sair". The logo in the sidebar is a link to `/questions`; `LogoMenu` is
+      gone. `PreferencesForm` is two segmented controls of submit buttons (`name="theme"` or `name="language"`,
+      `aria-pressed` on the current one): a press posts that one choice, which applies at once and leaves the menu
+      open; it still works without JavaScript, and there is no "Aplicar". The sign-in screen shows it at its top right
+      (`layout="inline"`), outside the card. `useDisclosure` (`src/components/useDisclosure.ts`) is the shared
+      open, Esc and press-outside behaviour of the account menu, the bell and "Exibição".
+    - **Guided upload.** The files step has a drop area (`data-testid="upload-drop"`: files dragged from the computer
+      are added as the button adds them, it lights up while files are over it, and anything else dragged is ignored);
+      the chosen files are rows with an icon, what the check said and an icon button "Remover {name}"; the step count
+      is also drawn as marks; the actions sit at the dialog's bottom with "Voltar" on the left; a file being sent shows
+      its percentage, never under 0 or over 100.
+    - **Upload tray.** The layout gives it only the materials in motion (uploading, waiting, processing). One that
+      needs review or failed is listed under the bell, not also as "in progress".
+    - **Busy states.** `PillButton` takes `pending` (a `Spinner` before its text and `aria-busy`); forms and actions
+      pass it while their Server Action runs. `LinkPending` (Next.js's `useLinkStatus`) shows a spinner at the end of
+      a sidebar entry and in place of a list row's arrow while the page it leads to is on its way.
+    - **Titles, skip link, errors.** The root metadata has a title template ("%s · GMshield"); each section's pages
+      are titled after its sidebar entry (`(signed-in)/section-metadata.ts`, a `layout.tsx` in `files`, `systems` and
+      `campaigns`, and `generateMetadata` in the single pages). "Pular para o conteúdo" is the shell's first Tab stop
+      and leads to `#content`, the main column. `error.tsx` at the root and inside `(signed-in)` renders `ErrorScreen`:
+      the page could not be shown, in the interface's language, with "Tentar de novo" (`retry`) and the way home; the
+      not-found page is a card with its title and the way home, and still says nothing more.
+    - **Material pages.** A page of a material has "Página anterior" and "Próxima página" in its header as well as
+      under the page; a material being read shows a progress bar over its page counts.
+  - **Third pass, same day**, after Dalton asked to remove unnecessary scrolling and to page what needs it.
+    - **The scroll that was not the app's.** In `next dev` every signed-in screen scrolled by 46px: Next.js puts its
+      development indicator under the page. `next.config.ts` sets `devIndicators: false` (compile and runtime errors
+      still show), so what scrolls in development is what scrolls in production.
+    - **Paged lists.** "Meus Arquivos", "Sistemas", "Minhas Mesas" and the two tabs of a system's page show one page
+      of rows, 10 unless "Exibição" says 20 or 50 ("Por página"; the size is the fifth field of the view cookie:
+      `files:list:comfortable:1:20`). The page is in the address (`?page=3`, with the filter or the tab kept), so it
+      can be linked and reloaded, and the pager is links: it works without JavaScript. `Pager`
+      (`src/components/Pager.tsx`) under the rows says which rows show ("21–30 de 61"), then "Anterior", the page
+      numbers (the first, the last, the current one and its neighbours; `aria-current` on the current one) and
+      "Próxima"; at an end the arrow that leads nowhere stays in place, dimmed and not a link. On a phone the numbers
+      give way to "Página 3 de 7". A compact pager in the toolbar (the range and the two arrows) turns the page
+      without scrolling to the end of the rows. A list of one page shows only its count ("7 itens"). A page past the
+      end is the last one; anything that is not a page number is the first (`src/paging.ts`: `pageParam`, `pageOf`,
+      `pageWindow`, `pageHref`). "Carregar mais" and its Server Actions (`moreFiles`, `moreSystems`, `moreCampaigns`,
+      `moreMaterials`, `moreCampaignsAction`) are gone.
+    - **Where the pages come from.** The backend's lists have a cursor, at most 50 items a call, and no total or
+      offset. `everyPage` (`src/server/every-page.ts`) reads a list to its end, 50 a call (`everyMaterial`,
+      `everySystem`, `everyCampaign`), and the screen cuts its page out of it; that is what gives the pager a total and
+      numbered pages. It stops after 20 calls (1,000 items) and the count then says "(os 1.000 mais recentes)". The
+      layout already read every campaign and system this way. A total and a page offset from the backend would make
+      the walk unnecessary (noted in `docs/_bmad-output/implementation-artifacts/deferred-work.md`).
+    - **The quality report.** A book's outline has hundreds of sections and a poor scan dozens of unreadable runs, and
+      the material's page listed them all. The outline shows 10 at a time and the unreadable pages 12 runs, each with a
+      compact pager beside its heading (`?outline=`, `?unreadable=`; each keeps the other, and turning one does not
+      move the page: `scroll={false}`). Indents come from the whole outline. "Onde pertence" is one row while its form
+      is closed.
+    - **The page view.** The header has "Ir para a página": a number field and "Ir" between the two page links, a
+      plain GET form to `/files/{id}/pages?page=N`, which answers with the page's own address (past the last page: the
+      last page), so it works without JavaScript. From 901px the picture is as tall as the window leaves and the
+      extracted text scrolls within the same height, so the page is seen whole and nothing is turned by scrolling; the
+      links under the page remain for one column.
+    - **Pages that fit their room.** `PageView` takes `fit`: the SVG then carries a size of its own in the picture's
+      shape (attributes, larger than any screen), and two CSS limits (the column's width, `--page-height` set by the
+      screen that holds it) bring it down, as for a picture. The page view, the source view and the preview panel use
+      it, so a cited passage is in view when the source view opens, with no scroll inside the panel.
+    - **The conversation.** A question just asked comes to the top of the window (`scrollIntoView`, without gliding
+      under reduced motion), and the newest turn is as tall as the window above the composer, so its answer is written
+      in view; only a new turn moves the page, never a piece of the answer. Before, a new question landed under the
+      docked composer once the conversation was longer than the window.
+    - **One thing scrolls at a time.** The guided upload scrolls its step, not the whole dialog: the title, the step
+      count and the actions stay in view with twenty files chosen, and the drop area becomes one row once files are
+      chosen. "Vários sistemas" lays its checkboxes in columns (a library of 23 systems made the place form 2,700px
+      tall). The bell shows the first five things that wait and one link to the rest ("Mais 7 em Meus Arquivos",
+      to the list filtered by state), and still counts them all.
+  - **Fourth pass, same day**: a walk through every completed story's screens and states (with the demo backend's
+    conversation states, an empty first-day account and long lists), which found two more menus in the wrong place.
+    - **The closed sidebar's handle.** From 768px it was a tab at mid-height on the left edge, far from the control
+      that closes the sidebar, with the logo mark alone at the top left and a 76px gutter kept for both. At every width
+      it is now the round menu button at the top left, in the bar, where the phone already had it; the bar keeps its
+      room under 1280px, the page keeps the ordinary gutter, and the mark is not shown while the sidebar is closed.
+    - **The campaign switcher in the sidebar.** Its list opened in place and pushed the navigation down, with a
+      scroll area inside the sidebar's own. It floats under its button now, as the one in the bar does.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
@@ -623,6 +764,17 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
 `-weight` and `-line-height`, `--space-*` (with `--space-touch-target: 44px`), `--radius-*`,
 `--width-*` and `--motion-slide` (0ms under `prefers-reduced-motion`).
 
+The usability pass (2026-11-21) added roles and changed a few values, in every theme:
+`--color-border` (a quiet separator; the full-contrast `--color-rule` no longer divides lists),
+`--color-field-border` and `--color-control-border` (the edge of a field and of a pill, an opaque
+colour in every theme), `--color-popover` (the opaque surface of a menu, a toast and a dialog),
+`--color-hover` and `--color-pressed` (overlays), and `--color-danger-soft`, `-warning-soft` and
+`-success-soft` (the tint behind a state pill and a notice). `--color-surface-active` is now
+clearly lighter or darker than the surface it sits on. New sizes: `--font-page-title-*` (28px),
+`--font-section-*` (18px), `--radius-field` (12px), `--width-prose`, `--width-form`,
+`--width-toast`, `--height-bar` and `--motion-fade`; `--width-sidebar` is 296px and
+`--font-nav-size` 16px.
+
 - Components use roles only, from CSS files (global CSS and CSS Modules): the CSP blocks `style`
   attributes. No hex value or primitive appears outside `tokens.css`.
 - No shadows, and the accent is never a fill: it draws the focus ring
@@ -635,7 +787,11 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
 - `test/contrast.test.ts` parses `tokens.css` and checks every text pair, the status colours on
   the surface and the pill pairs at 4.5:1 or better in each theme, and, with sharp, the brightest
   backdrop pixel under the scrim and under the glass. It also checks that the stylesheets keep
-  the rules above.
+  the rules above. From the usability pass it also checks text on the popover, on the hover and
+  pressed overlays and on the status tints, each status colour on the canvas and the popover, and
+  the edge of a field and of a pill at 3:1 (WCAG 1.4.11) against the canvas, a panel, the popover
+  and the field's own fill. That check raised `--illustrated-danger` from `#FF8A80` to `#FF9087`:
+  danger text on the bare canvas was 4.41:1 over the backdrop's brightest pixel.
 - The backdrop, `src/app/assets/backdrop.webp` (1280x720 pixel art, drawn without smoothing), was
   supplied by Dalton on 2026-11-16: a generated image with no third-party licence. Its brightest
   pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 78% (Story 2.5, up

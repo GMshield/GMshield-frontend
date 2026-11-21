@@ -152,8 +152,8 @@ describe('ingestion texts (Story 1.15)', () => {
 
 describe('t(path, params)', () => {
   it('returns the text at a path in the chosen language', () => {
-    expect(translator('pt-BR')('preferences.apply')).toBe('Aplicar');
-    expect(translator('en')('preferences.apply')).toBe('Apply');
+    expect(translator('pt-BR')('preferences.theme')).toBe('Tema');
+    expect(translator('en')('preferences.theme')).toBe('Theme');
     expect(translator('pt-BR')('dialog.cancel')).toBe('Cancelar');
     expect(translator('en')('dialog.cancel')).toBe('Cancel');
     expect(translator('en')('preferences.languages.pt-BR')).toBe('Português (Brasil)');
@@ -169,7 +169,7 @@ describe('t(path, params)', () => {
     const t = translator('en') as (path: string) => string;
     expect(() => t('preferences')).toThrow('No message at preferences');
     expect(() => t('nope.nothing')).toThrow();
-    expect(() => t('preferences.apply.more')).toThrow();
+    expect(() => t('preferences.theme.more')).toThrow();
   });
 });
 

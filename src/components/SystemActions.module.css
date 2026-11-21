@@ -8,5 +8,6 @@
 .error {
   max-width: 60ch;
   margin: var(--space-3) 0 0;
-  color: var(--color-text);
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
 }

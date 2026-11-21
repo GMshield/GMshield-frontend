@@ -9,8 +9,6 @@
   },
   "shell": {
     "name": "GMshield",
-    "menu": "GMshield menu",
-    "signedInAs": "Signed in as {username}",
     "signOut": "Sign out",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -31,7 +29,12 @@
       "characters": "Characters",
       "files": "My Files",
       "addFile": "Add File"
-    }
+    },
+    "account": "Account of {username}",
+    "accountMenu": "Account and preferences",
+    "signedInLabel": "Signed in as",
+    "home": "GMshield, go to Questions",
+    "skip": "Skip to content"
   },
   "placeholder": {
     "questions": "Here you will ask questions about your books and read the answers with their sources.",
@@ -45,9 +48,6 @@
     "new": "New system",
     "list": "Your systems",
     "empty": "A system holds the campaigns and materials of one game.",
-    "loadMore": "Load more",
-    "addedOne": "1 more item in the list.",
-    "addedOther": "{count} more items in the list.",
     "edition": "Edition {edition}",
     "form": {
       "newTitle": "New system",
@@ -93,9 +93,6 @@
     "archived": "Archived",
     "empty": "A campaign holds the conversations and materials of one game table.",
     "emptyArchived": "No archived campaign.",
-    "loadMore": "Load more",
-    "addedOne": "1 more item in the list.",
-    "addedOther": "{count} more items in the list.",
     "systemEdition": "{name} {edition}",
     "form": {
       "newTitle": "New campaign",
@@ -145,10 +142,7 @@
   },
   "files": {
     "list": "Your files",
-    "empty": "The files you send show here, with the state of each one.",
-    "loadMore": "Load more",
-    "addedOne": "1 more item in the list.",
-    "addedOther": "{count} more items in the list."
+    "empty": "The files you send show here, with the state of each one."
   },
   "notFound": {
     "title": "Not found.",
@@ -166,8 +160,7 @@
     "languages": {
       "pt-BR": "Português (Brasil)",
       "en": "English"
-    },
-    "apply": "Apply"
+    }
   },
   "dialog": {
     "cancel": "Cancel"
@@ -368,7 +361,9 @@
     },
     "notice": {
       "needsReview": "{name} needs review.",
-      "review": "Review"
+      "review": "Review",
+      "failed": "{name} failed.",
+      "open": "Open"
     },
     "place": {
       "campaign": "Campaign {campaign}",
@@ -416,7 +411,10 @@
           "empty": "{name} is empty, so it will not be sent.",
           "too_large": "{name} is larger than 2 GB, the most GMshield accepts, so it will not be sent.",
           "format": "{name} is in a format GMshield does not accept, so it will not be sent. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC."
-        }
+        },
+        "drop": "Drag your files here, or",
+        "dropNow": "Drop to add",
+        "chosen": "Chosen files"
       },
       "set": {
         "question": "What are the {count} photos?",
@@ -590,6 +588,102 @@
     },
     "close": "Close the source",
     "noCampaign": "There is no campaign in use: create one to ask questions.",
-    "newCampaign": "New campaign"
+    "newCampaign": "New campaign",
+    "intro": {
+      "title": "What do you want to look up?",
+      "text": "Ask about the campaign's rules. Every answer cites the file and the page it came from."
+    }
+  },
+  "feedback": {
+    "systemCreated": "System «{name}» created.",
+    "systemChanged": "Changes to «{name}» saved.",
+    "systemDeleted": "System deleted.",
+    "campaignCreated": "Campaign «{name}» created.",
+    "campaignRenamed": "Campaign renamed to «{name}».",
+    "campaignArchived": "Campaign «{name}» archived.",
+    "campaignRestored": "Campaign «{name}» restored.",
+    "campaignChosen": "«{name}» is the current campaign.",
+    "campaignDeleted": "Campaign deleted.",
+    "material": {
+      "accept": "«{name}» accepted. Answers use it as soon as it is prepared for search.",
+      "reprocess": "Reprocessing the failed pages of «{name}».",
+      "retry": "Processing of «{name}» started again.",
+      "discard": "«{name}» discarded."
+    },
+    "uploadDone": "«{name}» uploaded. Reading its pages has started.",
+    "uploadFailed": "The upload of «{name}» failed.",
+    "viewSaved": "Display saved in this browser."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "openOne": "Notifications, 1 new",
+    "openOther": "Notifications, {count} new",
+    "toasts": "Messages",
+    "empty": "No notifications in this visit.",
+    "attention": "Waiting for you",
+    "more": "{count} more in My Files",
+    "recent": "In this visit",
+    "clear": "Clear",
+    "dismiss": "Dismiss message",
+    "status": {
+      "success": "Done.",
+      "warning": "Warning.",
+      "danger": "Error.",
+      "info": "Note."
+    }
+  },
+  "view": {
+    "menu": "View",
+    "layout": "Layout",
+    "list": "List",
+    "grid": "Grid",
+    "density": "Spacing",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "previews": "Thumbnails",
+    "showPreviews": "Show thumbnails",
+    "filter": "Filter by state",
+    "states": {
+      "all": "All",
+      "ready": "Ready",
+      "review": "To review",
+      "progress": "In progress",
+      "failed": "Failed"
+    },
+    "emptyFilter": "No file in this state.",
+    "clearFilter": "See all",
+    "perPage": "Per page"
+  },
+  "preview": {
+    "open": "Preview {name}",
+    "title": "Preview",
+    "openFile": "Open file",
+    "close": "Close preview",
+    "none": "This file has no pages to show yet.",
+    "heading": "First page",
+    "thumbnail": "First page of {name}"
+  },
+  "errorPage": {
+    "title": "This page could not be shown.",
+    "lead": "Something failed while building it. Try again; if it keeps failing, go back to the start.",
+    "retry": "Try again",
+    "home": "Go to the start"
+  },
+  "paging": {
+    "label": "Pagination",
+    "labelTop": "Pagination, above the list",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "current": "Page {page}, current page",
+    "position": "Page {page} of {pages}",
+    "range": "{from}–{to} of {total}",
+    "totalOne": "1 item",
+    "totalOther": "{total} items",
+    "capped": "(the newest 1,000)",
+    "go": "Go",
+    "goTo": "Go to page",
+    "outline": "Pages of the outline",
+    "unreadable": "Pages of the unreadable pages list"
   }
 }

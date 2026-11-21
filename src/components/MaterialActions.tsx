@@ -38,6 +38,9 @@ export function MaterialActions({ id, name, actions, pages, language, action }: 
   const t = translator(language);
   const [state, formAction, pending] = useActionState(action, INITIAL);
   const [confirming, setConfirming] = useState(false);
+  // Which pill was pressed: it alone shows the spinner while the action runs (all of them are disabled meanwhile).
+  const [pressed, setPressed] = useState<string | null>(null);
+  const running = (name: string) => pending && pressed === name;
   if (actions.length === 0) {
     return null;
   }
@@ -52,6 +55,7 @@ export function MaterialActions({ id, name, actions, pages, language, action }: 
     const data = new FormData();
     data.set('id', id);
     data.set('action', 'discard');
+    setPressed('discard');
     startTransition(() => formAction(data));
   };
   return (
@@ -59,22 +63,22 @@ export function MaterialActions({ id, name, actions, pages, language, action }: 
       <form action={formAction} className={styles.row} aria-label={t('material.actions.label')}>
         <input type="hidden" name="id" value={id} />
         {actions.includes('accept') ? (
-          <SolidPillButton type="submit" name="action" value="accept" disabled={pending}>
+          <SolidPillButton type="submit" name="action" value="accept" disabled={pending} pending={running('accept')} onClick={() => setPressed('accept')}>
             {t('material.actions.accept')}
           </SolidPillButton>
         ) : null}
         {actions.includes('retry') ? (
-          <SolidPillButton type="submit" name="action" value="retry" disabled={pending}>
+          <SolidPillButton type="submit" name="action" value="retry" disabled={pending} pending={running('retry')} onClick={() => setPressed('retry')}>
             {t('material.actions.retry')}
           </SolidPillButton>
         ) : null}
         {actions.includes('reprocess') ? (
-          <PillButton type="submit" name="action" value="reprocess" disabled={pending}>
+          <PillButton type="submit" name="action" value="reprocess" disabled={pending} pending={running('reprocess')} onClick={() => setPressed('reprocess')}>
             {t('material.actions.reprocess')}
           </PillButton>
         ) : null}
         {actions.includes('discard') ? (
-          <PillButton aria-haspopup="dialog" disabled={pending} onClick={() => setConfirming(true)}>
+          <PillButton variant="danger" aria-haspopup="dialog" disabled={pending} pending={running('discard')} onClick={() => setConfirming(true)}>
             {t('material.actions.discard')}
           </PillButton>
         ) : null}

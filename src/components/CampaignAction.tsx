@@ -33,6 +33,7 @@ export function CampaignAction({ label, variant = 'default', fields, action }: C
         type="submit"
         variant={variant}
         aria-disabled={pending}
+        pending={pending}
         onClick={(event) => {
           if (pending) {
             event.preventDefault();

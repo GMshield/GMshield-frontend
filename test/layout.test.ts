@@ -89,7 +89,9 @@ describe('the signed-in layout (Story 1.11)', () => {
 
     expect(html).toContain('Untitled system');
     expect(html).toContain('First campaign');
-    expect(html).toContain('Signed in as Mestre_Ana');
+    // Usability pass: the account menu, in the bar, names the account under a small label.
+    expect(html).toMatch(/Signed in as<\/span><span[^>]*>Mestre_Ana<\/span>/);
+    expect(html).toContain('aria-label="Account of Mestre_Ana"');
     expect(html).toContain('<main');
     expect(html).toContain('<h1');
     expect(html).toContain('Here you will keep the characters of your campaigns.');
@@ -309,8 +311,10 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     // No live upload in this tab: the row is interrupted, and offers Retomar.
     expect(html).toContain('Envio interrompido.');
     expect(html).toContain('Retomar');
-    expect(html).toContain('precisa de revisão');
-    expect(html).toContain('data-state="needs_review"');
+    // Usability pass: a material that needs review is no longer "in progress". It waits for the GM in the notice
+    // and under the bell, and the tray keeps the files in motion.
+    expect(html).toContain('Bestiário.pdf precisa de revisão.');
+    expect(html).not.toContain('data-state="needs_review"');
     // "Adicionar Arquivo" is a button now, with the tray just before it; the dialog is in the page, closed.
     expect(html.indexOf('Arquivos em andamento')).toBeLessThan(html.indexOf('Adicionar Arquivo'));
     expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>.*Adicionar Arquivo<\/button>/);
@@ -527,7 +531,9 @@ describe('a page of a material (Story 1.19)', () => {
     let html = await route('13');
     expect(server.calls.find((call) => `${call.method} ${call.url}` === PAGE_13)?.headers['x-session-token']).toBe(SESSION);
     expect(html).toContain('Página 13 de 364');
-    expect(html).toMatch(/<h1[^>]*><a[^>]*href="\/files\/0190a0b0-0000-7000-8000-000000000003"[^>]*>Livro do Jogador.pdf<\/a><\/h1>/);
+    // Usability pass: the material's name is the way back above the title, and the title is the page's place.
+    expect(html).toMatch(/<a[^>]*href="\/files\/0190a0b0-0000-7000-8000-000000000003"[^>]*>(<svg.*?<\/svg>)?Livro do Jogador.pdf<\/a>/);
+    expect(html).toMatch(/<h1[^>]*>Página 13 de 364<\/h1>/);
     expect(html).toContain(`href="/api/v1/materials/${MATERIAL_ID}/pages/13/picture?ground=review"`);
     expect(html).toContain('Plate | 1,500 gp | 18');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/12"`);
@@ -651,7 +657,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Armaduras &lt;b&gt;pesadas&lt;/b&gt;');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
     // The actions it allows: Aceitar the one solid pill.
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Reprocessar páginas com falha:default', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Reprocessar páginas com falha:default', 'Descartar:danger']);
     expect(html).toContain('name="id" value="0190a0b0-0000-7000-8000-000000000003"');
     expect(html).toContain('<dialog');
     expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000003/pages/1"');
@@ -660,7 +666,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Quality report');
     expect(html).toContain('3 pages could not be read.');
     expect(html).toContain('Pages 40 to 41');
-    expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:default']);
+    expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:danger']);
   });
 
   it('shows only the actions the material allows: read-only when ready, retry and discard when failed, none while processing', async () => {
@@ -673,7 +679,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     // Nothing to reprocess.
     answer({ state: 'needs_review', actions: ['accept', 'discard'], pages: { ...reviewPages, unreadable: 0 } });
     let html = await page();
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
     expect(html).toContain('Nenhuma seção foi encontrada no texto.');
     expect(html).not.toContain('Páginas ilegíveis');
 
@@ -691,13 +697,13 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     html = await page();
     expect(html).toContain('Este arquivo não pôde ser processado.');
     expect(html.indexOf('Este arquivo não pôde ser processado.')).toBeLessThan(html.indexOf('Tentar de novo'));
-    expect(buttons(html)).toEqual(['Tentar de novo:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Tentar de novo:solid', 'Descartar:danger']);
     expect(html).not.toContain('Relatório de qualidade');
     expect(server.calls.map((call) => call.url)).not.toContain(`/api/v1/materials/${MATERIAL_ID}/report`);
 
     // Retry impossible: only Descartar.
     answer({ state: 'failed', failure: 'ingestion.password_required', actions: ['discard'] });
-    expect(buttons(await page())).toEqual(['Descartar:default']);
+    expect(buttons(await page())).toEqual(['Descartar:danger']);
 
     // Processing (after reprocess or retry) and discarded: no action, no report.
     for (const state of ['processing', 'discarded']) {
@@ -717,10 +723,11 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     const html = await page();
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
     expect(html).not.toContain('server.unavailable');
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
   });
 
-  it('the signed-in layout names the newest material that needs review in a warning notice that links to it', async () => {
+  // Usability pass (2026-11-21): no notice across every page for a material; the bell lists each one that waits.
+  it('the signed-in layout lists every material that needs review or failed under the bell, with a link, and counts them', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
@@ -731,32 +738,49 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
             { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] },
             { id: '0190a0b0-0000-7000-8000-000000000006', name: 'Bestiário.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
             { id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
+            { id: '0190a0b0-0000-7000-8000-000000000008', name: 'Scan.pdf', state: 'failed', actions: ['retry', 'discard'] },
           ],
         },
       },
     };
     await useBackend(routes);
     let html = await layoutHtml();
-    expect(html).toMatch(/<div role="status"[^>]*data-status="warning"/);
-    expect(html).toContain('Bestiário.pdf precisa de revisão.');
-    expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000006">Revisar</a>');
-    expect(html).not.toContain('Antigo.pdf precisa de revisão.');
-    expect(html).toContain('aria-label="Dispensar aviso"');
+    const bar = (text: string) => text.slice(0, text.indexOf('<main'));
+    const column = (text: string) => text.slice(text.indexOf('<main'));
+    // Under the bell, before the main column: the ones to review first, then the failed one; each with its link.
+    expect(bar(html)).toContain('aria-label="Notificações, 3 novas"');
+    expect(bar(html)).toContain('Bestiário.pdf precisa de revisão.');
+    expect(bar(html)).toContain('href="/files/0190a0b0-0000-7000-8000-000000000006">Revisar</a>');
+    expect(bar(html)).toContain('Antigo.pdf precisa de revisão.');
+    expect(bar(html)).toContain('Scan.pdf falhou.');
+    expect(bar(html)).toContain('href="/files/0190a0b0-0000-7000-8000-000000000008">Abrir</a>');
+    expect(bar(html).indexOf('Antigo.pdf precisa de revisão.')).toBeLessThan(bar(html).indexOf('Scan.pdf falhou.'));
+    // Nothing about them across the page, and nothing announced on load.
+    expect(column(html)).not.toContain('precisa de revisão');
+    expect(html).not.toContain('role="status"');
+    // The tray keeps the file in motion alone.
+    expect(html).toContain('Enviando.pdf');
+    expect(html).not.toContain('data-state="failed"');
     cookieJar['__Host-gmshield-lang'] = 'en';
     html = await layoutHtml();
-    expect(html).toContain('Bestiário.pdf needs review.');
-    expect(html).toContain('>Review</a>');
+    expect(bar(html)).toContain('Bestiário.pdf needs review.');
+    expect(bar(html)).toContain('>Review</a>');
+    expect(bar(html)).toContain('Scan.pdf failed.');
 
-    // Accepted (no longer in the tray's states): the notice is gone.
+    // Accepted (no longer in the tray's states): nothing waits, and the bell counts nothing.
     routes[MATERIALS] = { status: 200, body: { items: [{ id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] }] } };
-    expect(await layoutHtml()).not.toContain('role="status"');
+    html = await layoutHtml();
+    expect(html).toContain('aria-label="Notifications"');
+    expect(html).not.toContain('needs review');
 
-    // With a campaign notice, both show, one line each: the campaign's first.
+    // A campaign that cannot be loaded is still a notice across the page: it is the page's own state.
     routes['GET /api/v1/campaigns/current'] = problem(503, 'server.unavailable');
     routes[MATERIALS] = { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: [] }] } };
     html = await layoutHtml();
-    expect(html.match(/role="status"/g)).toHaveLength(2);
-    expect(html.indexOf('data-status="danger"')).toBeLessThan(html.indexOf('Antigo.pdf needs review.'));
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(column(html)).toContain('data-status="danger"');
+    expect(column(html)).not.toContain('Antigo.pdf needs review.');
+    expect(bar(html)).toContain('Antigo.pdf needs review.');
   });
 });
 
@@ -855,7 +879,7 @@ describe('the indexing notice', () => {
     expect(notices(html)).toEqual([]);
   });
 
-  it('stacks under a campaign error and a material that needs review, one line each, in that order', async () => {
+  it('stacks under a campaign error, one line each, in that order; a material that needs review is the bell\'s', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': problem(503, 'server.unavailable'),
@@ -867,19 +891,19 @@ describe('the indexing notice', () => {
 
     expect(notices(html)).toEqual([
       ['danger', 'Erro O serviço está indisponível agora. Tente de novo em instantes.', true],
-      ['warning', 'Atenção Bestiário.pdf precisa de revisão. Revisar', true],
       ['warning', 'Atenção Preparando as fontes para busca: faltam 150 trechos', false],
     ]);
-    // The first two can be dismissed; the indexing notice cannot.
-    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(2);
+    // The first can be dismissed; the indexing notice cannot.
+    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(1);
     expect(html.lastIndexOf('Dispensar aviso')).toBeLessThan(html.indexOf('Preparando as fontes'));
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    // Usability pass: the material that needs review is under the bell, before the main column.
+    expect(html.indexOf('Bestiário.pdf precisa de revisão.')).toBeLessThan(html.indexOf('<main'));
 
-    // The campaign loads again: the review and indexing notices stay, in that order.
+    // The campaign loads again: the indexing notice stays.
     routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
     html = await layoutHtml();
-    expect(notices(html).map(([status]) => status)).toEqual(['warning', 'warning']);
-    expect(html.indexOf('precisa de revisão')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(notices(html).map(([status]) => status)).toEqual(['warning']);
   });
 });
 
@@ -932,7 +956,9 @@ describe('a page beside its extracted text (Story 1.20)', () => {
     const html = await route('9');
     expect(html).toContain('Esta página não pôde ser aberta.');
     expect(html).toContain('Página 9 de 30');
-    expect(html).not.toContain('<svg');
+    // No page picture: the only drawing left is the arrow of the way back.
+    expect(html).not.toContain('<image');
+    expect(html).not.toContain('role="group"');
     expect(html).not.toContain('/picture');
     expect(html).not.toContain('Texto extraído');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/8"`);
@@ -941,7 +967,7 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 });
 
 describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
-  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed';
+  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed&limit=50';
   const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
   const OTHER_SYSTEM = '0190a0b0-0000-7000-8000-000000000030';
   const IN_CAMPAIGN = { campaign: { id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D' } }, systems: [] };
@@ -965,7 +991,7 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     const server = await useBackend({
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
-      [FILES]: { status: 200, body: { items: files, nextCursor: '0190a0b0-0000-7000-8000-000000000007' } },
+      [FILES]: { status: 200, body: { items: files } },
     });
     requestHeaders = { 'x-gmshield-path': '/files' };
 
@@ -976,10 +1002,12 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toMatch(/<main.*<button(?=[^>]*aria-haspopup="dialog")(?=[^>]*data-variant="solid")[^>]*>Adicionar Arquivo<\/button>/s);
     expect(html).toContain('aria-label="Seus arquivos"');
     expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
-    expect(html).toMatch(/Livro\.pdf<\/span><span[^>]*data-state="ready"[^>]*>.*?pronto.*?<span[^>]*>1,2 MB · 320 páginas · Campanha Mesa de sexta<\/span>/s);
+    expect(html).toMatch(/Livro\.pdf<\/span><span[^>]*><span[^>]*data-state="ready"[^>]*>.*?pronto.*?<span[^>]*>1,2 MB · 320 páginas · Campanha Mesa de sexta<\/span>/s);
     expect(html).toContain('>2 KB · 1 página · D&amp;D e Pathfinder</span>');
     expect(html).toContain('>Sem lugar</span>');
-    expect(html).toContain('Carregar mais');
+    // Third round of the usability pass: one page says how many files there are; nothing is added by "Carregar mais".
+    expect(html).toContain('3 itens');
+    expect(html).not.toContain('Carregar mais');
     expect(server.calls.find((call) => `${call.method} ${call.url}` === FILES)?.headers['x-session-token']).toBe(SESSION);
   });
 
@@ -994,34 +1022,40 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
   });
 
-  it('a first page the backend left empty with a next page offers "Carregar mais", not the empty sentence', async () => {
+  it('a backend page left empty with more after it is read on: the rows show, not the empty sentence', async () => {
     await useBackend({
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
       [FILES]: { status: 200, body: { items: [], nextCursor: MATERIAL_ID } },
+      [`${FILES}&cursor=${MATERIAL_ID}`]: { status: 200, body: { items: files.slice(2) } },
     });
     const html = await layoutHtml(await FilesPage());
     expect(html).not.toContain('Os arquivos que você enviar aparecem aqui');
-    expect(html).toContain(`name="cursor" value="${MATERIAL_ID}"`);
-    expect(html).toContain('Carregar mais');
+    expect(html).toContain('Solto.md');
+    expect(html).toContain('1 item');
   });
 
-  it('"Carregar mais" adds the next page after the cursor, and a malformed cursor never reaches the backend', async () => {
-    const { moreFiles } = await import('@/app/(signed-in)/files/actions');
-    const server = await useBackend({ [`${FILES}&cursor=${MATERIAL_ID}`]: { status: 200, body: { items: files.slice(2) } } });
-    const start = { rows: [], nextCursor: MATERIAL_ID, error: null, added: 0 };
-    const form = new FormData();
-    form.set('cursor', MATERIAL_ID);
-
-    expect(await moreFiles(start, form)).toEqual({
-      rows: [{ id: files[2]!.id, label: 'Solto.md', detail: 'Sem lugar', href: `/files/${files[2]!.id}`, state: { state: 'uploading', word: 'enviando' } }],
-      nextCursor: null,
-      error: null,
-      added: 1,
-    });
-    form.set('cursor', '../x');
-    expect((await moreFiles(start, form)).error).toBe('O pedido não é válido.');
-    expect(server.calls).toHaveLength(1);
+  it('a long list is paged: ten files a page, the rows shown of the total, and a page link keeps the address', async () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => ({
+      ...files[2]!,
+      id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
+      name: `Arquivo ${index + 1}.md`,
+    }));
+    const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: twelve } } });
+    let html = await layoutHtml(await FilesPage());
+    expect(html).toContain('1–10 de 12');
+    expect(html).toContain('Arquivo 10.md');
+    expect(html).not.toContain('Arquivo 11.md');
+    // Above the rows and under them: the page is turned without scrolling to the end of the list.
+    expect(html).toContain('aria-label="Paginação, acima da lista"');
+    expect(html).toContain('aria-label="Paginação"');
+    expect([...html.matchAll(/href="\/files\?page=2"/g)].length).toBeGreaterThanOrEqual(3);
+    html = await layoutHtml(await FilesPage({ searchParams: Promise.resolve({ page: '2' }) }));
+    expect(html).toContain('11–12 de 12');
+    expect(html).toContain('Arquivo 12.md');
+    expect(html).not.toContain('Arquivo 10.md');
+    // One read of the whole list a render; a page number never reaches the backend.
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).filter((call) => call.includes('state=ready'))).toEqual([FILES, FILES]);
   });
 
   it('a material page says where it belongs, with "Alterar", reading the campaigns and systems it can be given', async () => {
@@ -1039,6 +1073,8 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
       [
         'GET /api/v1/campaigns?limit=50',
         `GET /api/v1/materials/${MATERIAL_ID}`,
+        // Usability pass: a ready material with pages shows its first page beside its facts.
+        `GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`,
         `GET /api/v1/materials/${MATERIAL_ID}/report`,
         'GET /api/v1/systems?limit=50',
       ].sort(),

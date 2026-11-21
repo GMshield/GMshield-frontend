@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { defaultOptions, type UrlStorage } from 'tus-js-client';
 
 import { startUpload, UPLOADS_ENDPOINT, type UploadFile, type UploadHandle } from '@/client/upload';
+import { translator } from '@/messages';
 
 import {
   fill,
@@ -18,6 +19,8 @@ import {
   type SetProblem,
   type UploadTexts,
 } from './types';
+import { useNotifications } from '../notifications/NotificationsProvider';
+
 import styles from './Uploads.module.css';
 
 /** How long an unfinished upload lives on the server: a stored resume entry older than this is gone. */
@@ -237,9 +240,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   const handles = useRef(new Map<string, UploadHandle>());
   const counter = useRef(0);
   const textsRef = useRef(texts);
+  const { notify } = useNotifications();
+  const notifyRef = useRef(notify);
   useEffect(() => {
     textsRef.current = texts;
-  }, [texts]);
+    notifyRef.current = notify;
+  }, [texts, notify]);
 
   const announce = useCallback((text: string, now = false) => {
     // A zero-width space alternates so that the same words are said again.
@@ -280,8 +286,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
       change(key, (upload) => ({ ...upload, phase: 'failed', problem }));
       // A refusal (the format, the size) is said at once; anything else politely.
       const refused = (problem as { status?: unknown } | null)?.status;
-      const words = `${stateWords(name, 'failed')} ${problemText(problem, textsRef.current.errors)}`;
+      const reason = problemText(problem, textsRef.current.errors);
+      const words = `${stateWords(name, 'failed')} ${reason}`;
       announce(words, refused === 415 || refused === 413 || refused === 400 || refused === 422);
+      // Usability pass: seen too, wherever the GM is, and kept under the bell. Quiet: the line above already says it.
+      const t = translator(textsRef.current.language);
+      notifyRef.current({ status: 'danger', message: `${t('feedback.uploadFailed', { name })} ${reason}`, quiet: true });
     },
     [announce, change, stateWords],
   );
@@ -323,6 +333,14 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         change(key, (upload) => ({ ...upload, phase: 'waiting', sent: upload.size, materialId: result.materialId }));
         if (options.quiet !== true) {
           announce(stateWords(name, 'waiting'));
+          // Usability pass: the upload's end is seen wherever the GM is, with the way to the file. Quiet, as above.
+          const t = translator(textsRef.current.language);
+          notifyRef.current({
+            status: 'success',
+            message: t('feedback.uploadDone', { name }),
+            link: { href: `/files/${encodeURIComponent(result.materialId)}`, label: t('material.notice.open') },
+            quiet: true,
+          });
         }
         return result.state;
       } catch (error) {

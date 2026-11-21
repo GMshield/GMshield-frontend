@@ -5,6 +5,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 type SetCall = { name: string; value: string; options: Record<string, unknown> };
 const setCalls: SetCall[] = [];
+// A list asks for the router (it starts again from the first page when the rows a page change); here there is none.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
+}));
 vi.mock('next/headers', () => ({
   headers: async () => new Headers(),
   cookies: async () => ({
@@ -270,32 +275,49 @@ describe('Notice', () => {
 });
 
 describe('PreferencesForm', () => {
-  it('has two labelled radio groups with the current choice, and an "Aplicar" pill', () => {
+  // Usability pass (2026-11-21): segmented controls of submit buttons; a press applies that one choice at once.
+  it('has two labelled groups of buttons, the current choice pressed, and no "Aplicar" step', () => {
     const { container } = render(<PreferencesForm theme="dark" language="pt-BR" />);
     const theme = screen.getByRole('group', { name: 'Tema' });
     const language = screen.getByRole('group', { name: 'Idioma' });
-    expect(within(theme).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)).toEqual(['illustrated', 'dark', 'light']);
-    expect(within(theme).getByRole('radio', { name: 'Escuro' })).toHaveProperty('checked', true);
-    expect(within(language).getByRole('radio', { name: 'Português (Brasil)' })).toHaveProperty('checked', true);
-    expect(within(language).getByRole('radio', { name: 'English' })).toHaveProperty('checked', false);
-    expect(screen.getByRole('button', { name: 'Aplicar' })).toHaveProperty('type', 'submit');
+    const themes = within(theme).getAllByRole('button') as HTMLButtonElement[];
+    expect(themes.map((button) => [button.name, button.value, button.type])).toEqual([
+      ['theme', 'illustrated', 'submit'],
+      ['theme', 'dark', 'submit'],
+      ['theme', 'light', 'submit'],
+    ]);
+    expect(themes.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    // Each theme has an icon beside its name; the name alone names the button.
+    expect(themes.every((button) => button.querySelector('svg[aria-hidden="true"]') !== null)).toBe(true);
+    expect(within(language).getByRole('button', { name: 'Português (Brasil)' }).getAttribute('aria-pressed')).toBe('true');
+    const english = within(language).getByRole('button', { name: 'English' }) as HTMLButtonElement;
+    expect([english.name, english.value, english.getAttribute('aria-pressed'), english.lang]).toEqual(['language', 'en', 'false', 'en']);
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aplicar' })).toBeNull();
+    expect(screen.getByRole('form', { name: 'Preferências' }).dataset.layout).toBe('stack');
     expectNoStyleAttribute(container);
   });
 
   it('labels everything in English', () => {
     render(<PreferencesForm theme="illustrated" language="en" />);
     expect(screen.getByRole('form', { name: 'Preferences' })).toBeTruthy();
-    expect(within(screen.getByRole('group', { name: 'Theme' })).getByRole('radio', { name: 'Illustrated' })).toHaveProperty('checked', true);
+    expect(within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', { name: 'Illustrated' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('group', { name: 'Language' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeTruthy();
+    cleanup();
+    // At the top of the sign-in screen: the same groups, side by side.
+    render(<PreferencesForm theme="illustrated" language="en" layout="inline" />);
+    expect(screen.getByRole('form', { name: 'Preferences' }).dataset.layout).toBe('inline');
+    expect(screen.getByRole('group', { name: 'Theme' })).toBeTruthy();
   });
 
-  it('submits the choice to the Server Action, which sets both cookies', async () => {
+  it('a press posts that one choice to the Server Action, which sets its cookie and leaves the other alone', async () => {
     const user = userEvent.setup();
+    setCalls.length = 0;
     render(<PreferencesForm theme="illustrated" language="pt-BR" />);
-    await user.click(screen.getByRole('radio', { name: 'Claro' }));
-    await user.click(screen.getByRole('radio', { name: 'English' }));
-    await user.click(screen.getByRole('button', { name: 'Aplicar' }));
+    await user.click(screen.getByRole('button', { name: 'Claro' }));
+    await vi.waitFor(() => expect(setCalls).toHaveLength(1));
+    expect(setCalls.map(({ name, value }) => [name, value])).toEqual([['__Host-gmshield-theme', 'light']]);
+    await user.click(screen.getByRole('button', { name: 'English' }));
     await vi.waitFor(() => expect(setCalls).toHaveLength(2));
     expect(setCalls.map(({ name, value }) => [name, value])).toEqual([
       ['__Host-gmshield-theme', 'light'],
@@ -529,7 +551,7 @@ describe('MaterialActions (Story 1.20)', () => {
     expect(pills.map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
       'Aceitar:solid',
       'Reprocessar páginas com falha:default',
-      'Descartar:default',
+      'Descartar:danger',
     ]);
     // From the keyboard: Tab to Aceitar, Enter posts it.
     await user.tab();
@@ -542,7 +564,7 @@ describe('MaterialActions (Story 1.20)', () => {
     rerender(<MaterialActions id={ID} name="Livro.pdf" actions={['retry', 'discard']} pages={undefined} language="en" action={action} />);
     expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
       'Try again:solid',
-      'Discard:default',
+      'Discard:danger',
     ]);
     rerender(<MaterialActions id={ID} name="Livro.pdf" actions={[]} pages={444} language="en" action={action} />);
     expect(container.querySelector('form')).toBeNull();
@@ -834,59 +856,48 @@ describe('HTML in a material name or section path is text (Story 2.8)', () => {
 });
 
 describe('ItemList (Story 3.1)', () => {
-  const ADDED = { one: 'Mais 1 item na lista.', other: 'Mais {count} itens na lista.' };
   const row = (id: string, label: string, href: string | null = null) => ({ id, label, detail: null, href, state: null });
 
-  it('shows the rows, each opening its page when it has one, and "Carregar mais" adds the next page under them on request', async () => {
+  it('shows the rows, each opening its page when it has one; without paging it is a plain list', async () => {
     const { ItemList } = await import('@/components/ItemList');
-    const user = userEvent.setup();
-    const action = vi
-      .fn()
-      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c')], nextCursor: 'c', error: null, added: 1 })
-      .mockResolvedValueOnce({ rows: [row('c', 'Terceiro', '/systems/c'), row('d', 'Quarto'), row('e', 'Quinto')], nextCursor: null, error: null, added: 2 });
     const { container } = render(
-      <ItemList
-        label="Seus sistemas"
-        rows={[{ ...row('a', 'D&D', '/systems/a'), detail: '5.2.1' }, row('b', 'Segundo', '/systems/b')]}
-        nextCursor="b"
-        loadMore="Carregar mais"
-        added={ADDED}
-        action={action}
-        fields={{ system: 's' }}
-      />,
+      <ItemList label="Seus sistemas" rows={[{ ...row('a', 'D&D', '/systems/a'), detail: '5.2.1' }, row('b', 'Segundo', '/systems/b'), row('c', 'Terceiro')]} />,
     );
     const list = screen.getByRole('list', { name: 'Seus sistemas' });
     expect(within(list).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/systems/a', '/systems/b']);
-    // The status is there, empty, before anything is added, so that what is added is announced.
-    expect(screen.getByRole('status').textContent).toBe('');
     expect(within(list).getAllByRole('link')[0]!.textContent).toBe('D&D5.2.1');
-
-    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
-    await screen.findByText('Terceiro');
-    expect(screen.getByRole('status').textContent).toBe('Mais 1 item na lista.');
-    const sent = action.mock.calls[0]?.[1] as FormData;
-    expect(sent.get('cursor')).toBe('b');
-    expect(sent.get('system')).toBe('s');
-    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
-    await screen.findByText('Quarto');
-    expect(screen.getByRole('status').textContent).toBe('Mais 2 itens na lista.');
-    expect((action.mock.calls[1]?.[1] as FormData).get('cursor')).toBe('c');
-    // The last page: no more pill, and a row without a page opens nothing.
-    expect(screen.queryByRole('button', { name: 'Carregar mais' })).toBeNull();
-    expect(screen.getByText('Quarto').closest('a')).toBeNull();
-    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    // A row without a page opens nothing.
+    expect(screen.getByText('Terceiro').closest('a')).toBeNull();
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    // No pager, no display menu, and nothing that adds rows: the rows are what the server gave.
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
     expectNoStyleAttribute(container);
   });
 
-  it('a refusal shows as an alert under the list, and the rows stay', async () => {
+  it('a paged list names the rows shown and links to the other pages, with no style attribute', async () => {
     const { ItemList } = await import('@/components/ItemList');
-    const user = userEvent.setup();
-    const action = vi.fn().mockResolvedValueOnce({ rows: [], nextCursor: 'a', error: 'O serviço está indisponível agora.', added: 0 });
-    render(<ItemList label="Lista" rows={[row('a', 'D&D')]} nextCursor="a" loadMore="Load more" added={ADDED} action={action} />);
-    await user.click(screen.getByRole('button', { name: 'Load more' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('O serviço está indisponível agora.');
-    expect(screen.getByText('D&D')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+    const { DEFAULT_VIEW } = await import('@/view-cookie');
+    const { container } = render(
+      <ItemList
+        label="Lista"
+        rows={[row('a', 'D&D', '/systems/a')]}
+        pages={{ paging: { page: 2, pages: 3, total: 21, from: 11, to: 20, complete: true }, path: '/systems' }}
+        viewKey="systems"
+        view={DEFAULT_VIEW}
+        language="en"
+      />,
+    );
+    const pager = screen.getByRole('navigation', { name: 'Pagination' });
+    expect(within(pager).getAllByRole('link').map((link) => `${link.textContent}:${link.getAttribute('href')}`)).toEqual([
+      'Previous:/systems',
+      '1:/systems',
+      '2:/systems?page=2',
+      '3:/systems?page=3',
+      'Next:/systems?page=3',
+    ]);
+    expect(screen.getAllByText('11–20 of 21')).toHaveLength(2);
+    expectNoStyleAttribute(container);
   });
 });
 

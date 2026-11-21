@@ -69,6 +69,7 @@ export function SystemActions({ id, counts, language, action }: SystemActionsPro
         variant="danger"
         aria-haspopup="dialog"
         aria-disabled={pending}
+        pending={pending}
         onClick={() => {
           if (!pending) {
             setConfirming(true);

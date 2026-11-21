@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { UsernameForm } from '@/components/UsernameForm';
@@ -9,6 +10,10 @@ import styles from '../../page.module.css';
 import { completeSignInAction } from '../actions';
 import { homeWithNotice } from '../notice';
 
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: translator((await currentPreferences()).language)('username.title') };
+}
+
 /** The username step of a first sign-in. Without a sign-in attempt cookie, back to the sign-in screen. */
 export default async function UsernamePage() {
   if ((await currentSignInToken()) === null) {
@@ -18,9 +23,13 @@ export default async function UsernamePage() {
   const t = translator(language);
   return (
     <main className={styles.main}>
-      <h1 className={styles.heading}>{t('username.title')}</h1>
-      <p className={styles.lead}>{t('username.lead')}</p>
-      <UsernameForm language={language} action={completeSignInAction} />
+      <div className={styles.entry}>
+        <div className={styles.card}>
+          <h1 className={styles.heading}>{t('username.title')}</h1>
+          <p className={styles.lead}>{t('username.lead')}</p>
+          <UsernameForm language={language} action={completeSignInAction} />
+        </div>
+      </div>
     </main>
   );
 }

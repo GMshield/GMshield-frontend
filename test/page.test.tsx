@@ -92,9 +92,14 @@ describe('page (GET /)', () => {
     expect(form?.getAttribute('action')).toBe('/sign-in/google');
     expect(view.getByRole('link', { name: en.signIn.terms }).getAttribute('href')).toBe('/terms');
     expect(view.getByRole('link', { name: en.signIn.privacy }).getAttribute('href')).toBe('/privacy');
-    expect((view.getByRole('radio', { name: en.preferences.themes.dark }) as HTMLInputElement).checked).toBe(true);
+    // Usability pass: the theme and the language are segmented controls at the top of the screen, outside the main part,
+    // the current choice pressed; neither is the solid main action.
+    expect(view.getByRole('button', { name: en.preferences.themes.dark }).getAttribute('aria-pressed')).toBe('true');
+    expect(view.getByRole('button', { name: en.preferences.themes.light }).getAttribute('aria-pressed')).toBe('false');
+    expect(view.getByRole('main').contains(view.getByRole('form', { name: en.preferences.title }))).toBe(false);
     expect(view.queryByRole('status')).toBeNull();
-    expect((await generateMetadata()).title).toBe(en.app.title);
+    // A page names itself before the product; the sign-in screen is the product's own.
+    expect((await generateMetadata()).title).toEqual({ default: en.app.title, template: `%s · ${en.app.title}` });
     cleanup();
     acceptLanguage = null;
     expect(render(await HomePage()).getByRole('button', { name: ptBR.signIn.google })).toBeTruthy();
@@ -153,10 +158,16 @@ describe('page (GET /)', () => {
   });
 
   it('the not-found page says only "Não encontrado." / "Not found."', async () => {
-    const heading = async () => ((((await NotFound()) as ReactElement<Props>).props.children as ReactElement<Props>[])[0])?.props.children;
-    expect(await heading()).toBe('Não encontrado.');
+    // Usability pass: a card with the title and the one way on; still nothing about whether the item exists.
+    const page = async () => {
+      const view = render(await NotFound());
+      const said = { heading: view.getByRole('heading', { level: 1 }).textContent, text: view.getByRole('main').textContent, home: view.getByRole('link').getAttribute('href') };
+      cleanup();
+      return said;
+    };
+    expect(await page()).toEqual({ heading: 'Não encontrado.', text: 'Não encontrado.Ir para o início', home: '/' });
     acceptLanguage = 'en';
-    expect(await heading()).toBe('Not found.');
+    expect((await page()).heading).toBe('Not found.');
   });
 
   it('keeps both message files in step', () => {

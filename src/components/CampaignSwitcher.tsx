@@ -7,6 +7,7 @@ import { useActionState, useEffect, useId, useRef, useState } from 'react';
 import { CAMPAIGN_ACTION_START, type CampaignActionState } from '@/app/(signed-in)/campaigns/form-state';
 
 import styles from './CampaignSwitcher.module.css';
+import { NamedIcon } from './Icons';
 
 /** A campaign the switcher offers: its id, its name and its system's words. */
 export type SwitcherCampaign = { readonly id: string; readonly name: string; readonly system: string };
@@ -39,7 +40,7 @@ export type CampaignSwitcherProps = {
 
 /**
  * The campaign switcher (Story 3.2), under the logo and on the context bar's campaign name: a disclosure button showing
- * the current campaign's name (the pattern of `LogoMenu`). Open, it lists the campaigns in use with their system, the
+ * the current campaign's name (the pattern `useDisclosure` shares). Open, it lists the campaigns in use with their system, the
  * current one marked in words, then "Ver todas as mesas" and "Nova campanha". Picking one posts it to the Server Action,
  * which makes it current and refreshes the page; the list then closes. A refusal shows as an alert in the list, which
  * stays open. Esc, with focus in the button or the open list, closes it and gives focus back to the button; the key is
@@ -92,7 +93,10 @@ export function CampaignSwitcher({ labels, current, campaigns, placement, action
         aria-controls={id}
         onClick={() => setOpened(open ? null : { done: state.done, path: pathname })}
       >
-        {current?.name ?? labels.none}
+        <span className={styles.triggerName}>{current?.name ?? labels.none}</span>
+        <span className={styles.chevron}>
+          <NamedIcon name="chevronDown" size={16} />
+        </span>
       </button>
       <div id={id} role="group" aria-label={labels.panel} className={styles.panel} hidden={!open}>
         {campaigns.length === 0 ? null : (
@@ -103,7 +107,12 @@ export function CampaignSwitcher({ labels, current, campaigns, placement, action
                 <>
                   <span className={styles.name}>{campaign.name}</span>
                   <span className={styles.system}>{campaign.system}</span>
-                  {isCurrent ? <span className={styles.mark}>{labels.current}</span> : null}
+                  {isCurrent ? (
+                    <span className={styles.mark}>
+                      <NamedIcon name="check" size={14} />
+                      {labels.current}
+                    </span>
+                  ) : null}
                 </>
               );
               return (

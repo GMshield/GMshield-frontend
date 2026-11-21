@@ -1,3 +1,4 @@
+import { EmptyState, PageHeader } from '@/components/PageHeader';
 import { CampaignForm } from '@/components/CampaignForm';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
@@ -6,7 +7,6 @@ import { currentPreferences } from '@/preferences';
 import { listSystems } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import styles from '../../systems/systems.module.css';
 import { createCampaignAction } from '../actions';
 import { systemLabel } from '../rows';
 
@@ -26,17 +26,13 @@ export default async function NewCampaignPage({
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
   const systems = await listSystems(token ?? '', { limit: 50 });
   const heading = (
-    <div className={styles.header}>
-      <h1 className={styles.heading}>{t('campaigns.form.newTitle')}</h1>
-    </div>
+    <PageHeader title={t('campaigns.form.newTitle')} back={{ href: '/campaigns', label: t('shell.entries.campaigns') }} />
   );
   if (!systems.ok) {
     return (
       <>
         {heading}
-        <div className={styles.notice}>
-          <Notice status="danger" language={language} message={errorText(systems.problem, language)} dismissible={false} />
-        </div>
+        <Notice status="danger" language={language} message={errorText(systems.problem, language)} dismissible={false} />
       </>
     );
   }
@@ -44,12 +40,11 @@ export default async function NewCampaignPage({
     return (
       <>
         {heading}
-        <p className={styles.empty}>{t('campaigns.form.noSystem')}</p>
-        <div className={styles.notice}>
+        <EmptyState icon="systems" text={t('campaigns.form.noSystem')}>
           <PillLink href="/systems/new" solid>
             {t('campaigns.form.createSystem')}
           </PillLink>
-        </div>
+        </EmptyState>
       </>
     );
   }

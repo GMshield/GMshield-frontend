@@ -1,3 +1,5 @@
+import { NamedIcon } from '@/components/Icons';
+import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
 import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
@@ -65,44 +67,46 @@ export default async function CampaignPage({
   const conversation = tab === 'conversations' ? await campaignConversation(token ?? '', campaignId) : null;
   return (
     <>
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.heading}>{name}</h1>
-          {archived ? <p className={styles.edition}>{t('campaigns.page.archived')}</p> : null}
-          {isCurrent ? <p className={styles.edition}>{t('campaigns.page.isCurrent')}</p> : null}
-        </div>
-        <div className={styles.headerActions}>
-          {isCurrent || archived ? null : (
-            <CampaignAction label={t('campaigns.page.use')} variant="solid" fields={{ id: campaignId }} action={chooseCampaignAction} />
-          )}
-          <PillLink href={`${here}/edit`}>{t('campaigns.page.rename')}</PillLink>
-          <CampaignAction
-            // Keyed by the campaign alone: the refresh after the action keeps the pill, so a refusal's alert stays shown.
-            key={campaignId}
-            label={t(archived ? 'campaigns.page.restore' : 'campaigns.page.archive')}
-            fields={{ id: campaignId, version: String(version), archived: archived ? 'false' : 'true' }}
-            action={archiveCampaignAction}
-          />
-          <CampaignDeleteAction
-            key={`delete-${campaignId}`}
-            id={campaignId}
-            counts={deletion.ok ? deletion.data : null}
-            language={language}
-            action={deleteCampaignAction}
-          />
-        </div>
-      </div>
-      <nav className={styles.tabs} aria-label={t('campaigns.page.sections')}>
-        <ul className={styles.tabList}>
-          {TABS.map((key) => (
-            <li key={key}>
-              <Link className={styles.tab} href={`${here}?tab=${key}`} aria-current={key === tab ? 'page' : undefined}>
-                {t(`campaigns.page.${key}`)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <PageHeader
+        title={name}
+        back={{ href: archived ? '/campaigns?archived=true' : '/campaigns', label: t('shell.entries.campaigns') }}
+        actions={
+          <>
+            {isCurrent || archived ? null : (
+              <CampaignAction label={t('campaigns.page.use')} variant="solid" fields={{ id: campaignId }} action={chooseCampaignAction} />
+            )}
+            <PillLink href={`${here}/edit`}>{t('campaigns.page.rename')}</PillLink>
+            <CampaignAction
+              // Keyed by the campaign alone: the refresh after the action keeps the pill, so a refusal's alert stays shown.
+              key={campaignId}
+              label={t(archived ? 'campaigns.page.restore' : 'campaigns.page.archive')}
+              fields={{ id: campaignId, version: String(version), archived: archived ? 'false' : 'true' }}
+              action={archiveCampaignAction}
+            />
+            <CampaignDeleteAction
+              key={`delete-${campaignId}`}
+              id={campaignId}
+              counts={deletion.ok ? deletion.data : null}
+              language={language}
+              action={deleteCampaignAction}
+            />
+          </>
+        }
+      >
+        {archived ? <PageSubtitle>{t('campaigns.page.archived')}</PageSubtitle> : null}
+        {isCurrent ? (
+          <PageSubtitle>
+            <span className={styles.badge}>
+              <NamedIcon name="check" size={14} />
+              {t('campaigns.page.isCurrent')}
+            </span>
+          </PageSubtitle>
+        ) : null}
+      </PageHeader>
+      <Tabs
+        label={t('campaigns.page.sections')}
+        tabs={TABS.map((key) => ({ key, href: `${here}?tab=${key}`, label: t(`campaigns.page.${key}`), current: key === tab }))}
+      />
       {tab === 'overview' ? (
         <dl className={styles.details}>
           <div className={styles.detail}>
@@ -125,7 +129,11 @@ export default async function CampaignPage({
           ) : null}
         </dl>
       ) : null}
-      {tab === 'scope' ? <p className={styles.description}>{t('campaigns.page.scopeStarting')}</p> : null}
+      {tab === 'scope' ? (
+        <div className={styles.panel}>
+          <p className={styles.description}>{t('campaigns.page.scopeStarting')}</p>
+        </div>
+      ) : null}
       {conversation === null ? null : conversation.ok ? (
         <ul className={styles.conversations} aria-label={t('campaigns.page.conversationList')}>
           <li className={styles.conversation}>
@@ -143,11 +151,9 @@ export default async function CampaignPage({
           </li>
         </ul>
       ) : problemFields(conversation.problem).code === 'request.not_found' ? (
-        <p className={styles.empty}>{t('campaigns.page.noConversation')}</p>
+        <EmptyState icon="questions" text={t('campaigns.page.noConversation')} />
       ) : (
-        <div className={styles.notice}>
-          <Notice status="danger" language={language} message={errorText(conversation.problem, language)} dismissible={false} />
-        </div>
+        <Notice status="danger" language={language} message={errorText(conversation.problem, language)} dismissible={false} />
       )}
     </>
   );

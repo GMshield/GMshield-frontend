@@ -76,7 +76,7 @@ const BELONGING: Belonging = {
 };
 const LABELS = {
   name: 'GMshield',
-  menu: 'Menu',
+  home: 'GMshield, ir para Consultas',
   openMenu: 'Abrir menu',
   closeMenu: 'Fechar menu',
   navigation: 'Navegação principal',
@@ -148,7 +148,7 @@ function view(
       urlStorage={storage}
       {...(options.sets === undefined ? {} : { imageSets: options.sets })}
     >
-      <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={rows} />
+      <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={rows} />
     </UploadsProvider>
   );
   const rendered = render(tree(options.rows ?? []));
@@ -453,7 +453,7 @@ describe('the guided upload (Story 1.14)', () => {
     const user = userEvent.setup();
     const tree = (belonging: Belonging) => (
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={belonging} urlStorage={memoryStorage()}>
-        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
       </UploadsProvider>
     );
     const { rerender } = render(tree(NO_PLACES));
@@ -475,6 +475,71 @@ describe('the guided upload (Story 1.14)', () => {
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     expect(within(dialog()).getByText('Step 1 of 4')).toBeTruthy();
     expect(within(dialog()).getByRole('heading', { name: en.upload.dialog.title })).toBeTruthy();
+  });
+
+  // Usability pass (2026-11-21).
+  it('takes files dropped on its drop area as it takes chosen ones, lights up while files are over it, and ignores anything else dragged', async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    const modal = dialog();
+    const drop = within(modal).getByTestId('upload-drop');
+    expect(drop.textContent).toContain('Arraste os arquivos para cá, ou');
+    expect(within(drop).getByRole('button', { name: 'Escolher arquivos' })).toBeTruthy();
+
+    // Text dragged over it is not for it: nothing lights up and nothing is added.
+    fireEvent.dragOver(drop, { dataTransfer: { types: ['text/plain'], files: [] } });
+    expect(drop.dataset.over).toBeUndefined();
+    fireEvent.drop(drop, { dataTransfer: { types: ['text/plain'], files: [] } });
+    expect(within(modal).queryByRole('list', { name: 'Arquivos escolhidos' })).toBeNull();
+
+    const files = [pdf('Livro.pdf'), fileOf('planilha.xlsx', new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]))];
+    fireEvent.dragEnter(drop, { dataTransfer: { types: ['Files'], files } });
+    expect(drop.dataset.over).toBe('true');
+    expect(drop.textContent).toContain('Solte para adicionar');
+    fireEvent.dragLeave(drop);
+    expect(drop.dataset.over).toBeUndefined();
+    fireEvent.dragOver(drop, { dataTransfer: { types: ['Files'], files } });
+    fireEvent.drop(drop, { dataTransfer: { types: ['Files'], files } });
+    expect(drop.dataset.over).toBeUndefined();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    // Each file is a row: what the check said, and an icon button that removes it, named after the file.
+    const rows = within(within(modal).getByRole('list', { name: 'Arquivos escolhidos' })).getAllByRole('listitem');
+    expect(rows.map((row) => row.dataset.check)).toEqual(['accepted', 'refused']);
+    expect(rows[0]!.textContent).toContain('Livro.pdf');
+    expect(rows[0]!.textContent).toContain('Pronto para enviar');
+    expect(rows[1]!.textContent).toContain('Não enviado:');
+    expect(urgent()).toContain('planilha.xlsx');
+    await user.click(within(rows[1]!).getByRole('button', { name: 'Remover planilha.xlsx' }));
+    expect(within(modal).getAllByRole('listitem')).toHaveLength(1);
+    expect((within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('draws the step count as marks filled up to the current step, and shows a sent file\'s percentage beside its state', async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    const modal = dialog();
+    const marks = () => [...modal.querySelectorAll('[aria-hidden="true"] > span')].filter((mark) => mark.parentElement?.previousElementSibling?.textContent?.startsWith('Passo'));
+    expect(marks().map((mark) => (mark as HTMLElement).dataset.done ?? 'no')).toEqual(['true', 'no', 'no', 'no']);
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 2 de 4')).toBeTruthy();
+    expect(marks().map((mark) => (mark as HTMLElement).dataset.done ?? 'no')).toEqual(['true', 'true', 'no', 'no']);
+    // "Voltar" comes before the main action in the actions.
+    const actions = within(modal).getAllByRole('button').map((button) => button.textContent);
+    expect(actions.indexOf('Voltar')).toBeLessThan(actions.indexOf('Próximo'));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    act(() => uploads[0]!.options.onProgress?.(3000, 6000));
+    expect(within(modal).getByText('enviando · 50%')).toBeTruthy();
+    // Never past 100, whatever is counted.
+    act(() => uploads[0]!.options.onProgress?.(9000, 6000));
+    expect(within(modal).getByText('enviando · 100%')).toBeTruthy();
   });
 });
 
@@ -1225,7 +1290,7 @@ describe("the conversation's empty state (Story 2.4)", () => {
     const user = userEvent.setup();
     render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()}>
-        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
         <Conversation language="pt-BR" campaignId={CAMPAIGN_ID} hasSources={false} review={null} />
       </UploadsProvider>,
     );

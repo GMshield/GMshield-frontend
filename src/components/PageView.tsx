@@ -8,6 +8,9 @@ import styles from './PageView.module.css';
 /** A page as the backend answers it: a material's page on the review ground, or a page a reference names (Story 2.7). */
 type Page = components['schemas']['MaterialPageView'];
 
+/** The least a fitted page's own size is on its shorter side, in pixels: more than any screen shows it at. */
+const FIT_SIZE = 4000;
+
 /** Share of a line's box height taken as its font size, and where its baseline sits from the box's top. */
 const FONT_SHARE = 0.9;
 const BASELINE_SHARE = 0.8;
@@ -145,7 +148,8 @@ function markedText(text: string, ranges: readonly (readonly [number, number])[]
  * `cited` names the passages to mark. On a picture page each box of a cited passage is a rect under the translucent
  * passage mark, and the lines within a cited box sit in a group announced as "trecho citado"; on a text page each
  * cited passage's range is a `<mark>` announced the same way. A page without a cited passage marks nothing. The
- * source view, which shows "p. N" itself, leaves out the "Page N of M" caption (`caption={false}`).
+ * source view, which shows "p. N" itself, leaves out the "Page N of M" caption (`caption={false}`). The page view
+ * shows a picture page at the height of the window (`fit`).
  */
 export function PageView({
   page,
@@ -153,12 +157,18 @@ export function PageView({
   language,
   cited = [],
   caption = true,
+  fit = false,
 }: {
   readonly page: Page;
   readonly pictureSrc: string;
   readonly language: Language;
   readonly cited?: readonly string[];
   readonly caption?: boolean;
+  /**
+   * Whether a picture page fits the room its screen gives it: no wider than its column and no taller than
+   * `--page-height`, keeping its shape. Without it the page is as wide as its column, whatever its height.
+   */
+  readonly fit?: boolean;
 }) {
   const t = translator(language);
   const position = t('pageView.position', { page: page.page, total: page.pageTotal });
@@ -178,9 +188,14 @@ export function PageView({
     );
   }
   const boxes = marked.flatMap((passage) => (passage.boxes ?? []).map(boxOf));
+  // A page that fits its room is sized like a picture: the SVG gets a size of its own, in the picture's shape and larger
+  // than any screen, and the stylesheet's two limits (the column's width, the room's height) bring it down to the
+  // largest size that keeps the shape. Attributes, not a style: the Content-Security-Policy allows no style attribute.
+  const grown = fit ? Math.ceil(FIT_SIZE / Math.max(Math.min(picture.width, picture.height), 1)) : 0;
+  const size = fit ? { width: picture.width * grown, height: picture.height * grown } : {};
   return (
-    <figure className={styles.view} data-kind="picture">
-      <svg className={styles.page} viewBox={`0 0 ${picture.width} ${picture.height}`} role="group" aria-label={position}>
+    <figure className={styles.view} data-kind="picture" data-fit={fit ? 'room' : undefined}>
+      <svg className={styles.page} viewBox={`0 0 ${picture.width} ${picture.height}`} role="group" aria-label={position} {...size}>
         <rect className={styles.frame} width={picture.width} height={picture.height} />
         <image href={pictureSrc} width={picture.width} height={picture.height} aria-hidden="true" />
         {boxes.map(([left, top, right, bottom], index) => (

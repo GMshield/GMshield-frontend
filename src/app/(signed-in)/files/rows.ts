@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { ListRow } from '@/components/ItemList';
+import { pictureUrl } from '@/components/PageView';
 import { formatSize } from '@/components/uploads/types';
 import type { Language, Translate } from '@/messages';
 import type { Material, MaterialBelonging } from '@/server/materials';
@@ -43,6 +44,19 @@ export function belongingText(belonging: MaterialBelonging, t: Translate, langua
 }
 
 /**
+ * What a row shows of a material's pages (usability pass, 2026-11-21): once it needs review or is ready and has pages,
+ * the address of its first page's picture, for the thumbnail, and its page total, for the preview. Nothing before that:
+ * the backend shows no page of a version still being read.
+ */
+export function previewOf(material: Material): { readonly thumbnail: string | null; readonly pages: number | null } {
+  const total = material.pages?.total ?? 0;
+  if ((material.state !== 'needs_review' && material.state !== 'ready') || total < 1) {
+    return { thumbnail: null, pages: null };
+  }
+  return { thumbnail: pictureUrl(material.id, 1), pages: total };
+}
+
+/**
  * A material's row (Story 3.3): its name, its state pill, then its size (once known), its pages (once known) and where
  * it belongs, one after another ("1,2 MB · 320 páginas · Campanha X"); it opens the material's page. `here`: the system
  * whose page lists it.
@@ -62,5 +76,6 @@ export function fileRow(material: Material, t: Translate, language: Language, he
     detail: parts.join(' · '),
     href: `/files/${encodeURIComponent(material.id)}`,
     state: { state: material.state, word: t(`material.state.${material.state}`) },
+    ...previewOf(material),
   };
 }

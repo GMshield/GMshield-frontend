@@ -9,8 +9,6 @@
   },
   "shell": {
     "name": "GMshield",
-    "menu": "Menu de GMshield",
-    "signedInAs": "Conectado como {username}",
     "signOut": "Sair",
     "openMenu": "Abrir menu",
     "closeMenu": "Fechar menu",
@@ -31,7 +29,12 @@
       "characters": "Personagens",
       "files": "Meus Arquivos",
       "addFile": "Adicionar Arquivo"
-    }
+    },
+    "account": "Conta de {username}",
+    "accountMenu": "Conta e preferências",
+    "signedInLabel": "Conectado como",
+    "home": "GMshield, ir para Consultas",
+    "skip": "Pular para o conteúdo"
   },
   "placeholder": {
     "questions": "Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.",
@@ -45,9 +48,6 @@
     "new": "Novo sistema",
     "list": "Seus sistemas",
     "empty": "Um sistema reúne as campanhas e os materiais de um jogo.",
-    "loadMore": "Carregar mais",
-    "addedOne": "Mais 1 item na lista.",
-    "addedOther": "Mais {count} itens na lista.",
     "edition": "Edição {edition}",
     "form": {
       "newTitle": "Novo sistema",
@@ -93,9 +93,6 @@
     "archived": "Arquivadas",
     "empty": "Uma campanha reúne as conversas e os materiais de uma mesa de jogo.",
     "emptyArchived": "Nenhuma campanha arquivada.",
-    "loadMore": "Carregar mais",
-    "addedOne": "Mais 1 item na lista.",
-    "addedOther": "Mais {count} itens na lista.",
     "systemEdition": "{name} {edition}",
     "form": {
       "newTitle": "Nova campanha",
@@ -145,10 +142,7 @@
   },
   "files": {
     "list": "Seus arquivos",
-    "empty": "Os arquivos que você enviar aparecem aqui, com o estado de cada um.",
-    "loadMore": "Carregar mais",
-    "addedOne": "Mais 1 item na lista.",
-    "addedOther": "Mais {count} itens na lista."
+    "empty": "Os arquivos que você enviar aparecem aqui, com o estado de cada um."
   },
   "notFound": {
     "title": "Não encontrado.",
@@ -166,8 +160,7 @@
     "languages": {
       "pt-BR": "Português (Brasil)",
       "en": "English"
-    },
-    "apply": "Aplicar"
+    }
   },
   "dialog": {
     "cancel": "Cancelar"
@@ -368,7 +361,9 @@
     },
     "notice": {
       "needsReview": "{name} precisa de revisão.",
-      "review": "Revisar"
+      "review": "Revisar",
+      "failed": "{name} falhou.",
+      "open": "Abrir"
     },
     "place": {
       "campaign": "Campanha {campaign}",
@@ -416,7 +411,10 @@
           "empty": "{name} está vazio, então não será enviado.",
           "too_large": "{name} tem mais de 2 GB, o máximo que o GMshield aceita, então não será enviado.",
           "format": "{name} está num formato que o GMshield não aceita, então não será enviado. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC."
-        }
+        },
+        "drop": "Arraste os arquivos para cá, ou",
+        "dropNow": "Solte para adicionar",
+        "chosen": "Arquivos escolhidos"
       },
       "set": {
         "question": "Como ficam as {count} fotos?",
@@ -590,6 +588,102 @@
     },
     "close": "Fechar a fonte",
     "noCampaign": "Não há campanha em uso: crie uma para fazer perguntas.",
-    "newCampaign": "Nova campanha"
+    "newCampaign": "Nova campanha",
+    "intro": {
+      "title": "O que você quer consultar?",
+      "text": "Pergunte sobre as regras da campanha. Cada resposta cita o arquivo e a página de onde veio."
+    }
+  },
+  "feedback": {
+    "systemCreated": "Sistema «{name}» criado.",
+    "systemChanged": "Alterações em «{name}» salvas.",
+    "systemDeleted": "Sistema excluído.",
+    "campaignCreated": "Campanha «{name}» criada.",
+    "campaignRenamed": "Campanha renomeada para «{name}».",
+    "campaignArchived": "Campanha «{name}» arquivada.",
+    "campaignRestored": "Campanha «{name}» restaurada.",
+    "campaignChosen": "«{name}» é a campanha atual.",
+    "campaignDeleted": "Campanha excluída.",
+    "material": {
+      "accept": "«{name}» aceito. As respostas passam a usá-lo assim que estiver preparado para busca.",
+      "reprocess": "Reprocessando as páginas com falha de «{name}».",
+      "retry": "O processamento de «{name}» recomeçou.",
+      "discard": "«{name}» descartado."
+    },
+    "uploadDone": "«{name}» enviado. A leitura das páginas começou.",
+    "uploadFailed": "O envio de «{name}» falhou.",
+    "viewSaved": "Exibição salva neste navegador."
+  },
+  "notifications": {
+    "title": "Notificações",
+    "openOne": "Notificações, 1 nova",
+    "openOther": "Notificações, {count} novas",
+    "toasts": "Avisos",
+    "empty": "Nenhuma notificação nesta visita.",
+    "attention": "Esperando por você",
+    "more": "Mais {count} em Meus Arquivos",
+    "recent": "Nesta visita",
+    "clear": "Limpar",
+    "dismiss": "Dispensar aviso",
+    "status": {
+      "success": "Pronto.",
+      "warning": "Atenção.",
+      "danger": "Erro.",
+      "info": "Aviso."
+    }
+  },
+  "view": {
+    "menu": "Exibição",
+    "layout": "Disposição",
+    "list": "Lista",
+    "grid": "Grade",
+    "density": "Espaçamento",
+    "comfortable": "Confortável",
+    "compact": "Compacto",
+    "previews": "Miniaturas",
+    "showPreviews": "Mostrar miniaturas",
+    "filter": "Filtrar por estado",
+    "states": {
+      "all": "Todos",
+      "ready": "Prontos",
+      "review": "Para revisar",
+      "progress": "Em andamento",
+      "failed": "Com falha"
+    },
+    "emptyFilter": "Nenhum arquivo neste estado.",
+    "clearFilter": "Ver todos",
+    "perPage": "Por página"
+  },
+  "preview": {
+    "open": "Pré-visualizar {name}",
+    "title": "Pré-visualização",
+    "openFile": "Abrir arquivo",
+    "close": "Fechar pré-visualização",
+    "none": "Este arquivo ainda não tem páginas para mostrar.",
+    "heading": "Primeira página",
+    "thumbnail": "Primeira página de {name}"
+  },
+  "errorPage": {
+    "title": "Esta página não pôde ser mostrada.",
+    "lead": "Algo falhou ao montá-la. Tente de novo; se continuar, volte ao início.",
+    "retry": "Tentar de novo",
+    "home": "Ir para o início"
+  },
+  "paging": {
+    "label": "Paginação",
+    "labelTop": "Paginação, acima da lista",
+    "previous": "Anterior",
+    "next": "Próxima",
+    "page": "Página {page}",
+    "current": "Página {page}, página atual",
+    "position": "Página {page} de {pages}",
+    "range": "{from}–{to} de {total}",
+    "totalOne": "1 item",
+    "totalOther": "{total} itens",
+    "capped": "(os 1.000 mais recentes)",
+    "go": "Ir",
+    "goTo": "Ir para a página",
+    "outline": "Páginas do sumário",
+    "unreadable": "Páginas da lista de páginas ilegíveis"
   }
 }
