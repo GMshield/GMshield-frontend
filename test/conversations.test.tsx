@@ -1,0 +1,348 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Story 3.10 part A, the server's side: each area's list of the current campaign's conversations, a new conversation,
+ * an opened one with its stored turns, and the rename (its page and its Server Action). The browser's side (examples,
+ * the composer's focus, the address once the first question made the conversation, a stored turn still being written)
+ * is in `test/conversation.test.tsx`.
+ */
+let cookieJar: Record<string, string> = {};
+const setCookie = vi.fn();
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
+  cookies: async () => ({
+    get: (name: string) => (Object.hasOwn(cookieJar, name) ? { name, value: cookieJar[name] } : undefined),
+    set: (...args: unknown[]) => setCookie(...args),
+  }),
+}));
+// The pages' client parts ask for the router; outside Next.js there is none.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
+}));
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({ refresh: () => undefined, revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
+
+const { createElement } = await import('react');
+const { renderToStaticMarkup } = await import('react-dom/server');
+const { UploadsProvider } = await import('@/components/uploads/UploadsProvider');
+const { uploadTexts } = await import('@/components/uploads/upload-texts');
+const { NO_PLACES } = await import('@/components/uploads/types');
+const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+const { default: RulesPage } = await import('@/app/(signed-in)/rules/page');
+const { default: NewRulesConversationPage } = await import('@/app/(signed-in)/rules/new/page');
+const { default: QuestionsConversationPage } = await import('@/app/(signed-in)/questions/[id]/page');
+const { default: RulesConversationPage } = await import('@/app/(signed-in)/rules/[id]/page');
+const { default: RenameRulesConversationPage } = await import('@/app/(signed-in)/rules/[id]/edit/page');
+const { renameConversationAction } = await import('@/app/(signed-in)/conversation-actions');
+const { FLASH_COOKIE, flashFrom } = await import('@/flash-cookie');
+const ptBR = (await import('@/messages/pt-BR.json')).default;
+const en = (await import('@/messages/en.json')).default;
+const { startScripted } = await import('./support/servers');
+type Scripted = Awaited<ReturnType<typeof startScripted>>;
+
+const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+const CREDENTIAL = 'configured-service-credential-0123456789';
+const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+const FIRST = '0190a0b0-0000-7000-8000-000000000020';
+const SECOND = '0190a0b0-0000-7000-8000-000000000022';
+const RULES_ID = '0190a0b0-0000-7000-8000-000000000023';
+const TURN = '0190a0b0-0000-7000-8000-000000000021';
+const PASSAGE = '0190a0b0-0000-7000-8000-000000000009';
+const CURRENT = { status: 200, body: { campaignId: CAMPAIGN, hasSources: true, indexing: null, indexingFailed: null } };
+const NO_REVIEW = { status: 200, body: { items: [], total: 0 } };
+const REVIEW = 'GET /api/v1/materials?state=needs_review&limit=1';
+const summary = (id: string, name: string, questions: number, lastAskedAt: string, area = 'questions') => ({
+  id,
+  area,
+  name,
+  questions,
+  createdAt: '2026-11-20T10:00:00Z',
+  lastAskedAt,
+  version: 0,
+});
+const RULES = { id: RULES_ID, campaignId: CAMPAIGN, area: 'rules', name: 'Fabricar itens', version: 3 };
+const STORED = {
+  id: TURN,
+  question: 'Que regras já existem sobre fabricar itens?',
+  language: 'pt-BR',
+  createdAt: '2026-11-22T12:00:00Z',
+  events: [
+    { sequence: 1, type: 'delta', data: { text: 'Fabricar leva um dia por 5 PO.' } },
+    { sequence: 2, type: 'citation', data: { passageId: PASSAGE, offset: 30 } },
+    {
+      sequence: 3,
+      type: 'done',
+      data: {
+        stopped: false,
+        silent: false,
+        modelKnowledge: false,
+        references: [{ number: 1, materialName: 'Livro do Jogador.pdf', sectionPath: ['Ofícios'], page: 187, passageIds: [PASSAGE], removed: false, tier: 'system' }],
+      },
+    },
+  ],
+};
+
+let backend: Scripted | undefined;
+async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
+  backend = await startScripted(routes);
+  vi.stubEnv('GMSHIELD_MODE', '');
+  vi.stubEnv('GMSHIELD_BACKEND_URL', backend.url);
+  vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+  return backend;
+}
+
+function problem(status: number, code: string, params: Record<string, number> = {}) {
+  return { status, body: { type: `urn:gmshield:problem:${code}`, title: 'x', status, category: code.split('.')[0], code, params, traceId: 't' } };
+}
+
+function form(fields: Record<string, string>): FormData {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    data.set(key, value);
+  }
+  return data;
+}
+
+/** The digest a `redirect()` or `notFound()` call threw, or null when the call returned. */
+async function thrownDigest(run: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await run();
+    return null;
+  } catch (error) {
+    const digest = String((error as { digest?: unknown }).digest ?? '');
+    if (digest === '') {
+      throw error;
+    }
+    return digest;
+  }
+}
+
+const query = (values: Record<string, string> = {}) => Promise.resolve(values);
+const params = (id: string) => Promise.resolve({ id });
+/** A conversation screen as the signed-in layout holds it: inside the uploads' provider, which its empty state uses. */
+const inShell = (page: unknown) =>
+  renderToStaticMarkup(createElement(UploadsProvider, { texts: uploadTexts('pt-BR'), belonging: NO_PLACES, children: page as never }));
+/** The opening tag of the link to `href`, whatever its attributes' order; '' when there is none. */
+const linkTo = (html: string, href: string) => [...html.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes(`href="${href}"`)) ?? '';
+/** The solid pills of a page: links or buttons whose variant is solid. */
+const solids = (html: string) => [...html.matchAll(/<(a|button)[^>]*data-variant="solid"[^>]*>(.*?)<\/\1>/g)].map((match) => match[2]);
+const calls = (server: Scripted) => server.calls.map((call) => `${call.method} ${call.url}`);
+
+beforeEach(() => {
+  cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
+  setCookie.mockReset();
+  revalidatePath.mockReset();
+});
+
+afterEach(async () => {
+  await backend?.close();
+  backend = undefined;
+  vi.unstubAllEnvs();
+});
+
+describe('each area lists its conversations (Story 3.10)', () => {
+  it('Consultas lists only the questions conversations, most recently asked first, with "Nova conversa" and a pager', async () => {
+    const server = await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/conversations?area=questions&limit=10': {
+        status: 200,
+        body: {
+          items: [
+            summary(SECOND, 'O que a campanha diz sobre viagens?', 1, '2026-11-22T09:00:00Z'),
+            summary(FIRST, 'Como funciona o descanso dos personagens?', 3, '2026-11-21T18:00:00Z'),
+          ],
+          total: 2,
+        },
+      },
+    });
+
+    const html = renderToStaticMarkup(await QuestionsPage({ searchParams: query() }));
+
+    // Only the questions area is asked for, of the current campaign, with the session.
+    expect(calls(server)).toContain(`GET /api/v1/campaigns/${CAMPAIGN}/conversations?area=questions&limit=10`);
+    expect(server.calls.at(-1)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toContain(`<h1`);
+    expect(html).toContain(ptBR.shell.entries.questions);
+    expect(solids(html)).toEqual([ptBR.conversations.new]);
+    expect(linkTo(html, '/questions/new')).toContain('data-variant="solid"');
+    // In the backend's order: the most recently asked first, each opening its conversation.
+    expect(html.indexOf('O que a campanha diz sobre viagens?')).toBeLessThan(html.indexOf('Como funciona o descanso dos personagens?'));
+    expect(html).toContain(`href="/questions/${SECOND}"`);
+    expect(html).toContain(`href="/questions/${FIRST}"`);
+    // "N perguntas" and the date of the last question.
+    expect(html).toContain('1 pergunta · última em 22 de nov. de 2026');
+    expect(html).toContain('3 perguntas · última em 21 de nov. de 2026');
+    expect(html).toContain(`aria-label="${ptBR.conversations.listQuestions}"`);
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+
+  it('Criação de Regras lists the rules area, on page 2 with the offset, in English too', async () => {
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    const server = await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/conversations?area=rules&limit=10&offset=10': {
+        status: 200,
+        body: { items: [summary(RULES_ID, 'Fabricar itens', 2, '2026-11-22T09:00:00Z', 'rules')], total: 11 },
+      },
+    });
+
+    const html = renderToStaticMarkup(await RulesPage({ searchParams: query({ page: '2' }) }));
+
+    expect(calls(server)).toContain(`GET /api/v1/campaigns/${CAMPAIGN}/conversations?area=rules&limit=10&offset=10`);
+    expect(html).toContain(en.shell.entries.rules);
+    expect(solids(html)).toEqual([en.conversations.new]);
+    expect(linkTo(html, '/rules/new')).not.toBe('');
+    expect(html).toContain(`href="/rules/${RULES_ID}"`);
+    expect(html).toContain('2 questions · last on Nov 22, 2026');
+    // The pager names the page, and leads back to the first one.
+    expect(html).toContain('href="/rules"');
+  });
+
+  it('an empty list says so in one sentence with "Nova conversa"; with no campaign it offers a new campaign', async () => {
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/conversations?area=rules&limit=10': { status: 200, body: { items: [], total: 0 } },
+    });
+    let html = renderToStaticMarkup(await RulesPage({ searchParams: query() }));
+    expect(html).toContain(ptBR.conversations.emptyRules);
+    // One solid pill, in the header; the sentence's own "Nova conversa" is outlined.
+    expect(solids(html)).toEqual([ptBR.conversations.new]);
+    expect(html.match(/href="\/rules\/new"/g)).toHaveLength(2);
+    expect(html).not.toContain('<ul');
+    await backend!.close();
+
+    await useBackend({ 'GET /api/v1/conversations/current': problem(404, 'request.not_found') });
+    html = renderToStaticMarkup(await QuestionsPage({ searchParams: query() }));
+    expect(html).toContain(ptBR.conversation.noCampaign);
+    expect(html).toContain('href="/campaigns/new"');
+    expect(html).not.toContain('href="/questions/new"');
+    expect(html).not.toContain(ptBR.notFound.title);
+  });
+
+  it('a list that cannot be loaded says why', async () => {
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/conversations?area=questions&limit=10': problem(503, 'server.unavailable'),
+    });
+    const html = renderToStaticMarkup(await QuestionsPage({ searchParams: query() }));
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+    expect(solids(html)).toEqual([ptBR.conversations.new]);
+  });
+});
+
+describe('a new and an opened conversation (Story 3.10)', () => {
+  it('a new conversation of Criação de Regras shows its heading, its three examples and the way back, and no name', async () => {
+    await useBackend({ 'GET /api/v1/conversations/current': CURRENT, [REVIEW]: NO_REVIEW });
+
+    const html = inShell(await NewRulesConversationPage());
+
+    expect(html).toContain('Que regra você quer criar?');
+    for (const example of Object.values(ptBR.conversation.examples.rules)) {
+      expect(html).toContain(`>${example}</button>`);
+    }
+    expect(html).toContain('href="/rules"');
+    expect(html).toContain(`>${ptBR.shell.entries.rules}</a>`);
+    expect(html).not.toContain(ptBR.conversation.rename);
+    expect(html).toContain('<textarea');
+  });
+
+  it('an opened conversation shows its stored turns with their references, its name and "Renomear"', async () => {
+    const server = await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [STORED] } },
+    });
+
+    const html = inShell(await RulesConversationPage({ params: params(RULES_ID) }));
+
+    expect(calls(server)).toEqual(expect.arrayContaining([`GET /api/v1/conversations/${RULES_ID}`, `GET /api/v1/conversations/${RULES_ID}/turns`]));
+    expect(html).toContain('Que regras já existem sobre fabricar itens?');
+    expect(html).toContain('Fabricar leva um dia por 5 PO.');
+    expect(html).toContain('Livro do Jogador.pdf');
+    expect(html).toContain('<sup');
+    expect(html).toContain('Fabricar itens');
+    expect(linkTo(html, `/rules/${RULES_ID}/edit`)).not.toBe('');
+    expect(html).toContain(`>${ptBR.conversation.rename}</a>`);
+    expect(html).toContain('href="/rules"');
+    // A conversation with turns shows no intro and no examples.
+    expect(html).not.toContain('Que regra você quer criar?');
+  });
+
+  it('a conversation of the other area opens under its own address; another account\'s is "Não encontrado."', async () => {
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [] } },
+      [`GET /api/v1/conversations/${FIRST}`]: problem(404, 'request.not_found'),
+      [`GET /api/v1/conversations/${FIRST}/turns`]: problem(404, 'request.not_found'),
+    });
+    expect(await thrownDigest(async () => QuestionsConversationPage({ params: params(RULES_ID) }))).toMatch(
+      new RegExp(`^NEXT_REDIRECT;[a-z]+;/rules/${RULES_ID};`),
+    );
+    expect(await thrownDigest(async () => RulesConversationPage({ params: params(FIRST) }))).toMatch(/NEXT_HTTP_ERROR_FALLBACK;404/);
+    const count = backend!.calls.length;
+    expect(await thrownDigest(async () => RulesConversationPage({ params: params('../me') }))).toMatch(/NEXT_HTTP_ERROR_FALLBACK;404/);
+    expect(backend!.calls).toHaveLength(count);
+  });
+});
+
+describe('rename a conversation (Story 3.10)', () => {
+  it('the rename page holds the name and the version, with the way back to the conversation', async () => {
+    await useBackend({ [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES } });
+
+    const html = renderToStaticMarkup(await RenameRulesConversationPage({ params: params(RULES_ID) }));
+
+    expect(html).toContain(ptBR.conversations.form.renameTitle);
+    expect(html).toMatch(/<input[^>]*name="name"[^>]*value="Fabricar itens"|<input[^>]*value="Fabricar itens"[^>]*name="name"/);
+    expect(html).toContain('<input type="hidden" name="version" value="3"/>');
+    expect(html).toContain(`<input type="hidden" name="id" value="${RULES_ID}"/>`);
+    expect(html).toContain(`href="/rules/${RULES_ID}"`);
+    expect(solids(html)).toEqual([ptBR.conversations.form.save]);
+    expect(html).not.toContain('<select');
+  });
+
+  it('saves on the version read, names the conversation in a toast and opens it; a stale version or a bad name is said', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [`PATCH /api/v1/conversations/${RULES_ID}`]: { status: 200, body: { ...RULES, name: 'Viagem ao norte', version: 4 } },
+    };
+    const server = await useBackend(routes);
+    const previous = { values: { name: 'Fabricar itens', systemId: '' }, version: 3, error: null, field: null, stale: false };
+    const typed = { id: RULES_ID, version: '3', name: 'Viagem ao norte' };
+
+    expect(await thrownDigest(() => renameConversationAction(previous, form(typed)))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/rules/${RULES_ID};`));
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 3, name: 'Viagem ao norte' });
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    const [name, value] = setCookie.mock.calls[0] as [string, string];
+    expect(name).toBe(FLASH_COOKIE);
+    expect(flashFrom(value)).toEqual({ status: 'success', message: 'Conversa renomeada para «Viagem ao norte».' });
+
+    // Matrix row "Stale rename": the form shows the current name and version, and says it changed elsewhere.
+    routes[`PATCH /api/v1/conversations/${RULES_ID}`] = problem(409, 'request.stale_version');
+    routes[`GET /api/v1/conversations/${RULES_ID}`] = { status: 200, body: { ...RULES, name: 'Outro nome', version: 5 } };
+    expect(await renameConversationAction(previous, form(typed))).toEqual({
+      values: { name: 'Outro nome', systemId: '' },
+      version: 5,
+      error: ptBR.conversations.form.stale,
+      field: null,
+      stale: true,
+    });
+    // Matrix row "Bad name": beside the field, with the limits, in the interface's language.
+    routes[`PATCH /api/v1/conversations/${RULES_ID}`] = problem(400, 'request.conversation_name_invalid', { min: 1, max: 120 });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await renameConversationAction(previous, form({ ...typed, name: '' }))).toMatchObject({
+      error: 'The name needs 1 to 120 characters.',
+      field: 'name',
+      version: 3,
+      values: { name: '' },
+    });
+    const count = server.calls.length;
+    for (const fields of [{ ...typed, id: '../me' }, { ...typed, version: '-1' }, { ...typed, version: '9'.repeat(16) }]) {
+      expect((await renameConversationAction(previous, form(fields))).error).toBe('The request is not valid.');
+    }
+    expect(server.calls).toHaveLength(count);
+  });
+});

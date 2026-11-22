@@ -8,9 +8,9 @@ import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { ScopeControls } from '@/components/ScopeControls';
-import { errorText, problemFields, translator } from '@/messages';
+import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { campaignConversation } from '@/server/conversations';
+import { AREAS, listConversations } from '@/server/conversations';
 import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -33,9 +33,9 @@ function tabOf(value: unknown): Tab {
  * - scope (Story 3.6): the scope controls inline, the same as the context bar's popover ({@link ScopeControls}): the
  *   three tier switches, the materials of each tier that is on with a switch each, and the model-knowledge switch (disabled until
  *   Story 3.8); a press saves at once. When the scope cannot be read, a notice says why;
- * - conversations: the campaign's one conversation with its question count and "Abrir", which makes the campaign current
- *   and opens Consultas (for an archived campaign, which cannot be current, a sentence asks to restore it instead); one
- *   sentence when there is none.
+ * - conversations: from Story 3.10 one row per area (Consultas, Criação de Regras) with how many conversations the
+ *   campaign has there and "Abrir", which makes the campaign current and opens that area's list (for an archived
+ *   campaign, which cannot be current, a sentence asks to restore it instead); one sentence when it has none in either.
  * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
  * "Não encontrado." page.
  *
@@ -67,10 +67,14 @@ export default async function CampaignPage({
   const campaignId = campaign.data.id;
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
-  const [conversation, scope] = await Promise.all([
-    tab === 'conversations' ? campaignConversation(token ?? '', campaignId) : null,
+  const [areas, scope] = await Promise.all([
+    tab === 'conversations'
+      ? Promise.all(AREAS.map(async (area) => ({ area, list: await listConversations(token ?? '', campaignId, area, { limit: 1 }) })))
+      : null,
     tab === 'scope' ? getCampaignScope(token ?? '', campaignId) : null,
   ]);
+  const refused = areas?.map(({ list }) => list).find((list) => !list.ok);
+  const counted = areas?.map(({ area, list }) => ({ area, total: list.ok ? list.data.total : 0 })) ?? [];
   return (
     <>
       <PageHeader
@@ -143,26 +147,26 @@ export default async function CampaignPage({
       ) : (
         <Notice status="danger" language={language} message={errorText(scope.problem, language)} dismissible={false} />
       )}
-      {conversation === null ? null : conversation.ok ? (
-        <ul className={styles.conversations} aria-label={t('campaigns.page.conversationList')}>
-          <li className={styles.conversation}>
-            <span className={styles.conversationName}>{t('shell.entries.questions')}</span>
-            <span className={styles.count}>
-              {conversation.data.questions === 1
-                ? t('campaigns.page.questionsOne')
-                : t('campaigns.page.questionsOther', { count: conversation.data.questions })}
-            </span>
-            {archived ? (
-              <span className={styles.count}>{t('campaigns.page.restoreToOpen')}</span>
-            ) : (
-              <CampaignAction label={t('campaigns.page.open')} fields={{ id: campaignId }} action={openConversationAction} />
-            )}
-          </li>
-        </ul>
-      ) : problemFields(conversation.problem).code === 'request.not_found' ? (
+      {areas === null ? null : refused !== undefined && !refused.ok ? (
+        <Notice status="danger" language={language} message={errorText(refused.problem, language)} dismissible={false} />
+      ) : counted.every(({ total }) => total === 0) ? (
         <EmptyState icon="questions" text={t('campaigns.page.noConversation')} />
       ) : (
-        <Notice status="danger" language={language} message={errorText(conversation.problem, language)} dismissible={false} />
+        <ul className={styles.conversations} aria-label={t('campaigns.page.conversationList')}>
+          {counted.map(({ area, total }) => (
+            <li key={area} className={styles.conversation}>
+              <span className={styles.conversationName}>{t(`shell.entries.${area}`)}</span>
+              <span className={styles.count}>
+                {total === 1 ? t('campaigns.page.conversationsOne') : t('campaigns.page.conversationsOther', { count: total })}
+              </span>
+              {archived ? (
+                <span className={styles.count}>{t('campaigns.page.restoreToOpen')}</span>
+              ) : (
+                <CampaignAction label={t('campaigns.page.open')} fields={{ id: campaignId, area }} action={openConversationAction} />
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );

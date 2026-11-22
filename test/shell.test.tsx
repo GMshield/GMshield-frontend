@@ -141,7 +141,7 @@ describe('the signed-in shell (Story 1.11)', () => {
 
   it('puts the sidebar, the context bar and the main column in that order, in the page and in Tab order', async () => {
     const user = userEvent.setup();
-    render(shell({ children: <a href="/questions#start">início</a> }));
+    render(shell({ children: <a href="#start">início</a> }));
     const sidebar = screen.getByTestId('sidebar');
     const context = screen.getByRole('navigation', { name: ptBR.shell.context });
     const main = screen.getByRole('main');
@@ -256,7 +256,7 @@ describe('the signed-in shell (Story 1.11)', () => {
     atWidth(1000);
     render(
       <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="u" current={CURRENT} sidebar="open" panel={<a href="/x">painel</a>}>
-        <a href="/questions#start">início</a>
+        <a href="#start">início</a>
       </Shell>,
     );
     // Usability pass: the context bar and the bell share the bar above the page; the column holds the bar and the main.

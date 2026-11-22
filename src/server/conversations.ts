@@ -10,9 +10,12 @@ import { outgoingTraceparent, traceFrom } from './trace';
 /**
  * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
  * turn's answer as server-sent events, the GM's stop of an answer (Story 2.6), and a page a turn's source reference
- * names (Story 2.7), and from Story 3.2 a campaign's conversation with its question count. From Story 3.9 a search of
+ * names (Story 2.7). From Story 3.9 a search of
  * the library (created as a job, then read by id) and a page of the campaign's current scope, the ground a search
- * result opens on. The backend takes the owner from the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
+ * result opens on. From Story 3.10 a campaign's conversations of one area (its campaign page counts them with the
+ * same list), one conversation with its stored turns,
+ * its rename, and a question that continues a conversation or starts one in an area. The backend takes the owner from
+ * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
 const UNIT = 'server.conversations';
@@ -20,13 +23,24 @@ const UNIT = 'server.conversations';
 type Schemas = components['schemas'];
 export type CurrentConversation = Schemas['CurrentConversation'];
 export type Turn = Schemas['Turn'];
-export type CampaignConversation = Schemas['CampaignConversation'];
 /** A page a reference names (Story 2.7): the same shape as a material's page on the review ground. */
 export type ReferencePage = Schemas['MaterialPageView'];
 /** A search of the library (Story 3.9): its query, filters, state and, once done, its results. */
 export type Search = Schemas['Search'];
 export type SearchCreated = Schemas['SearchCreated'];
 export type NewSearch = Schemas['NewSearch'];
+/** Story 3.10: a conversation in a list, a page of them, one conversation, its stored turns and a rename. */
+export type ConversationSummary = Schemas['ConversationSummary'];
+export type ConversationPage = Schemas['ConversationPage'];
+export type ConversationItem = Schemas['Conversation'];
+export type StoredTurn = Schemas['StoredTurn'];
+export type ConversationTurns = Schemas['ConversationTurns'];
+export type ConversationChange = Schemas['ConversationChange'];
+/** The areas of the sidebar a conversation belongs to (Story 3.10). */
+export const AREAS = ['questions', 'rules'] as const;
+export type Area = (typeof AREAS)[number];
+/** Where a question goes (Story 3.10): a conversation to continue, or the area of a new one. */
+export type QuestionTarget = { readonly conversationId?: string; readonly area?: Area };
 
 /** A campaign or turn id as the backend mints it (a UUID); anything else is one nowhere. */
 const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
@@ -45,23 +59,74 @@ export function currentConversation(sessionToken: string, options: CallOptions =
 }
 
 /**
- * The campaign's conversation and how many questions it holds (Story 3.2); `request.not_found` when it has none or the
- * campaign is not the account's.
+ * Records a question on the campaign: the turn, its conversation and its language. Story 3.10: in the conversation
+ * `target` names, or in a new one of its area; with neither, the campaign's latest questions conversation.
  */
-export function campaignConversation(sessionToken: string, campaignId: string, options: CallOptions = {}): Promise<Result<CampaignConversation>> {
-  return call('conversations.of_campaign', options, (client) =>
-    client.GET('/api/v1/campaigns/{campaignId}/conversation', {
+export function askQuestion(
+  sessionToken: string,
+  campaignId: string,
+  question: string,
+  options: CallOptions = {},
+  target: QuestionTarget = {},
+): Promise<Result<Turn>> {
+  return call('conversations.ask', options, (client) =>
+    client.POST('/api/v1/campaigns/{campaignId}/turns', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
+      body: { question, ...(target.conversationId === undefined ? {} : { conversationId: target.conversationId }), ...(target.area === undefined ? {} : { area: target.area }) },
     }),
   );
 }
 
-/** Records a question on the campaign: the turn, its conversation and its language. */
-export function askQuestion(sessionToken: string, campaignId: string, question: string, options: CallOptions = {}): Promise<Result<Turn>> {
-  return call('conversations.ask', options, (client) =>
-    client.POST('/api/v1/campaigns/{campaignId}/turns', {
-      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
-      body: { question },
+/**
+ * One page of the campaign's conversations of `area` (Story 3.10), the most recently asked first, with the list's
+ * total; `request.not_found` for a campaign that is not the account's.
+ */
+export function listConversations(
+  sessionToken: string,
+  campaignId: string,
+  area: Area,
+  query: { readonly limit?: number; readonly offset?: number } = {},
+  options: CallOptions = {},
+): Promise<Result<ConversationPage>> {
+  return call('conversations.list', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/conversations', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId }, query: { area, ...query } },
+    }),
+  );
+}
+
+/** One conversation of the account (Story 3.10): its campaign, area, name and version; `request.not_found` otherwise. */
+export function getConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<ConversationItem>> {
+  return call('conversations.get', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/** A conversation's newest 200 turns, oldest first, each with its stored events (Story 3.10). */
+export function conversationTurns(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<ConversationTurns>> {
+  return call('conversations.turns', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}/turns', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/**
+ * Renames a conversation on the version it was read at (Story 3.10); `request.stale_version` when it changed since,
+ * `request.conversation_name_invalid` for a name outside its limits.
+ */
+export function renameConversation(
+  sessionToken: string,
+  conversationId: string,
+  body: ConversationChange,
+  options: CallOptions = {},
+): Promise<Result<ConversationItem>> {
+  return call('conversations.rename', options, (client) =>
+    client.PATCH('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+      body,
     }),
   );
 }

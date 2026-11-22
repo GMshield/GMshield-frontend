@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ANSWER_DONE,
   BOOK_VERSION,
+  CONVERSATION,
+  CONVERSATION_ID,
+  STORED_TURN,
   NOTES_VERSION,
   REFERENCE_TEXT_PAGE,
   SEARCH_DONE,
@@ -358,6 +361,30 @@ describe('stand-in backend', () => {
     const bytes = await fetch(`${running.url}/api/v1/campaigns/${campaign}/sources/${BOOK_VERSION}/pages/13/picture`);
     expect(bytes.status).toBe(200);
     expect(bytes.headers.get('content-type')).toBe('image/webp');
+  });
+
+  it('answers the conversations by area (Story 3.10): a list, one conversation, its stored turn and a rename', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const listed = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/conversations`, 't');
+    expect(listed).toMatchObject({ status: 200, body: { total: 1, items: [{ id: CONVERSATION_ID, area: 'questions', questions: 1 }] } });
+    for (const key of schemas.ConversationSummary!.required ?? []) {
+      expect((listed.body as { items: unknown[] }).items[0], key).toHaveProperty(key);
+    }
+    expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toMatchObject({ status: 200, body: CONVERSATION });
+    expect(answer(contract, 'PATCH', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toMatchObject({
+      status: 200,
+      body: { id: CONVERSATION_ID, name: 'Viagem ao norte', version: 1 },
+    });
+    const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
+    expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN] } });
+    for (const key of schemas.StoredTurn!.required ?? []) {
+      expect(STORED_TURN, key).toHaveProperty(key);
+    }
+    // The stored events are the streamed answer's, by sequence, ending with its done.
+    expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 8, type: 'done', data: ANSWER_DONE });
   });
 
   it('answers any other path with a 404 problem detail', async () => {

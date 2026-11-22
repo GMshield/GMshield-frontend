@@ -69,3 +69,13 @@ export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
 export function answer(contract: unknown, method: string, pathname: string, traceId: string): Answer;
 export function createStandInServer(contract: Contract, options?: { quiet?: boolean }): Server;
+/** Story 3.10: the starter campaign's questions conversation, its id, and its one stored turn with its events. */
+export const CONVERSATION_ID: string;
+export const CONVERSATION: { id: string; campaignId: string; area: 'questions' | 'rules'; name: string; version: number };
+export const STORED_TURN: {
+  id: string;
+  question: string;
+  language: string | null;
+  createdAt: string;
+  events: { sequence: number; type: string; data: unknown }[];
+};
