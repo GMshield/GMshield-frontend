@@ -8,7 +8,7 @@ import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
 import { currentAccount } from '@/server/accounts';
 import { currentConversation } from '@/server/conversations';
-import { currentCampaign, listAllCampaigns, listAllSystems } from '@/server/library';
+import { currentCampaign, getCampaignScope, listAllCampaigns, listAllSystems } from '@/server/library';
 import { listMaterials, TRAY_STATES } from '@/server/materials';
 import { currentPath, currentSessionToken, endedPath, renewPath } from '@/server/session-cookies';
 
@@ -49,6 +49,10 @@ import { systemLabel } from './campaigns/rows';
  * Story 3.3: every campaign in use and every system are read here (50 a page, all the pages), for the guided upload's
  * "where it belongs", which chooses the current campaign first; the switcher still shows the first 50 campaigns. When
  * the systems cannot be loaded the upload offers the campaigns alone, and with neither, "nowhere yet".
+ *
+ * Story 3.6: the current campaign's scope settings are read as soon as the campaign is known, for the context bar's
+ * summary and its popover. When they cannot be read the bar shows system › campaign without a summary, and the page
+ * still renders.
  */
 /**
  * The states the upload tray shows (usability pass, 2026-11-21): a file being sent, waiting its turn or being read. One
@@ -62,9 +66,9 @@ export default async function SignedInLayout({ children }: { readonly children: 
     redirect('/');
   }
   const [preferences, sidebar, here] = await Promise.all([currentPreferences(), currentSidebar(), currentPath()]);
-  const [account, campaign, materials, conversation, campaigns, systems] = await Promise.all([
+  const [account, [campaign, scope], materials, conversation, campaigns, systems] = await Promise.all([
     currentAccount(token),
-    currentCampaign(token),
+    currentCampaign(token).then(async (found) => [found, found.ok ? await getCampaignScope(token, found.data.id) : null] as const),
     listMaterials(token, TRAY_STATES, { limit: 50 }),
     currentConversation(token),
     listAllCampaigns(token),
@@ -141,6 +145,7 @@ export default async function SignedInLayout({ children }: { readonly children: 
       username={account.data.username}
       current={current}
       campaigns={choices}
+      scope={scope?.ok ? scope.data : null}
       sidebar={sidebar}
       notices={notices}
       attention={attention}

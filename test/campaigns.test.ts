@@ -24,6 +24,7 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: RenameCampaignPage } = await import('@/app/(signed-in)/campaigns/[id]/edit/page');
 const {
   archiveCampaignAction,
+  changeScopeAction,
   chooseCampaignAction,
   createCampaignAction,
   deleteCampaignAction,
@@ -33,6 +34,7 @@ const {
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 const { startScripted } = await import('./support/servers');
+type ScopeFormState = import('@/components/ScopeControls').ScopeFormState;
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
@@ -50,6 +52,25 @@ const FIRST = { id: STARTER, name: 'Primeira campanha', system: UNTITLED, archiv
 const ROW = { id: ID, name: 'Mesa de quinta', system: { id: DND_ID, name: 'D&D', edition: '5.2.1' }, archived: false };
 const STARTER_ROW = { id: STARTER, name: 'Primeira campanha', system: { id: STARTER_SYSTEM, name: 'Sistema sem nome', edition: null }, archived: false };
 const EMPTY = { status: 200, body: { items: [], total: 0 } };
+/** Story 3.6: a campaign's scope as the backend answers it, with one material of its own, two of its system, one other. */
+const NOTES = '0190a0b0-0000-7000-8000-000000000052';
+const BOOK = '0190a0b0-0000-7000-8000-000000000003';
+const BESTIARY = '0190a0b0-0000-7000-8000-000000000051';
+const ATLAS = '0190a0b0-0000-7000-8000-000000000057';
+const SCOPE = {
+  version: 4,
+  campaignTier: true,
+  systemTier: true,
+  otherTier: false,
+  modelKnowledge: false,
+  materials: [
+    { id: NOTES, name: 'Notas da sessão 12.md', tier: 'campaign' as const, on: true },
+    { id: BOOK, name: 'Livro do Jogador.pdf', tier: 'system' as const, on: true },
+    { id: BESTIARY, name: 'Bestiário.pdf', tier: 'system' as const, on: false },
+    { id: ATLAS, name: 'Atlas de outra mesa.pdf', tier: 'other' as const, on: true },
+  ],
+};
+const NO_SCOPE_ANSWER: ScopeFormState = { scope: null, error: null, saved: false };
 const START = { error: null, done: 0 };
 
 let backend: Scripted | undefined;
@@ -94,6 +115,12 @@ const linkTo = (html: string, href: string) => [...html.matchAll(/<a\b[^>]*>/g)]
 /** The solid pills of a page: links or buttons whose variant is solid. */
 const solids = (html: string) => [...html.matchAll(/<(a|button)[^>]*data-variant="solid"[^>]*>(.*?)<\/\1>/g)].map((match) => match[2]);
 const calls = (server: Scripted) => server.calls.map((call) => `${call.method} ${call.url}`);
+/** Every switch of a page, in order: its name and `aria-checked`. */
+const switchesOf = (html: string) =>
+  [...html.matchAll(/<button[^>]*role="switch"[^>]*>/g)].map((match) => [
+    /aria-label="([^"]*)"/.exec(match[0])?.[1] ?? '',
+    /aria-checked="([^"]*)"/.exec(match[0])?.[1] ?? '',
+  ]);
 
 beforeEach(() => {
   cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
@@ -334,15 +361,45 @@ describe('a campaign page (Story 3.2)', () => {
     expect(renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }))).toContain('Mesa de quinta');
   });
 
-  it('the scope tab says the four settings in words, read-only, in both languages', async () => {
-    await useBackend({ [`GET /api/v1/campaigns/${ID}`]: current(THURSDAY), 'GET /api/v1/campaigns/current': current(FIRST) });
-    let html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
-    expect(linkTo(html, `/campaigns/${ID}?tab=scope`)).toContain('aria-current="page"');
-    expect(html).toContain('Campanha: ligada · Sistema: ligado · Outros: desligado · Conhecimento do modelo: desligado');
-    expect(html).not.toMatch(/<(input|select)\b(?![^>]*type="hidden")/);
-    cookieJar['__Host-gmshield-lang'] = 'en';
-    html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
-    expect(html).toContain('Campaign: on · System: on · Others: off · Model knowledge: off');
+  it('the scope tab shows the scope controls inline: tier switches, the materials of each tier that is on, model knowledge disabled', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [`GET /api/v1/campaigns/${ID}`]: current(THURSDAY),
+      'GET /api/v1/campaigns/current': current(FIRST),
+      [`GET /api/v1/campaigns/${ID}/scope`]: { status: 200, body: SCOPE },
+    };
+    const server = await useBackend(routes);
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
+      expect(linkTo(html, `/campaigns/${ID}?tab=scope`)).toContain('aria-current="page"');
+      expect(html).toContain(messages.campaigns.scope.intro.replace("'", '&#x27;'));
+      // Matrix row "Default": campaign and system on, other off, model knowledge off and disabled with its reason.
+      expect(switchesOf(html)).toEqual([
+        [messages.campaigns.scope.campaign, 'true'],
+        ['Notas da sessão 12.md', 'true'],
+        [messages.campaigns.scope.system, 'true'],
+        ['Livro do Jogador.pdf', 'true'],
+        ['Bestiário.pdf', 'false'],
+        [messages.campaigns.scope.other, 'false'],
+        [messages.campaigns.scope.modelKnowledge, 'false'],
+      ]);
+      expect(html).not.toContain('Atlas de outra mesa.pdf');
+      expect(html).toContain(messages.campaigns.scope.comingSoon);
+      expect(html).toMatch(new RegExp(`aria-label="${messages.campaigns.scope.modelKnowledge}"[^>]*aria-disabled="true"`));
+      expect(html).not.toContain('campaigns.page.scopeStarting');
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    expect(calls(server)).toContain(`GET /api/v1/campaigns/${ID}/scope`);
+    // The scope is read for its tab only.
+    server.calls.length = 0;
+    renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+    expect(calls(server)).not.toContain(`GET /api/v1/campaigns/${ID}/scope`);
+    // A scope that cannot be read: a notice in place of the controls.
+    routes[`GET /api/v1/campaigns/${ID}/scope`] = problem(503, 'server.unavailable');
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+    expect(switchesOf(html)).toEqual([]);
   });
 
   it('the conversations tab shows its conversation\'s questions and "Abrir", or one sentence when there is none', async () => {
@@ -564,5 +621,99 @@ describe('a campaign\'s rename page (Story 3.2)', () => {
       expect((await renameCampaignAction(previous, form(fields))).error).toBe('The request is not valid.');
     }
     expect(server.calls).toHaveLength(count);
+  });
+});
+
+describe("a campaign's scope (Story 3.6)", () => {
+  const PUT = `PUT /api/v1/campaigns/${ID}/scope`;
+  const GET = `GET /api/v1/campaigns/${ID}/scope`;
+  /** The form a press posts: the whole settings on the version read. */
+  const pressed = (fields: Record<string, string> = {}, off: readonly string[] = [BESTIARY]) => {
+    const data = form({ campaign: ID, version: '4', campaignTier: 'true', systemTier: 'true', otherTier: 'false', modelKnowledge: 'false', ...fields });
+    for (const id of off) {
+      data.append('materialsOff', id);
+    }
+    return data;
+  };
+
+  it('matrix row "Material off": the full settings go on the version read, the layout follows and the answer says when it applies', async () => {
+    const saved = { ...SCOPE, version: 5, materials: SCOPE.materials.map((m) => (m.id === BOOK ? { ...m, on: false } : m)) };
+    const server = await useBackend({ [PUT]: { status: 200, body: saved } });
+    const answer = await changeScopeAction(NO_SCOPE_ANSWER, pressed({}, [BESTIARY, BOOK]));
+    expect(answer).toEqual({ scope: saved, error: null, saved: true });
+    expect(calls(server)).toEqual([PUT]);
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({
+      version: 4,
+      campaignTier: true,
+      systemTier: true,
+      otherTier: false,
+      modelKnowledge: false,
+      materialsOff: [BESTIARY, BOOK],
+    });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it('matrix rows "Tier off" and "All off": the tier switches go as pressed, the materials off kept', async () => {
+    const server = await useBackend({ [PUT]: { status: 200, body: { ...SCOPE, version: 5, systemTier: false } } });
+    expect((await changeScopeAction(NO_SCOPE_ANSWER, pressed({ systemTier: 'false' }))).saved).toBe(true);
+    expect(JSON.parse(server.calls[0]!.body)).toMatchObject({ campaignTier: true, systemTier: false, otherTier: false, materialsOff: [BESTIARY] });
+    await changeScopeAction(NO_SCOPE_ANSWER, pressed({ campaignTier: 'false', systemTier: 'false' }, []));
+    expect(JSON.parse(server.calls[1]!.body)).toMatchObject({ campaignTier: false, systemTier: false, otherTier: false, materialsOff: [] });
+  });
+
+  it('matrix row "Stale": the settings are read again and shown, with the stale line; nothing is saved', async () => {
+    const now = { ...SCOPE, version: 6, otherTier: true };
+    const routes: Record<string, { status: number; body: unknown }> = { [PUT]: problem(409, 'request.stale_version'), [GET]: { status: 200, body: now } };
+    const server = await useBackend(routes);
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const answer = await changeScopeAction(NO_SCOPE_ANSWER, pressed());
+      expect(answer).toEqual({ scope: now, error: messages.campaigns.scope.stale, saved: false });
+    }
+    expect(calls(server)).toEqual([PUT, GET, PUT, GET]);
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    // When the settings cannot be read again either, the reason is said, and the switches stay.
+    routes[GET] = problem(503, 'server.unavailable');
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const previous = { ...NO_SCOPE_ANSWER, scope: SCOPE };
+    expect(await changeScopeAction(previous, pressed())).toEqual({
+      ...previous,
+      error: 'O serviço está indisponível agora. Tente de novo em instantes.',
+    });
+  });
+
+  it('matrix row "Refused": scope.material_unknown is said in words, in both languages, and the switches stay', async () => {
+    await useBackend({ [PUT]: problem(400, 'scope.material_unknown') });
+    const previous = { ...NO_SCOPE_ANSWER, scope: SCOPE, saved: true };
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      expect(await changeScopeAction(previous, pressed())).toEqual({
+        ...previous,
+        error: messages.errors.codes.scope.material_unknown,
+        saved: false,
+      });
+    }
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('a malformed form never reaches the backend', async () => {
+    const server = await useBackend({});
+    const many = Array.from({ length: 1001 }, (_, i) => `0190a0b0-0000-7000-8000-${String(i).padStart(12, '0')}`);
+    for (const data of [
+      pressed({ campaign: '../x' }),
+      pressed({ version: '-1' }),
+      pressed({ version: '9'.repeat(16) }),
+      pressed({ campaignTier: 'yes' }),
+      pressed({ modelKnowledge: '' }),
+      pressed({}, ['not-an-id']),
+      pressed({}, many),
+    ]) {
+      expect((await changeScopeAction(NO_SCOPE_ANSWER, data)).error).toBe('O pedido não é válido.');
+    }
+    const missing = pressed();
+    missing.delete('otherTier');
+    expect((await changeScopeAction(NO_SCOPE_ANSWER, missing)).error).toBe('O pedido não é válido.');
+    expect(server.calls).toEqual([]);
   });
 });

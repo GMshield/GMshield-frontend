@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { chooseCampaignAction } from '@/app/(signed-in)/campaigns/actions';
+import { changeScopeAction, chooseCampaignAction } from '@/app/(signed-in)/campaigns/actions';
 import { createImageSetAction, dropSetImageAction, replaceSetImageAction } from '@/app/(signed-in)/image-set-actions';
 import { signOutAction } from '@/app/sign-in/actions';
 import { translator } from '@/messages';
@@ -16,6 +16,8 @@ import { NotificationCenter } from './notifications/NotificationCenter';
 import { NotificationsProvider, type NotificationInput } from './notifications/NotificationsProvider';
 import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
+import { scopeSummary, type Scope } from './scope';
+import { ScopePopover } from './ScopePopover';
 import styles from './Shell.module.css';
 import { ShellFrame } from './ShellPanel';
 import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
@@ -31,6 +33,11 @@ export type ShellProps = {
   readonly current: { readonly id?: string; readonly system: string; readonly campaign: string } | null;
   /** The campaigns in use the switcher offers (Story 3.2), newest first. */
   readonly campaigns?: readonly SwitcherCampaign[];
+  /**
+   * The current campaign's scope settings (Story 3.6), for the context bar's summary and its popover; null (no summary)
+   * when there is no campaign or they could not be read.
+   */
+  readonly scope?: Scope | null;
   readonly sidebar: SidebarState;
   /**
    * Lines at the top of the main column, one each, in the order given, such as a failure to load the current campaign.
@@ -70,12 +77,15 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * Usability pass (2026-11-21): the notifications are around everything (their toasts are told from any page and from
  * the uploads), and the bar above the page holds the system and campaign on the left and, on the right, the bell and
  * the account menu (the account, the theme and the language, "Sair").
+ * Story 3.6: after the campaign, the context bar holds its scope summary, which opens the scope popover; each switch
+ * there saves through a Server Action that renders the layout again, so the summary follows.
  */
 export function Shell({
   preferences,
   username,
   current,
   campaigns = [],
+  scope = null,
   sidebar,
   notices = [],
   attention = [],
@@ -102,6 +112,18 @@ export function Shell({
       action={chooseCampaignAction}
     />
   );
+  const scopePopover =
+    current?.id === undefined || current.id === '' || scope === null ? null : (
+      <ScopePopover
+        summary={scopeSummary(scope, t)}
+        label={t('shell.scope.label')}
+        panel={t('shell.scope.panel')}
+        campaignId={current.id}
+        scope={scope}
+        language={preferences.language}
+        action={changeScopeAction}
+      />
+    );
   const entries = Object.fromEntries(
     [...SIDEBAR_ENTRIES, ADD_FILE].map(({ key }) => [key, t(`shell.entries.${key}`)]),
   ) as Record<EntryKey, string>;
@@ -129,7 +151,7 @@ export function Shell({
           />
           <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
             <div className={styles.bar}>
-              <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} />
+              <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} scope={scopePopover} />
               <div className={styles.barEnd}>
                 <NotificationCenter language={preferences.language} attention={attention} />
                 <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>

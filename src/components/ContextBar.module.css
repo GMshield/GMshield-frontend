@@ -1,5 +1,11 @@
-/* Where the GM is: "system › campaign", a trail on the left of the bar above the page. */
+/*
+ * Where the GM is: "system › campaign", a trail on the left of the bar above the page. Story 3.6: then the scope summary;
+ * the bar spans the height of the bar above the page and is the containing block of the scope popover, which opens
+ * under it (ScopePopover.module.css).
+ */
 .bar {
+  position: relative;
+  align-self: stretch;
   display: flex;
   flex: 1;
   flex-wrap: wrap;

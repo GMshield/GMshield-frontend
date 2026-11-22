@@ -168,6 +168,14 @@ function expectAA(theme: Theme, page: Rgb) {
     }
     expect(ratio(colour, over(role(theme, 'field'), page)), `${theme}: ${edge} on the field`).toBeGreaterThanOrEqual(NON_TEXT);
   }
+  // Story 3.6: a switch. Off, its muted knob on the control's fill, on a panel and on a floating surface; on, the canvas
+  // knob on the solid track, and the track itself against what it sits on (WCAG 1.4.11).
+  for (const [name, ground] of [['surface', surface], ['popover', popover]] as const) {
+    const track = over(role(theme, 'control'), ground);
+    expect(ratio(opaque(role(theme, 'text-muted')), track), `${theme}: off switch knob on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+    expect(ratio(opaque(role(theme, 'solid')), ground), `${theme}: on switch track on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  expect(ratio(opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))), `${theme}: on switch knob`).toBeGreaterThanOrEqual(NON_TEXT);
   // The current sidebar entry is found by more than tone, but the tone alone must still be seen on the panel.
   expect(ratio(over(role(theme, 'surface-active'), surface), surface), `${theme}: active row on surface`).toBeGreaterThan(1.15);
 }
@@ -329,6 +337,9 @@ describe('stylesheets', () => {
       // Third round: the pager's arrows and numbers (one rule for both), and the page jump's field.
       ['components/Pager.module.css', '.step,\n.page'],
       ['components/Pager.module.css', '.gap'],
+      // Story 3.6: a switch (the whole row) and the scope summary in the context bar.
+      ['components/Switch.module.css', '.switch'],
+      ['components/ScopePopover.module.css', '.trigger'],
       ['app/(signed-in)/files/[id]/pages/[page]/page.module.css', '.jumpInput'],
     ] as const) {
       const body = hitArea(rules(file), selector);

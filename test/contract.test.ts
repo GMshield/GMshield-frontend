@@ -22,14 +22,14 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
-    // Story 3.4 part B: a material's deletion, a superseded version's removal and `superseded`, added in 1.24.0
-    // (1.23.0 added a material's replacement, the reprocess of a ready one and the version serving).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.24.0');
-    expect(meetsMinimum('1.24.0')).toBe(true);
-    expect(meetsMinimum('1.24.1')).toBe(true);
-    // Story 3.5: the contract copy is 1.25.0 (a campaign's scope settings and the current-scope page); nothing here
-    // uses them yet, so the minimum stays 1.24.0 and a 1.25.0 backend meets it.
+    // Story 3.6: the frontend reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page,
+    // Story 3.5); 1.24.0 added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.25.0');
     expect(meetsMinimum('1.25.0')).toBe(true);
+    expect(meetsMinimum('1.25.1')).toBe(true);
+    expect(meetsMinimum('1.26.0')).toBe(true);
+    expect(meetsMinimum('1.24.0')).toBe(false);
+    expect(meetsMinimum('1.24.1')).toBe(false);
     expect(meetsMinimum('1.23.0')).toBe(false);
     expect(meetsMinimum('1.22.0')).toBe(false);
     expect(meetsMinimum('1.21.0')).toBe(false);

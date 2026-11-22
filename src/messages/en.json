@@ -34,7 +34,18 @@
     "accountMenu": "Account and preferences",
     "signedInLabel": "Signed in as",
     "home": "GMshield, go to Questions",
-    "skip": "Skip to content"
+    "skip": "Skip to content",
+    "scope": {
+      "label": "Scope",
+      "panel": "Campaign scope",
+      "campaign": "Campaign",
+      "system": "System",
+      "other": "Other",
+      "none": "No sources",
+      "modelOff": "model knowledge off",
+      "modelOn": "model knowledge on",
+      "summary": "{tiers} · {model}"
+    }
   },
   "placeholder": {
     "questions": "Here you will ask questions about your books and read the answers with their sources.",
@@ -121,7 +132,6 @@
       "name": "Name",
       "system": "System",
       "state": "State",
-      "scopeStarting": "Campaign: on · System: on · Others: off · Model knowledge: off",
       "conversationList": "Conversations of this campaign",
       "questionsOne": "1 question",
       "questionsOther": "{count} questions",
@@ -138,6 +148,20 @@
       "materialsOne": "1 material",
       "materialsOther": "{count} materials",
       "confirm": "Delete campaign"
+    },
+    "scope": {
+      "intro": "This campaign's answers use only the sources switched on here.",
+      "campaign": "Campaign",
+      "system": "System",
+      "other": "Other systems and campaigns",
+      "modelKnowledge": "Model knowledge",
+      "comingSoon": "Coming soon",
+      "on": "on",
+      "off": "off",
+      "materials": "Materials: {tier}",
+      "pages": "Pages of the materials: {tier}",
+      "noMaterials": "No ready material.",
+      "stale": "The scope was changed elsewhere. The switches now show the current scope: make your change again."
     }
   },
   "files": {
@@ -189,7 +213,8 @@
       "upload": "The upload could not continue.",
       "ingestion": "This file could not be processed.",
       "page": "This page could not be shown.",
-      "material": "The action on the material could not be done."
+      "material": "The action on the material could not be done.",
+      "scope": "The scope could not be changed."
     },
     "codes": {
       "request": {
@@ -257,6 +282,9 @@
         "version_in_progress": "This material already has a version on its way. Wait for it to finish, or accept, retry or discard it, before starting another one.",
         "not_ready": "This material has no ready version to replace or reprocess.",
         "version_not_removable": "Only a previous version can be removed. The page has been updated."
+      },
+      "scope": {
+        "material_unknown": "One of the materials is no longer in this campaign, its system or the others. Reload the page to see the current scope."
       }
     }
   },

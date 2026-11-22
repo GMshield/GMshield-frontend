@@ -8,6 +8,15 @@ export const EXAMPLES: Readonly<Record<string, unknown>>;
 /** Story 3.1: the starter system, as the systems list and the current campaign answer it. */
 export const STARTER_SYSTEM: { id: string; name: string; edition: null; description: null; version: number };
 export const PICTURE: Buffer;
+/** Story 3.6: a campaign's starting scope, with a few materials in each tier. */
+export const STARTING_SCOPE: {
+  version: number;
+  campaignTier: boolean;
+  systemTier: boolean;
+  otherTier: boolean;
+  modelKnowledge: boolean;
+  materials: { id: string; name: string; tier: 'campaign' | 'system' | 'other'; on: boolean }[];
+};
 export type StandInReference = {
   number: number;
   materialName: string;

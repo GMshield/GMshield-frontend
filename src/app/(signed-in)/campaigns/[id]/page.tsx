@@ -7,14 +7,15 @@ import { CampaignAction } from '@/components/CampaignAction';
 import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
+import { ScopeControls } from '@/components/ScopeControls';
 import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { campaignConversation } from '@/server/conversations';
-import { campaignDeletion, currentCampaign, getCampaign } from '@/server/library';
+import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import styles from '../../systems/systems.module.css';
-import { archiveCampaignAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
+import { archiveCampaignAction, changeScopeAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
 import { systemLabel } from '../rows';
 
 const TABS = ['overview', 'scope', 'conversations'] as const;
@@ -29,7 +30,9 @@ function tabOf(value: unknown): Tab {
  * current one; the current one says so instead), "Renomear" and "Arquivar" or "Restaurar" (reversible, so with no
  * confirmation), and three tabs chosen by `?tab=`:
  * - overview (the default): the name, the system (a link to its page) and "Arquivada" when archived;
- * - scope: the four settings in words, read-only until Story 3.6 (every campaign has the starting scope until 3.5);
+ * - scope (Story 3.6): the scope controls inline, the same as the context bar's popover ({@link ScopeControls}): the
+ *   three tier switches, the materials of each tier that is on with a switch each, and the model-knowledge switch (disabled until
+ *   Story 3.8); a press saves at once. When the scope cannot be read, a notice says why;
  * - conversations: the campaign's one conversation with its question count and "Abrir", which makes the campaign current
  *   and opens Consultas (for an archived campaign, which cannot be current, a sentence asks to restore it instead); one
  *   sentence when there is none.
@@ -64,7 +67,10 @@ export default async function CampaignPage({
   const campaignId = campaign.data.id;
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
-  const conversation = tab === 'conversations' ? await campaignConversation(token ?? '', campaignId) : null;
+  const [conversation, scope] = await Promise.all([
+    tab === 'conversations' ? campaignConversation(token ?? '', campaignId) : null,
+    tab === 'scope' ? getCampaignScope(token ?? '', campaignId) : null,
+  ]);
   return (
     <>
       <PageHeader
@@ -129,11 +135,14 @@ export default async function CampaignPage({
           ) : null}
         </dl>
       ) : null}
-      {tab === 'scope' ? (
-        <div className={styles.panel}>
-          <p className={styles.description}>{t('campaigns.page.scopeStarting')}</p>
-        </div>
-      ) : null}
+      {scope === null ? null : scope.ok ? (
+        <section className={`${styles.panel} ${styles.scope}`} aria-label={t('shell.scope.panel')}>
+          <p className={styles.description}>{t('campaigns.scope.intro')}</p>
+          <ScopeControls key={campaignId} campaignId={campaignId} scope={scope.data} language={language} action={changeScopeAction} />
+        </section>
+      ) : (
+        <Notice status="danger" language={language} message={errorText(scope.problem, language)} dismissible={false} />
+      )}
       {conversation === null ? null : conversation.ok ? (
         <ul className={styles.conversations} aria-label={t('campaigns.page.conversationList')}>
           <li className={styles.conversation}>

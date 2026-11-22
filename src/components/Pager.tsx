@@ -6,14 +6,30 @@ import { pageHref, pageWindow, type Paging } from '@/paging';
 import { NamedIcon } from './Icons';
 import styles from './Pager.module.css';
 
-export type PagerProps = {
+/** Where its controls lead: links to pages of an address (the default), or, for a list paged in the browser, a call. */
+type PagerTarget =
+  | {
+      /** The list's address without its page, and the other fields of its query (a filter, a tab), kept by every link. */
+      readonly path: string;
+      readonly query?: Readonly<Record<string, string>>;
+      /** The query field that carries the page; `page` unless a screen pages two things. */
+      readonly field?: string;
+      readonly onPage?: undefined;
+    }
+  | {
+      /**
+       * Story 3.6: a list paged in the browser (a tier's materials in the scope controls, which also float over any
+       * page): its arrows are buttons that call this with the page to show, and the address does not change.
+       */
+      readonly onPage: (page: number) => void;
+      readonly path?: undefined;
+      readonly query?: undefined;
+      readonly field?: undefined;
+    };
+
+export type PagerProps = PagerTarget & {
   /** Where the page shown stands in its list. */
   readonly paging: Paging;
-  /** The list's address without its page, and the other fields of its query (a filter, a tab), kept by every link. */
-  readonly path: string;
-  readonly query?: Readonly<Record<string, string>>;
-  /** The query field that carries the page; `page` unless a screen pages two things. */
-  readonly field?: string;
   readonly language: Language;
   /** The navigation's accessible name, when "Paginação" alone would not tell two pagers of one screen apart. */
   readonly label?: string;
@@ -32,7 +48,7 @@ export type PagerProps = {
  * nowhere stays in place, dimmed, so the others do not move under the pointer. On a phone the numbers give way to
  * "Página 2 de 7". A list of one page shows only how many rows it has (and a compact pager nothing at all).
  */
-export function Pager({ paging, path, query = {}, field = 'page', language, label, compact = false }: PagerProps) {
+export function Pager({ paging, path = '', query = {}, field = 'page', onPage, language, label, compact = false }: PagerProps) {
   const t = translator(language);
   const { page, pages, total, from, to } = paging;
   if (total === 0 || (compact && pages === 1)) {
@@ -52,15 +68,28 @@ export function Pager({ paging, path, query = {}, field = 'page', language, labe
         {direction === 'next' ? <NamedIcon name="forward" size={18} /> : null}
       </>
     );
-    return target < 1 || target > pages ? (
+    const end = target < 1 || target > pages;
+    if (end && onPage !== undefined) {
+      // Paged here, a button that does nothing at an end: the press that reached the end keeps its focus on it.
+      return (
+        <button type="button" className={styles.step} aria-disabled="true">
+          {content}
+        </button>
+      );
+    }
+    return end ? (
       // Not a link at an end: it leads nowhere. It keeps its place, and assistive technology hears that it is off.
       <span className={styles.step} aria-disabled="true">
         {content}
       </span>
-    ) : (
+    ) : onPage === undefined ? (
       <Link className={styles.step} href={href(target)} rel={direction === 'previous' ? 'prev' : 'next'} scroll={!compact}>
         {content}
       </Link>
+    ) : (
+      <button type="button" className={styles.step} onClick={() => onPage(target)}>
+        {content}
+      </button>
     );
   };
   return (
@@ -79,14 +108,26 @@ export function Pager({ paging, path, query = {}, field = 'page', language, labe
                     </li>
                   ) : (
                     <li key={number} className={styles.number}>
-                      <Link
-                        className={styles.page}
-                        href={href(number)}
-                        aria-label={t(number === page ? 'paging.current' : 'paging.page', { page: number })}
-                        aria-current={number === page ? 'page' : undefined}
-                      >
-                        {number}
-                      </Link>
+                      {onPage === undefined ? (
+                        <Link
+                          className={styles.page}
+                          href={href(number)}
+                          aria-label={t(number === page ? 'paging.current' : 'paging.page', { page: number })}
+                          aria-current={number === page ? 'page' : undefined}
+                        >
+                          {number}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.page}
+                          aria-label={t(number === page ? 'paging.current' : 'paging.page', { page: number })}
+                          aria-current={number === page ? 'page' : undefined}
+                          onClick={() => onPage(number)}
+                        >
+                          {number}
+                        </button>
+                      )}
                     </li>
                   ),
                 )}
