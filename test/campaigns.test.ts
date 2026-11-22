@@ -29,6 +29,7 @@ const {
   createCampaignAction,
   deleteCampaignAction,
   openConversationAction,
+  openSavedAnswerAction,
   renameCampaignAction,
 } = await import('@/app/(signed-in)/campaigns/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -520,6 +521,43 @@ describe('a campaign\'s actions (Story 3.2)', () => {
     expect(server.calls).toHaveLength(count);
     routes['PUT /api/v1/campaigns/current'] = problem(404, 'request.not_found');
     expect(await openConversationAction(START, form({ id: ID, area: 'questions' }))).toEqual({ error: 'Não encontrado.', done: 0 });
+  });
+});
+
+describe('"Ir" on a saved answer of another campaign (Story 3.12)', () => {
+  const TURN = '0190a0b0-0000-7000-8000-000000000051';
+  const fields = { id: ID, conversationId: CONVERSATION, area: 'rules', turnId: TURN };
+
+  it('makes its campaign current, renders the layout again and opens its conversation at the answer', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { 'PUT /api/v1/campaigns/current': { status: 200, body: THURSDAY } };
+    const server = await useBackend(routes);
+    expect(await thrownDigest(() => openSavedAnswerAction(START, form(fields)))).toMatch(
+      new RegExp(`^NEXT_REDIRECT;[a-z]+;/rules/${CONVERSATION}\\?turn=${TURN};`),
+    );
+    // The switcher, the sidebar and the context bar follow the new current campaign at once.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    revalidatePath.mockClear();
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignId: ID });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+  });
+
+  it('never reaches the backend with a malformed field, and shows a refusal as its text', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { 'PUT /api/v1/campaigns/current': { status: 200, body: THURSDAY } };
+    const server = await useBackend(routes);
+    for (const bad of [
+      { ...fields, id: 'nope' },
+      { ...fields, conversationId: '../campaigns' },
+      { ...fields, turnId: '1' },
+      { ...fields, area: 'search' },
+      { id: ID, conversationId: CONVERSATION, area: 'rules' },
+    ] as Record<string, string>[]) {
+      expect(await openSavedAnswerAction(START, form(bad))).toEqual({ error: 'O pedido não é válido.', done: 0 });
+    }
+    expect(server.calls).toHaveLength(0);
+    revalidatePath.mockClear();
+    routes['PUT /api/v1/campaigns/current'] = problem(404, 'request.not_found');
+    expect(await openSavedAnswerAction(START, form(fields))).toEqual({ error: 'Não encontrado.', done: 0 });
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 

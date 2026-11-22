@@ -202,7 +202,13 @@ export function ItemList({
         <Pager paging={listPages.paging} path={listPages.path} query={listPages.query} language={language} />
       )}
       {previewing === null || preview === undefined || language === undefined ? null : (
-        <ShellPanel>
+        <ShellPanel
+          onReplaced={() => {
+            // Story 3.12: another right panel took the slot; focus stays with it.
+            opener.current = null;
+            setPreviewing(null);
+          }}
+        >
           <MaterialPreview
             key={previewing.id}
             id={previewing.id}

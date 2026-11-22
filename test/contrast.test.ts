@@ -182,6 +182,16 @@ function expectAA(theme: Theme, page: Rgb) {
     expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill edge on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
     expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill word on ${name}`).toBeGreaterThanOrEqual(AA);
   }
+  // Story 3.12: an answer's bookmark. Not set, its outline icon on the solid circle; set, an outlined circle with a filled
+  // icon, both in the text colour, on the canvas and on the hover over it (WCAG 1.4.11). The saved items panel's words
+  // are the text and muted text on the surface (the pairs above); its button in the bar is the bell's.
+  expect(ratio(opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))), `${theme}: bookmark icon on its circle`).toBeGreaterThanOrEqual(NON_TEXT);
+  for (const [name, ground] of [['canvas', page], ['hover over canvas', over(role(theme, 'hover'), page)]] as const) {
+    expect(ratio(opaque(role(theme, 'text')), ground), `${theme}: set bookmark outline and icon on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  for (const [name, ground] of [['surface', surface], ['hover over surface', over(role(theme, 'hover'), surface)]] as const) {
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: saved item meta-line on ${name}`).toBeGreaterThanOrEqual(AA);
+  }
   // The current sidebar entry is found by more than tone, but the tone alone must still be seen on the panel.
   expect(ratio(over(role(theme, 'surface-active'), surface), surface), `${theme}: active row on surface`).toBeGreaterThan(1.15);
 }

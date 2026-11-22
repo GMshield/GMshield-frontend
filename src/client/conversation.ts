@@ -9,7 +9,9 @@ import type { components } from '@/server/backend/generated/public';
  * reads the count of passages still being prepared for search, and of those that could not be, from
  * `GET /api/v1/conversations/current`. Story 3.10: a question names the conversation it continues, or the area of the
  * new one it starts. Story 3.11: a finished answer is dismissed with `PUT /api/v1/turns/{id}/dismissal`, and its
- * dismissal undone with `DELETE` on the same path. The relays reach the backend; the browser never does.
+ * dismissal undone with `DELETE` on the same path. Story 3.12: a done answer is saved with
+ * `PUT /api/v1/turns/{id}/bookmark` and removed with `DELETE` there, and the saved answers are read a page at a time
+ * from `GET /api/v1/saved-answers`. The relays reach the backend; the browser never does.
  */
 
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
@@ -107,6 +109,54 @@ export async function setDismissal(turnId: string, action: 'dismiss' | 'restore'
       return { ok: true };
     }
     const body: unknown = await response.json().catch(() => null);
+    return { ok: false, problem: body ?? UNAVAILABLE };
+  } catch {
+    return { ok: false, problem: UNAVAILABLE };
+  }
+}
+
+/**
+ * Saves a done turn's answer (`save`, PUT) or removes it from the saved answers (`remove`, DELETE) (Story 3.12). Done
+ * when the relay answered 204 (also when nothing changed); otherwise the problem it answered, or the generic
+ * "unavailable" one.
+ */
+export async function setBookmark(turnId: string, action: 'save' | 'remove'): Promise<DismissalResult> {
+  try {
+    const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/bookmark`, {
+      method: action === 'save' ? 'PUT' : 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (response.status === 204) {
+      return { ok: true };
+    }
+    const body: unknown = await response.json().catch(() => null);
+    return { ok: false, problem: body ?? UNAVAILABLE };
+  } catch {
+    return { ok: false, problem: UNAVAILABLE };
+  }
+}
+
+/** A saved answer, as the relay lists it (Story 3.12). */
+export type SavedAnswer = components['schemas']['SavedAnswer'];
+
+/** A page of the saved answers (Story 3.12), or the problem the relay answered. */
+export type SavedPageResult =
+  | { readonly ok: true; readonly items: readonly SavedAnswer[]; readonly total: number }
+  | { readonly ok: false; readonly problem: unknown };
+
+/** Reads `limit` saved answers from `offset`, the newest saved first, with the list's total (Story 3.12). */
+export async function loadSavedAnswers(offset: number, limit: number): Promise<SavedPageResult> {
+  try {
+    const response = await fetch(`/api/v1/saved-answers?limit=${limit}&offset=${offset}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const body: unknown = await response.json().catch(() => null);
+    if (response.status === 200 && typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)) {
+      const page = body as { readonly items: readonly SavedAnswer[]; readonly total?: unknown };
+      return { ok: true, items: page.items, total: typeof page.total === 'number' ? page.total : page.items.length };
+    }
     return { ok: false, problem: body ?? UNAVAILABLE };
   } catch {
     return { ok: false, problem: UNAVAILABLE };

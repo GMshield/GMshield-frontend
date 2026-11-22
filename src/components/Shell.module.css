@@ -168,3 +168,27 @@
 .main {
   scroll-margin-top: var(--space-4);
 }
+
+/*
+ * Story 3.12: the saved items panel, 340px. At 1280px and more it is a column beside the main column, as the source
+ * view is; under 1280px it opens over the main column (inert behind it), and under 768px it is a full-screen sheet.
+ */
+@media (min-width: 1280px) {
+  .shell[data-panel='saved'] {
+    --panel-track: var(--width-panel);
+  }
+}
+
+@media (max-width: 1279px) {
+  .shell[data-panel='saved'] .panel {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .shell[data-panel='saved'] .panel {
+    left: 0;
+    width: 100%;
+    border-radius: 0;
+  }
+}

@@ -450,6 +450,148 @@ describe('the dismissal relay (Story 3.11)', () => {
   });
 });
 
+describe('the bookmark and saved answers relays (Story 3.12)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function bookmark(method: 'PUT' | 'DELETE', headers: Record<string, string>, id = TURN): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const route = await import('@/app/api/v1/turns/[id]/bookmark/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/bookmark`, { method, headers: { host: 'gm.test', ...headers } });
+    return route[method](request, { params: Promise.resolve({ id }) });
+  }
+
+  async function saved(query: string, headers: Record<string, string>): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const route = await import('@/app/api/v1/saved-answers/route');
+    return route.GET(
+      new NextRequest(`http://gm.test/api/v1/saved-answers${query}`, { headers: { host: 'gm.test', 'sec-fetch-site': 'same-origin', ...headers } }),
+    );
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+  const PAGE = {
+    items: [
+      {
+        turnId: TURN,
+        conversationId: '0190a0b0-0000-7000-8000-000000000020',
+        campaignId: CAMPAIGN,
+        campaignName: 'Primeira campanha',
+        area: 'questions',
+        conversationName: 'Quanto dano causa Fire Bolt?',
+        savedAt: '2026-11-22T12:05:00Z',
+        excerpt: 'Fire Bolt causa 1d10.',
+      },
+    ],
+    nextCursor: '10',
+    total: 11,
+  };
+
+  it('saves (PUT) and removes (DELETE) through the typed client with the session, each answering 204', async () => {
+    const backend = await useBackend({
+      [`PUT /api/v1/turns/${TURN}/bookmark`]: { status: 204 },
+      [`DELETE /api/v1/turns/${TURN}/bookmark`]: { status: 204 },
+    });
+    for (const method of ['PUT', 'DELETE'] as const) {
+      const answered = await bookmark(method, { origin: 'http://gm.test', cookie });
+      expect(answered.status).toBe(204);
+      expect(answered.headers.get('cache-control')).toBe('no-store');
+      expect(await answered.text()).toBe('');
+    }
+    expect(backend.calls.map((call) => call.method)).toEqual(['PUT', 'DELETE']);
+    for (const call of backend.calls) {
+      expect(call.headers['x-session-token']).toBe(SESSION);
+      expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    }
+  });
+
+  it('refuses another origin, an id that is not one and no session without reaching the backend', async () => {
+    const backend = await useBackend({});
+    for (const method of ['PUT', 'DELETE'] as const) {
+      expect((await bookmark(method, { origin: 'http://evil.test', cookie })).status).toBe(403);
+      expect((await bookmark(method, { origin: 'http://gm.test', cookie }, 'nope')).status).toBe(404);
+      expect((await bookmark(method, { origin: 'http://gm.test' })).status).toBe(401);
+    }
+    expect(backend.calls).toEqual([]);
+  });
+
+  it("passes an answer that is not done and another owner's turn on as the backend's problems", async () => {
+    await useBackend({
+      [`PUT /api/v1/turns/${TURN}/bookmark`]: {
+        status: 409,
+        body: { status: 409, category: 'conversation', code: 'conversation.turn_not_done', params: {} },
+      },
+      [`DELETE /api/v1/turns/${TURN}/bookmark`]: { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } },
+    });
+    const notDone = await bookmark('PUT', { origin: 'http://gm.test', cookie });
+    expect(notDone.status).toBe(409);
+    expect(notDone.headers.get('content-type')).toBe('application/problem+json');
+    expect(await notDone.json()).toMatchObject({ code: 'conversation.turn_not_done' });
+    const missing = await bookmark('DELETE', { origin: 'http://gm.test', cookie });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ code: 'request.not_found' });
+  });
+
+  it('reads a page of the saved answers with its limit and offset, and refuses a malformed one without the backend', async () => {
+    const backend = await useBackend({
+      'GET /api/v1/saved-answers?limit=10&offset=10': { status: 200, body: PAGE },
+      'GET /api/v1/saved-answers': { status: 200, body: { items: [], total: 0 } },
+    });
+    const read = await saved('?limit=10&offset=10', { cookie });
+    expect(read.status).toBe(200);
+    expect(read.headers.get('cache-control')).toBe('no-store');
+    expect(await read.json()).toEqual(PAGE);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect((await saved('', { cookie })).status).toBe(200);
+    const count = backend.calls.length;
+    for (const query of ['?limit=0', '?limit=51', '?limit=01', '?limit=x', '?offset=-1', '?offset=100001', '?offset=1.5']) {
+      const refused = await saved(query, { cookie });
+      expect(refused.status, query).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: 'request.invalid' });
+    }
+    expect((await saved('', { origin: 'http://evil.test', cookie })).status).toBe(403);
+    expect((await saved('', { origin: 'http://gm.test' })).status).toBe(401);
+    expect(backend.calls).toHaveLength(count);
+  });
+
+  it("the browser's calls go to the relays on this site: done on 204 or a page, else the problem or the generic one", async () => {
+    const { loadSavedAnswers, setBookmark } = await import('@/client/conversation');
+    const send = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', send);
+    expect(await setBookmark(TURN, 'save')).toEqual({ ok: true });
+    expect(send).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/bookmark`, expect.objectContaining({ method: 'PUT' }));
+    expect(await setBookmark(TURN, 'remove')).toEqual({ ok: true });
+    expect(send).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/bookmark`, expect.objectContaining({ method: 'DELETE' }));
+    const problem = { status: 409, category: 'conversation', code: 'conversation.turn_not_done', params: {} };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), { status: 409 })));
+    expect(await setBookmark(TURN, 'save')).toEqual({ ok: false, problem });
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await setBookmark(TURN, 'remove')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
+
+    const list = vi.fn(async () => new Response(JSON.stringify(PAGE), { status: 200 }));
+    vi.stubGlobal('fetch', list);
+    expect(await loadSavedAnswers(10, 10)).toEqual({ ok: true, items: PAGE.items, total: 11 });
+    expect(list).toHaveBeenLastCalledWith('/api/v1/saved-answers?limit=10&offset=10', expect.objectContaining({ cache: 'no-store' }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 502 })));
+    expect(await loadSavedAnswers(0, 10)).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
+  });
+});
+
 describe("the browser's stop call and stream address (Story 2.6)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

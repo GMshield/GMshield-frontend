@@ -33,7 +33,7 @@ const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { previewPageAction } = await import('@/app/(signed-in)/files/actions');
 const { deleteMaterialAction, materialAction, removeVersionAction } = await import('@/app/(signed-in)/files/[id]/actions');
 const { createSystemAction, deleteSystemAction } = await import('@/app/(signed-in)/systems/actions');
-const { archiveCampaignAction, chooseCampaignAction } = await import('@/app/(signed-in)/campaigns/actions');
+const { archiveCampaignAction, chooseCampaignAction, openSavedAnswerAction } = await import('@/app/(signed-in)/campaigns/actions');
 const { fileRow, previewOf } = await import('@/app/(signed-in)/files/rows');
 const { translator } = await import('@/messages');
 const { startScripted } = await import('./support/servers');
@@ -138,6 +138,17 @@ describe('what an action says once it has succeeded', () => {
     cookieJar['__Host-gmshield-lang'] = 'en';
     await chooseCampaignAction({ error: null, done: 0 }, form({ id: ID }));
     expect(flashed()?.flash?.message).toBe('«Mesa de sexta» is the current campaign.');
+  });
+
+  it('Story 3.12: "Ir" on a saved answer of another campaign names the campaign it switched to, in both languages', async () => {
+    const campaign = { id: ID, name: 'A Coroa Partida', system: { id: ID, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 0 };
+    await useBackend({ 'PUT /api/v1/campaigns/current': { status: 200, body: campaign } });
+    const fields = { id: ID, conversationId: MATERIAL, area: 'questions', turnId: MATERIAL };
+    await expect(openSavedAnswerAction({ error: null, done: 0 }, form(fields))).rejects.toMatchObject({ digest: expect.stringContaining('/questions/') });
+    expect(flashed()?.flash).toEqual({ status: 'success', message: 'Campanha trocada para «A Coroa Partida».' });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    await expect(openSavedAnswerAction({ error: null, done: 0 }, form(fields))).rejects.toMatchObject({ digest: expect.stringContaining('?turn=') });
+    expect(flashed()?.flash?.message).toBe('Switched to the campaign «A Coroa Partida».');
   });
 
   it("accepting, reprocessing, retrying and discarding a material each name it; a refused one says nothing", async () => {

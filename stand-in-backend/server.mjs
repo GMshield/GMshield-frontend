@@ -31,7 +31,9 @@
 // picture page for any other. Story 3.10: the starter campaign has one conversation (whatever area is listed), the
 // questions one every question continues; it holds one answered turn, its stored events the stand-in answer's; a
 // rename answers it at version 1 under the new name. Story 3.10 part B: its deletion takes its one question, and a
-// delete of it answers 202 with no body.
+// delete of it answers 202 with no body. Story 3.12: its stored turn is not saved (`bookmarked: false`), a bookmark and
+// its removal answer 204 (as the contract declares), and the saved answers are two: the stored turn's answer in the
+// starter campaign and one in another campaign ("A Coroa Partida").
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -471,8 +473,36 @@ export const STORED_TURN = {
     ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
     ['done', ANSWER_DONE],
   ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
+  bookmarked: false,
 };
 EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN] };
+
+/** Story 3.12: the saved answers: the stored turn's, in the starter campaign, then one in another campaign. */
+EXAMPLES['GET /api/v1/saved-answers'] = {
+  items: [
+    {
+      turnId: STORED_TURN.id,
+      conversationId: CONVERSATION_ID,
+      campaignId: CONVERSATION.campaignId,
+      campaignName: STARTER_CAMPAIGN.name,
+      area: 'questions',
+      conversationName: CONVERSATION.name,
+      savedAt: '2026-11-22T12:05:00Z',
+      excerpt: 'Fire Bolt causa 1d10 de dano de fogo.',
+    },
+    {
+      turnId: '0190a0b0-0000-7000-8000-000000000051',
+      conversationId: '0190a0b0-0000-7000-8000-000000000050',
+      campaignId: '0190a0b0-0000-7000-8000-000000000040',
+      campaignName: 'A Coroa Partida',
+      area: 'rules',
+      conversationName: 'Descanso longo',
+      savedAt: '2026-11-22T12:01:00Z',
+      excerpt: 'Um descanso longo dura oito horas.',
+    },
+  ],
+  total: 2,
+};
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

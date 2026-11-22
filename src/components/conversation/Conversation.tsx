@@ -10,6 +10,7 @@ import {
   parseDone,
   parseTier,
   postQuestion,
+  setBookmark,
   setDismissal,
   stopTurn,
   turnEventsUrl,
@@ -21,6 +22,7 @@ import {
 } from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
 
+import { useSavedItems } from '../saved/SavedItems';
 import { useOptionalScopePopover } from '../ScopePopoverContext';
 import { ShellPanel } from '../ShellPanel';
 import { SourceView, type LoadPage } from '../SourceView';
@@ -95,7 +97,8 @@ type Dismissal = 'shown' | 'undoable' | 'gone';
  * as they arrive (each tier's version of the answer starts at its offset). Story 3.8: whether its model knowledge was
  * on, as frozen with it (from its `done` event), which decides the offer under a silent answer. Story 3.11: whether the GM
  * dismissed it, why its dismissal was refused (shown under its actions), why its undo was (shown in its line), and
- * whether its undo is under way.
+ * whether its undo is under way. Story 3.12: whether its answer is saved, and why the last change of that was refused
+ * (shown under its actions).
  */
 type ShownTurn = {
   readonly key: number;
@@ -116,6 +119,8 @@ type ShownTurn = {
   readonly dismissProblem: unknown;
   readonly undoProblem: unknown;
   readonly undoPending: boolean;
+  readonly bookmarked: boolean;
+  readonly bookmarkProblem: unknown;
 };
 
 /**
@@ -206,6 +211,11 @@ export type ConversationProps = {
   readonly openStream?: (url: string) => EventSource;
   /** For tests: how the source view reads a page (the relay by default). */
   readonly loadPage?: LoadPage;
+  /**
+   * Story 3.12: the turn a saved item's "Ir" opens the conversation at (`?turn=`): it is scrolled into view instead of
+   * the last turn, and takes focus. One not among the turns loaded leaves the conversation at its last turn.
+   */
+  readonly focusTurn?: string | null;
 };
 
 /**
@@ -268,6 +278,8 @@ function newTurn(key: number, question: string): ShownTurn {
     dismissProblem: null,
     undoProblem: null,
     undoPending: false,
+    bookmarked: false,
+    bookmarkProblem: null,
   };
 }
 
@@ -303,7 +315,7 @@ export function shownFromStored(stored: StoredTurn, key: number): { readonly tur
   const citations: Citation[] = [];
   const tiers: TierStart[] = [];
   let lastId: string | null = null;
-  const base = { ...newTurn(key, stored.question), id: stored.id, language: stored.language ?? null };
+  const base = { ...newTurn(key, stored.question), id: stored.id, language: stored.language ?? null, bookmarked: stored.bookmarked === true };
   for (const event of stored.events) {
     lastId = String(event.sequence);
     const data = storedData(event.data);
@@ -449,6 +461,13 @@ export function NoCampaignConversation({ language, area = 'questions' }: { reado
  *   the refusal in it, until its time ends. While an undo is under way the line's time does not end it: the undo's
  *   answer does (shown again, or, refused after the time, the line goes then). The delete dialog's count leaves out the
  *   turns dismissed here, and a conversation whose every turn is gone shows its intro again.
+ * - Story 3.12, bookmark an answer: before dismiss, under each done answer only (not a stopped, failed, running or
+ *   silent one),
+ *   a filled circle with an outlined bookmark ("Salvar resposta"); once saved, an outlined circle with a filled bookmark
+ *   ("Remover dos itens salvos"), with `aria-pressed`. A press changes it at once, then sends the change; a refusal puts
+ *   it back and shows its text under the actions. The saved items panel, when open, reads its list again. Each turn's
+ *   `<li>` is `turn-<id>`, and a conversation opened at a turn (`focusTurn`, a saved item's "Ir") shows that one instead
+ *   of the last, with focus on it; a turn not loaded leaves it at the last turn.
  */
 export function Conversation({
   language,
@@ -463,8 +482,10 @@ export function Conversation({
   stored = [],
   questions = null,
   deleteAction,
+  focusTurn = null,
 }: ConversationProps) {
   const t = translator(language);
+  const savedItems = useSavedItems();
   const uploads = useUploads();
   const scopePopover = useOptionalScopePopover();
   const [draft, setDraft] = useState('');
@@ -502,6 +523,12 @@ export function Conversation({
   const dismissButtons = useRef(new Map<number, HTMLButtonElement>());
   const undoButtons = useRef(new Map<number, HTMLButtonElement>());
   const pendingFocus = useRef<{ readonly key: number; readonly to: 'undo' | 'dismiss' } | 'composer' | null>(null);
+  /**
+   * Story 3.12: each turn's bookmark changes, sent one after the other (so the last press is the one that holds), and
+   * the number of the latest press, whose refusal alone puts the button back.
+   */
+  const bookmarkQueue = useRef(new Map<number, Promise<void>>());
+  const bookmarkPress = useRef(new Map<number, number>());
 
   useEffect(() => {
     // Read after the first render, so the server's and the browser's first renders agree.
@@ -852,7 +879,10 @@ export function Conversation({
         }, UNDO_MS),
       );
       const sent = setDismissal(turnId, 'dismiss').then((result) => {
-        if (!result.ok) {
+        if (result.ok) {
+          // Story 3.12: a dismissed saved answer leaves the saved items.
+          savedItems?.savedChanged();
+        } else {
           stopUndoTimer(key);
           if (onUndoPill(key)) {
             pendingFocus.current = { key, to: 'dismiss' };
@@ -864,7 +894,7 @@ export function Conversation({
       });
       dismissals.current.set(key, sent);
     },
-    [change, endLine, language, onUndoPill, say, stopUndoTimer, t],
+    [change, endLine, language, onUndoPill, savedItems, say, stopUndoTimer, t],
   );
 
   /**
@@ -886,6 +916,8 @@ export function Conversation({
         }
         const result = await setDismissal(turnId, 'restore');
         if (result.ok) {
+          // Story 3.12: an undone dismissal of a saved answer lists it again.
+          savedItems?.savedChanged();
           stopUndoTimer(key);
           lapsed.current.delete(key);
           dismissals.current.delete(key);
@@ -906,7 +938,33 @@ export function Conversation({
         change(key, (turn) => (turn.undoPending ? { ...turn, undoPending: false } : turn));
       }
     },
-    [change, endLine, language, say, stopUndoTimer],
+    [change, endLine, language, savedItems, say, stopUndoTimer],
+  );
+
+  /**
+   * Story 3.12: saves the answer of the turn `key`, or removes it from the saved items. The button changes at once, then
+   * the change is sent (after any still under way for that turn); a refusal of the latest press puts the button back
+   * and says why under the actions. The saved items panel, when open, reads its list again.
+   */
+  const toggleBookmark = useCallback(
+    (key: number, turnId: string, wanted: boolean) => {
+      const press = (bookmarkPress.current.get(key) ?? 0) + 1;
+      bookmarkPress.current.set(key, press);
+      change(key, (turn) => ({ ...turn, bookmarked: wanted, bookmarkProblem: null }));
+      const before = bookmarkQueue.current.get(key) ?? Promise.resolve();
+      const sent = before.then(async () => {
+        const result = await setBookmark(turnId, wanted ? 'save' : 'remove');
+        const latest = bookmarkPress.current.get(key) === press;
+        if (result.ok) {
+          savedItems?.savedChanged();
+        } else if (latest) {
+          change(key, (turn) => ({ ...turn, bookmarked: !wanted, bookmarkProblem: result.problem }));
+          say(errorText(result.problem, language));
+        }
+      });
+      bookmarkQueue.current.set(key, sent);
+    },
+    [change, language, say, savedItems],
   );
 
   // Story 3.11: focus goes where a dismissal, its undo or the end of its line sent it, once the screen shows it.
@@ -983,16 +1041,37 @@ export function Conversation({
   // longer than the window, and the GM had to scroll down to read what they had just asked for. Only a new turn moves
   // the page (never a delta of the answer), so reading back while an answer is written is not interrupted.
   // Story 3.10: an opened conversation shows its last turn at once, without the smooth scroll of a new question.
+  // Story 3.12: opened at a turn (a saved item's "Ir"), it shows that turn instead, with focus on it, when it is among
+  // the turns loaded; otherwise its last turn, as before.
   const lastTurn = useRef<HTMLLIElement | null>(null);
   const shownTurns = useRef(0);
   const opened = useRef(stored.length > 0);
   useEffect(() => {
     if (turns.length > shownTurns.current) {
-      const still = opened.current || (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      const opening = opened.current;
+      const still = opening || (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
       opened.current = false;
-      lastTurn.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+      const target = opening && focusTurn !== null ? document.getElementById(`turn-${focusTurn}`) : null;
+      if (target === null) {
+        lastTurn.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+      } else {
+        target.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+        // Under 1280px a saved items panel may still lie over the page for a moment (it closes once the page has
+        // arrived), and nothing behind it takes focus until then: try again on the next frames, for half a second.
+        let tries = 0;
+        const focusIt = () => {
+          target.focus({ preventScroll: true });
+          if (document.activeElement !== target && target.isConnected && tries < 30) {
+            tries += 1;
+            requestAnimationFrame(focusIt);
+          }
+        };
+        focusIt();
+      }
     }
     shownTurns.current = turns.length;
+    // Only the count of turns moves the page; the turn to open at is read once, when it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns.length]);
 
   // Story 3.10: a stored turn whose answer is still being written is followed from its last event.
@@ -1037,6 +1116,13 @@ export function Conversation({
 
   const closeSource = useCallback(() => {
     focusOpener.current = true;
+    setSource(null);
+  }, []);
+
+  /** Story 3.12: another right panel (the saved items) took the slot: the source view closes, and focus stays there. */
+  const replaceSource = useCallback(() => {
+    focusOpener.current = false;
+    sourceOpener.current = null;
     setSource(null);
   }, []);
 
@@ -1181,8 +1267,16 @@ export function Conversation({
               </li>
             );
           }
+          const target = turnId !== null && turnId === focusTurn;
           return (
-            <li key={turn.key} className={styles.turn} ref={last}>
+            <li
+              key={turn.key}
+              id={turnId === null ? undefined : `turn-${turnId}`}
+              className={styles.turn}
+              ref={last}
+              // Story 3.12: the turn a saved item opened takes focus once, from the page; never from the keyboard.
+              tabIndex={target ? -1 : undefined}
+            >
               <p className={styles.question}>
                 <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
                 {turn.question}
@@ -1247,9 +1341,24 @@ export function Conversation({
                 </p>
               ) : null}
               {finished || turn.status === 'failed' ? <hr className={styles.rule} /> : null}
-              {/* Story 3.11: the answer's actions, right-aligned under its rule; 3.12's bookmark goes before dismiss. */}
+              {/* Story 3.11: the answer's actions, right-aligned under its rule; Story 3.12: bookmark (done answers only), then dismiss. */}
               {finished && turnId !== null ? (
                 <div className={styles.actions}>
+                  {/* A silent answer (the sources said nothing) is not saved (Story 3.12 review). */}
+                  {turn.status === 'done' && !turn.silent ? (
+                    <button
+                      type="button"
+                      className={styles.action}
+                      aria-label={t(turn.bookmarked ? 'conversation.unbookmark' : 'conversation.bookmark')}
+                      aria-pressed={turn.bookmarked}
+                      data-set={turn.bookmarked ? 'true' : undefined}
+                      onClick={() => toggleBookmark(turn.key, turnId, !turn.bookmarked)}
+                    >
+                      <span className={styles.actionCircle}>
+                        <NamedIcon name={turn.bookmarked ? 'bookmarkFilled' : 'bookmark'} size={16} />
+                      </span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={styles.action}
@@ -1272,6 +1381,11 @@ export function Conversation({
               {turn.dismissProblem === null ? null : (
                 <p className={styles.failed} data-testid="dismiss-problem">
                   {errorText(turn.dismissProblem, language)}
+                </p>
+              )}
+              {turn.bookmarkProblem === null ? null : (
+                <p className={styles.failed} data-testid="bookmark-problem">
+                  {errorText(turn.bookmarkProblem, language)}
                 </p>
               )}
             </li>
@@ -1353,7 +1467,7 @@ export function Conversation({
         {alerted}
       </div>
       {source === null ? null : (
-        <ShellPanel>
+        <ShellPanel onReplaced={replaceSource}>
           <SourceView
             key={`${source.turnId}:${source.reference.number}:${source.opened}`}
             turnId={source.turnId}

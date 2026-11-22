@@ -429,7 +429,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
       )}
       {body}
       {open === null || view.kind !== 'done' ? null : (
-        <ShellPanel>
+        <ShellPanel onReplaced={() => setOpen(null)}>
           <SourceView
             key={`${open.result.passageId}:${open.opened}`}
             ground={{ kind: 'scope', campaignId: view.search.campaignId, versionId: open.result.versionId }}

@@ -159,9 +159,11 @@ export async function newConversationPage(area: Area) {
  * An opened conversation (Story 3.10): its stored turns with their answers and references, and the composer, which
  * continues it. Another account's id, an unknown one or a malformed one is the single "Não encontrado." page; a
  * conversation of the other area opens under its own area's address. Story 3.10 part B: how many questions its deletion
- * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words.
+ * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words. Story 3.12: a
+ * `turn` (the `?turn=` of a saved item's "Ir") opens it scrolled to that answer, with focus on it; anything that is not
+ * an id is ignored, and a turn not among those loaded leaves it at its last turn.
  */
-export async function openedConversationPage(area: Area, id: string) {
+export async function openedConversationPage(area: Area, id: string, turn?: string | string[]) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
   if (!isId(id)) {
     notFoundFor({ code: 'request.not_found' });
@@ -177,8 +179,9 @@ export async function openedConversationPage(area: Area, id: string) {
     notFoundFor(conversation.problem);
     return <Notice status="danger" language={language} message={errorText(conversation.problem, language)} />;
   }
+  const focusTurn = typeof turn === 'string' && isId(turn) ? turn : null;
   if (conversation.data.area !== area) {
-    redirect(`/${conversation.data.area}/${encodeURIComponent(conversation.data.id)}`);
+    redirect(`/${conversation.data.area}/${encodeURIComponent(conversation.data.id)}${focusTurn === null ? '' : `?turn=${focusTurn}`}`);
   }
   if (!turns.ok) {
     notFoundFor(turns.problem);
@@ -188,13 +191,14 @@ export async function openedConversationPage(area: Area, id: string) {
   const sameCampaign = current.ok && current.data.campaignId === conversation.data.campaignId;
   return (
     <Conversation
-      key={conversation.data.id}
+      key={`${conversation.data.id}:${focusTurn ?? ''}`}
       language={language}
       campaignId={conversation.data.campaignId}
       hasSources={sameCampaign ? current.data.hasSources : true}
       review={sameCampaign ? review : null}
       area={area}
       conversationId={conversation.data.id}
+      focusTurn={focusTurn}
       name={conversation.data.name}
       stored={turns.data.items}
       questions={deletion.ok ? deletion.data.questions : null}

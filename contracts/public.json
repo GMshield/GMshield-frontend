@@ -1355,6 +1355,76 @@
         "required" : [ "code", "count" ],
         "type" : "object"
       },
+      "SavedAnswer" : {
+        "description" : "A saved answer (contract 1.32.0)",
+        "properties" : {
+          "area" : {
+            "description" : "Its conversation's area",
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "campaignId" : {
+            "description" : "Its conversation's campaign's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "campaignName" : {
+            "description" : "The campaign's name",
+            "type" : "string"
+          },
+          "conversationId" : {
+            "description" : "Its conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "conversationName" : {
+            "description" : "Its conversation's name: the GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "excerpt" : {
+            "description" : "The answer's text with its Markdown removed and its white space made single spaces, cut at a word boundary to at most 280 code points",
+            "maxLength" : 280,
+            "type" : "string"
+          },
+          "savedAt" : {
+            "description" : "When the GM saved it",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "turnId" : {
+            "description" : "The saved turn's id",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "area", "campaignId", "campaignName", "conversationId", "conversationName", "excerpt", "savedAt", "turnId" ],
+        "type" : "object"
+      },
+      "SavedAnswerPage" : {
+        "description" : "One page of the account's saved answers (contract 1.32.0)",
+        "properties" : {
+          "items" : {
+            "description" : "The newest saved first",
+            "items" : {
+              "$ref" : "#/components/schemas/SavedAnswer"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The offset of the next page, as text; absent on the last",
+            "example" : "20",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many saved answers are listed",
+            "example" : 27,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
       "Scope" : {
         "properties" : {
           "campaignTier" : {
@@ -1615,6 +1685,10 @@
       "StoredTurn" : {
         "description" : "A turn of a conversation with its stored events (contract 1.29.0). A turn whose answer is still being written has no done or error event yet: its stream continues after the last sequence",
         "properties" : {
+          "bookmarked" : {
+            "description" : "Whether the GM saved its answer (contract 1.32.0)",
+            "type" : "boolean"
+          },
           "createdAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -1640,7 +1714,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "createdAt", "events", "id", "language", "question" ],
+        "required" : [ "bookmarked", "createdAt", "events", "id", "language", "question" ],
         "type" : "object"
       },
       "StoredTurnEvent" : {
@@ -2011,7 +2085,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.31.0"
+    "version" : "1.32.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -4025,6 +4099,65 @@
         "tags" : [ "session" ]
       }
     },
+    "/api/v1/saved-answers" : {
+      "get" : {
+        "operationId" : "listSavedAnswers",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the newest saved to skip, 0 to 100000",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavedAnswerPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The account's saved answers across all its campaigns (contract 1.32.0), the newest saved first, each with its campaign's name, its conversation's area and name, when it was saved and an excerpt. A page starts at an offset and names the total of the list. Left out (and not counted): a dismissed answer (its bookmark is kept, so undoing the dismissal lists it again), an answer of a conversation being deleted, and the answers of an archived campaign (listed again once it is restored) or of a campaign being deleted. request.invalid (400) for a limit outside 1 to 50, or an offset outside 0 to 100000",
+        "tags" : [ "conversations" ]
+      }
+    },
     "/api/v1/searches/{searchId}" : {
       "get" : {
         "operationId" : "getSearch",
@@ -4538,6 +4671,82 @@
         },
         "summary" : "What goes with one of the account's game systems if it is deleted: how many campaigns, conversations and materials (those of its campaigns, and those attached to it and to no other system). request.not_found (404) for any other id, a system being deleted included; session.required (401) without a session.",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/turns/{turnId}/bookmark" : {
+      "delete" : {
+        "operationId" : "unbookmarkTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The answer is not saved"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Remove the turn's answer from the saved answers (contract 1.32.0; 204), whatever the turn's state. A turn that is not saved stays as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves. A bookmark gives the answer no standing as a source: the scope, retrieval and the history sent with a later question never read it",
+        "tags" : [ "conversations" ]
+      },
+      "put" : {
+        "operationId" : "bookmarkTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The answer is saved"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Save the turn's answer (contract 1.32.0; 204): from now on its conversation's turns say it is bookmarked, and it heads the saved answers. Only a done turn (its last event a done event, neither stopped nor silent) is saved: conversation.turn_not_done (409) for a turn still running, stopped, failed or silent, and nothing changes. A turn saved already keeps the time it was saved (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves. A bookmark gives the answer no standing as a source: the scope, retrieval and the history sent with a later question never read it",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/turns/{turnId}/dismissal" : {

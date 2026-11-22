@@ -293,7 +293,8 @@
         "material_unknown": "One of the materials is no longer in this campaign, its system or the others. Reload the page to see the current scope."
       },
       "conversation": {
-        "turn_running": "This answer is still being written. Wait for it to finish before dismissing it."
+        "turn_running": "This answer is still being written. Wait for it to finish before dismissing it.",
+        "turn_not_done": "Only a finished answer can be saved."
       }
     }
   },
@@ -652,6 +653,8 @@
     "connectionLost": "Connection lost. Trying again…",
     "reconnectFailed": "Could not reconnect.",
     "retry": "Try again",
+    "bookmark": "Save answer",
+    "unbookmark": "Remove from saved items",
     "dismiss": "Dismiss answer",
     "dismissed": "Answer dismissed.",
     "undo": "Undo",
@@ -831,5 +834,19 @@
       "unknown": "Going with it: this conversation's questions and their answers. This cannot be undone.",
       "confirm": "Delete conversation"
     }
+  },
+  "saved": {
+    "title": "Saved items",
+    "open": "Saved items",
+    "close": "Close saved items",
+    "list": "Saved answers",
+    "empty": "No saved answers. Use the bookmark under an answer to keep it here.",
+    "go": "Go",
+    "goTo": "Go to the answer in «{name}»",
+    "switched": "Switched to the campaign «{name}».",
+    "loading": "Loading the saved items…",
+    "retry": "Try again",
+    "pages": "Pages of the saved items",
+    "separator": " › "
   }
 }

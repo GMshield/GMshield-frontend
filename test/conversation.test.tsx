@@ -1,22 +1,26 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import type { UrlStorage } from 'tus-js-client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_PLACES } from '@/components/uploads/types';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/questions' }));
 
 type Ask = (campaignId: string, question: string) => Promise<unknown>;
 const postQuestion = vi.fn<Ask>();
 const stopTurn = vi.fn<(turnId: string) => Promise<boolean>>();
 type SetDismissal = typeof import('@/client/conversation').setDismissal;
 const setDismissal = vi.fn<SetDismissal>();
+type SetBookmark = typeof import('@/client/conversation').setBookmark;
+const setBookmark = vi.fn<SetBookmark>();
 vi.mock('@/client/conversation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/client/conversation')>()),
   postQuestion,
   stopTurn,
   setDismissal,
+  setBookmark,
 }));
 
 const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
@@ -1964,12 +1968,19 @@ describe('model knowledge only when I turn it on (Story 3.8)', () => {
 describe('conversations by area (Story 3.10)', () => {
   const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
   type Stored = import('@/client/conversation').StoredTurn;
-  const stored = (id: string, question: string, events: [string, unknown][], language: Stored['language'] = 'pt-BR'): Stored => ({
+  const stored = (
+    id: string,
+    question: string,
+    events: [string, unknown][],
+    language: Stored['language'] = 'pt-BR',
+    bookmarked = false,
+  ): Stored => ({
     id,
     question,
     language,
     createdAt: '2026-11-22T12:00:00Z',
     events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
+    bookmarked,
   });
 
   type DeleteAction = NonNullable<import('@/components/conversation/Conversation').ConversationProps['deleteAction']>;
@@ -1981,28 +1992,35 @@ describe('conversations by area (Story 3.10)', () => {
       stored?: readonly Stored[];
       questions?: number | null;
       deleteAction?: DeleteAction;
+      focusTurn?: string | null;
+      language?: 'pt-BR' | 'en';
+      around?: (children: ReactNode) => ReactNode;
     } = {},
   ) {
+    const around = props.around ?? ((children: ReactNode) => children);
     return render(
-      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
-        <Conversation
-          language="pt-BR"
-          campaignId={CAMPAIGN}
-          hasSources
-          review={null}
-          area={props.area}
-          conversationId={props.conversationId}
-          name={props.name}
-          stored={props.stored}
-          questions={props.questions}
-          deleteAction={props.deleteAction}
-          openStream={(url) => {
-            const stream = new FakeStream(url);
-            streams.push(stream);
-            return stream as unknown as EventSource;
-          }}
-        />
-      </UploadsProvider>,
+      around(
+        <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+          <Conversation
+            language={props.language ?? 'pt-BR'}
+            campaignId={CAMPAIGN}
+            hasSources
+            review={null}
+            area={props.area}
+            conversationId={props.conversationId}
+            name={props.name}
+            stored={props.stored}
+            questions={props.questions}
+            deleteAction={props.deleteAction}
+            focusTurn={props.focusTurn}
+            openStream={(url) => {
+              const stream = new FakeStream(url);
+              streams.push(stream);
+              return stream as unknown as EventSource;
+            }}
+          />
+        </UploadsProvider>,
+      ),
     );
   }
 
@@ -2024,6 +2042,7 @@ describe('conversations by area (Story 3.10)', () => {
     postQuestion.mockReset();
     stopTurn.mockReset();
     setDismissal.mockReset();
+    setBookmark.mockReset();
     localStorage.clear();
     window.history.replaceState(null, '', '/questions/new');
   });
@@ -2479,5 +2498,290 @@ describe('conversations by area (Story 3.10)', () => {
     expect(screen.getByTestId('dismissed-line').textContent).toBe('Answer dismissed.Undo');
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
     expect(setDismissal).toHaveBeenCalledWith(TURN, 'dismiss');
+  });
+
+  // --- Story 3.12: bookmark answers and find them again
+
+  function bookmarkOf(item: HTMLElement, name = 'Salvar resposta') {
+    return within(item).getByRole('button', { name });
+  }
+
+  function turnItems() {
+    return turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+  }
+
+  it('a done answer has "Salvar resposta" before dismiss; a stopped, a failed and a running one have none', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...DONE, stopped: true, references: [] }]]),
+        stored(THIRD, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+        stored(PASSAGE_C, 'E depois?', [['delta', { text: 'Escrevendo' }]]),
+        // Silent: done with no reference and no model part (the sources said nothing): it cannot be saved.
+        stored(PASSAGE_B, 'E o tempo?', [['delta', { text: 'Nada.' }], ['done', { ...DONE, references: [], silent: true }]]),
+      ],
+    });
+    await waitFor(() => expect(streams).toHaveLength(1));
+    const items = turnItems();
+    expect(within(items[4]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[4]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    const save = bookmarkOf(items[0]!);
+    const dismiss = within(items[0]!).getByRole('button', { name: 'Dispensar resposta' });
+    // Before dismiss, unpressed, a filled circle with the outlined bookmark.
+    expect(save.compareDocumentPosition(dismiss) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.getAttribute('aria-pressed')).toBe('false');
+    expect(save.dataset.set).toBeUndefined();
+    expect(save.querySelector('span svg path')?.getAttribute('fill')).toBe('none');
+    // A stopped answer keeps its dismiss only; a failed one and one being written have neither.
+    expect(within(items[1]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[1]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    expect(within(items[2]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[3]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    // Once the answer being written is done, it has one too; each turn's item is named by its id.
+    streams[0]!.emit('done', DONE, 2);
+    expect(bookmarkOf(items[3]!)).toBeTruthy();
+    expect(items.map((item) => item.id)).toEqual([`turn-${TURN}`, `turn-${SECOND}`, `turn-${THIRD}`, `turn-${PASSAGE_C}`, `turn-${PASSAGE_B}`]);
+  });
+
+  it('a press inverts the button at once, then saves; pressed again it removes, and a stored saved answer opens set', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setBookmark.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    setBookmark.mockResolvedValue({ ok: true });
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E Fireball?', [['delta', { text: 'Fireball causa 8d6.' }], ['done', DONE]], 'pt-BR', true),
+      ],
+    });
+    const [first, second] = turnItems();
+    // Saved already: an outlined circle with the filled bookmark, named for its removal and pressed.
+    const set = bookmarkOf(second!, 'Remover dos itens salvos');
+    expect(set.getAttribute('aria-pressed')).toBe('true');
+    expect(set.dataset.set).toBe('true');
+    expect(set.querySelector('span svg path')?.getAttribute('fill')).toBe('currentColor');
+
+    fireEvent.click(bookmarkOf(first!));
+
+    // At once, before the backend answers.
+    const now = bookmarkOf(first!, 'Remover dos itens salvos');
+    expect(now.getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect(setBookmark).toHaveBeenLastCalledWith(TURN, 'save'));
+    answer({ ok: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bookmarkOf(first!, 'Remover dos itens salvos')).toBeTruthy();
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+
+    fireEvent.click(set);
+    expect(bookmarkOf(second!).getAttribute('aria-pressed')).toBe('false');
+    await waitFor(() => expect(setBookmark).toHaveBeenLastCalledWith(SECOND, 'remove'));
+    // A bookmark never touches the dismissal.
+    expect(setDismissal).not.toHaveBeenCalled();
+  });
+
+  it('a refusal puts the button back and says why under the actions; the next press clears it', async () => {
+    const notDone = { status: 409, category: 'conversation', code: 'conversation.turn_not_done', params: {} };
+    setBookmark.mockResolvedValueOnce({ ok: false, problem: notDone }).mockResolvedValue({ ok: true });
+    twoDone();
+    const [first] = turnItems();
+
+    fireEvent.click(bookmarkOf(first!));
+    expect(bookmarkOf(first!, 'Remover dos itens salvos')).toBeTruthy();
+
+    await waitFor(() => expect(screen.getByTestId('bookmark-problem').textContent).toBe('Só uma resposta concluída pode ser salva.'));
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    expect(polite()).toContain('Só uma resposta concluída pode ser salva.');
+    // The refusal sits under the actions.
+    const actions = bookmarkOf(first!).parentElement!;
+    expect(actions.compareDocumentPosition(screen.getByTestId('bookmark-problem')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(bookmarkOf(first!));
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+    await waitFor(() => expect(setBookmark).toHaveBeenCalledTimes(2));
+  });
+
+  it('presses in a row are sent in order, and only the latest one\'s refusal puts the button back', async () => {
+    const answers: ((result: { ok: boolean; problem?: unknown }) => void)[] = [];
+    setBookmark.mockImplementation(() => new Promise((resolve) => answers.push(resolve as never)));
+    twoDone();
+    const [first] = turnItems();
+    fireEvent.click(bookmarkOf(first!));
+    fireEvent.click(bookmarkOf(first!, 'Remover dos itens salvos'));
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    // The second waits for the first.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(setBookmark).toHaveBeenCalledTimes(1);
+    answers[0]!({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    await waitFor(() => expect(setBookmark).toHaveBeenCalledTimes(2));
+    expect(setBookmark.mock.calls.map((call) => call[1])).toEqual(['save', 'remove']);
+    // The first's refusal is not the latest press: nothing moves.
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+    answers[1]!({ ok: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a change tells the saved items panel to read its list again', async () => {
+    setBookmark.mockResolvedValue({ ok: true });
+    const { SavedItemsProvider, useSavedItems } = await import('@/components/saved/SavedItems');
+    function Version() {
+      return <output data-testid="saved-version">{useSavedItems()?.version}</output>;
+    }
+    twoDone();
+    cleanup();
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]])],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          {children}
+          <Version />
+        </SavedItemsProvider>
+      ),
+    });
+    expect(screen.getByTestId('saved-version').textContent).toBe('0');
+    fireEvent.click(bookmarkOf(turnItems()[0]!));
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('1'));
+  });
+
+  it('opened at a turn (a saved item\'s "Ir") shows that turn instead of the last, with focus on it', () => {
+    const scrolled: Element[] = [];
+    const before = Element.prototype.scrollIntoView;
+    // jsdom does not scroll: note what the page asks to bring into view.
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    const three = [
+      stored(TURN, 'Quanto dano?', [['delta', { text: 'Um.' }], ['done', DONE]]),
+      stored(SECOND, 'E Fireball?', [['delta', { text: 'Dois.' }], ['done', DONE]]),
+      stored(THIRD, 'E Shield?', [['delta', { text: 'Três.' }], ['done', DONE]]),
+    ];
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: three, focusTurn: SECOND });
+    const target = document.getElementById(`turn-${SECOND}`)!;
+    expect(scrolled).toEqual([target]);
+    expect(document.activeElement).toBe(target);
+    // Focusable by the page only, never a stop of the keyboard; the other turns are not focusable at all.
+    expect(target.getAttribute('tabindex')).toBe('-1');
+    expect(document.getElementById(`turn-${TURN}`)!.hasAttribute('tabindex')).toBe(false);
+    cleanup();
+    scrolled.length = 0;
+
+    // A turn not among those loaded (older than the newest 200, or gone): the last turn, as before, and focus stays.
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: three, focusTurn: PASSAGE_C });
+    expect(scrolled).toEqual([document.getElementById(`turn-${THIRD}`)]);
+    expect(document.activeElement).toBe(document.body);
+    Element.prototype.scrollIntoView = before;
+  });
+
+  it('a dismissal and its undo tell the saved items panel to read its list again', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    const { SavedItemsProvider, useSavedItems } = await import('@/components/saved/SavedItems');
+    function Version() {
+      return <output data-testid="saved-version">{useSavedItems()?.version}</output>;
+    }
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]], 'pt-BR', true)],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          {children}
+          <Version />
+        </SavedItemsProvider>
+      ),
+    });
+    fireEvent.click(dismissButtons()[0]!);
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('1'));
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('2'));
+  });
+
+  it('Ctrl+Shift+S over an open source view closes it and opens the saved items panel in its place, with focus inside', async () => {
+    const { SavedItemsProvider } = await import('@/components/saved/SavedItems');
+    const { SavedItemsPanel } = await import('@/components/saved/SavedItemsPanel');
+    const { ShellFrame } = await import('@/components/ShellPanel');
+    const user = userEvent.setup();
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['citation', { passageId: PASSAGE_A, offset: 21 }], ['done', DONE]])],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          <ShellFrame>
+            {children}
+            <SavedItemsPanel language="pt-BR" action={async (previous) => previous} load={async () => ({ ok: true, items: [], total: 0 })} />
+          </ShellFrame>
+        </SavedItemsProvider>
+      ),
+    });
+    await user.click(within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('button')[0]!);
+    expect(screen.getByRole('button', { name: 'Fechar a fonte' })).toBeTruthy();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('button', { name: 'Fechar a fonte' })).toBeNull();
+    expect(screen.getAllByRole('complementary')).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar itens salvos' }));
+  });
+
+  it('opened at a turn while the page behind a panel cannot take focus yet, the turn takes it once it can', async () => {
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {};
+    // As behind an open panel under 1280px: the first focus does nothing (the page is inert), later ones work.
+    const original = HTMLElement.prototype.focus;
+    let refused = 0;
+    const focus = vi.spyOn(HTMLLIElement.prototype, 'focus').mockImplementation(function focus(this: HTMLLIElement, options?: FocusOptions) {
+      if (refused < 2) {
+        refused += 1;
+        return;
+      }
+      original.call(this, options);
+    });
+    try {
+      opened({
+        conversationId: CONVERSATION,
+        name: 'Fire Bolt',
+        stored: [
+          stored(TURN, 'Quanto dano?', [['delta', { text: 'Um.' }], ['done', DONE]]),
+          stored(SECOND, 'E Fireball?', [['delta', { text: 'Dois.' }], ['done', DONE]]),
+        ],
+        focusTurn: TURN,
+      });
+      expect(document.activeElement).not.toBe(document.getElementById(`turn-${TURN}`));
+
+      await waitFor(() => expect(document.activeElement).toBe(document.getElementById(`turn-${TURN}`)));
+      expect(refused).toBe(2);
+    } finally {
+      focus.mockRestore();
+      Element.prototype.scrollIntoView = before;
+    }
+  });
+
+  it('names the bookmark in English too', () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      language: 'en',
+      stored: [
+        stored(TURN, 'How much?', [['delta', { text: 'One.' }], ['done', DONE]], 'en'),
+        stored(SECOND, 'And Fireball?', [['delta', { text: 'Two.' }], ['done', DONE]], 'en', true),
+      ],
+    });
+    const [first, second] = turnItems();
+    expect(bookmarkOf(first!, 'Save answer').getAttribute('aria-pressed')).toBe('false');
+    expect(bookmarkOf(second!, 'Remove from saved items').getAttribute('aria-pressed')).toBe('true');
   });
 });

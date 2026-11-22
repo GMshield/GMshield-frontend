@@ -1,8 +1,18 @@
-/** The shell's icons, inline and decorative: the control that holds one names it (`aria-label` or text). */
-function Icon({ path, size = 24 }: { readonly path: string; readonly size?: number }) {
+/**
+ * The shell's icons, inline and decorative: the control that holds one names it (`aria-label` or text). Stroked; from
+ * Story 3.12 an icon may also be filled with the same colour (a set bookmark).
+ */
+function Icon({ path, size = 24, filled = false }: { readonly path: string; readonly size?: number; readonly filled?: boolean }) {
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width={size} height={size}>
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={path}
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -61,7 +71,9 @@ export type IconName =
   | 'picture'
   | 'signOut'
   | 'search'
-  | 'dismiss';
+  | 'dismiss'
+  | 'bookmark'
+  | 'bookmarkFilled';
 
 const PATHS: Readonly<Record<IconName, string>> = {
   questions: 'M4 5h16v11H9l-5 4z',
@@ -93,9 +105,16 @@ const PATHS: Readonly<Record<IconName, string>> = {
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
   /** Story 3.11: an answer's dismiss action, an X drawn inside its filled circle. */
   dismiss: 'M7 7l10 10M17 7L7 17',
+  /** Story 3.12: the bookmark of an answer and of the saved items: a ribbon with a notch, outlined. */
+  bookmark: 'M7 4h10v16l-5-4-5 4z',
+  /** Story 3.12: the same ribbon filled: a saved answer's bookmark. */
+  bookmarkFilled: 'M7 4h10v16l-5-4-5 4z',
 };
+
+/** Story 3.12: the icons drawn filled as well as stroked. */
+const FILLED: ReadonlySet<IconName> = new Set<IconName>(['bookmarkFilled']);
 
 /** An icon by its name, 20px unless a size is given. */
 export function NamedIcon({ name, size = 20 }: { readonly name: IconName; readonly size?: number }) {
-  return <Icon path={PATHS[name]} size={size} />;
+  return <Icon path={PATHS[name]} size={size} filled={FILLED.has(name)} />;
 }

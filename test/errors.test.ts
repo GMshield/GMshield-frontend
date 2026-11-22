@@ -16,7 +16,8 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 // UploadProblems.java; Story 1.21 adds the image set's two), the page routes (Story 1.19, PageProblems.java), and the
 // review actions (Story 1.20, MaterialProblems.java), and the systems (Story 3.1, LibraryProblems.java), and a scope
 // change naming a material in none of the campaign's tiers (Story 3.5, CampaignScopes.java; shown from Story 3.6), and a
-// dismissal of an answer still being written (Story 3.11, ConversationProblems.java).
+// dismissal of an answer still being written (Story 3.11, ConversationProblems.java), and a bookmark of an answer that
+// is not done (Story 3.12).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
     'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required',
@@ -32,7 +33,7 @@ const BACKEND_CODES = {
   page: ['ground_unknown'],
   material: ['action_unavailable', 'version_in_progress', 'not_ready'],
   scope: ['material_unknown'],
-  conversation: ['turn_running'],
+  conversation: ['turn_running', 'turn_not_done'],
 } as const;
 
 function leaves(value: unknown): string[] {
