@@ -7,9 +7,19 @@ import type { components } from '@/server/backend/generated/public';
  * reopens itself names the last event id in its address. Story 2.7: a page a turn's reference names is read from
  * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The indexing notice
  * reads the count of passages still being prepared for search, and of those that could not be, from
- * `GET /api/v1/conversations/current`. The relays
- * reach the backend; the browser never does.
+ * `GET /api/v1/conversations/current`. Story 3.10: a question names the conversation it continues, or the area of the
+ * new one it starts. The relays reach the backend; the browser never does.
  */
+
+/** The areas of the sidebar a conversation belongs to (Story 3.10). */
+export const AREAS = ['questions', 'rules'] as const;
+export type Area = (typeof AREAS)[number];
+
+/** Where a question goes (Story 3.10): the conversation it continues, else a new one of `area`. */
+export type QuestionTarget = { readonly conversationId?: string | null; readonly area?: Area };
+
+/** A conversation's stored turn with its events, as the server read it (Story 3.10). */
+export type StoredTurn = components['schemas']['StoredTurn'];
 
 /** A recorded turn, as the relay answers it. */
 export type AskedTurn = { readonly id: string; readonly conversationId: string; readonly language: string | null };
@@ -28,13 +38,17 @@ function isTurn(value: unknown): value is AskedTurn {
     && (turn.language === null || typeof turn.language === 'string');
 }
 
-/** Posts a question on the campaign; answers the turn, or the problem the relay answered. */
-export async function postQuestion(campaignId: string, question: string): Promise<AskResult> {
+/**
+ * Posts a question on the campaign; answers the turn, or the problem the relay answered. Story 3.10: in the
+ * conversation `target` names, else in a new one of its area (without either, the campaign's latest questions one).
+ */
+export async function postQuestion(campaignId: string, question: string, target: QuestionTarget = {}): Promise<AskResult> {
+  const where = target.conversationId ? { conversationId: target.conversationId } : target.area === undefined ? {} : { area: target.area };
   try {
     const response = await fetch(`/api/v1/campaigns/${encodeURIComponent(campaignId)}/turns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, ...where }),
       credentials: 'same-origin',
       cache: 'no-store',
     });
@@ -177,6 +191,28 @@ export function parseTier(data: Record<string, unknown> | null): TierStart | nul
     return null;
   }
   return { tier: data.tier, offset: data.offset as number };
+}
+
+/** How many code points a conversation's default name keeps (Story 3.10, the backend's `Conversations.DEFAULT_NAME`). */
+export const DEFAULT_NAME = 60;
+
+/**
+ * A conversation's default name, as the backend gives it until it is renamed (Story 3.10): the first question's runs of
+ * white space made one space, then its first {@link DEFAULT_NAME} code points, cut back to the last space when that
+ * would split a word (a word longer than all of them is cut where they end).
+ */
+export function defaultName(question: string): string {
+  const flat = question.replace(/\p{White_Space}+/gu, ' ').trim();
+  const points = Array.from(flat);
+  if (points.length <= DEFAULT_NAME) {
+    return flat;
+  }
+  if (points[DEFAULT_NAME] === ' ') {
+    return points.slice(0, DEFAULT_NAME).join('');
+  }
+  const cut = points.slice(0, DEFAULT_NAME).join('');
+  const space = cut.lastIndexOf(' ');
+  return space > 0 ? cut.slice(0, space) : cut;
 }
 
 /** A page a turn's reference names (Story 2.7), as the relay answers it: the shape of a material's page. */

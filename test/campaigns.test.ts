@@ -401,11 +401,15 @@ describe('a campaign page (Story 3.2)', () => {
     expect(switchesOf(html)).toEqual([]);
   });
 
-  it('the conversations tab shows its conversation\'s questions and "Abrir", or one sentence when there is none', async () => {
+  it('the conversations tab counts the conversations of each area with "Abrir" for each, or one sentence when there is none', async () => {
+    const QUESTIONS = `GET /api/v1/campaigns/${ID}/conversations?area=questions&limit=1`;
+    const RULES = `GET /api/v1/campaigns/${ID}/conversations?area=rules&limit=1`;
+    const listed = (total: number) => ({ status: 200, body: { items: total === 0 ? [] : [{ id: CONVERSATION, area: 'questions', name: 'x', questions: 1, createdAt: '2026-11-22T12:00:00Z', lastAskedAt: '2026-11-22T12:00:00Z', version: 0 }], total } });
     const routes: Record<string, { status: number; body: unknown }> = {
       [`GET /api/v1/campaigns/${ID}`]: current(THURSDAY),
       'GET /api/v1/campaigns/current': current(FIRST),
-      [`GET /api/v1/campaigns/${ID}/conversation`]: { status: 200, body: { id: CONVERSATION, questions: 3 } },
+      [QUESTIONS]: listed(3),
+      [RULES]: listed(1),
     };
     const server = await useBackend(routes);
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
@@ -413,15 +417,22 @@ describe('a campaign page (Story 3.2)', () => {
       const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }));
       expect(linkTo(html, `/campaigns/${ID}?tab=conversations`)).toContain('aria-current="page"');
       expect(html).toContain(`aria-label="${messages.campaigns.page.conversationList}"`);
-      expect(html).toContain(messages.shell.entries.questions);
-      expect(html).toContain(language === 'en' ? '3 questions' : '3 perguntas');
-      expect(html).toMatch(new RegExp(`<button[^>]*>${messages.campaigns.page.open}</button>`));
+      // One row per area, in the sidebar's order, each with its count and an "Abrir" that carries its area.
+      expect(html.indexOf(messages.shell.entries.questions)).toBeLessThan(html.indexOf(messages.shell.entries.rules));
+      expect(html).toContain(language === 'en' ? '3 conversations<' : '3 conversas<');
+      expect(html).toContain(language === 'en' ? '1 conversation<' : '1 conversa<');
+      expect(html.match(new RegExp(`<button[^>]*>${messages.campaigns.page.open}</button>`, 'g'))).toHaveLength(2);
+      expect(html).toContain('<input type="hidden" name="area" value="questions"/>');
+      expect(html).toContain('<input type="hidden" name="area" value="rules"/>');
     }
-    expect(calls(server)).toContain(`GET /api/v1/campaigns/${ID}/conversation`);
-    routes[`GET /api/v1/campaigns/${ID}/conversation`] = { status: 200, body: { id: CONVERSATION, questions: 1 } };
+    expect(calls(server)).toEqual(expect.arrayContaining([QUESTIONS, RULES]));
+    // A campaign with only rule conversations still lists them; Consultas shows 0.
+    routes[QUESTIONS] = listed(0);
     cookieJar['__Host-gmshield-lang'] = 'pt-BR';
-    expect(renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }))).toContain('1 pergunta<');
-    // An archived campaign's conversation shows, with no "Abrir" (it cannot become current) but a sentence in its place.
+    const rulesOnly = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }));
+    expect(rulesOnly).toContain('0 conversas<');
+    expect(rulesOnly).not.toContain('Esta campanha ainda não tem conversas.');
+    // An archived campaign's rows show, with no "Abrir" (it cannot become current) but a sentence in its place.
     routes[`GET /api/v1/campaigns/${ID}`] = current({ ...THURSDAY, archived: true });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
@@ -432,9 +443,13 @@ describe('a campaign page (Story 3.2)', () => {
     expect(ptBR.campaigns.page.restoreToOpen).toBe('Restaure a campanha para abrir a conversa.');
     expect(en.campaigns.page.restoreToOpen).toBe('Restore the campaign to open the conversation.');
     cookieJar['__Host-gmshield-lang'] = 'pt-BR';
-    routes[`GET /api/v1/campaigns/${ID}/conversation`] = problem(404, 'request.not_found');
-    const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }));
-    expect(html).toContain('Esta campanha ainda não tem conversas.');
+    routes[RULES] = listed(0);
+    const none = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }));
+    expect(none).toContain('Esta campanha ainda não tem conversas.');
+    // A list that cannot be read says why.
+    routes[RULES] = problem(503, 'server.unavailable');
+    const down = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'conversations' }) }));
+    expect(down).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
   });
 
   it('another owner\'s campaign, an unknown one or a malformed id is the single not-found page', async () => {
@@ -488,16 +503,23 @@ describe('a campaign\'s actions (Story 3.2)', () => {
     expect(server.calls).toHaveLength(count);
   });
 
-  it('"Abrir" makes the campaign current and opens Consultas', async () => {
+  it('"Abrir" makes the campaign current and opens the list of its area', async () => {
     const routes: Record<string, { status: number; body: unknown }> = { 'PUT /api/v1/campaigns/current': { status: 200, body: THURSDAY } };
     const server = await useBackend(routes);
-    expect(await thrownDigest(() => openConversationAction(START, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/questions;/);
+    expect(await thrownDigest(() => openConversationAction(START, form({ id: ID, area: 'questions' })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/questions;/);
     // The shared layout (switcher, context bar) is rendered again with the new current campaign or name.
     expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
     revalidatePath.mockClear();
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignId: ID });
+    expect(await thrownDigest(() => openConversationAction(START, form({ id: ID, area: 'rules' })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/rules;/);
+    // An area that is not one never reaches the backend.
+    const count = server.calls.length;
+    for (const fields of [{ id: ID }, { id: ID, area: 'search' }, { id: ID, area: '../campaigns' }] as Record<string, string>[]) {
+      expect(await openConversationAction(START, form(fields))).toEqual({ error: 'O pedido não é válido.', done: 0 });
+    }
+    expect(server.calls).toHaveLength(count);
     routes['PUT /api/v1/campaigns/current'] = problem(404, 'request.not_found');
-    expect(await openConversationAction(START, form({ id: ID }))).toEqual({ error: 'Não encontrado.', done: 0 });
+    expect(await openConversationAction(START, form({ id: ID, area: 'questions' }))).toEqual({ error: 'Não encontrado.', done: 0 });
   });
 });
 

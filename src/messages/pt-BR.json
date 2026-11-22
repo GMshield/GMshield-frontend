@@ -138,8 +138,8 @@
       "system": "Sistema",
       "state": "Situação",
       "conversationList": "Conversas desta campanha",
-      "questionsOne": "1 pergunta",
-      "questionsOther": "{count} perguntas",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
       "open": "Abrir",
       "restoreToOpen": "Restaure a campanha para abrir a conversa.",
       "noConversation": "Esta campanha ainda não tem conversas."
@@ -241,7 +241,8 @@
         "system_name_taken": "Você já tem um sistema com este nome e esta edição.",
         "campaign_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "campaign_name_taken": "Este sistema já tem uma campanha com este nome, talvez arquivada.",
-        "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual."
+        "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
+        "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
@@ -618,7 +619,6 @@
     "loadFailed": "Não foi possível carregar esta página."
   },
   "conversation": {
-    "heading": "Consultas",
     "turns": "Perguntas e respostas",
     "question": "Pergunta",
     "answer": "Resposta",
@@ -663,8 +663,24 @@
     "newCampaign": "Nova campanha",
     "intro": {
       "title": "O que você quer consultar?",
-      "text": "Pergunte sobre as regras da campanha. Cada resposta cita o arquivo e a página de onde veio."
-    }
+      "text": "Pergunte sobre as regras da campanha. Cada resposta cita o arquivo e a página de onde veio.",
+      "rulesTitle": "Que regra você quer criar?",
+      "rulesText": "Veja primeiro o que as fontes já dizem. Cada resposta cita o arquivo e a página de onde veio.",
+      "examples": "Exemplos de perguntas"
+    },
+    "examples": {
+      "questions": {
+        "one": "Como funciona o descanso dos personagens?",
+        "two": "Quais são as regras de combate à distância?",
+        "three": "O que a campanha diz sobre viagens?"
+      },
+      "rules": {
+        "one": "Que regras já existem sobre fabricar itens?",
+        "two": "Como o sistema define a dificuldade de um teste?",
+        "three": "Quais regras da casa esta campanha tem?"
+      }
+    },
+    "rename": "Renomear"
   },
   "feedback": {
     "systemCreated": "Sistema «{name}» criado.",
@@ -686,7 +702,8 @@
     "versionRemoved": "Versão anterior removida.",
     "uploadDone": "«{name}» enviado. A leitura das páginas começou.",
     "uploadFailed": "O envio de «{name}» falhou.",
-    "viewSaved": "Exibição salva neste navegador."
+    "viewSaved": "Exibição salva neste navegador.",
+    "conversationRenamed": "Conversa renomeada para «{name}»."
   },
   "notifications": {
     "title": "Notificações",
@@ -780,5 +797,23 @@
     "notFound": "Não encontrado.",
     "noCampaign": "Escolha ou crie uma campanha para buscar nas fontes dela.",
     "newCampaign": "Nova campanha"
+  },
+  "conversations": {
+    "new": "Nova conversa",
+    "listQuestions": "Conversas de Consultas",
+    "listRules": "Conversas de Criação de Regras",
+    "emptyQuestions": "Nenhuma conversa ainda. Comece uma para consultar as regras da campanha.",
+    "emptyRules": "Nenhuma conversa ainda. Comece uma para preparar uma regra da campanha.",
+    "questionsOne": "1 pergunta",
+    "questionsOther": "{count} perguntas",
+    "lastAsked": "última em {date}",
+    "detail": "{questions} · {last}",
+    "form": {
+      "renameTitle": "Renomear conversa",
+      "name": "Nome",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Esta conversa foi renomeada em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve."
+    }
   }
 }

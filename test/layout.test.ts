@@ -164,8 +164,8 @@ describe('the signed-in layout (Story 1.11)', () => {
   });
 
   it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
+    // Story 3.10: Criação de Regras is no longer a placeholder (its list is in test/conversations.test.tsx).
     const pages = {
-      rules: (await import('@/app/(signed-in)/rules/page')).default,
       characters: CharactersPage,
     } as const;
     const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -180,10 +180,9 @@ describe('the signed-in layout (Story 1.11)', () => {
         expect(messages.placeholder[key], `${language} ${key}`).not.toMatch(/!|\p{Extended_Pictographic}/u);
       }
     }
-    expect(ptBR.placeholder.rules).toBe('Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.');
   });
 
-  it('the questions page (Story 2.4) is the conversation: the composer, and with no source the empty state', async () => {
+  it('a new conversation (Story 2.4, from Story 3.10 at /questions/new) is the composer, and with no source the empty state', async () => {
     const conversation = { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: false };
     const review = { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', kind: 'rulebook' }] };
     const server = await useBackend({
@@ -193,8 +192,8 @@ describe('the signed-in layout (Story 1.11)', () => {
       'GET /api/v1/conversations/current': { status: 200, body: conversation },
       'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: review },
     });
-    requestHeaders = { 'x-gmshield-path': '/questions' };
-    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+    requestHeaders = { 'x-gmshield-path': '/questions/new' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/new/page');
 
     let html = await layoutHtml(await QuestionsPage());
 
@@ -321,8 +320,8 @@ describe('the questions page with no campaign (Story 3.2)', () => {
       'GET /api/v1/conversations/current': problem(404, 'request.not_found'),
       'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: { items: [] } },
     });
-    requestHeaders = { 'x-gmshield-path': '/questions' };
-    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+    requestHeaders = { 'x-gmshield-path': '/questions/new' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/new/page');
 
     const html = await layoutHtml(await QuestionsPage());
 

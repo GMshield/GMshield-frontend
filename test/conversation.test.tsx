@@ -175,7 +175,7 @@ describe('the conversation (Story 2.4)', () => {
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.keyboard('{Enter}');
 
-    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Uma\nduas\n\n\n\n\n\n');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Uma\nduas\n\n\n\n\n\n', { area: 'questions' });
     expect(composer().value).toBe('');
     expect(composer().rows).toBe(1);
     await waitFor(() => expect(streams).toHaveLength(1));
@@ -187,18 +187,18 @@ describe('the conversation (Story 2.4)', () => {
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy();
   });
 
-  it('keeps the draft per campaign in this browser and clears it on send', async () => {
-    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}`, 'Rascunho guardado');
+  it('keeps the draft per campaign and conversation in this browser and clears it on send', async () => {
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`, 'Rascunho guardado');
     view();
     await waitFor(() => expect(composer().value).toBe('Rascunho guardado'));
     const user = userEvent.setup();
     await user.type(composer(), '?');
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Rascunho guardado?');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Rascunho guardado?');
 
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.click(screen.getByRole('button', { name: 'Enviar' }));
 
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBeNull();
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBeNull();
   });
 
   it('works when the browser keeps nothing', async () => {
@@ -300,7 +300,8 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('done', doneWith(PASSAGE_A));
 
     expect(document.querySelector('img')).toBeNull();
-    expect(document.querySelector('a')).toBeNull();
+    // Story 3.10: the only links are the slim line's (the way back and "Renomear"), never in an answer.
+    expect(screen.getAllByRole('list')[0]!.querySelector('a')).toBeNull();
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('b')).toBeNull();
     expect(turns().getByText('o SRD (https://srd.example/fire-bolt)')).toBeTruthy();
@@ -330,16 +331,19 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('citation', { passageId: PASSAGE_A, offset: 38 });
     stream.emit('done', doneWith(PASSAGE_A));
 
-    for (const tag of ['a', 'img', 'iframe', 'script']) {
+    for (const tag of ['img', 'iframe', 'script']) {
       expect(document.querySelector(tag), tag).toBeNull();
     }
+    // Story 3.10: the only links are the slim line's (the way back and "Renomear"), never in an answer.
+    expect(screen.getAllByRole('list')[0]!.querySelector('a')).toBeNull();
     expect(turns().getByText(/https:\/\/example\.invalid\/auto/)).toBeTruthy();
     expect(turns().getByText('clique para curar (javascript:alert(1))')).toBeTruthy();
     expect(turns().getByText('o grimório (https://example.invalid/grimorio)')).toBeTruthy();
     // A reference-style image is dropped whole, its address with it; nothing loads from example.invalid.
     expect(document.body.innerHTML).not.toContain('ninho.png');
     expect(document.body.innerHTML).not.toContain('example.invalid/frame');
-    expect(document.querySelectorAll('[src], [href]')).toHaveLength(0);
+    expect(document.querySelectorAll('[src]')).toHaveLength(0);
+    expect([...document.querySelectorAll('[href]')].map((link) => link.getAttribute('href'))).toEqual(['/questions', '/questions/c/edit']);
   });
 
   it('marks an answer in another language than the interface with its language and a visible label', async () => {
@@ -393,7 +397,7 @@ describe('the conversation (Story 2.4)', () => {
     await user.type(composer(), 'Quanto dano causa Fire Bolt?{Enter}');
 
     await waitFor(() => expect(composer().value).toBe('Quanto dano causa Fire Bolt?'));
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Quanto dano causa Fire Bolt?');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Quanto dano causa Fire Bolt?');
 
     let refuse: (value: unknown) => void = () => undefined;
     postQuestion.mockImplementationOnce(() => new Promise((resolve) => (refuse = resolve)));
@@ -403,7 +407,7 @@ describe('the conversation (Story 2.4)', () => {
     await act(async () => refuse({ ok: false, problem: { status: 400, category: 'request', code: 'request.invalid', params: {} } }));
 
     expect(composer().value).toBe('Outra pergunta');
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Outra pergunta');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Outra pergunta');
   });
 
   it('takes at most 4,000 characters in the composer, as the backend does', () => {
@@ -817,7 +821,7 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     stream.emit('done', { stopped: false, silent: true, references: [] }, 1);
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.keyboard('{Enter}');
-    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Outra pergunta');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Outra pergunta', { conversationId: 'c' });
   });
 
   it('sends a stop pressed before the turn id is known as soon as the id arrives', async () => {
@@ -933,7 +937,7 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
 
     await waitFor(() => expect(streams).toHaveLength(2));
-    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Quanto dano causa Fire Bolt?');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Quanto dano causa Fire Bolt?', { conversationId: 'c' });
     expect(turns().getAllByText('Quanto dano causa Fire Bolt?')).toHaveLength(1);
     expect(turns().queryByText('O serviço de IA está indisponível agora.')).toBeNull();
     streams[1]!.emit('delta', { text: 'Um d10.' }, 1);
@@ -1951,5 +1955,161 @@ describe('model knowledge only when I turn it on (Story 3.8)', () => {
       ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Em geral, 1d10.'],
       ['END:Do conhecimento do modelo, sem fonte.'],
     ]);
+  });
+});
+
+describe('conversations by area (Story 3.10)', () => {
+  const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
+  type Stored = import('@/client/conversation').StoredTurn;
+  const stored = (id: string, question: string, events: [string, unknown][], language: Stored['language'] = 'pt-BR'): Stored => ({
+    id,
+    question,
+    language,
+    createdAt: '2026-11-22T12:00:00Z',
+    events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
+  });
+
+  function opened(props: { area?: 'questions' | 'rules'; conversationId?: string | null; name?: string | null; stored?: readonly Stored[] } = {}) {
+    return render(
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+        <Conversation
+          language="pt-BR"
+          campaignId={CAMPAIGN}
+          hasSources
+          review={null}
+          area={props.area}
+          conversationId={props.conversationId}
+          name={props.name}
+          stored={props.stored}
+          openStream={(url) => {
+            const stream = new FakeStream(url);
+            streams.push(stream);
+            return stream as unknown as EventSource;
+          }}
+        />
+      </UploadsProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    localStorage.clear();
+    window.history.replaceState(null, '', '/questions/new');
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('matrix: a new conversation opens with the composer focused and three area examples, which fill it and never send', async () => {
+    opened({ area: 'rules' });
+    expect(document.activeElement).toBe(composer());
+    expect(screen.getByText('Que regra você quer criar?')).toBeTruthy();
+    const examples = within(screen.getByRole('list', { name: 'Exemplos de perguntas' })).getAllByRole('button');
+    expect(examples.map((button) => button.textContent)).toEqual([
+      'Que regras já existem sobre fabricar itens?',
+      'Como o sistema define a dificuldade de um teste?',
+      'Quais regras da casa esta campanha tem?',
+    ]);
+    // The way back only: a new conversation has no name and no "Renomear" yet.
+    const top = screen.getByTestId('conversation-top');
+    expect(within(top).getByRole('link', { name: 'Criação de Regras' }).getAttribute('href')).toBe('/rules');
+    expect(within(top).queryByRole('link', { name: 'Renomear' })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(examples[1]!);
+
+    expect(composer().value).toBe('Como o sistema define a dificuldade de um teste?');
+    expect(document.activeElement).toBe(composer());
+    expect(composer().selectionStart).toBe(composer().value.length);
+    expect(postQuestion).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:rules`)).toBe('Como o sistema define a dificuldade de um teste?');
+  });
+
+  it('matrix row "First question in a new conversation": asked in its area, then the address and the slim line name it', async () => {
+    opened({ area: 'rules' });
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'Que regras já existem sobre fabricar itens mágicos de alto nível em campanhas longas?{Enter}');
+
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Que regras já existem sobre fabricar itens mágicos de alto nível em campanhas longas?', { area: 'rules' });
+    await waitFor(() => expect(window.location.pathname).toBe(`/rules/${CONVERSATION}`));
+    const top = screen.getByTestId('conversation-top');
+    // The default name, as the backend gives it: the first 60 code points, cut at a word boundary.
+    expect(within(top).getByText('Que regras já existem sobre fabricar itens mágicos de alto')).toBeTruthy();
+    expect(within(top).getByRole('link', { name: 'Renomear' }).getAttribute('href')).toBe(`/rules/${CONVERSATION}/edit`);
+    expect(screen.queryByRole('list', { name: 'Exemplos de perguntas' })).toBeNull();
+
+    // Matrix row "Continue": the next question names the conversation.
+    streams[0]!.emit('done', { stopped: false, silent: true, modelKnowledge: false, references: [] }, 1);
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'E itens comuns?{Enter}');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'E itens comuns?', { conversationId: CONVERSATION });
+  });
+
+  it('matrix: a reopened conversation shows its turns with their references, and the next question continues it', async () => {
+    const done = { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] };
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano causa Fire Bolt?', [
+          ['delta', { text: 'Fire Bolt causa 1d10.' }],
+          ['citation', { passageId: PASSAGE_A, offset: 21 }],
+          ['done', done],
+        ]),
+        stored(PASSAGE_B, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...done, stopped: true, references: [] }]]),
+        stored(PASSAGE_C, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+      ],
+    });
+
+    expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(turns().getByText(/Livro do Jogador\.pdf/)).toBeTruthy();
+    expect(turns().getByText('Começo')).toBeTruthy();
+    expect(turns().getByText('Interrompida')).toBeTruthy();
+    // A failed turn shows its failure in place of what streamed, with "Tentar de novo".
+    expect(turns().queryByText('Metade')).toBeNull();
+    expect(turns().getByText('O serviço de IA está indisponível agora.')).toBeTruthy();
+    expect(screen.queryByTestId('conversation-intro')).toBeNull();
+    expect(within(screen.getByTestId('conversation-top')).getByText('Fire Bolt')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Fire Bolt');
+    // Nothing streams for turns that have ended, and the composer is not taken from the reader.
+    expect(streams).toHaveLength(0);
+    expect(document.activeElement).not.toBe(composer());
+
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'E Fireball?{Enter}');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'E Fireball?', { conversationId: CONVERSATION });
+    expect(window.location.pathname).toBe('/questions/new');
+  });
+
+  it('follows a stored turn still being written from its last event, keeping what it already has', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa ' }], ['citation', { passageId: PASSAGE_A, offset: 16 }]])],
+    });
+
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(streams[0]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=2`);
+    expect(turns().getByText('Fire Bolt causa')).toBeTruthy();
+    // While it runs, the send button is Stop.
+    expect(screen.getByRole('button', { name: 'Parar' })).toBeTruthy();
+    streams[0]!.emit('delta', { text: '1d10.' }, 3);
+    streams[0]!.emit('done', { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] }, 4);
+
+    expect(turns().getByText(/Fire Bolt causa\s*1d10\./)).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy();
+  });
+
+  it('keeps the draft of an opened conversation apart from a new one\'s', async () => {
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`, 'Rascunho novo');
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:${CONVERSATION}`, 'Rascunho da conversa');
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [] });
+    await waitFor(() => expect(composer().value).toBe('Rascunho da conversa'));
   });
 });

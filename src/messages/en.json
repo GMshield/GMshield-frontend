@@ -138,8 +138,8 @@
       "system": "System",
       "state": "State",
       "conversationList": "Conversations of this campaign",
-      "questionsOne": "1 question",
-      "questionsOther": "{count} questions",
+      "conversationsOne": "1 conversation",
+      "conversationsOther": "{count} conversations",
       "open": "Open",
       "restoreToOpen": "Restore the campaign to open the conversation.",
       "noConversation": "This campaign has no conversations yet."
@@ -241,7 +241,8 @@
         "system_name_taken": "You already have a system with this name and edition.",
         "campaign_name_invalid": "The name needs {min} to {max} characters.",
         "campaign_name_taken": "This system already has a campaign with this name, perhaps an archived one.",
-        "stale_version": "This was changed elsewhere. Reload the page to see the current version."
+        "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
+        "conversation_name_invalid": "The name needs {min} to {max} characters."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",
@@ -618,7 +619,6 @@
     "loadFailed": "This page could not be loaded."
   },
   "conversation": {
-    "heading": "Questions",
     "turns": "Questions and answers",
     "question": "Question",
     "answer": "Answer",
@@ -663,8 +663,24 @@
     "newCampaign": "New campaign",
     "intro": {
       "title": "What do you want to look up?",
-      "text": "Ask about the campaign's rules. Every answer cites the file and the page it came from."
-    }
+      "text": "Ask about the campaign's rules. Every answer cites the file and the page it came from.",
+      "rulesTitle": "What rule do you want to create?",
+      "rulesText": "First see what the sources already say. Every answer cites the file and the page it came from.",
+      "examples": "Example questions"
+    },
+    "examples": {
+      "questions": {
+        "one": "How does resting work for the characters?",
+        "two": "What are the rules for ranged combat?",
+        "three": "What does the campaign say about travel?"
+      },
+      "rules": {
+        "one": "What rules already exist for crafting items?",
+        "two": "How does the system set the difficulty of a check?",
+        "three": "What house rules does this campaign have?"
+      }
+    },
+    "rename": "Rename"
   },
   "feedback": {
     "systemCreated": "System «{name}» created.",
@@ -686,7 +702,8 @@
     "versionRemoved": "Previous version removed.",
     "uploadDone": "«{name}» uploaded. Reading its pages has started.",
     "uploadFailed": "The upload of «{name}» failed.",
-    "viewSaved": "Display saved in this browser."
+    "viewSaved": "Display saved in this browser.",
+    "conversationRenamed": "Conversation renamed to «{name}»."
   },
   "notifications": {
     "title": "Notifications",
@@ -780,5 +797,23 @@
     "notFound": "Not found.",
     "noCampaign": "Choose or create a campaign to search its sources.",
     "newCampaign": "New campaign"
+  },
+  "conversations": {
+    "new": "New conversation",
+    "listQuestions": "Question conversations",
+    "listRules": "Rule creation conversations",
+    "emptyQuestions": "No conversations yet. Start one to look up the campaign's rules.",
+    "emptyRules": "No conversations yet. Start one to prepare a rule for the campaign.",
+    "questionsOne": "1 question",
+    "questionsOther": "{count} questions",
+    "lastAsked": "last on {date}",
+    "detail": "{questions} · {last}",
+    "form": {
+      "renameTitle": "Rename conversation",
+      "name": "Name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This conversation was renamed elsewhere. The field now shows its current name: make your change again and save."
+    }
   }
 }

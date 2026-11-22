@@ -16,6 +16,7 @@ import {
   getCampaign,
   getCampaignScope,
 } from '@/server/library';
+import { AREAS } from '@/server/conversations';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -167,17 +168,21 @@ export async function chooseCampaignAction(previous: CampaignActionState, form: 
   return result.ok ? { error: null, done: previous.done + 1 } : { ...previous, error: errorText(result.problem, language) };
 }
 
-/** "Abrir" on a campaign's conversation: the campaign becomes the current one, and Consultas opens on it. */
+/**
+ * "Abrir" on a campaign's area of conversations (the form's `area`: `questions` or `rules`, Story 3.10): the campaign
+ * becomes the current one, and that area's list opens on it.
+ */
 export async function openConversationAction(previous: CampaignActionState, form: FormData): Promise<CampaignActionState> {
   const { language } = await currentPreferences();
   const id = form.get('id');
-  if (typeof id !== 'string' || !ID.test(id)) {
+  const area = AREAS.find((word) => word === form.get('area'));
+  if (typeof id !== 'string' || !ID.test(id) || area === undefined) {
     return { ...previous, error: invalid(language) };
   }
   const result = await chooseCampaign((await currentSessionToken()) ?? '', id);
   if (result.ok) {
     revalidatePath('/', 'layout');
-    redirect('/questions');
+    redirect(`/${area}`);
   }
   return { ...previous, error: errorText(result.problem, language) };
 }

@@ -5,14 +5,17 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 
 import {
   MODEL_TIER,
+  defaultName,
   parseCitation,
   parseDone,
   parseTier,
   postQuestion,
   stopTurn,
   turnEventsUrl,
+  type Area,
   type Citation,
   type SourceReference,
+  type StoredTurn,
   type TierStart,
 } from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
@@ -25,14 +28,26 @@ import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { NamedIcon } from '../Icons';
+import { PillLink } from '../PillLink';
 
 import styles from './Conversation.module.css';
 import { References, referenceLine } from './References';
 
 /** The most lines the composer grows to; past them it scrolls. */
 export const COMPOSER_MAX_LINES = 6;
-/** Where the unsent question of a campaign is kept in this browser (Story 2.4). */
+/**
+ * Where the unsent question of a campaign is kept in this browser (Story 2.4); from Story 3.10 one per conversation:
+ * `<campaign>:<conversation>`, or `<campaign>:new:<area>` before a new conversation has its id.
+ */
 export const DRAFT_PREFIX = 'gmshield:draft:';
+
+/** The key of a conversation's draft after {@link DRAFT_PREFIX} (Story 3.10). */
+export function draftKey(campaignId: string, conversationId: string | null, area: Area): string {
+  return conversationId === null ? `${campaignId}:new:${area}` : `${campaignId}:${conversationId}`;
+}
+
+/** The three example questions of each area (Story 3.10), by their message keys. */
+const EXAMPLES = ['one', 'two', 'three'] as const;
 /** `EventSource.CLOSED`, without reading the browser global. */
 const CLOSED = 2;
 
@@ -154,6 +169,14 @@ export type ConversationProps = {
   readonly language: Language;
   readonly campaignId: string;
   readonly hasSources: boolean;
+  /** Story 3.10: the sidebar's area the conversation belongs to (Consultas by default). */
+  readonly area?: Area;
+  /** Story 3.10: the conversation opened; absent or null for a new one, which gets its id from its first question. */
+  readonly conversationId?: string | null;
+  /** Story 3.10: the opened conversation's name. */
+  readonly name?: string | null;
+  /** Story 3.10: the opened conversation's stored turns, oldest first, each with its events. */
+  readonly stored?: readonly StoredTurn[];
   /** The newest material that needs review, when there is one. */
   readonly review: { readonly href: string; readonly name: string } | null;
   /** For tests: how a stream of a turn is opened (the browser's `EventSource` by default). */
@@ -168,20 +191,20 @@ export type ConversationProps = {
  */
 type OpenSource = { readonly turnId: string; readonly reference: SourceReference; readonly opened: number };
 
-function readDraft(campaignId: string): string {
+function readDraft(key: string): string {
   try {
-    return globalThis.localStorage?.getItem(`${DRAFT_PREFIX}${campaignId}`) ?? '';
+    return globalThis.localStorage?.getItem(`${DRAFT_PREFIX}${key}`) ?? '';
   } catch {
     return '';
   }
 }
 
-function writeDraft(campaignId: string, text: string): void {
+function writeDraft(key: string, text: string): void {
   try {
     if (text === '') {
-      globalThis.localStorage?.removeItem(`${DRAFT_PREFIX}${campaignId}`);
+      globalThis.localStorage?.removeItem(`${DRAFT_PREFIX}${key}`);
     } else {
-      globalThis.localStorage?.setItem(`${DRAFT_PREFIX}${campaignId}`, text);
+      globalThis.localStorage?.setItem(`${DRAFT_PREFIX}${key}`, text);
     }
   } catch {
     // A browser that keeps nothing: the draft lives as long as the page.
@@ -221,6 +244,86 @@ function newTurn(key: number, question: string): ShownTurn {
   };
 }
 
+/** What a stored turn whose answer is still being written resumes from (Story 3.10): its stream after its last event. */
+type Resume = {
+  readonly key: number;
+  readonly turnId: string;
+  readonly language: string | null;
+  readonly question: string;
+  readonly initial: FollowStart;
+};
+
+/** Where a stream starts: the text, citations and tiers already received, and the last event id (Story 3.10). */
+type FollowStart = {
+  readonly text: string;
+  readonly citations: readonly Citation[];
+  readonly tiers: readonly TierStart[];
+  readonly lastId: string | null;
+};
+
+/** The data of a stored event, as an object; null when it is not one. */
+function storedData(data: unknown): Record<string, unknown> | null {
+  return typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+}
+
+/**
+ * A stored turn as the screen shows it (Story 3.10), its events folded as the stream's would be: deltas make its text,
+ * citations and tiers are kept, and its last event ends it (done: finished or stopped, with its references; error: its
+ * failure). One with no final event is still being written: it shows what it has and is followed from its last event.
+ */
+export function shownFromStored(stored: StoredTurn, key: number): { readonly turn: ShownTurn; readonly resume: Resume | null } {
+  let text = '';
+  const citations: Citation[] = [];
+  const tiers: TierStart[] = [];
+  let lastId: string | null = null;
+  const base = { ...newTurn(key, stored.question), id: stored.id, language: stored.language ?? null };
+  for (const event of stored.events) {
+    lastId = String(event.sequence);
+    const data = storedData(event.data);
+    switch (event.type) {
+      case 'delta':
+        text += typeof data?.text === 'string' ? data.text : '';
+        break;
+      case 'citation': {
+        const citation = parseCitation(data);
+        if (citation !== null) {
+          citations.push(citation);
+        }
+        break;
+      }
+      case 'tier': {
+        const start = parseTier(data);
+        if (start !== null) {
+          tiers.push(start);
+        }
+        break;
+      }
+      case 'done': {
+        const done = parseDone(data, tiers.some((start) => start.tier === MODEL_TIER));
+        const turn: ShownTurn = {
+          ...base,
+          status: done.stopped ? 'stopped' : 'done',
+          text,
+          citations,
+          tiers,
+          references: done.references,
+          silent: done.silent,
+          modelKnowledge: done.modelKnowledge,
+        };
+        return { turn, resume: null };
+      }
+      case 'error': {
+        const code = typeof data?.code === 'string' ? data.code : null;
+        return { turn: { ...base, status: 'failed', text, failure: failureOf(code), problem: { code, category: null } }, resume: null };
+      }
+      default:
+        break;
+    }
+  }
+  const turn: ShownTurn = { ...base, status: text === '' ? 'searching' : 'answering', text };
+  return { turn, resume: { key, turnId: stored.id, language: base.language, question: stored.question, initial: { text, citations, tiers, lastId } } };
+}
+
 /** A numeric event id, or null for one that is not a sequence. */
 function sequenceOf(id: string): number | null {
   return /^\d{1,18}$/.test(id) ? Number(id) : null;
@@ -231,11 +334,13 @@ function sequenceOf(id: string): number | null {
  * composer is there but disabled, with the reason above it and a link to `/campaigns/new`; the reason names the
  * disabled field (`aria-describedby`).
  */
-export function NoCampaignConversation({ language }: { readonly language: Language }) {
+export function NoCampaignConversation({ language, area = 'questions' }: { readonly language: Language; readonly area?: Area }) {
   const t = translator(language);
+  // Story 3.10: named after its area.
+  const heading = t(`shell.entries.${area}`);
   return (
-    <section className={styles.conversation} aria-label={t('conversation.heading')}>
-      <h1 className={styles.visuallyHidden}>{t('conversation.heading')}</h1>
+    <section className={styles.conversation} aria-label={heading}>
+      <h1 className={styles.visuallyHidden}>{heading}</h1>
       <div className={styles.dock}>
         <p className={styles.empty} id="conversation-no-campaign" data-testid="conversation-no-campaign">
           <span>{t('conversation.noCampaign')}</span>
@@ -267,7 +372,7 @@ export function NoCampaignConversation({ language }: { readonly language: Langua
 }
 
 /**
- * The conversation screen (Story 2.4): the turns asked since the page opened, and the composer.
+ * The conversation screen (Story 2.4): the conversation's turns, and the composer.
  *
  * - The composer is a pill: Enter sends, Shift+Enter adds a line, and it grows to six lines. Its draft is kept per
  *   campaign in this browser and cleared on send.
@@ -298,16 +403,43 @@ export function NoCampaignConversation({ language }: { readonly language: Langua
  *   closes with a muted "Do conhecimento do modelo, sem fonte."; such an answer is not silent. Under a silent answer
  *   whose turn had model knowledge off, a muted line offers to widen the sources or turn model knowledge on, with
  *   "Abrir o escopo", which opens the context bar's scope popover with focus inside it.
+ * - Story 3.10, conversations by area: a slim line at the top leads back to the area's list ("← Consultas" or "← Criação
+ *   de Regras") and, once the conversation has an id, shows its name and "Renomear". A new conversation shows its
+ *   area's heading and three example questions (each fills the composer and focuses it; none is sent), with the cursor
+ *   in the composer; its first question is asked in its area, and the conversation id that comes back replaces the
+ *   address with `/{area}/{id}` without leaving the page. An opened conversation shows its stored turns as their events
+ *   fold (answers with their superscripts and references, stopped and failed ones marked), follows one still being
+ *   written from its last event, and every question continues it. The draft is kept per conversation.
  */
-export function Conversation({ language, campaignId, hasSources, review, openStream, loadPage }: ConversationProps) {
+export function Conversation({
+  language,
+  campaignId,
+  hasSources,
+  review,
+  openStream,
+  loadPage,
+  area = 'questions',
+  conversationId = null,
+  name = null,
+  stored = [],
+}: ConversationProps) {
   const t = translator(language);
   const uploads = useUploads();
   const scopePopover = useOptionalScopePopover();
   const [draft, setDraft] = useState('');
-  const [turns, setTurns] = useState<readonly ShownTurn[]>([]);
+  // Story 3.10: the stored turns of an opened conversation, folded once; those still being written are followed below.
+  const [opening] = useState(() => stored.map((turn, index) => shownFromStored(turn, index + 1)));
+  const [turns, setTurns] = useState<readonly ShownTurn[]>(() => opening.map((shown) => shown.turn));
+  /** Story 3.10: the conversation, once it has an id (an opened one, or a new one after its first question). */
+  const [conversation, setConversation] = useState<{ readonly id: string; readonly name: string } | null>(
+    conversationId === null ? null : { id: conversationId, name: name ?? '' },
+  );
+  const conversationRef = useRef<string | null>(conversationId);
+  const key = draftKey(campaignId, conversation?.id ?? null, area);
+  const composer = useRef<HTMLTextAreaElement | null>(null);
   const [spoken, setSpoken] = useState<Spoken>({ text: '', answer: false, references: [], note: '', tiers: [] });
   const [alerted, setAlerted] = useState('');
-  const counter = useRef(0);
+  const counter = useRef(stored.length);
   const followers = useRef(new Map<number, Follower>());
   /** The ids of the turns asked, by key, as soon as they are known; and the keys whose stop waits for one. */
   const turnIds = useRef(new Map<number, string>());
@@ -322,7 +454,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     // Read after the first render, so the server's and the browser's first renders agree.
     let current = true;
     void Promise.resolve().then(() => {
-      const kept = readDraft(campaignId);
+      const kept = readDraft(key);
       if (current && kept !== '') {
         setDraft((typed) => (typed === '' ? kept : typed));
       }
@@ -330,7 +462,16 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     return () => {
       current = false;
     };
-  }, [campaignId]);
+  }, [key]);
+
+  // Story 3.10: a new conversation opens with the cursor in the composer.
+  useEffect(() => {
+    if (stored.length === 0) {
+      composer.current?.focus();
+    }
+    // Only when the screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const open = followers.current;
@@ -370,20 +511,21 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         if (typed !== '') {
           return typed;
         }
-        writeDraft(campaignId, question);
+        writeDraft(key, question);
         return question;
       });
     },
-    [campaignId],
+    [key],
   );
 
   const follow = useCallback(
-    (key: number, turnId: string, turnLanguage: string | null, question: string) => {
+    (key: number, turnId: string, turnLanguage: string | null, question: string, initial?: FollowStart) => {
       const open = openStream ?? ((url: string) => new EventSource(url));
-      let text = '';
-      const citations: Citation[] = [];
-      const tiers: TierStart[] = [];
-      let lastId: string | null = null;
+      // Story 3.10: a stored turn still being written resumes after what it already has.
+      let text = initial?.text ?? '';
+      const citations: Citation[] = [...(initial?.citations ?? [])];
+      const tiers: TierStart[] = [...(initial?.tiers ?? [])];
+      let lastId: string | null = initial?.lastId ?? null;
       let current: EventSource | null = null;
       let ended = false;
       let gaveUp = false;
@@ -616,7 +758,8 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
       const key = counter.current;
       const added = newTurn(key, question);
       setTurns((all) => (replacing === undefined ? [...all, added] : all.map((turn) => (turn.key === replacing ? added : turn))));
-      const asked = await postQuestion(campaignId, question);
+      const known = conversationRef.current;
+      const asked = await postQuestion(campaignId, question, known === null ? { area } : { conversationId: known });
       if (!asked.ok) {
         pendingStops.current.delete(key);
         // A refused question is not lost: it goes back to the composer unless the GM has started another.
@@ -626,6 +769,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         return;
       }
       turnIds.current.set(key, asked.turn.id);
+      if (conversationRef.current === null) {
+        // Story 3.10: the first question made the conversation; the address becomes its own, without leaving the page.
+        const id = asked.turn.conversationId;
+        conversationRef.current = id;
+        setConversation({ id, name: defaultName(question) });
+        globalThis.history?.replaceState(null, '', `/${area}/${encodeURIComponent(id)}`);
+      }
       change(key, (turn) => ({ ...turn, id: asked.turn.id, status: 'searching', language: asked.turn.language }));
       say(t('conversation.answering'));
       follow(key, asked.turn.id, asked.turn.language, question);
@@ -633,7 +783,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         void sendStop(key, asked.turn.id);
       }
     },
-    [campaignId, change, follow, language, restore, say, sendStop, t],
+    [area, campaignId, change, follow, language, restore, say, sendStop, t],
   );
 
   const active = turns.find((turn) => RUNNING.has(turn.status));
@@ -657,15 +807,30 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   // it. The turns only grow, so without this a new question landed below the docked composer once the conversation was
   // longer than the window, and the GM had to scroll down to read what they had just asked for. Only a new turn moves
   // the page (never a delta of the answer), so reading back while an answer is written is not interrupted.
+  // Story 3.10: an opened conversation shows its last turn at once, without the smooth scroll of a new question.
   const lastTurn = useRef<HTMLLIElement | null>(null);
   const shownTurns = useRef(0);
+  const opened = useRef(stored.length > 0);
   useEffect(() => {
     if (turns.length > shownTurns.current) {
-      const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const still = opened.current || (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      opened.current = false;
       lastTurn.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
     }
     shownTurns.current = turns.length;
   }, [turns.length]);
+
+  // Story 3.10: a stored turn whose answer is still being written is followed from its last event.
+  useEffect(() => {
+    for (const { resume } of opening) {
+      if (resume !== null) {
+        turnIds.current.set(resume.key, resume.turnId);
+        follow(resume.key, resume.turnId, resume.language, resume.question, resume.initial);
+      }
+    }
+    // Once, when the screen opens: the followers' own effect closes them when it leaves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!running) {
@@ -719,9 +884,9 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
       return;
     }
     setDraft('');
-    writeDraft(campaignId, '');
+    writeDraft(key, '');
     await ask(question);
-  }, [ask, campaignId, draft, running]);
+  }, [ask, key, draft, running]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -735,19 +900,58 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
     }
   };
 
+  /** Story 3.10: an example question fills the composer and puts the cursor after it; it is never sent. */
+  const chooseExample = (example: string) => {
+    setDraft(example);
+    writeDraft(key, example);
+    const field = composer.current;
+    if (field !== null) {
+      field.value = example;
+      field.focus();
+      field.setSelectionRange(example.length, example.length);
+    }
+  };
+
   const linkText = (text: string, address: string) => t('conversation.link', { text, address });
+  const areaName = t(`shell.entries.${area}`);
+  const title = conversation !== null && conversation.name !== '' ? conversation.name : areaName;
   const lines = Math.min(COMPOSER_MAX_LINES, Math.max(1, draft.split('\n').length));
 
   return (
-    <section className={styles.conversation} aria-label={t('conversation.heading')}>
-      <h1 className={styles.visuallyHidden}>{t('conversation.heading')}</h1>
+    <section className={styles.conversation} aria-label={title}>
+      <h1 className={styles.visuallyHidden}>{title}</h1>
+      {/* Story 3.10: the way back to the area's list and, once the conversation has an id, its name and "Renomear". */}
+      <div className={styles.top} data-testid="conversation-top">
+        <Link className={styles.back} href={`/${area}`}>
+          <NamedIcon name="back" size={16} />
+          {areaName}
+        </Link>
+        {conversation === null ? null : (
+          <>
+            <p className={styles.name}>{conversation.name}</p>
+            <PillLink href={`/${area}/${encodeURIComponent(conversation.id)}/edit`}>{t('conversation.rename')}</PillLink>
+          </>
+        )}
+      </div>
       {turns.length === 0 ? (
         <div className={styles.intro} data-testid="conversation-intro">
           <span className={styles.introIcon}>
-            <NamedIcon name="questions" size={28} />
+            <NamedIcon name={area} size={28} />
           </span>
-          <p className={styles.introTitle}>{t('conversation.intro.title')}</p>
-          <p className={styles.introText}>{t('conversation.intro.text')}</p>
+          <p className={styles.introTitle}>{t(area === 'rules' ? 'conversation.intro.rulesTitle' : 'conversation.intro.title')}</p>
+          <p className={styles.introText}>{t(area === 'rules' ? 'conversation.intro.rulesText' : 'conversation.intro.text')}</p>
+          <ul className={styles.examples} aria-label={t('conversation.intro.examples')}>
+            {EXAMPLES.map((example) => {
+              const text = t(`conversation.examples.${area}.${example}`);
+              return (
+                <li key={example}>
+                  <button type="button" className={styles.example} onClick={() => chooseExample(text)}>
+                    {text}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
       <ol className={styles.turns} aria-label={t('conversation.turns')}>
@@ -848,6 +1052,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             {t('conversation.composer.label')}
           </label>
           <textarea
+            ref={composer}
             id="conversation-question"
             className={styles.field}
             rows={lines}
@@ -856,7 +1061,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             maxLength={4000}
             onChange={(event) => {
               setDraft(event.target.value);
-              writeDraft(campaignId, event.target.value);
+              writeDraft(key, event.target.value);
             }}
             onKeyDown={onKeyDown}
           />

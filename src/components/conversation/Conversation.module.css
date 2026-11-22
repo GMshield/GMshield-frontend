@@ -449,3 +449,79 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/*
+ * Story 3.10: the slim line at the top of a conversation: the way back to its area's list, its name and "Renomear".
+ * It takes one line on a wide screen; on a narrow one the name wraps under the way back.
+ */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-inline-size: 0;
+}
+
+.back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--space-touch-target);
+  margin-inline-start: calc(-1 * var(--space-2));
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}
+
+.back:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+.name {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Story 3.10: the three example questions of a new conversation, each a button that fills the composer. */
+.examples {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.example {
+  min-block-size: var(--space-touch-target);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-align: center;
+  cursor: pointer;
+}
+
+.example:hover {
+  border-color: var(--color-text);
+}

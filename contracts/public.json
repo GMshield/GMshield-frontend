@@ -182,6 +182,138 @@
         "required" : [ "version" ],
         "type" : "object"
       },
+      "Conversation" : {
+        "description" : "One conversation (contract 1.29.0)",
+        "properties" : {
+          "area" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "Its version: a rename names it and raises it by one",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "area", "campaignId", "id", "name", "version" ],
+        "type" : "object"
+      },
+      "ConversationChange" : {
+        "description" : "A rename of a conversation (contract 1.29.0)",
+        "properties" : {
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming",
+            "example" : "Viagem ao norte",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the rename was made on, as the conversation was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "name", "version" ],
+        "type" : "object"
+      },
+      "ConversationPage" : {
+        "description" : "One page of a campaign's conversations of one area (contract 1.29.0)",
+        "properties" : {
+          "items" : {
+            "description" : "The most recently asked first",
+            "items" : {
+              "$ref" : "#/components/schemas/ConversationSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The offset of the next page, as text; absent on the last",
+            "example" : "20",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many conversations the campaign has in this area",
+            "example" : 27,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "ConversationSummary" : {
+        "description" : "A conversation in a list (contract 1.29.0)",
+        "properties" : {
+          "area" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "createdAt" : {
+            "description" : "When its first question was asked",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastAskedAt" : {
+            "description" : "When its newest question was asked",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "questions" : {
+            "description" : "How many questions it holds",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Its version: a rename names it and raises it by one",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "area", "createdAt", "id", "lastAskedAt", "name", "questions", "version" ],
+        "type" : "object"
+      },
+      "ConversationTurns" : {
+        "description" : "A conversation's turns (contract 1.29.0)",
+        "properties" : {
+          "items" : {
+            "description" : "Its newest 200 turns, oldest first",
+            "items" : {
+              "$ref" : "#/components/schemas/StoredTurn"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "items" ],
+        "type" : "object"
+      },
       "CurrentCampaignChoice" : {
         "properties" : {
           "campaignId" : {
@@ -1022,6 +1154,16 @@
       },
       "NewTurn" : {
         "properties" : {
+          "area" : {
+            "description" : "The area of a new conversation (contract 1.29.0); with conversationId it must be that conversation's. Absent or null with no conversationId: the campaign's latest questions conversation is continued (made when it has none)",
+            "enum" : [ "questions", "rules" ],
+            "type" : [ "string", "null" ]
+          },
+          "conversationId" : {
+            "description" : "The conversation to continue (contract 1.29.0): one of this campaign's. Absent or null: a new conversation of area, or without area the campaign's latest questions conversation",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
           "question" : {
             "description" : "The GM's question: 1 to 4,000 code points, not blank",
             "maxLength" : 4000,
@@ -1456,6 +1598,71 @@
         "required" : [ "attemptToken", "authorizationUrl", "expiresInSeconds" ],
         "type" : "object"
       },
+      "StoredTurn" : {
+        "description" : "A turn of a conversation with its stored events (contract 1.29.0). A turn whose answer is still being written has no done or error event yet: its stream continues after the last sequence",
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "events" : {
+            "description" : "Its stored events, by sequence",
+            "items" : {
+              "$ref" : "#/components/schemas/StoredTurnEvent"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "language" : {
+            "description" : "The question's language, null when unsure",
+            "enum" : [ "pt-BR", "en" ],
+            "type" : [ "string", "null" ]
+          },
+          "question" : {
+            "description" : "The GM's question",
+            "type" : "string"
+          }
+        },
+        "required" : [ "createdAt", "events", "id", "language", "question" ],
+        "type" : "object"
+      },
+      "StoredTurnEvent" : {
+        "description" : "A stored event of a turn, as its stream sends it (contract 1.29.0)",
+        "properties" : {
+          "data" : {
+            "additionalProperties" : { },
+            "description" : "The event's data, by its type, as the stream sends it; a done event's built when read",
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/TurnDeltaEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnCitationEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnTierEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnDoneEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnErrorEvent"
+            } ],
+            "type" : "object"
+          },
+          "sequence" : {
+            "description" : "Its sequence: the stream's event id",
+            "format" : "int64",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "type" : {
+            "description" : "The stream's event name",
+            "enum" : [ "delta", "citation", "tier", "done", "error" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "data", "sequence", "type" ],
+        "type" : "object"
+      },
       "System" : {
         "properties" : {
           "description" : {
@@ -1790,7 +1997,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.28.0"
+    "version" : "1.29.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2046,7 +2253,84 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The campaign's conversation (a campaign has at most one) and how many questions it holds, for an archived campaign too; request.not_found (404) when the campaign has none or is not the account's (unknown, another account's or malformed)",
+        "summary" : "The campaign's latest questions conversation (from contract 1.29.0 a campaign has many: the one a question with no conversation continues) and how many questions it holds, for an archived campaign too; request.not_found (404) when the campaign has none or is not the account's (unknown, another account's or malformed)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/conversations" : {
+      "get" : {
+        "operationId" : "listConversations",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The area listed",
+          "in" : "query",
+          "name" : "area",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the most recently asked to skip, 0 to 100000",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The campaign's conversations of one area (contract 1.29.0), the most recently asked first, each with its name and question count. A page starts at an offset and names the total of the list. A conversation is made by its first question, so none is empty. request.invalid (400) without an area or for one that is not one, a limit outside 1 to 50, or an offset outside 0 to 100000; request.not_found (404) for a campaign that is not the account's (unknown, another account's or malformed)",
         "tags" : [ "conversations" ]
       }
     },
@@ -2289,7 +2573,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Ask a question in the campaign's conversation: the turn and its answer job are recorded together (201); request.invalid (400) for a blank question or one past 4,000 code points, request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
+        "summary" : "Ask a question in one of the campaign's conversations: the turn and its answer job are recorded together (201). From contract 1.29.0: with conversationId, in that conversation; with area only, in a new conversation of that area (a conversation is made by its first question); with neither, in the campaign's latest questions conversation. The conversation's newest question becomes this one. request.invalid (400) for a blank question or one past 4,000 code points, an area that is not one, or an area other than the conversation's; request.not_found (404) for a campaign that is not the account's or a conversationId that is not one of its conversations; nothing is recorded then",
         "tags" : [ "conversations" ]
       }
     },
@@ -2610,6 +2894,152 @@
           }
         },
         "summary" : "The current campaign's conversation: its campaign, whether it has an accepted source, and how many of its passages are still being prepared for search (null when nothing is pending); request.not_found (404) when the account has no campaign",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}" : {
+      "get" : {
+        "operationId" : "getConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One of the account's conversations (contract 1.29.0): its campaign, area, name and version; request.not_found (404) for any other id (unknown, another account's, malformed, or of a campaign being deleted)",
+        "tags" : [ "conversations" ]
+      },
+      "patch" : {
+        "operationId" : "renameConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConversationChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames one of the account's conversations on the version it names (contract 1.29.0): the conversation as stored, its version raised by one. request.conversation_name_invalid (400) for a name outside 1 to 120 code points after trimming (params min and max), request.stale_version (409) when the conversation has left that version, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}/turns" : {
+      "get" : {
+        "operationId" : "listConversationTurns",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationTurns"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A conversation's turns (contract 1.29.0): its newest 200, oldest first, each with its question, language and stored events as its stream sends them (a done event's data built when read, so removed is as of then). A turn still being answered has no done or error event yet; its stream continues after its last sequence. request.not_found (404) for a conversation that is not the account's",
         "tags" : [ "conversations" ]
       }
     },

@@ -28,7 +28,9 @@
 // one of another campaign, all on; a change answers the same settings at version 1. Story 3.9: a search is recorded
 // (202 with its id) and reads as done with two results, a passage of the campaign's notes (a text page) then one of
 // the book (a picture page); a page of the current scope is the notes' text page for the notes' version and the book's
-// picture page for any other.
+// picture page for any other. Story 3.10: the starter campaign has one conversation (whatever area is listed), the
+// questions one every question continues; it holds one answered turn, its stored events the stand-in answer's; a
+// rename answers it at version 1 under the new name.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -201,6 +203,16 @@ export const SEARCH_DONE = {
   ],
 };
 
+/** Story 3.10: the starter campaign's questions conversation, the one the stand-in's turns belong to. */
+export const CONVERSATION_ID = '0190a0b0-0000-7000-8000-000000000020';
+export const CONVERSATION = {
+  id: CONVERSATION_ID,
+  campaignId: '0190a0b0-0000-7000-8000-000000000002',
+  area: 'questions',
+  name: 'Quanto dano causa Fire Bolt?',
+  version: 0,
+};
+
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
   'GET /api/v1/campaigns/current': STARTER,
@@ -216,6 +228,23 @@ export const EXAMPLES = {
     version: 0,
   },
   'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+  // Story 3.10: one conversation, whatever area is asked (the stand-in reads no query).
+  'GET /api/v1/campaigns/{campaignId}/conversations': {
+    items: [
+      {
+        id: CONVERSATION_ID,
+        area: 'questions',
+        name: CONVERSATION.name,
+        questions: 1,
+        createdAt: '2026-11-22T12:00:00Z',
+        lastAskedAt: '2026-11-22T12:00:00Z',
+        version: 0,
+      },
+    ],
+    total: 1,
+  },
+  'GET /api/v1/conversations/{conversationId}': CONVERSATION,
+  'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
   'PUT /api/v1/campaigns/{id}/scope': { ...STARTING_SCOPE, version: 1 },
@@ -423,6 +452,25 @@ export const ANSWER_EVENTS = [
 ]
   .map(([name, data], index) => `id:${index + 1}\nevent:${name}\ndata:${JSON.stringify(data)}\n\n`)
   .join('');
+
+/** Story 3.10: the stand-in answer's events as a conversation's stored turn carries them, by sequence. */
+export const STORED_TURN = {
+  id: '0190a0b0-0000-7000-8000-000000000021',
+  question: CONVERSATION.name,
+  language: 'pt-BR',
+  createdAt: '2026-11-22T12:00:00Z',
+  events: [
+    ['tier', { tier: 'campaign', offset: 0 }],
+    ['delta', { text: HOUSE_RULE }],
+    ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000010', offset: BOOK_AT - 2 }],
+    ['delta', { text: '\n\n' }],
+    ['tier', { tier: 'system', offset: BOOK_AT }],
+    ['delta', { text: BOOK_RULE }],
+    ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+    ['done', ANSWER_DONE],
+  ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
+};
+EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN] };
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

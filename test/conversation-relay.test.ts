@@ -232,6 +232,26 @@ describe('the question relay (Story 2.4)', () => {
     expect(backend.calls).toEqual([]);
   });
 
+  it('passes on the conversation a question continues, or the area of a new one, and refuses any other (Story 3.10)', async () => {
+    const conversationId = '0190a0b0-0000-7000-8000-000000000020';
+    const turn = { id: TURN, conversationId, language: 'pt-BR' };
+    const backend = await useBackend({ [`POST /api/v1/campaigns/${CAMPAIGN}/turns`]: { status: 201, body: turn } });
+    const headers = { origin: 'http://gm.test', cookie: `__Host-gmshield-session=${SESSION}.4102444800` };
+
+    expect((await post(headers, JSON.stringify({ question: 'E agora?', conversationId }))).status).toBe(201);
+    expect((await post(headers, JSON.stringify({ question: 'Nova?', area: 'rules' }))).status).toBe(201);
+    expect((await post(headers, JSON.stringify({ question: 'Nula?', conversationId: null, area: null }))).status).toBe(201);
+    expect(backend.calls.map((call) => JSON.parse(call.body))).toEqual([
+      { question: 'E agora?', conversationId },
+      { question: 'Nova?', area: 'rules' },
+      { question: 'Nula?' },
+    ]);
+    for (const body of [{ question: 'x', conversationId: '../me' }, { question: 'x', conversationId: 7 }, { question: 'x', area: 'search' }]) {
+      expect((await post(headers, JSON.stringify(body))).status).toBe(400);
+    }
+    expect(backend.calls).toHaveLength(3);
+  });
+
   it('passes the backend refusal on with its status', async () => {
     await useBackend({
       [`POST /api/v1/campaigns/${CAMPAIGN}/turns`]: { status: 400, body: { status: 400, category: 'request', code: 'request.invalid', params: {} } },
@@ -260,6 +280,13 @@ describe("the browser's question call (Story 2.4)", () => {
     const problem = { status: 404, category: 'request', code: 'request.not_found', params: {} };
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), { status: 404 })));
     expect(await postQuestion(CAMPAIGN, 'Quanto?')).toEqual({ ok: false, problem });
+
+    // Story 3.10: a conversation to continue, else the area of a new one.
+    vi.stubGlobal('fetch', send);
+    await postQuestion(CAMPAIGN, 'E agora?', { conversationId: 'c', area: 'rules' });
+    expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ body: '{"question":"E agora?","conversationId":"c"}' }));
+    await postQuestion(CAMPAIGN, 'Nova?', { conversationId: null, area: 'rules' });
+    expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ body: '{"question":"Nova?","area":"rules"}' }));
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 502 })));
     expect(await postQuestion(CAMPAIGN, 'Quanto?')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
