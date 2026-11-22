@@ -29,6 +29,7 @@ const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
 const { References } = await import('@/components/conversation/References');
+const { TierLabel, tierWord } = await import('@/components/TierLabel');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
 
@@ -1143,5 +1144,48 @@ describe('SystemForm (Story 3.1)', () => {
     // The next save names the current version.
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
+  });
+});
+
+describe('TierLabel (Story 3.7)', () => {
+  afterEach(cleanup);
+
+  it('is an outlined pill with the tier\'s word, never focusable and with no role of its own', () => {
+    const pt = translator('pt-BR');
+    const en = translator('en');
+    const { container } = render(
+      <p>
+        <TierLabel tier="campaign" t={pt} />
+        <TierLabel tier="system" t={pt} />
+        <TierLabel tier="other" t={pt} />
+        <TierLabel tier="campaign" t={en} className="extra" />
+      </p>,
+    );
+    const pills = Array.from(container.querySelectorAll<HTMLElement>('span[data-tier]'));
+    expect(pills.map((pill) => pill.textContent)).toEqual(['Campanha', 'Sistema', 'Outros', 'Campaign']);
+    expect(pills.map((pill) => pill.dataset.tier)).toEqual(['campaign', 'system', 'other', 'campaign']);
+    for (const pill of pills) {
+      expect(pill.className).toMatch(/pill/);
+      expect(pill.getAttribute('role')).toBeNull();
+      expect(pill.getAttribute('tabindex')).toBeNull();
+      expect(pill.getAttribute('aria-hidden')).toBeNull();
+    }
+    expect(pills[3]!.className).toMatch(/extra/);
+    // Each word is followed by a visually hidden ": ", so a reader never runs it into what follows.
+    expect(pills.map((pill) => pill.nextElementSibling?.textContent)).toEqual([': ', ': ', ': ', ': ']);
+    expect(pills.every((pill) => /separator/u.test(pill.nextElementSibling?.className ?? ''))).toBe(true);
+    expect(container.textContent).toBe('Campanha: Sistema: Outros: Campaign: ');
+    // The words are the scope's own ("shell.scope.*"), so a tier reads the same everywhere.
+    expect(tierWord('other', en)).toBe(en('shell.scope.other'));
+  });
+
+  it('is drawn on a reference line before its button, and not at all for a reference without a tier', () => {
+    const t = translator('pt-BR');
+    const base = { materialName: 'Livro.pdf', sectionPath: [], page: 3, passageIds: ['p'], removed: false };
+    render(<References references={[{ ...base, number: 1, tier: 'system' }, { ...base, number: 2 }]} t={t} onOpen={() => undefined} />);
+    const items = screen.getAllByRole('listitem');
+    expect(items[0]!.firstElementChild?.textContent).toBe('Sistema');
+    expect(items[0]!.querySelector('[data-tier] + span + button')).not.toBeNull();
+    expect(items[1]!.querySelector('[data-tier]')).toBeNull();
   });
 });

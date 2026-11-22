@@ -1591,9 +1591,31 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "tier" : {
+            "description" : "The tier its source had in the turn's scope when the answer was written (Story 3.7), kept when the source leaves the scope; absent for a reference stored before then",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
           }
         },
         "required" : [ "materialName", "number", "page", "passageIds", "removed", "sectionPath" ],
+        "type" : "object"
+      },
+      "TurnTierEvent" : {
+        "description" : "The data of a tier event (Story 3.7): the sources disagree, and the version of this tier of the scope starts at a place of the answer's text. The campaign's version comes first; each other tier's follows as an alternative. Only a tier with a source in the turn's scope",
+        "properties" : {
+          "offset" : {
+            "description" : "Where the tier's version starts, in code points of the answer's text",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "tier" : {
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "offset", "tier" ],
         "type" : "object"
       },
       "UploadCompletion" : {
@@ -1642,7 +1664,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.25.0"
+    "version" : "1.26.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3802,6 +3824,8 @@
                   }, {
                     "$ref" : "#/components/schemas/TurnCitationEvent"
                   }, {
+                    "$ref" : "#/components/schemas/TurnTierEvent"
+                  }, {
                     "$ref" : "#/components/schemas/TurnDoneEvent"
                   }, {
                     "$ref" : "#/components/schemas/TurnErrorEvent"
@@ -3822,7 +3846,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's",
+        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). From contract 1.26.0 also tier (TurnTierEvent), stored and replayed like citation. A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's",
         "tags" : [ "conversations" ]
       }
     },

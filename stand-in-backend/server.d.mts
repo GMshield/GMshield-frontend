@@ -24,9 +24,11 @@ export type StandInReference = {
   page: number;
   passageIds: string[];
   removed: boolean;
+  /** Story 3.7: the tier its source had when the answer was written. */
+  tier?: 'campaign' | 'system' | 'other';
 };
 export const ANSWER_DONE: { stopped: boolean; silent: boolean; references: StandInReference[] };
-/** Story 2.7: the pages of the stand-in answer's references 1 (a picture page) and 2 (a text page). */
+/** Story 2.7: the pages of the stand-in answer's references 2 (a picture page) and 1 (a text page). */
 export const REFERENCE_PAGE: unknown;
 export const REFERENCE_TEXT_PAGE: {
   page: number;
@@ -38,6 +40,9 @@ export const REFERENCE_TEXT_PAGE: {
   outcome: string;
 };
 export const ANSWER_EVENTS: string;
+/** Story 3.7: the stand-in answer's two versions, the campaign's house rule, then the book's rule. */
+export const HOUSE_RULE: string;
+export const BOOK_RULE: string;
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
 export function answer(contract: unknown, method: string, pathname: string, traceId: string): Answer;

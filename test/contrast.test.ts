@@ -176,6 +176,12 @@ function expectAA(theme: Theme, page: Rgb) {
     expect(ratio(opaque(role(theme, 'solid')), ground), `${theme}: on switch track on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
   }
   expect(ratio(opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))), `${theme}: on switch knob`).toBeGreaterThanOrEqual(NON_TEXT);
+  // Story 3.7: a tier pill is outlined in the muted text colour with its word in it, on the canvas (an answer) and on a
+  // panel: the word 4.5:1 (the muted text pairs above) and the edge 3:1 (WCAG 1.4.11).
+  for (const [name, ground] of [['canvas', page], ['surface', surface]] as const) {
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill edge on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill word on ${name}`).toBeGreaterThanOrEqual(AA);
+  }
   // The current sidebar entry is found by more than tone, but the tone alone must still be seen on the panel.
   expect(ratio(over(role(theme, 'surface-active'), surface), surface), `${theme}: active row on surface`).toBeGreaterThan(1.15);
 }
@@ -306,6 +312,18 @@ describe('stylesheets', () => {
     for (const path of STYLESHEETS) {
       expect(readFileSync(path, 'utf8'), relative(ROOT, path)).not.toMatch(/url\(\s*['"]?(https?:)?\/\/|@import\s+url\(\s*['"]?(https?:)?\/\//);
     }
+  });
+
+  it('draw the tier pill outlined in the muted text colour, with no fill, in the meta type (Story 3.7)', () => {
+    const css = readFileSync(join(ROOT, 'src/components/TierLabel.module.css'), 'utf8');
+    const pill = /^\.pill \{([^}]*)\}/m.exec(css)?.[1] ?? '';
+    expect(pill).toMatch(/border: 1px solid var\(--color-text-muted\);/);
+    expect(pill).toMatch(/border-radius: var\(--radius-full\);/);
+    expect(pill).toMatch(/background: none;/);
+    expect(pill).toMatch(/color: var\(--color-text-muted\);/);
+    expect(pill).toMatch(/font-size: var\(--font-meta-size\);/);
+    expect(pill).toMatch(/font-weight: var\(--font-meta-weight\);/);
+    expect(pill).not.toMatch(/cursor|:hover/);
   });
 
   it('no component sets a style attribute (the CSP blocks them)', () => {

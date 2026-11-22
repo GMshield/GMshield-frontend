@@ -791,6 +791,28 @@ they sit in `src/`.
     `material.version_not_removable` comes back in words.
   - The stand-in backend answers `superseded: []`, the material's deletion count (`{versions: 1, pages: 444}`) and both
     deletes (202).
+- **The campaign's version leads (Story 3.7).** Public contract 1.26.0 (the minimum backend contract too).
+  - When the sources disagree, the backend relays a `tier` event (`TurnTierEvent` `{tier, offset}`, tier `campaign`,
+    `system` or `other`) where each tier's version of the answer starts: the campaign's first, then each other tier's as
+    an alternative. `parseTier` (`src/client/conversation.ts`) keeps only a tier the backend writes at an offset from 0;
+    the screen keeps the events like citations (a replayed one is ignored by its sequence) and shows nothing of them
+    while the answer streams.
+  - At `done`, by the same rule as the superscripts, each one becomes a `TierLabel` pill ("Campanha" / "Sistema" /
+    "Outros", "Campaign" / "System" / "Other": the `shell.scope.*` words, in the interface's language) at its offset in
+    the Markdown text (`AnswerMarkdown`'s tier marks): moved forward over whitespace so it opens the version's first
+    paragraph, before an emphasis or link that starts it, before a code block it opens, after the superscripts of the
+    version before it. A pill at or past the end of the text is left out. Since a pill says the sources disagree, a
+    marker repeating the tier before it is dropped, and no inline pill is drawn unless two tiers are left. The polite
+    region says the same pills, and each reference line after its tier's word.
+  - `TurnSourceReference.tier` is optional (none on a reference stored before 1.26.0): `References` draws the pill
+    before the line, and none without a tier; `isReference` leaves out a reference with any other tier. A removed source
+    keeps its tier.
+  - `TierLabel` (`src/components/TierLabel.tsx`): an outlined span, no fill, the meta type, edge and word in
+    `--color-text-muted`, `--radius-full`, followed by a visually hidden ": " so a reader never runs the word into the
+    text. It is not focusable and has no role of its own, so it is read as its word.
+  - The stand-in backend's answer is the campaign's house rule ("Notas da campanha.md", reference 1, the text page)
+    under a campaign `tier` event, then the book's rule ("Livro do Jogador.pdf", reference 2, the picture page) under a
+    system one; each reference carries its tier.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never

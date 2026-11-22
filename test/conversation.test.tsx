@@ -1451,3 +1451,264 @@ describe('open the cited page in the source view (Story 2.7)', () => {
     expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 });
+
+describe('the campaign\'s version leads (Story 3.7)', () => {
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  const HOUSE = 'Na mesa, 2d10.';
+  const BOOK = 'No livro, 1d10.';
+
+  /** The house rule under its campaign marker, then the book's rule under its system marker, each with its citation. */
+  function disagree(stream: FakeStream, first = 1): void {
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, first);
+    stream.emit('delta', { text: HOUSE }, first + 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, first + 2);
+    stream.emit('delta', { text: '\n\n' }, first + 3);
+    stream.emit('tier', { tier: 'system', offset: 16 }, first + 4);
+    stream.emit('delta', { text: BOOK }, first + 5);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 31 }, first + 6);
+  }
+
+  const DISAGREE_DONE = {
+    silent: false,
+    references: [
+      reference(1, [PASSAGE_A], { materialName: 'Notas da campanha.md', sectionPath: ['Magias'], page: 2, tier: 'campaign' }),
+      reference(2, [PASSAGE_B], { page: 13, tier: 'system' }),
+    ],
+  };
+
+  /** The paragraphs of the answer, each as its pills, texts and superscripts in order. */
+  function answerParts(): string[][] {
+    const answer = turns().getAllByRole('paragraph').filter((p) => p.closest('[class*="answer"]') !== null);
+    return answer.map((paragraph) =>
+      [...paragraph.childNodes].map((node) => {
+        if (node.nodeName === 'SUP') {
+          return `SUP:${shown(node)}`;
+        }
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.dataset.tier}:${node.textContent}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      }),
+    );
+  }
+
+  it('opens the house rule with a Campanha pill and the book\'s rule with a Sistema pill, each with its citation', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    // Nothing of a tier shows while the answer streams, as for the superscripts.
+    expect(document.querySelector('[data-tier]')).toBeNull();
+
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+    // References: the campaign's, then the system's, each line opened by its tier's pill.
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items.map((item) => item.querySelector('[data-tier]')?.textContent)).toEqual(['Campanha', 'Sistema']);
+    // A visually hidden ": " keeps the word apart from the line for a reader.
+    expect(items.map((item) => item.textContent)).toEqual(['Campanha: Notas da campanha.md, Magias, p. 2', 'Sistema: Livro do Jogador.pdf, Magias › Fire Bolt, p. 13']);
+    // The line's button is still named by its line alone.
+    expect(within(items[0]!).getByRole('button').textContent).toBe('Notas da campanha.md, Magias, p. 2');
+  });
+
+  it('draws a pill that takes no focus, has no role of its own and is read as its word', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    // Two in the answer and two on the references, plus the answer's two again in the polite region.
+    const pills = [...document.querySelectorAll<HTMLElement>('[data-tier]')];
+    expect(pills.length).toBe(6);
+    expect(pills.filter((pill) => pill.closest('[data-testid="conversation-polite"]') === null)).toHaveLength(4);
+    for (const pill of pills) {
+      expect(pill.tagName).toBe('SPAN');
+      expect(pill.getAttribute('tabindex')).toBeNull();
+      expect(pill.getAttribute('role')).toBeNull();
+      expect(pill.getAttribute('aria-hidden')).toBeNull();
+      expect(pill.className).toMatch(/pill/);
+    }
+    // Tabbing through the answer reaches the reference buttons only, never a pill.
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    for (let i = 0; i < 12; i++) {
+      await user.tab();
+      if (document.activeElement !== null) {
+        seen.push(document.activeElement);
+      }
+    }
+    expect(seen.some((element) => element.hasAttribute('data-tier'))).toBe(false);
+    expect(seen.some((element) => element.textContent === 'Notas da campanha.md, Magias, p. 2')).toBe(true);
+  });
+
+  it('shows no inline pill when only one tier speaks, and each reference still carries its tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Fire Bolt causa 1d10.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 21 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'system' })] });
+
+    expect(turns().getAllByRole('paragraph').some((p) => p.querySelector('[data-tier]') !== null && p.closest('ol') === null)).toBe(false);
+    const item = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem');
+    expect(item.querySelector('[data-tier]')?.textContent).toBe('Sistema');
+  });
+
+  it('shows Outros for an other-tier reference, and no pill for a reference stored before tiers, which still opens', async () => {
+    const loadPage = vi.fn<LoadPage>().mockResolvedValue({ page: 3, pageTotal: 3, picture: null, lines: [], text: 'Fire Bolt.', passages: [], outcome: 'read_directly' });
+    view({ loadPage });
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'other' }), reference(2, [PASSAGE_B])] });
+
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items[0]!.querySelector('[data-tier]')?.textContent).toBe('Outros');
+    expect(items[1]!.querySelector('[data-tier]')).toBeNull();
+    expect(items[1]!.textContent).toBe('Livro do Jogador.pdf, Magias › Fire Bolt, p. 3');
+    fireEvent.click(within(items[1]!).getByRole('button'));
+    await waitFor(() => expect(loadPage).toHaveBeenCalled());
+    expect(loadPage.mock.calls[0]!.slice(0, 2)).toEqual([TURN, 2]);
+  });
+
+  it('keeps a removed source\'s stored tier beside "fonte removida"', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'campaign', removed: true })] });
+
+    const item = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem');
+    expect(item.textContent).toBe('Campanha: Livro do Jogador.pdf, Magias › Fire Bolt, p. 3 — fonte removida');
+  });
+
+  it('ignores a tier event that is not one, and leaves out a reference with an unknown tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'xyz', offset: 0 });
+    stream.emit('tier', { tier: 'campaign', offset: -1 });
+    stream.emit('tier', { tier: 'campaign' });
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'model' }), reference(2, [PASSAGE_B], { tier: 'system' })] });
+
+    expect(document.querySelectorAll('p [data-tier]')).toHaveLength(0);
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(items[0]!.getAttribute('value')).toBe('2');
+  });
+
+  it('puts the pills at the same places after a reconnection mid-answer replays from the last event', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    stream.emit('delta', { text: HOUSE }, 2);
+    vi.useFakeTimers();
+    stream.drop();
+    act(() => vi.advanceTimersByTime(RECONNECT_GIVE_UP_MS));
+    fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
+    expect(streams[1]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=2`);
+    vi.useRealTimers();
+    streams[1]!.open();
+    // The backend replays from the last id; anything repeated is ignored, so the campaign pill is drawn once.
+    streams[1]!.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    streams[1]!.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 3);
+    streams[1]!.emit('delta', { text: '\n\n' }, 4);
+    streams[1]!.emit('tier', { tier: 'system', offset: 16 }, 5);
+    streams[1]!.emit('delta', { text: BOOK }, 6);
+    streams[1]!.emit('citation', { passageId: PASSAGE_B, offset: 31 }, 7);
+    streams[1]!.emit('done', DISAGREE_DONE, 8);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+  });
+
+  it('says the tiers in the polite region: each version after its word, each reference line after its tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    const region = screen.getByTestId('conversation-polite');
+    expect([...region.querySelectorAll('p')].map((p) => p.textContent)).toEqual([`Campanha: ${HOUSE}`, `Sistema: ${BOOK}`]);
+    expect([...region.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+      'Campanha: Notas da campanha.md, Magias, p. 2',
+      'Sistema: Livro do Jogador.pdf, Magias › Fire Bolt, p. 13',
+    ]);
+  });
+
+  it('draws no inline pill for a lone marker, and one pill for a tier marked twice in a row', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'system', offset: 0 }, 1);
+    stream.emit('delta', { text: BOOK }, 2);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 15 }, 3);
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_B], { tier: 'system' })] }, 4);
+
+    expect(document.querySelectorAll('main p span[data-tier], [class*="answer"] span[data-tier]')).toHaveLength(0);
+    expect(answerParts()).toEqual([[`#text:${BOOK}`, 'SUP:1']]);
+    // Reference pills stay as they are.
+    expect(within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem').querySelector('[data-tier]')?.textContent).toBe('Sistema');
+
+    cleanup();
+    streams = [];
+    view();
+    const repeated = await ask('Quanto dano causa Fire Bolt?');
+    repeated.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    repeated.emit('delta', { text: 'Um.\n\n' }, 2);
+    repeated.emit('tier', { tier: 'campaign', offset: 5 }, 3);
+    repeated.emit('delta', { text: 'Dois.\n\n' }, 4);
+    repeated.emit('tier', { tier: 'system', offset: 12 }, 5);
+    repeated.emit('delta', { text: 'Três.' }, 6);
+    repeated.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'campaign' })] }, 7);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', '#text:Um.'],
+      ['#text:Dois.'],
+      ['PILL:system:Sistema', 'SEP:: ', '#text:Três.'],
+    ]);
+  });
+
+  it('keeps both pills at their places in a stopped answer', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', { stopped: true, silent: false, references: DISAGREE_DONE.references }, 8);
+
+    expect(turns().getByText('Interrompida')).toBeTruthy();
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+  });
+
+  it('names the tiers in English with an English interface', async () => {
+    view({ language: 'en' });
+    const stream = await ask('How much damage?', 'en');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    const shownPills = [...document.querySelectorAll('[data-tier]')].filter((pill) => pill.closest('[data-testid="conversation-polite"]') === null);
+    expect(shownPills.map((pill) => pill.textContent)).toEqual(['Campaign', 'System', 'Campaign', 'System']);
+  });
+});
