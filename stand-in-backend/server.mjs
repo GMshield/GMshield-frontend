@@ -23,7 +23,9 @@
 // Story 3.4: a material has no other version serving; once accepted (or moved) it is ready and may be reprocessed, and a
 // reprocess answers a new version waiting while the accepted one, its 444 pages, keeps serving. Story 3.4 part B: a
 // material has no superseded version (`superseded: []`); its deletion takes its one version and its 444 pages, and a
-// delete of it, or of one of its versions, answers 202 with no body.
+// delete of it, or of one of its versions, answers 202 with no body. Story 3.6: a campaign's scope is the starting one
+// (campaign and system on, other and model knowledge off, version 0) with two campaign materials, one of the system and
+// one of another campaign, all on; a change answers the same settings at version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -148,6 +150,21 @@ const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, 
 const IN_STARTER_CAMPAIGN = { campaign: { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name } }, systems: [] };
 const IN_STARTER_SYSTEM = { campaign: null, systems: [{ id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name }] };
 
+/** Story 3.6: the starting scope of a campaign, with a few materials in each tier (newest first within a tier). */
+export const STARTING_SCOPE = {
+  version: 0,
+  campaignTier: true,
+  systemTier: true,
+  otherTier: false,
+  modelKnowledge: false,
+  materials: [
+    { id: '0190a0b0-0000-7000-8000-000000000060', name: 'Notas da campanha.md', tier: 'campaign', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', tier: 'campaign', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000061', name: 'Guia do Mestre.pdf', tier: 'system', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000062', name: 'Bestiário de outra mesa.pdf', tier: 'other', on: true },
+  ],
+};
+
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
   'GET /api/v1/campaigns/current': STARTER,
@@ -164,6 +181,8 @@ export const EXAMPLES = {
   },
   'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
+  'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
+  'PUT /api/v1/campaigns/{id}/scope': { ...STARTING_SCOPE, version: 1 },
   'GET /api/v1/systems': { items: [STARTER_SYSTEM], total: 1 },
   'GET /api/v1/systems/{id}': STARTER_SYSTEM,
   'POST /api/v1/systems': {

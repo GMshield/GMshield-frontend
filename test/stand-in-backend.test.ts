@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ANSWER_DONE, REFERENCE_TEXT_PAGE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
+import { ANSWER_DONE, REFERENCE_TEXT_PAGE, STARTING_SCOPE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
 
 import { CONTRACT_PATH, startStandIn, type Running } from './support/servers';
 
@@ -80,6 +80,21 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/conversation`, 't')).toMatchObject({
       status: 200,
       body: { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+    });
+  });
+
+  it("answers a campaign's scope (Story 3.6): the starting one with materials in every tier, and a change at version 1", () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    const read = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/scope`, 't');
+    expect(read).toMatchObject({ status: 200, body: { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false } });
+    expect(read.body).toBe(STARTING_SCOPE);
+    // In tier order (campaign, system, other), each on, so a test-mode shell shows every tier's materials.
+    expect(STARTING_SCOPE.materials.map((material) => material.tier)).toEqual(['campaign', 'campaign', 'system', 'other']);
+    expect(STARTING_SCOPE.materials.every((material) => material.on)).toBe(true);
+    expect(new Set(STARTING_SCOPE.materials.map((material) => material.id)).size).toBe(STARTING_SCOPE.materials.length);
+    expect(answer(contract, 'PUT', `/api/v1/campaigns/${campaign}/scope`, 't')).toMatchObject({
+      status: 200,
+      body: { ...STARTING_SCOPE, version: 1 },
     });
   });
 

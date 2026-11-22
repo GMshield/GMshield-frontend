@@ -40,6 +40,24 @@
   backdrop-filter: var(--glass-blur);
 }
 
+/*
+ * A campaign's scope tab (Story 3.6): one muted line on what the switches do, then the scope controls, no wider than a
+ * form so a switch's state stays near its name.
+ */
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scope > .description {
+  color: var(--color-text-muted);
+}
+
+.scope > :last-child {
+  max-width: var(--width-form);
+}
+
 /* A campaign's overview (Story 3.2): each field's name beside its value, the names in one column. */
 .details {
   display: grid;

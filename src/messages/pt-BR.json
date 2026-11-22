@@ -34,7 +34,18 @@
     "accountMenu": "Conta e preferências",
     "signedInLabel": "Conectado como",
     "home": "GMshield, ir para Consultas",
-    "skip": "Pular para o conteúdo"
+    "skip": "Pular para o conteúdo",
+    "scope": {
+      "label": "Escopo",
+      "panel": "Escopo da campanha",
+      "campaign": "Campanha",
+      "system": "Sistema",
+      "other": "Outros",
+      "none": "Nenhuma fonte",
+      "modelOff": "conhecimento do modelo desligado",
+      "modelOn": "conhecimento do modelo ligado",
+      "summary": "{tiers} · {model}"
+    }
   },
   "placeholder": {
     "questions": "Aqui você vai fazer perguntas sobre os seus livros e ler as respostas com as fontes.",
@@ -121,7 +132,6 @@
       "name": "Nome",
       "system": "Sistema",
       "state": "Situação",
-      "scopeStarting": "Campanha: ligada · Sistema: ligado · Outros: desligado · Conhecimento do modelo: desligado",
       "conversationList": "Conversas desta campanha",
       "questionsOne": "1 pergunta",
       "questionsOther": "{count} perguntas",
@@ -138,6 +148,20 @@
       "materialsOne": "1 material",
       "materialsOther": "{count} materiais",
       "confirm": "Excluir campanha"
+    },
+    "scope": {
+      "intro": "As respostas desta campanha usam só as fontes ligadas aqui.",
+      "campaign": "Campanha",
+      "system": "Sistema",
+      "other": "Outros sistemas e campanhas",
+      "modelKnowledge": "Conhecimento do modelo",
+      "comingSoon": "Chega em breve",
+      "on": "ligado",
+      "off": "desligado",
+      "materials": "Materiais: {tier}",
+      "pages": "Páginas dos materiais: {tier}",
+      "noMaterials": "Nenhum material pronto.",
+      "stale": "O escopo foi alterado em outro lugar. Os interruptores agora mostram o escopo atual: faça sua alteração de novo."
     }
   },
   "files": {
@@ -189,7 +213,8 @@
       "upload": "O envio não pôde continuar.",
       "ingestion": "Este arquivo não pôde ser processado.",
       "page": "Esta página não pôde ser mostrada.",
-      "material": "A ação no material não pôde ser feita."
+      "material": "A ação no material não pôde ser feita.",
+      "scope": "O escopo não pôde ser alterado."
     },
     "codes": {
       "request": {
@@ -257,6 +282,9 @@
         "version_in_progress": "Este material já tem uma versão a caminho. Espere ela terminar, ou aceite, tente de novo ou descarte essa versão, antes de começar outra.",
         "not_ready": "Este material não tem uma versão pronta para substituir ou reprocessar.",
         "version_not_removable": "Só uma versão anterior pode ser removida. A página foi atualizada."
+      },
+      "scope": {
+        "material_unknown": "Um dos materiais não está mais nesta campanha, no seu sistema ou nos outros. Recarregue a página para ver o escopo atual."
       }
     }
   },

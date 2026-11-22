@@ -22,6 +22,11 @@ import { everyPage, type Every } from './every-page';
  *
  * Story 3.2 part B: what a campaign's deletion takes with it (`{conversations, materials}`), and the deletion itself
  * (202, no body). From the delete on, the campaign is `request.not_found` everywhere, and the current campaign falls back.
+ *
+ * Story 3.6: a campaign's scope settings as the backend resolves them (its three tier switches, model knowledge, their
+ * version and every material of its tiers, each with whether it is on), and a change of them on the version read
+ * (`request.stale_version` when they changed elsewhere, `scope.material_unknown` for a material in none of its tiers).
+ * Only the backend works out what a campaign may use; nothing here filters or computes a scope.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -35,6 +40,9 @@ export type SystemDeletion = Schemas['SystemDeletion'];
 export type CampaignDeletion = Schemas['CampaignDeletion'];
 export type NewCampaign = Schemas['NewCampaign'];
 export type CampaignChange = Schemas['CampaignChange'];
+export type Scope = Schemas['Scope'];
+export type ScopeChange = Schemas['ScopeChange'];
+export type ScopeMaterial = Schemas['ScopeMaterial'];
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
 export type CampaignQuery = NonNullable<operations['listCampaigns']['parameters']['query']>;
 
@@ -177,5 +185,22 @@ export function campaignDeletion(sessionToken: string, id: string, options: Call
 export function deleteCampaign(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('library.campaign_delete', options, (client) =>
     client.DELETE('/api/v1/campaigns/{id}', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/** One of the account's campaigns' scope settings, with the materials of every tier; `request.not_found` for any other id. */
+export function getCampaignScope(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<Scope>> {
+  return call('scope.campaign', options, (client) =>
+    client.GET('/api/v1/campaigns/{id}/scope', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/**
+ * A change of one of the account's campaigns' scope settings on the version it names, from the next question on: the
+ * switches replaced and the materials off exactly those listed. `request.stale_version` when they moved on.
+ */
+export function changeCampaignScope(sessionToken: string, id: string, body: ScopeChange, options: CallOptions = {}): Promise<Result<Scope>> {
+  return call('scope.campaign_change', options, (client) =>
+    client.PUT('/api/v1/campaigns/{id}/scope', { params: { header: session(sessionToken), path: { id } }, body }),
   );
 }

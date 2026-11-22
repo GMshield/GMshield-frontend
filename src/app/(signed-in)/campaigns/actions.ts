@@ -4,9 +4,18 @@ import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import type { CampaignDeleteState } from '@/components/CampaignDeleteAction';
+import type { ScopeFormState } from '@/components/ScopeControls';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { changeCampaign, chooseCampaign, createCampaign, deleteCampaign, getCampaign } from '@/server/library';
+import {
+  changeCampaign,
+  changeCampaignScope,
+  chooseCampaign,
+  createCampaign,
+  deleteCampaign,
+  getCampaign,
+  getCampaignScope,
+} from '@/server/library';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -25,12 +34,16 @@ import type { CampaignActionState, CampaignField, CampaignFormState, CampaignFor
  *
  * Story 3.2 part B: the delete of a campaign, confirmed in its dialog, which revalidates the layout (the switcher and
  * the context bar no longer show it; the current campaign has fallen back) and opens Minhas Mesas.
+ *
+ * Story 3.6: a press on a scope switch, in the context bar's popover or the campaign page's scope tab.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
 const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
 /** At most 15 digits: always a safe integer. */
 const VERSION = /^(?:0|[1-9]\d{0,14})$/;
+/** The most material ids a scope change may list (the backend checks it again). */
+const MAX_MATERIALS_OFF = 1000;
 /** Far past the limit, so the backend still sees a name too long and names it; only a runaway post is cut. */
 const MOST = 10_000;
 
@@ -187,4 +200,66 @@ export async function deleteCampaignAction(_previous: CampaignDeleteState, form:
     redirect('/campaigns');
   }
   return { error: errorText(result.problem, language) };
+}
+
+/** A scope switch as the form posts it ("true" or "false"); null for anything else. */
+function switchOf(form: FormData, name: string): boolean | null {
+  const value = form.get(name);
+  return value === 'true' ? true : value === 'false' ? false : null;
+}
+
+/**
+ * A press on a scope switch (Story 3.6): the form's whole settings (`campaign`, `version`, the four switches and each
+ * `materialsOff`) go to the backend on the version last read. Once saved, the shared layout is rendered again, so the
+ * context bar's summary follows, and the answer brings the settings as stored. A stale version brings the settings as
+ * they are now (the layout is rendered again too) with the stale line; any other refusal comes back as its text, the
+ * settings shown unchanged. A malformed form never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a
+ * cross-origin post before this runs.
+ */
+export async function changeScopeAction(previous: ScopeFormState, form: FormData): Promise<ScopeFormState> {
+  const { language } = await currentPreferences();
+  const id = form.get('campaign');
+  const version = form.get('version');
+  const campaignTier = switchOf(form, 'campaignTier');
+  const systemTier = switchOf(form, 'systemTier');
+  const otherTier = switchOf(form, 'otherTier');
+  const modelKnowledge = switchOf(form, 'modelKnowledge');
+  const materialsOff = form.getAll('materialsOff');
+  if (
+    typeof id !== 'string' ||
+    !ID.test(id) ||
+    typeof version !== 'string' ||
+    !VERSION.test(version) ||
+    campaignTier === null ||
+    systemTier === null ||
+    otherTier === null ||
+    modelKnowledge === null ||
+    materialsOff.length > MAX_MATERIALS_OFF ||
+    !materialsOff.every((value): value is string => typeof value === 'string' && ID.test(value))
+  ) {
+    return { ...previous, error: invalid(language), saved: false };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await changeCampaignScope(token, id, {
+    version: Number(version),
+    campaignTier,
+    systemTier,
+    otherTier,
+    modelKnowledge,
+    materialsOff,
+  });
+  if (result.ok) {
+    revalidatePath('/', 'layout');
+    return { scope: result.data, error: null, saved: true };
+  }
+  if (problemFields(result.problem).code === 'request.stale_version') {
+    const current = await getCampaignScope(token, id);
+    if (current.ok) {
+      revalidatePath('/', 'layout');
+      return { scope: current.data, error: translator(language)('campaigns.scope.stale'), saved: false };
+    }
+    return { ...previous, error: errorText(current.problem, language), saved: false };
+  }
+  return { ...previous, error: errorText(result.problem, language), saved: false };
 }

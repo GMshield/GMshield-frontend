@@ -100,6 +100,7 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
     expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/scope',
       'GET /api/v1/campaigns/current',
       'GET /api/v1/campaigns?limit=50',
       'GET /api/v1/conversations/current',
@@ -258,6 +259,55 @@ describe('the campaign switcher in the layout (Story 3.2)', () => {
     }
     expect(html).not.toContain('name="id" value="0190a0b0-0000-7000-8000-000000000002"');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+});
+
+describe("the context bar's scope summary (Story 3.6)", () => {
+  const SCOPE = 'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/scope';
+  const scope = (fields: Record<string, boolean>) => ({
+    status: 200,
+    body: { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [], ...fields },
+  });
+  /** The scope summary's button: its spoken name and the summary shown. */
+  const summaryOf = (html: string) => /<button[^>]*aria-label="(?:Escopo|Scope): ([^"]*)"[^>]*aria-expanded="false"[^>]*><span[^>]*>([^<]*)<\/span>/.exec(html);
+
+  it('reads the current campaign\'s scope with the session and shows its summary after the campaign, in both languages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [SCOPE]: scope({}) };
+    const server = await useBackend(routes);
+    let html = await layoutHtml();
+    expect(summaryOf(html)?.[2]).toBe('Campanha + Sistema · conhecimento do modelo desligado');
+    expect(summaryOf(html)?.[1]).toBe('Campanha + Sistema · conhecimento do modelo desligado');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === SCOPE)?.headers['x-session-token']).toBe(SESSION);
+    // After the campaign's name, inside the context bar.
+    const bar = html.slice(html.indexOf('aria-label="Sistema e campanha"'), html.indexOf('<main'));
+    expect(bar.indexOf('First campaign')).toBeLessThan(bar.indexOf('Campanha + Sistema'));
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(summaryOf(html)?.[2]).toBe('Campaign + System · model knowledge off');
+    // Every tier off: no sources; the other tier and model knowledge on.
+    routes[SCOPE] = scope({ campaignTier: false, systemTier: false });
+    expect(summaryOf(await layoutHtml())?.[2]).toBe('No sources · model knowledge off');
+    routes[SCOPE] = scope({ campaignTier: false, otherTier: true, modelKnowledge: true });
+    expect(summaryOf(await layoutHtml())?.[2]).toBe('System + Other · model knowledge on');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+
+  it('a scope that cannot be read: system › campaign without a summary, and the page still renders', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [SCOPE]: problem(503, 'server.unavailable') });
+    const html = await layoutHtml(await CharactersPage());
+    expect(summaryOf(html)).toBeNull();
+    expect(html).not.toContain('conhecimento do modelo');
+    expect(html).toContain('Untitled system');
+    expect(html).toContain('First campaign');
+    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
+  });
+
+  it('no current campaign: no summary, and no scope is asked for', async () => {
+    const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
+    const html = await layoutHtml();
+    expect(summaryOf(html)).toBeNull();
+    expect(html).not.toContain('conhecimento do modelo');
+    expect(server.calls.map((call) => call.url).filter((url) => url.endsWith('/scope'))).toEqual([]);
   });
 });
 

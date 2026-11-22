@@ -1,0 +1,78 @@
+/*
+ * The scope summary in the context bar and its popover (Story 3.6). The summary reads like the rest of the bar (the
+ * label style, the muted colour) behind a thin rule, with a chevron that says it opens something. The popover is placed
+ * against the context bar itself (ContextBar.module.css makes the bar its containing block), so it opens under the bar's
+ * left edge at any width, never wider than the bar: it cannot push the page sideways. It floats over the page, like the
+ * campaign switcher's list (z-index 12), and is never taller than the window under the bar; past that it scrolls as a
+ * whole, the one thing that scrolls there (the materials inside are paged, with no scroll area of their own).
+ */
+.popover {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: var(--space-1);
+  border-left: 1px solid var(--color-border);
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: var(--space-touch-target);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+.summary {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 12;
+  width: min(32rem, 100%);
+  max-height: calc(100dvh - var(--height-bar) - var(--space-4));
+  padding: var(--space-3);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-body-weight);
+  line-height: var(--font-body-line-height);
+  text-align: start;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+/* Under 768px the bar shows the campaign's name only (ContextBar.module.css). */
+@media (max-width: 767px) {
+  .popover {
+    display: none;
+  }
+}

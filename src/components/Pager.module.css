@@ -52,9 +52,25 @@
   background-color: var(--color-control);
 }
 
-a.step:hover {
+a.step:hover,
+button.step:hover:not([aria-disabled='true']) {
   border-color: var(--color-text);
   background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+/* Story 3.6: a list paged in the browser turns its pages with buttons, drawn as the links are. */
+button.step,
+button.page {
+  font-family: inherit;
+}
+
+button.step:not([aria-disabled='true']),
+button.page {
+  cursor: pointer;
+}
+
+button.page {
+  background-color: transparent;
 }
 
 .page:hover {

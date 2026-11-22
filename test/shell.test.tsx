@@ -392,6 +392,58 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(within(screen.getByTestId('sidebar')).getByRole('button', { name: ptBR.shell.noCampaign })).toBeTruthy();
   });
 
+  it('Story 3.6: after the campaign, the scope summary opens the scope popover; none without a campaign or a scope', async () => {
+    const user = userEvent.setup();
+    const scope = {
+      version: 0,
+      campaignTier: true,
+      systemTier: false,
+      otherTier: false,
+      modelKnowledge: false,
+      materials: [{ id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', tier: 'campaign' as const, on: true }],
+    };
+    const withScope = (language: Language, current: typeof CURRENT & { id?: string } | null, value: typeof scope | null) => (
+      <Shell preferences={{ theme: 'dark', language }} username="Mestre_Ana" current={current} scope={value} sidebar="open">
+        <h1>Página</h1>
+      </Shell>
+    );
+    const { rerender } = render(withScope('pt-BR', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, scope));
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    // Matrix row "Tier off": the system tier off leaves "Campanha" alone.
+    const summary = within(context).getByRole('button', { name: 'Escopo: Campanha · conhecimento do modelo desligado' });
+    expect(summary.textContent).toBe('Campanha · conhecimento do modelo desligado');
+    // After the campaign switcher, in the bar.
+    const switcher = within(context).getByRole('button', { name: 'First campaign' });
+    expect(switcher.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(summary);
+    const group = within(context).getByRole('group', { name: ptBR.shell.scope.panel });
+    expect(within(group).getByRole('switch', { name: 'Livro do Jogador.pdf' }).getAttribute('aria-checked')).toBe('true');
+    expect(within(group).getByRole('switch', { name: ptBR.campaigns.scope.system }).getAttribute('aria-checked')).toBe('false');
+    // The popover floats in the bar, before the page: it never pushes the main column.
+    expect(screen.getByRole('main').contains(group)).toBe(false);
+    rerender(withScope('en', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, { ...scope, campaignTier: false }));
+    expect(within(context).getByRole('button', { name: 'Scope: No sources · model knowledge off' })).toBeTruthy();
+    // Matrix rows "Scope unreadable" and "No campaign": no summary.
+    rerender(withScope('pt-BR', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, null));
+    expect(within(context).queryByRole('button', { name: /conhecimento do modelo/ })).toBeNull();
+    expect(within(context).getByRole('link', { name: 'Untitled system' })).toBeTruthy();
+    rerender(withScope('pt-BR', null, scope));
+    expect(within(screen.getByRole('navigation', { name: ptBR.shell.context })).queryByRole('button', { name: /conhecimento do modelo/ })).toBeNull();
+  });
+
+  it('Story 3.6: under 768px the summary is not shown (the campaign name only), and its popover floats under the bar', () => {
+    const css = (name: string) => readFileSync(join(process.cwd(), 'src/components', name), 'utf8');
+    expect(css('ScopePopover.module.css')).toMatch(/@media \(max-width: 767px\) \{\s*\.popover \{\s*display: none;/);
+    expect(css('ContextBar.module.css')).toMatch(/@media \(max-width: 767px\) \{\s*\.system,\s*\.separator \{\s*display: none;/);
+    expect(css('ContextBar.module.css')).toMatch(/^\.bar \{[^}]*position: relative;/m);
+    const panel = /^\.panel \{([^}]*)\}/m.exec(css('ScopePopover.module.css'))?.[1] ?? '';
+    expect(panel).toMatch(/position: absolute;/);
+    expect(panel).toMatch(/z-index: 12;/);
+    expect(panel).toMatch(/background-color: var\(--color-popover\);/);
+    expect(panel).toMatch(/border: 1px solid var\(--color-border\);/);
+    expect(panel).toMatch(/width: min\(32rem, 100%\);/);
+  });
+
   it('renders the page in the main column, and a right panel only when there is one', () => {
     render(shell({ children: <p>conteúdo</p> }));
     expect(within(screen.getByRole('main')).getByText('conteúdo')).toBeTruthy();
