@@ -92,7 +92,7 @@ describe('backend client', () => {
     running = await startStandIn();
     const client = createBackendClient({ baseUrl: running.url, traceparent: TRACEPARENT });
     const { data } = await client.GET('/api/v1/version', { headers: { cookie: 'session=secret', authorization: 'Bearer browser' } });
-    expect(data?.version).toBe('1.30.0');
+    expect(data?.version).toBe('1.31.0');
     const headers = running.requests[0]!.headers;
     expect(headers.traceparent).toBe(TRACEPARENT);
     expect(headers.cookie).toBeUndefined();

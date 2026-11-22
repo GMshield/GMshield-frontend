@@ -8,7 +8,8 @@ import type { components } from '@/server/backend/generated/public';
  * `GET /api/v1/turns/{id}/references/{number}/pages/{page}`, and its picture from `.../picture`. The indexing notice
  * reads the count of passages still being prepared for search, and of those that could not be, from
  * `GET /api/v1/conversations/current`. Story 3.10: a question names the conversation it continues, or the area of the
- * new one it starts. The relays reach the backend; the browser never does.
+ * new one it starts. Story 3.11: a finished answer is dismissed with `PUT /api/v1/turns/{id}/dismissal`, and its
+ * dismissal undone with `DELETE` on the same path. The relays reach the backend; the browser never does.
  */
 
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
@@ -85,6 +86,30 @@ export async function stopTurn(turnId: string): Promise<boolean> {
     return response.status === 204;
   } catch {
     return false;
+  }
+}
+
+/** What a dismissal or its undo gave (Story 3.11): done (204), or the problem the relay answered. */
+export type DismissalResult = { readonly ok: true } | { readonly ok: false; readonly problem: unknown };
+
+/**
+ * Dismisses a turn's answer (`dismiss`, PUT) or undoes its dismissal (`restore`, DELETE) (Story 3.11). Done when the
+ * relay answered 204 (also when nothing changed); otherwise the problem it answered, or the generic "unavailable" one.
+ */
+export async function setDismissal(turnId: string, action: 'dismiss' | 'restore'): Promise<DismissalResult> {
+  try {
+    const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/dismissal`, {
+      method: action === 'dismiss' ? 'PUT' : 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (response.status === 204) {
+      return { ok: true };
+    }
+    const body: unknown = await response.json().catch(() => null);
+    return { ok: false, problem: body ?? UNAVAILABLE };
+  } catch {
+    return { ok: false, problem: UNAVAILABLE };
   }
 }
 

@@ -357,6 +357,99 @@ describe('the stop relay (Story 2.6)', () => {
   });
 });
 
+describe('the dismissal relay (Story 3.11)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function dismissal(method: 'PUT' | 'DELETE', headers: Record<string, string>, id = TURN): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const route = await import('@/app/api/v1/turns/[id]/dismissal/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/dismissal`, { method, headers: { host: 'gm.test', ...headers } });
+    return route[method](request, { params: Promise.resolve({ id }) });
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+
+  it('dismisses (PUT) and undoes (DELETE) through the typed client with the session, each answering 204', async () => {
+    const backend = await useBackend({
+      [`PUT /api/v1/turns/${TURN}/dismissal`]: { status: 204 },
+      [`DELETE /api/v1/turns/${TURN}/dismissal`]: { status: 204 },
+    });
+
+    for (const method of ['PUT', 'DELETE'] as const) {
+      const answered = await dismissal(method, { origin: 'http://gm.test', cookie });
+      expect(answered.status).toBe(204);
+      expect(answered.headers.get('cache-control')).toBe('no-store');
+      expect(await answered.text()).toBe('');
+    }
+    expect(backend.calls.map((call) => call.method)).toEqual(['PUT', 'DELETE']);
+    for (const call of backend.calls) {
+      expect(call.headers['x-session-token']).toBe(SESSION);
+      expect(call.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    }
+  });
+
+  it('refuses another origin, an id that is not one and no session without reaching the backend', async () => {
+    const backend = await useBackend({});
+    for (const method of ['PUT', 'DELETE'] as const) {
+      expect((await dismissal(method, { origin: 'http://evil.test', cookie })).status).toBe(403);
+      expect((await dismissal(method, { origin: 'http://gm.test', cookie }, 'nope')).status).toBe(404);
+      expect((await dismissal(method, { origin: 'http://gm.test' })).status).toBe(401);
+    }
+    expect(backend.calls).toEqual([]);
+  });
+
+  it("passes an answer still being written and another owner's turn on as the backend's problems", async () => {
+    await useBackend({
+      [`PUT /api/v1/turns/${TURN}/dismissal`]: {
+        status: 409,
+        body: { status: 409, category: 'conversation', code: 'conversation.turn_running', params: {} },
+      },
+      [`DELETE /api/v1/turns/${TURN}/dismissal`]: { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } },
+    });
+    const running = await dismissal('PUT', { origin: 'http://gm.test', cookie });
+    expect(running.status).toBe(409);
+    expect(running.headers.get('content-type')).toBe('application/problem+json');
+    expect(await running.json()).toMatchObject({ code: 'conversation.turn_running' });
+    const missing = await dismissal('DELETE', { origin: 'http://gm.test', cookie });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ code: 'request.not_found' });
+  });
+
+  it("the browser's call goes to the relay on this site: done on 204, else the problem or the generic one", async () => {
+    const { setDismissal } = await import('@/client/conversation');
+    const send = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', send);
+    expect(await setDismissal(TURN, 'dismiss')).toEqual({ ok: true });
+    expect(send).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/dismissal`, expect.objectContaining({ method: 'PUT' }));
+    expect(await setDismissal(TURN, 'restore')).toEqual({ ok: true });
+    expect(send).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/dismissal`, expect.objectContaining({ method: 'DELETE' }));
+
+    const problem = { status: 409, category: 'conversation', code: 'conversation.turn_running', params: {} };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), { status: 409 })));
+    expect(await setDismissal(TURN, 'dismiss')).toEqual({ ok: false, problem });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 502 })));
+    expect(await setDismissal(TURN, 'dismiss')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await setDismissal(TURN, 'restore')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
+  });
+});
+
 describe("the browser's stop call and stream address (Story 2.6)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

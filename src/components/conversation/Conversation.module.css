@@ -525,3 +525,70 @@
 .example:hover {
   border-color: var(--color-text);
 }
+
+/*
+ * Story 3.11: an answer's actions, right-aligned under its rule (3.12's bookmark will come before dismiss). Each is a
+ * 28px circle filled with the text colour, in a 44px hit area that reaches past the row so the circle's edge meets the
+ * rule's end and the row stays as tall as the circle.
+ */
+.actions {
+  --answer-action-size: calc(var(--space-6) + var(--space-1));
+  --answer-action-overhang: calc((var(--answer-action-size) - var(--space-touch-target)) / 2);
+
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: calc(-1 * var(--space-1));
+}
+
+.action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--space-touch-target);
+  block-size: var(--space-touch-target);
+  margin-block: var(--answer-action-overhang);
+  margin-inline-end: var(--answer-action-overhang);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-on-solid);
+  cursor: pointer;
+}
+
+.actionCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--answer-action-size);
+  block-size: var(--answer-action-size);
+  border-radius: var(--radius-full);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+  transition: opacity var(--motion-fade) ease-out;
+}
+
+.action:hover .actionCircle {
+  opacity: 0.86;
+}
+
+/* Story 3.11: a dismissed turn's place while its undo lasts: "Resposta dispensada." and "Desfazer", muted. */
+.dismissedTurn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  scroll-margin-top: var(--space-6);
+}
+
+.dismissedLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}

@@ -10,6 +10,7 @@ import {
   parseDone,
   parseTier,
   postQuestion,
+  setDismissal,
   stopTurn,
   turnEventsUrl,
   type Area,
@@ -29,6 +30,7 @@ import { useUploads } from '../uploads/UploadsProvider';
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
 import { NamedIcon } from '../Icons';
+import { PillButton } from '../PillButton';
 import { PillLink } from '../PillLink';
 
 import styles from './Conversation.module.css';
@@ -57,6 +59,8 @@ export const REOPEN_FIRST_MS = 1000;
 export const REOPEN_LONGEST_MS = 15_000;
 /** Story 2.6: how long a lost connection may go without an `open` before the page stops trying. */
 export const RECONNECT_GIVE_UP_MS = 120_000;
+/** Story 3.11: how long the "Resposta dispensada." line with "Desfazer" stays in a dismissed turn's place. */
+export const UNDO_MS = 10_000;
 
 type TurnStatus = 'sending' | 'searching' | 'answering' | 'done' | 'stopped' | 'failed';
 /** The statuses of an answer still running: the send button is Stop, and Enter sends nothing. */
@@ -78,13 +82,20 @@ const FAILURES: ReadonlyMap<string, Failure> = new Map<string, Failure>([
 ]);
 /** The state of a running answer's stream: open, lost while it reconnects, or given up (Story 2.6). */
 type Connection = 'open' | 'lost' | 'failed';
+/**
+ * Story 3.11: whether a turn is shown, dismissed with its undo line in its place, or dismissed for good. A dismissed
+ * turn stays in the page's state (behind this flag), so the count of the questions asked here still works.
+ */
+type Dismissal = 'shown' | 'undoable' | 'gone';
 
 /**
  * A turn asked since the page opened: its question, then its answer as it is written. Story 2.5: its citations as they
  * arrive, and once it is done its references, or `silent` when it has none. Story 2.6: how it failed, and its stream's
  * connection. Story 2.7: its id once known, which names its references to the source view. Story 3.7: its tier events
  * as they arrive (each tier's version of the answer starts at its offset). Story 3.8: whether its model knowledge was
- * on, as frozen with it (from its `done` event), which decides the offer under a silent answer.
+ * on, as frozen with it (from its `done` event), which decides the offer under a silent answer. Story 3.11: whether the GM
+ * dismissed it, why its dismissal was refused (shown under its actions), why its undo was (shown in its line), and
+ * whether its undo is under way.
  */
 type ShownTurn = {
   readonly key: number;
@@ -101,6 +112,10 @@ type ShownTurn = {
   readonly modelKnowledge: boolean;
   readonly failure: Failure | null;
   readonly connection: Connection;
+  readonly dismissal: Dismissal;
+  readonly dismissProblem: unknown;
+  readonly undoProblem: unknown;
+  readonly undoPending: boolean;
 };
 
 /**
@@ -249,6 +264,10 @@ function newTurn(key: number, question: string): ShownTurn {
     modelKnowledge: false,
     failure: null,
     connection: 'open',
+    dismissal: 'shown',
+    dismissProblem: null,
+    undoProblem: null,
+    undoPending: false,
   };
 }
 
@@ -421,6 +440,15 @@ export function NoCampaignConversation({ language, area = 'questions' }: { reado
  * - Story 3.10 part B: once the conversation has an id, "Excluir" follows "Renomear" in the top line; its dialog names
  *   how many questions go (the count read with the page, plus those asked on it since), or says so in words when no
  *   count was read (a conversation made on this page).
+ * - Story 3.11, dismiss an answer: under the rule of each finished or stopped answer, right-aligned, a filled circle
+ *   with an X ("Dispensar resposta"); none while an answer is written, nor on a failed turn. Selecting it replaces the
+ *   question and answer at once with "Resposta dispensada." and a "Desfazer" pill, which takes focus while the polite
+ *   region says the line; the dismissal is sent. "Desfazer" within {@link UNDO_MS} undoes it: the turn shows again where
+ *   it was, with focus on its dismiss button. After that the line goes (focus on its pill moves to the composer). A
+ *   refused dismissal brings the answer back with the refusal under its actions; a refused undo keeps the line, with
+ *   the refusal in it, until its time ends. While an undo is under way the line's time does not end it: the undo's
+ *   answer does (shown again, or, refused after the time, the line goes then). The delete dialog's count leaves out the
+ *   turns dismissed here, and a conversation whose every turn is gone shows its intro again.
  */
 export function Conversation({
   language,
@@ -462,6 +490,18 @@ export function Conversation({
   const sourceOpener = useRef<HTMLButtonElement | null>(null);
   const focusOpener = useRef(false);
   const openings = useRef(0);
+  /**
+   * Story 3.11: each dismissed turn's undo timer and pending dismissal (an undo waits for it, so it never overtakes it),
+   * the undos under way, the dismiss buttons and undo pills by turn key, and where focus goes after the next render.
+   */
+  const undoTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const dismissals = useRef(new Map<number, Promise<boolean>>());
+  const undoing = useRef(new Set<number>());
+  /** Story 3.11: the turns whose line's time ended while their undo was under way: the undo's answer settles them. */
+  const lapsed = useRef(new Set<number>());
+  const dismissButtons = useRef(new Map<number, HTMLButtonElement>());
+  const undoButtons = useRef(new Map<number, HTMLButtonElement>());
+  const pendingFocus = useRef<{ readonly key: number; readonly to: 'undo' | 'dismiss' } | 'composer' | null>(null);
 
   useEffect(() => {
     // Read after the first render, so the server's and the browser's first renders agree.
@@ -488,11 +528,16 @@ export function Conversation({
 
   useEffect(() => {
     const open = followers.current;
+    const timers = undoTimers.current;
     return () => {
       for (const follower of open.values()) {
         follower.close();
       }
       open.clear();
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
     };
   }, []);
 
@@ -761,6 +806,123 @@ export function Conversation({
     [announce, language],
   );
 
+  /** Story 3.11: whether focus is on the undo pill of the turn `key`. */
+  const onUndoPill = useCallback((key: number) => {
+    const pill = undoButtons.current.get(key);
+    return pill !== undefined && pill === document.activeElement;
+  }, []);
+
+  /** Story 3.11: ends a turn's undo timer, if it runs. */
+  const stopUndoTimer = useCallback((key: number) => {
+    clearTimeout(undoTimers.current.get(key));
+    undoTimers.current.delete(key);
+  }, []);
+
+  /** Story 3.11: the undo line of the turn `key` goes; focus on its pill moves to the composer. */
+  const endLine = useCallback(
+    (key: number) => {
+      if (onUndoPill(key)) {
+        pendingFocus.current = 'composer';
+      }
+      change(key, (turn) => (turn.dismissal === 'undoable' ? { ...turn, dismissal: 'gone', undoProblem: null } : turn));
+    },
+    [change, onUndoPill],
+  );
+
+  /**
+   * Story 3.11: dismisses the turn `key` at once (its undo line in its place, with focus on "Desfazer"), starts the
+   * line's time, and sends the dismissal; a refusal brings the turn back with its text under the actions.
+   */
+  const dismiss = useCallback(
+    (key: number, turnId: string) => {
+      pendingFocus.current = { key, to: 'undo' };
+      change(key, (turn) => ({ ...turn, dismissal: 'undoable', dismissProblem: null, undoProblem: null }));
+      say(t('conversation.dismissed'));
+      stopUndoTimer(key);
+      undoTimers.current.set(
+        key,
+        setTimeout(() => {
+          undoTimers.current.delete(key);
+          // An undo under way decides: its success shows the turn again, its refusal ends the line then.
+          if (undoing.current.has(key)) {
+            lapsed.current.add(key);
+          } else {
+            endLine(key);
+          }
+        }, UNDO_MS),
+      );
+      const sent = setDismissal(turnId, 'dismiss').then((result) => {
+        if (!result.ok) {
+          stopUndoTimer(key);
+          if (onUndoPill(key)) {
+            pendingFocus.current = { key, to: 'dismiss' };
+          }
+          change(key, (turn) => ({ ...turn, dismissal: 'shown', dismissProblem: result.problem, undoProblem: null }));
+          say(errorText(result.problem, language));
+        }
+        return result.ok;
+      });
+      dismissals.current.set(key, sent);
+    },
+    [change, endLine, language, onUndoPill, say, stopUndoTimer, t],
+  );
+
+  /**
+   * Story 3.11: "Desfazer": once the dismissal was recorded, undoes it; the turn shows again where it was, with focus on
+   * its dismiss button. A refused undo keeps the line, with its text, until the line's time ends; refused after that
+   * time (which waited for it), the line goes at once.
+   */
+  const undo = useCallback(
+    async (key: number, turnId: string) => {
+      if (undoing.current.has(key)) {
+        return;
+      }
+      undoing.current.add(key);
+      change(key, (turn) => ({ ...turn, undoPending: true }));
+      try {
+        // A refused dismissal has brought the turn back already.
+        if (!(await (dismissals.current.get(key) ?? Promise.resolve(true)))) {
+          return;
+        }
+        const result = await setDismissal(turnId, 'restore');
+        if (result.ok) {
+          stopUndoTimer(key);
+          lapsed.current.delete(key);
+          dismissals.current.delete(key);
+          pendingFocus.current = { key, to: 'dismiss' };
+          change(key, (turn) => ({ ...turn, dismissal: 'shown', dismissProblem: null, undoProblem: null }));
+          return;
+        }
+        say(errorText(result.problem, language));
+        if (lapsed.current.delete(key)) {
+          // Its time ended while the undo was under way: the line goes now, as it would have then.
+          endLine(key);
+        } else {
+          change(key, (turn) => (turn.dismissal === 'undoable' ? { ...turn, undoProblem: result.problem } : turn));
+        }
+      } finally {
+        undoing.current.delete(key);
+        lapsed.current.delete(key);
+        change(key, (turn) => (turn.undoPending ? { ...turn, undoPending: false } : turn));
+      }
+    },
+    [change, endLine, language, say, stopUndoTimer],
+  );
+
+  // Story 3.11: focus goes where a dismissal, its undo or the end of its line sent it, once the screen shows it.
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (target === null) {
+      return;
+    }
+    pendingFocus.current = null;
+    if (target === 'composer') {
+      composer.current?.focus();
+    } else {
+      (target.to === 'undo' ? undoButtons : dismissButtons).current.get(target.key)?.focus();
+    }
+  }, [turns]);
+
   const ask = useCallback(
     async (question: string, replacing?: number) => {
       if (replacing !== undefined) {
@@ -931,7 +1093,9 @@ export function Conversation({
   const lines = Math.min(COMPOSER_MAX_LINES, Math.max(1, draft.split('\n').length));
   // Story 3.10 part B: the questions read with the page, plus those the backend recorded on it since.
   const askedHere = turns.slice(stored.length).filter((turn) => turn.id !== null).length;
-  const questionCount = questions === null ? null : questions + askedHere;
+  // Story 3.11: less the turns dismissed here, which the backend no longer counts (nor deletes in words).
+  const dismissedHere = turns.filter((turn) => turn.dismissal !== 'shown').length;
+  const questionCount = questions === null ? null : Math.max(0, questions + askedHere - dismissedHere);
 
   return (
     <section className={styles.conversation} aria-label={title}>
@@ -952,7 +1116,8 @@ export function Conversation({
           </>
         )}
       </div>
-      {turns.length === 0 ? (
+      {/* Story 3.11: a conversation whose every turn was dismissed here shows the intro, as it would on a reload. */}
+      {turns.every((turn) => turn.dismissal === 'gone') ? (
         <div className={styles.intro} data-testid="conversation-intro">
           <span className={styles.introIcon}>
             <NamedIcon name={area} size={28} />
@@ -982,8 +1147,42 @@ export function Conversation({
           // A refusal and an outage show in place of the answer: what streamed is hidden. A truncation keeps it.
           const hidden = turn.status === 'failed' && turn.failure !== 'truncated';
           const turnId = turn.id;
+          const last = index === turns.length - 1 ? lastTurn : undefined;
+          if (turn.dismissal === 'gone') {
+            return null;
+          }
+          if (turn.dismissal === 'undoable') {
+            // Story 3.11: the dismissed turn's place, for its undo's time.
+            return (
+              <li key={turn.key} className={styles.dismissedTurn} ref={last} data-testid="dismissed-line">
+                <p className={styles.dismissedLine}>
+                  <span>{t('conversation.dismissed')}</span>
+                  {turnId === null ? null : (
+                    <PillButton
+                      ref={(button) => {
+                        if (button === null) {
+                          undoButtons.current.delete(turn.key);
+                        } else {
+                          undoButtons.current.set(turn.key, button);
+                        }
+                      }}
+                      pending={turn.undoPending}
+                      onClick={() => void undo(turn.key, turnId)}
+                    >
+                      {t('conversation.undo')}
+                    </PillButton>
+                  )}
+                </p>
+                {turn.undoProblem === null ? null : (
+                  <p className={styles.dismissedLine} data-testid="undo-problem">
+                    {errorText(turn.undoProblem, language)}
+                  </p>
+                )}
+              </li>
+            );
+          }
           return (
-            <li key={turn.key} className={styles.turn} ref={index === turns.length - 1 ? lastTurn : undefined}>
+            <li key={turn.key} className={styles.turn} ref={last}>
               <p className={styles.question}>
                 <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
                 {turn.question}
@@ -1048,6 +1247,33 @@ export function Conversation({
                 </p>
               ) : null}
               {finished || turn.status === 'failed' ? <hr className={styles.rule} /> : null}
+              {/* Story 3.11: the answer's actions, right-aligned under its rule; 3.12's bookmark goes before dismiss. */}
+              {finished && turnId !== null ? (
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.action}
+                    aria-label={t('conversation.dismiss')}
+                    ref={(button) => {
+                      if (button === null) {
+                        dismissButtons.current.delete(turn.key);
+                      } else {
+                        dismissButtons.current.set(turn.key, button);
+                      }
+                    }}
+                    onClick={() => dismiss(turn.key, turnId)}
+                  >
+                    <span className={styles.actionCircle}>
+                      <NamedIcon name="dismiss" size={16} />
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+              {turn.dismissProblem === null ? null : (
+                <p className={styles.failed} data-testid="dismiss-problem">
+                  {errorText(turn.dismissProblem, language)}
+                </p>
+              )}
             </li>
           );
         })}

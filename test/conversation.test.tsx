@@ -10,13 +10,16 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined
 type Ask = (campaignId: string, question: string) => Promise<unknown>;
 const postQuestion = vi.fn<Ask>();
 const stopTurn = vi.fn<(turnId: string) => Promise<boolean>>();
+type SetDismissal = typeof import('@/client/conversation').setDismissal;
+const setDismissal = vi.fn<SetDismissal>();
 vi.mock('@/client/conversation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/client/conversation')>()),
   postQuestion,
   stopTurn,
+  setDismissal,
 }));
 
-const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS } = await import('@/components/conversation/Conversation');
+const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
 const { UploadsProvider, useUploads } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { errorText } = await import('@/messages');
@@ -2020,10 +2023,12 @@ describe('conversations by area (Story 3.10)', () => {
     streams = [];
     postQuestion.mockReset();
     stopTurn.mockReset();
+    setDismissal.mockReset();
     localStorage.clear();
     window.history.replaceState(null, '', '/questions/new');
   });
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -2191,5 +2196,288 @@ describe('conversations by area (Story 3.10)', () => {
   it('offers no "Excluir" without its Server Action', () => {
     opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [], questions: 1 });
     expect(within(screen.getByTestId('conversation-top')).queryByRole('button', { name: 'Excluir' })).toBeNull();
+  });
+
+  // --- Story 3.11: dismiss an answer
+
+  const DONE = { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] };
+  const SECOND = '0190a0b0-0000-7000-8000-000000000022';
+  const THIRD = '0190a0b0-0000-7000-8000-000000000023';
+
+  /** A conversation of two done turns, the first cited, as the page reads it with its question count. */
+  function twoDone(deleteAction?: DeleteAction) {
+    return opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      questions: 2,
+      deleteAction,
+      stored: [
+        stored(TURN, 'Quanto dano causa Fire Bolt?', [
+          ['delta', { text: 'Fire Bolt causa 1d10.' }],
+          ['citation', { passageId: PASSAGE_A, offset: 21 }],
+          ['done', DONE],
+        ]),
+        stored(SECOND, 'E Fireball?', [['delta', { text: 'Fireball causa 8d6.' }], ['done', { ...DONE, references: [], silent: true }]]),
+      ],
+    });
+  }
+
+  /** Lets the dismissal's and the undo's promises settle. */
+  async function settle() {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  function dismissButtons() {
+    return turns().queryAllByRole('button', { name: 'Dispensar resposta' });
+  }
+
+  it('a done and a stopped answer have "Dispensar resposta" under their rule; a failed one and one being written have none', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...DONE, stopped: true, references: [] }]]),
+        stored(THIRD, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+        stored(PASSAGE_C, 'E depois?', [['delta', { text: 'Escrevendo' }]]),
+      ],
+    });
+    await waitFor(() => expect(streams).toHaveLength(1));
+
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(items).toHaveLength(4);
+    for (const item of items.slice(0, 2)) {
+      const button = within(item).getByRole('button', { name: 'Dispensar resposta' });
+      // Under the rule, as the last control of the turn, with the X drawn inside a circle.
+      const rule = item.querySelector('hr')!;
+      expect(rule.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(button.querySelector('span svg path')).not.toBeNull();
+    }
+    expect(within(items[2]!).queryByRole('button', { name: 'Dispensar resposta' })).toBeNull();
+    expect(within(items[3]!).queryByRole('button', { name: 'Dispensar resposta' })).toBeNull();
+
+    // Once the answer being written is done, it has one too.
+    streams[0]!.emit('done', DONE, 2);
+    expect(within(items[3]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    expect(dismissButtons()).toHaveLength(3);
+  });
+
+  it('dismiss: the line replaces the turn at once with focus on "Desfazer"; after 10 s it goes and focus moves to the composer', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: null }));
+    twoDone(deleteAction);
+    vi.useFakeTimers();
+
+    fireEvent.click(dismissButtons()[0]!);
+
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(turns().queryByText(/Fire Bolt causa/)).toBeNull();
+    const line = screen.getByTestId('dismissed-line');
+    expect(line.textContent).toBe('Resposta dispensada.Desfazer');
+    const undo = within(line).getByRole('button', { name: 'Desfazer' });
+    expect(document.activeElement).toBe(undo);
+    expect(polite()).toContain('Resposta dispensada.');
+    expect(setDismissal).toHaveBeenCalledWith(TURN, 'dismiss');
+    // The other turn stays.
+    expect(turns().getByText('E Fireball?')).toBeTruthy();
+    await settle();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS - 1));
+    expect(screen.queryByTestId('dismissed-line')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(document.activeElement).toBe(composer());
+    expect(setDismissal).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+
+    // The delete dialog's count leaves out the turn dismissed here.
+    fireEvent.click(within(screen.getByTestId('conversation-top')).getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vai junto: 1 pergunta e sua resposta.');
+  });
+
+  it('after 10 s, focus elsewhere stays where it is', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[1]!);
+    await settle();
+    const other = dismissButtons()[0]!;
+    other.focus();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(document.activeElement).toBe(other);
+    vi.useRealTimers();
+  });
+
+  it('"Desfazer" within 10 s: the undo is sent, the turn is back where it was with its sources, and focus is on its dismiss button', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    act(() => vi.advanceTimersByTime(UNDO_MS - 1000));
+
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    expect(setDismissal).toHaveBeenLastCalledWith(TURN, 'restore');
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(within(items[0]!).getByText(/Livro do Jogador\.pdf/)).toBeTruthy();
+    expect(document.activeElement).toBe(within(items[0]!).getByRole('button', { name: 'Dispensar resposta' }));
+    // The line's time no longer runs: the turn stays.
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('an undo selected before the dismissal was answered waits for it, then undoes it', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    twoDone();
+
+    fireEvent.click(dismissButtons()[0]!);
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+    expect(setDismissal).toHaveBeenCalledTimes(1);
+    // Meanwhile the pill says it is busy.
+    expect(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }).getAttribute('aria-busy')).toBe('true');
+
+    answer({ ok: true });
+    await waitFor(() => expect(setDismissal).toHaveBeenLastCalledWith(TURN, 'restore'));
+    await waitFor(() => expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy());
+  });
+
+  it('a refused dismissal brings the answer back with the refusal under its actions', async () => {
+    setDismissal.mockResolvedValueOnce({ ok: false, problem: { status: 409, category: 'conversation', code: 'conversation.turn_running' } });
+    twoDone();
+
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    const problem = within(items[0]!).getByTestId('dismiss-problem');
+    expect(problem.textContent).toBe('Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la.');
+    const dismiss = within(items[0]!).getByRole('button', { name: 'Dispensar resposta' });
+    expect(dismiss.compareDocumentPosition(problem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.activeElement).toBe(dismiss);
+
+    // Dismissed again, it goes; the refusal with it.
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(dismiss);
+    expect(screen.queryByTestId('dismiss-problem')).toBeNull();
+  });
+
+  it('a refused undo keeps the line, with the refusal in it, until its time ends', async () => {
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockResolvedValueOnce({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    const line = screen.getByTestId('dismissed-line');
+    expect(within(line).getByTestId('undo-problem').textContent).toBe(errorText({ category: 'server', code: 'server.unavailable' }, 'pt-BR'));
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('an undo still under way when the 10 s end keeps the line; its success then shows the turn again', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    // The line stays, focus on its pill, while the undo is answered.
+    const pill = within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' });
+    expect(document.activeElement).toBe(pill);
+    answer({ ok: true });
+    await settle();
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(document.activeElement).toBe(within(items[0]!).getByRole('button', { name: 'Dispensar resposta' }));
+  });
+
+  it('an undo refused after the 10 s ended ends the line then, focus moving to the composer', async () => {
+    let answer: (result: { ok: false; problem: unknown }) => void = () => undefined;
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(screen.queryByTestId('dismissed-line')).not.toBeNull();
+
+    answer({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    await settle();
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(document.activeElement).toBe(composer());
+    expect(polite()).toContain(errorText({ category: 'server', code: 'server.unavailable' }, 'pt-BR'));
+  });
+
+  it('a conversation whose every turn was dismissed shows its intro once the lines end, as a reload would', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    expect(screen.queryByTestId('conversation-intro')).toBeNull();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    expect(screen.queryAllByTestId('dismissed-line')).toHaveLength(0);
+    expect(screen.getByTestId('conversation-intro')).toBeTruthy();
+  });
+
+  it('a stopped answer asked on the page is dismissed like a done one, in English too', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    view({ language: 'en' });
+    const stream = await ask('What does Fire Bolt do?', 'en');
+    stream.emit('delta', { text: 'It deals' }, 1);
+    expect(screen.queryByRole('button', { name: 'Dismiss answer' })).toBeNull();
+    stream.emit('done', { stopped: true, silent: false, references: [] }, 2);
+
+    fireEvent.click(turns().getByRole('button', { name: 'Dismiss answer' }));
+
+    expect(screen.getByTestId('dismissed-line').textContent).toBe('Answer dismissed.Undo');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
+    expect(setDismissal).toHaveBeenCalledWith(TURN, 'dismiss');
   });
 });
