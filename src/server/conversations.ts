@@ -10,8 +10,9 @@ import { outgoingTraceparent, traceFrom } from './trace';
 /**
  * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
  * turn's answer as server-sent events, the GM's stop of an answer (Story 2.6), and a page a turn's source reference
- * names (Story 2.7), and from Story 3.2 a campaign's conversation with its question count. The backend takes the owner from
- * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
+ * names (Story 2.7), and from Story 3.2 a campaign's conversation with its question count. From Story 3.9 a search of
+ * the library (created as a job, then read by id) and a page of the campaign's current scope, the ground a search
+ * result opens on. The backend takes the owner from the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
 const UNIT = 'server.conversations';
@@ -22,6 +23,10 @@ export type Turn = Schemas['Turn'];
 export type CampaignConversation = Schemas['CampaignConversation'];
 /** A page a reference names (Story 2.7): the same shape as a material's page on the review ground. */
 export type ReferencePage = Schemas['MaterialPageView'];
+/** A search of the library (Story 3.9): its query, filters, state and, once done, its results. */
+export type Search = Schemas['Search'];
+export type SearchCreated = Schemas['SearchCreated'];
+export type NewSearch = Schemas['NewSearch'];
 
 /** A campaign or turn id as the backend mints it (a UUID); anything else is one nowhere. */
 const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
@@ -86,6 +91,49 @@ export function referencePage(
   return call('conversations.reference_page', options, (client) =>
     client.GET('/api/v1/turns/{turnId}/references/{number}/pages/{page}', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { turnId, number: Number(number), page: Number(page) } },
+    }),
+  );
+}
+
+/**
+ * Starts a search of the campaign's scope (Story 3.9), narrowed by its filters: 202 with the search's id;
+ * `request.invalid` for a blank query, one past 500 code points or a filter that is not one, `request.not_found` for a
+ * campaign that is not the account's.
+ */
+export function createSearch(sessionToken: string, campaignId: string, body: NewSearch, options: CallOptions = {}): Promise<Result<SearchCreated>> {
+  return call('conversations.search', options, (client) =>
+    client.POST('/api/v1/campaigns/{campaignId}/searches', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
+      body,
+    }),
+  );
+}
+
+/**
+ * A search of the account (Story 3.9): its state and, once done, its results as they stand in its campaign's current
+ * scope; `request.not_found` for anything that is not the account's (pruned, or of a campaign deleted since, too).
+ */
+export function getSearch(sessionToken: string, searchId: string, options: CallOptions = {}): Promise<Result<Search>> {
+  return call('conversations.search_read', options, (client) =>
+    client.GET('/api/v1/searches/{searchId}', { params: { header: { 'X-Session-Token': sessionToken }, path: { searchId } } }),
+  );
+}
+
+/**
+ * One page of a version of the campaign's current scope (Story 3.5's ground, opened by a search result in Story 3.9);
+ * `request.not_found` for a version outside that scope, a campaign that is not the account's or a page that is not
+ * one.
+ */
+export function scopeSourcePage(
+  sessionToken: string,
+  campaignId: string,
+  versionId: string,
+  page: string,
+  options: CallOptions = {},
+): Promise<Result<ReferencePage>> {
+  return call('conversations.scope_page', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/sources/{versionId}/pages/{page}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId, versionId, page: Number(page) } },
     }),
   );
 }

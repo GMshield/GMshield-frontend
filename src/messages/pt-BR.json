@@ -45,6 +45,11 @@
       "modelOff": "conhecimento do modelo desligado",
       "modelOn": "conhecimento do modelo ligado",
       "summary": "{tiers} · {model}"
+    },
+    "search": {
+      "label": "Buscar nas fontes",
+      "placeholder": "Buscar nas fontes",
+      "open": "Buscar nas fontes"
     }
   },
   "placeholder": {
@@ -753,5 +758,27 @@
     "goTo": "Ir para a página",
     "outline": "Páginas do sumário",
     "unreadable": "Páginas da lista de páginas ilegíveis"
+  },
+  "search": {
+    "title": "Busca",
+    "subtitle": "Por sentido ou pelas palavras exatas, só nas fontes da campanha atual.",
+    "field": "O que você procura?",
+    "submit": "Buscar",
+    "invalid": "Escreva de 1 a 500 caracteres.",
+    "searching": "Procurando nas fontes…",
+    "results": "Resultados",
+    "tiers": "Camada",
+    "allTiers": "Todas",
+    "material": "Material",
+    "allMaterials": "Todos os materiais",
+    "empty": "Nada encontrado para «{query}» em {scope}.",
+    "emptyFiltered": "{scope}, só {filter}",
+    "start": "Escreva o que procura e pressione Enter.",
+    "failed": "A busca não pôde terminar.",
+    "timeout": "A busca demorou demais para responder.",
+    "retry": "Tentar de novo",
+    "notFound": "Não encontrado.",
+    "noCampaign": "Escolha ou crie uma campanha para buscar nas fontes dela.",
+    "newCampaign": "Nova campanha"
   }
 }

@@ -972,6 +972,29 @@
         "required" : [ "name", "systemId" ],
         "type" : "object"
       },
+      "NewSearch" : {
+        "description" : "A search of the campaign's scope (contract 1.28.0). The filters only narrow the scope, never widen it",
+        "properties" : {
+          "materialId" : {
+            "description" : "Only this material's version; absent or null for every material on",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "query" : {
+            "description" : "What to find, by meaning or exact words: 1 to 500 code points, not blank",
+            "maxLength" : 500,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "tier" : {
+            "description" : "Only this tier's sources; absent or null for every tier on",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "query" ],
+        "type" : "object"
+      },
       "NewSystem" : {
         "properties" : {
           "description" : {
@@ -1271,6 +1294,105 @@
           }
         },
         "required" : [ "id", "name", "on", "tier" ],
+        "type" : "object"
+      },
+      "Search" : {
+        "description" : "A search of the library (contract 1.28.0)",
+        "properties" : {
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "description" : "Why it failed (category.reason, for example scope.passage_refused); only when failed",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "materialId" : {
+            "description" : "The material filter, null for none",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "query" : {
+            "description" : "The query as the GM wrote it",
+            "type" : "string"
+          },
+          "results" : {
+            "description" : "Up to 20 results, best first; empty unless done. Each is re-checked against the campaign's current scope when read: one that left it since is not listed",
+            "items" : {
+              "$ref" : "#/components/schemas/SearchResult"
+            },
+            "maxItems" : 20,
+            "type" : "array"
+          },
+          "state" : {
+            "description" : "pending until its job ends: done with its results, or failed with a code",
+            "enum" : [ "pending", "done", "failed" ],
+            "type" : "string"
+          },
+          "tier" : {
+            "description" : "The tier filter, null for none",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "campaignId", "id", "materialId", "query", "results", "state", "tier" ],
+        "type" : "object"
+      },
+      "SearchCreated" : {
+        "properties" : {
+          "id" : {
+            "description" : "The search's id",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "id" ],
+        "type" : "object"
+      },
+      "SearchResult" : {
+        "description" : "A passage found, as it stands in the campaign's current scope",
+        "properties" : {
+          "firstWords" : {
+            "description" : "The passage's first 160 code points (its white space made single spaces), cut at a word boundary",
+            "type" : "string"
+          },
+          "materialName" : {
+            "description" : "The material's name",
+            "type" : "string"
+          },
+          "page" : {
+            "description" : "The page",
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "passageId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sectionPath" : {
+            "description" : "The section path, outermost first; may be empty",
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "tier" : {
+            "description" : "The tier of its source in the campaign's current scope",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
+          },
+          "versionId" : {
+            "description" : "Its material version: the source page opens on the ground of the current scope",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "firstWords", "materialName", "page", "passageId", "sectionPath", "tier", "versionId" ],
         "type" : "object"
       },
       "SessionGrant" : {
@@ -1668,7 +1790,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.27.0"
+    "version" : "1.28.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -1925,6 +2047,62 @@
           }
         },
         "summary" : "The campaign's conversation (a campaign has at most one) and how many questions it holds, for an archived campaign too; request.not_found (404) when the campaign has none or is not the account's (unknown, another account's or malformed)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/searches" : {
+      "post" : {
+        "operationId" : "createSearch",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewSearch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SearchCreated"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Search the campaign's scope by meaning or exact words (202): the search and its job are recorded together, and the search is then read by id until it is done or failed. Only the campaign's current scope is searched (its tiers and materials switched on, each material's ready version, and passages still being prepared for search), narrowed by the filters; a passage that holds the exact query comes first. Only the account's newest 20 searches are kept. request.invalid (400) for a blank query, one past 500 code points, an unknown tier or a malformed material id; request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
         "tags" : [ "conversations" ]
       }
     },
@@ -3318,6 +3496,52 @@
         },
         "summary" : "The signed-in account; session.required (401) without a session, session.renewal_required (401) when the token must be renewed first",
         "tags" : [ "session" ]
+      }
+    },
+    "/api/v1/searches/{searchId}" : {
+      "get" : {
+        "operationId" : "getSearch",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The search's id",
+          "in" : "path",
+          "name" : "searchId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Search"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A search of the account: its query, filters and state, and once done its results, each re-checked against its campaign's current scope narrowed by the filters (one that left the scope since is not listed). request.not_found (404) for a search that is not the account's (another account's, unknown, malformed, pruned, or of a campaign deleted since)",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/session" : {

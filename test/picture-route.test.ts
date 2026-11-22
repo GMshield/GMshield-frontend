@@ -6,6 +6,7 @@ import { startScripted, type Scripted } from './support/servers';
 const { NextRequest } = await import('next/server');
 const route = await import('@/app/api/v1/materials/[id]/pages/[page]/picture/route');
 const referenceRoute = await import('@/app/api/v1/turns/[id]/references/[number]/pages/[page]/picture/route');
+const scopeRoute = await import('@/app/api/v1/campaigns/[id]/sources/[versionId]/pages/[page]/picture/route');
 
 const CREDENTIAL = 'configured-service-credential-0123456789';
 const SESSION = 'sessionTokenAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -71,6 +72,30 @@ describe('picture route', () => {
     expect(answer.headers.get('content-type')).toBe('image/webp');
     expect(answer.headers.get('cache-control')).toBe('no-store');
     expect(backend.calls[0]!.url).toBe(`/api/v1/turns/${TURN}/references/1/pages/13/picture`);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.cookie).toBeUndefined();
+  });
+
+  it('relays a page picture of the current scope (Story 3.9): campaign then version in the path, the session as X-Session-Token', async () => {
+    const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+    const VERSION = '0190a0b0-0000-7000-8000-000000000071';
+    backend = await startScripted({
+      [`GET /api/v1/campaigns/${CAMPAIGN}/sources/${VERSION}/pages/13/picture`]: { status: 200, body: 'webp', contentType: 'image/webp' },
+    });
+    vi.stubEnv('GMSHIELD_BACKEND_URL', backend.url);
+    captureOutput();
+    expect(scopeRoute.runtime).toBe('nodejs');
+    expect(scopeRoute.dynamic).toBe('force-dynamic');
+    const answer = await scopeRoute.GET(
+      new NextRequest(`${SITE}/api/v1/campaigns/${CAMPAIGN}/sources/${VERSION}/pages/13/picture`, {
+        headers: { cookie: `__Host-gmshield-session=${SESSION}.4102444800` },
+      }),
+      { params: Promise.resolve({ id: CAMPAIGN, versionId: VERSION, page: '13' }) },
+    );
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('image/webp');
+    expect(answer.headers.get('cache-control')).toBe('no-store');
+    expect(backend.calls[0]!.url).toBe(`/api/v1/campaigns/${CAMPAIGN}/sources/${VERSION}/pages/13/picture`);
     expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
     expect(backend.calls[0]!.headers.cookie).toBeUndefined();
   });

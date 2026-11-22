@@ -59,7 +59,8 @@ export type IconName =
   | 'sun'
   | 'moon'
   | 'picture'
-  | 'signOut';
+  | 'signOut'
+  | 'search';
 
 const PATHS: Readonly<Record<IconName, string>> = {
   questions: 'M4 5h16v11H9l-5 4z',
@@ -88,6 +89,7 @@ const PATHS: Readonly<Record<IconName, string>> = {
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
   picture: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15.5 9.5h.01',
   signOut: 'M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
 };
 
 /** An icon by its name, 20px unless a size is given. */

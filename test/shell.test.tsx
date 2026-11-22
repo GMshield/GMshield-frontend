@@ -8,9 +8,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 let pathname = '/questions';
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
-  useRouter: () => ({ refresh }),
+  useRouter: () => ({ refresh, push }),
   redirect: (url: string) => {
     throw new Error(`redirect ${url}`);
   },
@@ -148,6 +149,8 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(bell.getAttribute('aria-expanded')).toBe('false');
     const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
     const skip = screen.getByRole('link', { name: ptBR.shell.skip });
+    const search = screen.getByRole('search', { name: ptBR.shell.search.label });
+    const searchButton = screen.getByRole('link', { name: ptBR.shell.search.open });
     expect(sidebar.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Story 3.2: the campaign's name is the switcher's button; its list is closed (hidden).
@@ -169,6 +172,8 @@ describe('the signed-in shell (Story 1.11)', () => {
         place = 'context';
       } else if (main.contains(focused)) {
         place = 'main';
+      } else if (search.contains(focused) || focused === searchButton) {
+        place = 'search';
       } else if (focused === bell || focused === account) {
         place = 'bar end';
       } else if (focused === skip) {
@@ -178,8 +183,9 @@ describe('the signed-in shell (Story 1.11)', () => {
     }
     const regions = visited.filter((place, index) => index === 0 || visited[index - 1] !== place);
     // Usability pass: "Pular para o conteúdo" is the first stop; the bell and the account menu close the bar above the
-    // page, after the context bar and before the main column.
-    expect(regions).toEqual(['skip', 'sidebar', 'context', 'bar end', 'main']);
+    // page, after the context bar and before the main column. Story 3.9: the search field (and the phone's search
+    // button, which CSS shows in its place under 768px) comes between the context bar and the bell.
+    expect(regions).toEqual(['skip', 'sidebar', 'context', 'search', 'bar end', 'main']);
     expect(skip.getAttribute('href')).toBe('#content');
     expect(main.id).toBe('content');
     expect(visited.filter((place) => place === 'sidebar').length).toBeGreaterThanOrEqual(9);
@@ -471,6 +477,89 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(panel).toMatch(/background-color: var\(--color-popover\);/);
     expect(panel).toMatch(/border: 1px solid var\(--color-border\);/);
     expect(panel).toMatch(/width: min\(32rem, 100%\);/);
+  });
+
+  it('Story 3.9: "/" focuses the search field when no field, editable text or dialog has focus', async () => {
+    const user = userEvent.setup();
+    render(
+      shell({
+        children: (
+          <>
+            <button type="button">algo</button>
+            <input aria-label="outro campo" />
+            <div contentEditable suppressContentEditableWarning aria-label="texto editável" />
+            <dialog open aria-label="diálogo">
+              <button type="button">no diálogo</button>
+            </dialog>
+          </>
+        ),
+      }),
+    );
+    const field = screen.getByRole('searchbox', { name: ptBR.shell.search.label });
+    expect(field.getAttribute('aria-keyshortcuts')).toBe('/');
+
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(field);
+    expect((field as HTMLInputElement).value).toBe('');
+
+    screen.getByRole('button', { name: 'algo' }).focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(field);
+
+    // In another field, an editable text or a dialog, "/" is typed or left alone.
+    const other = screen.getByRole('textbox', { name: 'outro campo' });
+    other.focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(other);
+    expect((other as HTMLInputElement).value).toBe('/');
+    const editable = screen.getByLabelText('texto editável');
+    editable.focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(editable);
+    screen.getByRole('button', { name: 'no diálogo' }).focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'no diálogo' }));
+    // With Ctrl or Meta, it is the browser's.
+    screen.getByRole('button', { name: 'algo' }).focus();
+    await user.keyboard('{Control>}/{/Control}');
+    expect(document.activeElement).not.toBe(field);
+  });
+
+  it('Story 3.9: Enter opens the search page with the query, Esc clears the field, and a blank query goes nowhere', async () => {
+    const user = userEvent.setup();
+    push.mockClear();
+    render(shell());
+    const field = screen.getByRole('searchbox', { name: ptBR.shell.search.label }) as HTMLInputElement;
+    const form = screen.getByRole('search', { name: ptBR.shell.search.label });
+    expect(form.getAttribute('action')).toBe('/search');
+    expect(field.name).toBe('q');
+
+    await user.click(field);
+    await user.keyboard('Espada Vorpal');
+    // Typing searches nothing.
+    expect(push).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(field.value).toBe('');
+    await user.keyboard('   {Enter}');
+    expect(push).not.toHaveBeenCalled();
+
+    await user.clear(field);
+    await user.keyboard('  Espada & Vorpal {Enter}');
+    expect(push).toHaveBeenCalledExactlyOnceWith('/search?q=Espada+%26+Vorpal');
+    expect(field.value).toBe('');
+    // Under 768px a search button opens the search page instead (CSS swaps them).
+    expect(screen.getByRole('link', { name: ptBR.shell.search.open }).getAttribute('href')).toBe('/search');
+    const css = readFileSync(join(process.cwd(), 'src/components/search/SearchField.module.css'), 'utf8');
+    const narrow = /@media \(max-width: 767px\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    expect(narrow).toMatch(/\.form \{\s*display: none;/);
+    expect(narrow).toMatch(/\.open \{\s*display: inline-flex;/);
+    expect(css).toMatch(/^\.open \{[^}]*display: none;/m);
+  });
+
+  it('Story 3.9: names the search field and the search button in English too', () => {
+    render(shell({ language: 'en' }));
+    expect(screen.getByRole('searchbox', { name: en.shell.search.label })).toBeTruthy();
+    expect(screen.getByRole('link', { name: en.shell.search.open })).toBeTruthy();
   });
 
   it('renders the page in the main column, and a right panel only when there is one', () => {

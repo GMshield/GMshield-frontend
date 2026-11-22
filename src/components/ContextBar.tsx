@@ -13,6 +13,11 @@ export type ContextBarProps = {
   readonly switcher?: ReactNode;
   /** After the campaign: its scope summary, which opens the scope popover (Story 3.6); none without a campaign. */
   readonly scope?: ReactNode;
+  /**
+   * Story 3.9: the search field, after where the GM is (outside the trail's navigation, a search of its own), with or
+   * without a campaign; under 768px a search button in its place.
+   */
+  readonly search?: ReactNode;
 };
 
 /**
@@ -20,29 +25,33 @@ export type ContextBarProps = {
  * campaign name only. The system's name leads to Sistemas; from Story 3.2 the campaign's name is the campaign switcher,
  * which also opens when there is no campaign. Story 3.6: after the campaign, its scope summary, which opens the scope
  * popover under the bar (the bar is the popover's containing block); with no campaign, or a scope that could not be
- * read, there is none. Under 768px it is not shown either.
+ * read, there is none. Under 768px it is not shown either. Story 3.9: then the search field, which takes the room the
+ * trail leaves (`SearchField`).
  */
-export function ContextBar({ label, current, none, switcher, scope }: ContextBarProps) {
+export function ContextBar({ label, current, none, switcher, scope, search }: ContextBarProps) {
   return (
-    <nav className={styles.bar} aria-label={label}>
-      {current === null ? (
-        (switcher ?? <span className={styles.none}>{none}</span>)
-      ) : (
-        <>
-          <Link className={`${styles.link} ${styles.system}`} href="/systems">
-            {current.system}
-          </Link>
-          <span className={styles.separator} aria-hidden="true">
-            ›
-          </span>
-          {switcher ?? (
-            <Link className={styles.link} href="/campaigns">
-              {current.campaign}
+    <>
+      <nav className={styles.bar} aria-label={label}>
+        {current === null ? (
+          (switcher ?? <span className={styles.none}>{none}</span>)
+        ) : (
+          <>
+            <Link className={`${styles.link} ${styles.system}`} href="/systems">
+              {current.system}
             </Link>
-          )}
-          {scope}
-        </>
-      )}
-    </nav>
+            <span className={styles.separator} aria-hidden="true">
+              ›
+            </span>
+            {switcher ?? (
+              <Link className={styles.link} href="/campaigns">
+                {current.campaign}
+              </Link>
+            )}
+            {scope}
+          </>
+        )}
+      </nav>
+      {search}
+    </>
   );
 }

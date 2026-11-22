@@ -45,6 +45,11 @@
       "modelOff": "model knowledge off",
       "modelOn": "model knowledge on",
       "summary": "{tiers} · {model}"
+    },
+    "search": {
+      "label": "Search the sources",
+      "placeholder": "Search the sources",
+      "open": "Search the sources"
     }
   },
   "placeholder": {
@@ -753,5 +758,27 @@
     "goTo": "Go to page",
     "outline": "Pages of the outline",
     "unreadable": "Pages of the unreadable pages list"
+  },
+  "search": {
+    "title": "Search",
+    "subtitle": "By meaning or by the exact words, in the current campaign's sources only.",
+    "field": "What are you looking for?",
+    "submit": "Search",
+    "invalid": "Write 1 to 500 characters.",
+    "searching": "Searching the sources…",
+    "results": "Results",
+    "tiers": "Tier",
+    "allTiers": "All",
+    "material": "Material",
+    "allMaterials": "All materials",
+    "empty": "Nothing found for “{query}” in {scope}.",
+    "emptyFiltered": "{scope}, only {filter}",
+    "start": "Write what you are looking for and press Enter.",
+    "failed": "The search could not finish.",
+    "timeout": "The search took too long to answer.",
+    "retry": "Try again",
+    "notFound": "Not found.",
+    "noCampaign": "Choose or create a campaign to search its sources.",
+    "newCampaign": "New campaign"
   }
 }

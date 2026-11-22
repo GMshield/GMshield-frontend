@@ -835,6 +835,34 @@ they sit in `src/`.
   - Deploy order: backend → worker → frontend. The worker before this frontend (the old frontend cannot turn the
     switch on, so nothing it can set is ignored), and this frontend last so the switch only turns on once the worker
     honours it.
+- **Search the library (Story 3.9).** Public contract 1.28.0 (the minimum backend contract too).
+  - **The field.** The context bar holds a search field (`src/components/search/SearchField.tsx`), after where the GM
+    is and before the bell. A search runs on Enter only, never while typing: it opens `/search?q=…` (a plain form to
+    `/search` without JavaScript). Esc in the field clears it. `/` focuses it when no field, editable text or dialog has
+    focus (`focusSearchField` in `search-address.ts`: the first search field that can be seen, so on a phone the
+    search page's own). Under 768px the field gives way to a search button that opens `/search`.
+  - **The page.** `/search` (`src/app/(signed-in)/search/page.tsx`, `src/components/search/SearchPage.tsx`) has its own
+    field at its top at every width, prefilled with the query. With a query and no stored search, it starts one through
+    `POST /api/v1/campaigns/{id}/searches` (the relay, `createSearch` in `src/server/conversations.ts`) and replaces the
+    address with `&s=<id>`, so a reload and a page turned read the stored search; it then reads
+    `GET /api/v1/searches/{id}` (`getSearch`) every 500 ms for up to 30 s, a muted "Procurando nas fontes…" meanwhile.
+    A failed search, or one not done in time, says so with "Tentar de novo"; a query the backend refuses is said beside
+    the field; another account's search is "Não encontrado.". A stored search of another campaign (the GM switched
+    since) is started again for the current one.
+  - **The results.** Up to 20, ten a page (`?page=`, the shared `Pager`): the passage's first words, its tier
+    (`TierLabel`) and its place as a reference line ("Material, Seção › Sub, p. N"). Selecting one opens `SourceView` in
+    the right panel at that page, its passage marked, on the ground of the current scope: `SourceView` takes
+    `ground={{kind: 'scope', campaignId, versionId}}` beside its turn ground (`turnId`, unchanged), and reads the page
+    from `GET /api/v1/campaigns/{id}/sources/{versionId}/pages/{page}` and its picture from `.../picture` (the relays,
+    `scopeSourcePage` and `relayScopePicture`). Closing it (Esc too) gives focus back to the result.
+  - **The filters.** Chips for the tiers switched on only (and "Todas"), and a select of the materials switched on in
+    them; a change starts a new, narrowed search from page 1 (the backend narrows the scope; the page never hides
+    rows). A search that found nothing says so in one sentence naming the scope searched (`scopeTiers`, the tiers part
+    of `scopeSummary`, and the filters).
+  - Every string is in `search.*` and `shell.search.*`, in pt-BR and en. The stand-in backend records a search (202) and
+    reads it done with two results, the campaign's notes (a text page) and the book (a picture page), each page
+    answering on the current-scope path.
+  - Deploy order: backend → worker → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never

@@ -69,8 +69,12 @@
   margin: 0 auto;
 }
 
-/* The bar above the page: where the GM is (system and campaign) on the left, the notifications on the right. */
+/*
+ * The bar above the page: where the GM is (system and campaign) on the left, the notifications on the right. Story 3.9:
+ * a size container, so the search field gives way to its button when the bar is narrow (a source view open beside it).
+ */
 .bar {
+  container: bar / inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -10,7 +10,9 @@ import { outgoingTraceparent, traceFrom } from '../trace';
  * The relay of a page's picture (Story 1.19), modelled on the upload relay: `GET /api/v1/materials/{id}/pages/{page}/
  * picture?ground=...` of this site goes to the same path of the backend, and the backend's WebP streams back. Story
  * 2.7: the same relay serves the picture of a page a turn's source reference names,
- * `GET /api/v1/turns/{turnId}/references/{number}/pages/{page}/picture`, whose path is its ground.
+ * `GET /api/v1/turns/{turnId}/references/{number}/pages/{page}/picture`, whose path is its ground. Story 3.9: and the
+ * picture of a page of the campaign's current scope, `GET /api/v1/campaigns/{campaignId}/sources/{versionId}/pages/
+ * {page}/picture` (a search result's page).
  *
  * - The material or turn id must be a UUID, the reference and page numbers numbers from 1, and the ground a plain
  *   word: anything else answers "not found" without reaching the backend. The backend decides everything else
@@ -68,6 +70,17 @@ export function referencePicturePath(turnId: string, number: string, page: strin
   return `/api/v1/turns/${turnId}/references/${number}/pages/${page}/picture`;
 }
 
+/**
+ * The backend path of the picture of a page of the campaign's current scope (Story 3.9); null when an id or the page
+ * cannot be one.
+ */
+export function scopePicturePath(campaignId: string, versionId: string, page: string): string | null {
+  if (!ID.test(campaignId) || !ID.test(versionId) || !PAGE.test(page)) {
+    return null;
+  }
+  return `/api/v1/campaigns/${campaignId}/sources/${versionId}/pages/${page}/picture`;
+}
+
 function problem(status: number, category: string, code: string, title: string, traceId: string): Response {
   const body = JSON.stringify({ type: `urn:gmshield:problem:${code}`, title, status, category, code, params: {}, traceId });
   return new Response(body, {
@@ -103,6 +116,17 @@ export function relayReferencePicture(
   options: PictureRelayOptions = {},
 ): Promise<Response> {
   return relayPictureAt(request, referencePicturePath(turnId, number, page), options);
+}
+
+/** Relays the picture of a page of the campaign's current scope (Story 3.9), as {@link relayPicture} does. */
+export function relayScopePicture(
+  request: PictureRequest,
+  campaignId: string,
+  versionId: string,
+  page: string,
+  options: PictureRelayOptions = {},
+): Promise<Response> {
+  return relayPictureAt(request, scopePicturePath(campaignId, versionId, page), options);
 }
 
 /** Relays one picture request to the backend path `path` (null: "not found", the backend is not reached). */

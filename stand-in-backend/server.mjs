@@ -25,7 +25,10 @@
 // material has no superseded version (`superseded: []`); its deletion takes its one version and its 444 pages, and a
 // delete of it, or of one of its versions, answers 202 with no body. Story 3.6: a campaign's scope is the starting one
 // (campaign and system on, other and model knowledge off, version 0) with two campaign materials, one of the system and
-// one of another campaign, all on; a change answers the same settings at version 1.
+// one of another campaign, all on; a change answers the same settings at version 1. Story 3.9: a search is recorded
+// (202 with its id) and reads as done with two results, a passage of the campaign's notes (a text page) then one of
+// the book (a picture page); a page of the current scope is the notes' text page for the notes' version and the book's
+// picture page for any other.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -165,6 +168,39 @@ export const STARTING_SCOPE = {
   ],
 };
 
+/** Story 3.9: the versions of the two materials a search finds, and the search, done with a result in each. */
+export const NOTES_VERSION = '0190a0b0-0000-7000-8000-000000000070';
+export const BOOK_VERSION = '0190a0b0-0000-7000-8000-000000000071';
+export const SEARCH_ID = '0190a0b0-0000-7000-8000-000000000072';
+export const SEARCH_DONE = {
+  id: SEARCH_ID,
+  campaignId: STARTER_CAMPAIGN.id,
+  query: 'Fire Bolt',
+  tier: null,
+  materialId: null,
+  state: 'done',
+  results: [
+    {
+      passageId: '0190a0b0-0000-7000-8000-000000000010',
+      versionId: NOTES_VERSION,
+      materialName: 'Notas da campanha.md',
+      sectionPath: ['Magias'],
+      page: 2,
+      firstWords: 'Fire Bolt causa 1d10 de dano de fogo.',
+      tier: 'campaign',
+    },
+    {
+      passageId: '0190a0b0-0000-7000-8000-000000000009',
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Spells', 'Fire Bolt'],
+      page: 13,
+      firstWords: 'Fire Bolt. Evocation cantrip. You hurl a mote of fire at a creature or an object within range.',
+      tier: 'system',
+    },
+  ],
+};
+
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
   'GET /api/v1/campaigns/current': STARTER,
@@ -292,6 +328,8 @@ export const EXAMPLES = {
     indexing: null,
     indexingFailed: null,
   },
+  'POST /api/v1/campaigns/{campaignId}/searches': { id: SEARCH_ID },
+  'GET /api/v1/searches/{searchId}': SEARCH_DONE,
   'POST /api/v1/campaigns/{campaignId}/turns': {
     id: '0190a0b0-0000-7000-8000-000000000021',
     conversationId: '0190a0b0-0000-7000-8000-000000000020',
@@ -359,6 +397,8 @@ export const REFERENCE_TEXT_PAGE = {
 };
 
 const REFERENCE_PAGE_PATH = /^\/api\/v1\/turns\/[^/]+\/references\/([^/]+)\/pages\/[^/]+$/;
+/** Story 3.9: a page of the current scope, by version. */
+const SOURCE_PAGE_PATH = /^\/api\/v1\/campaigns\/[^/]+\/sources\/([^/]+)\/pages\/[^/]+$/;
 
 /** Story 3.7: the two versions of the stand-in answer, the campaign's house rule first, then the book's rule. */
 export const HOUSE_RULE = 'Na mesa, **Fire Bolt** causa 2d10 de dano de fogo.';
@@ -420,6 +460,10 @@ export function answer(contract, method, pathname, traceId) {
     const reference = REFERENCE_PAGE_PATH.exec(pathname)?.[1];
     if (reference !== undefined && method.toUpperCase() === 'GET') {
       return { status: 200, type, body: reference === '1' ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
+    }
+    const source = SOURCE_PAGE_PATH.exec(pathname)?.[1];
+    if (source !== undefined && method.toUpperCase() === 'GET') {
+      return { status: 200, type, body: source === NOTES_VERSION ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});
