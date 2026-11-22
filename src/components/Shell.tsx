@@ -18,6 +18,7 @@ import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
 import { scopeSummary, type Scope } from './scope';
 import { ScopePopover } from './ScopePopover';
+import { ScopePopoverProvider } from './ScopePopoverContext';
 import styles from './Shell.module.css';
 import { ShellFrame } from './ShellPanel';
 import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
@@ -130,51 +131,53 @@ export function Shell({
   return (
     <NotificationsProvider language={preferences.language}>
       <UploadsProvider texts={uploadTexts(preferences.language)} belonging={belonging} imageSets={IMAGE_SETS}>
-        {/* The first stop of the keyboard: past the sidebar and the bar, straight to the page (WCAG 2.4.1). */}
-        <a className={styles.skip} href="#content">
-          {t('shell.skip')}
-        </a>
-        <ShellFrame panel={panel}>
-          <Sidebar
-            labels={{
-              name: t('shell.name'),
-              home: t('shell.home'),
-              openMenu: t('shell.openMenu'),
-              closeMenu: t('shell.closeMenu'),
-              navigation: t('shell.navigation'),
-              currentCampaign: t('shell.currentCampaign'),
-              entries,
-            }}
-            campaign={switcher('sidebar')}
-            initialState={sidebar}
-            trayRows={trayRows}
-          />
-          <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
-            <div className={styles.bar}>
-              <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} scope={scopePopover} />
-              <div className={styles.barEnd}>
-                <NotificationCenter language={preferences.language} attention={attention} />
-                <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>
-                  <p className={accountStyles.account}>
-                    <span className={accountStyles.accountLabel}>{t('shell.signedInLabel')}</span>
-                    <span className={accountStyles.accountName}>{username}</span>
-                  </p>
-                  <PreferencesForm theme={preferences.theme} language={preferences.language} />
-                  <form action={signOutAction} className={accountStyles.signOut}>
-                    <PillButton type="submit">
-                      <NamedIcon name="signOut" size={18} />
-                      {t('shell.signOut')}
-                    </PillButton>
-                  </form>
-                </AccountMenu>
+        <ScopePopoverProvider>
+          {/* The first stop of the keyboard: past the sidebar and the bar, straight to the page (WCAG 2.4.1). */}
+          <a className={styles.skip} href="#content">
+            {t('shell.skip')}
+          </a>
+          <ShellFrame panel={panel}>
+            <Sidebar
+              labels={{
+                name: t('shell.name'),
+                home: t('shell.home'),
+                openMenu: t('shell.openMenu'),
+                closeMenu: t('shell.closeMenu'),
+                navigation: t('shell.navigation'),
+                currentCampaign: t('shell.currentCampaign'),
+                entries,
+              }}
+              campaign={switcher('sidebar')}
+              initialState={sidebar}
+              trayRows={trayRows}
+            />
+            <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
+              <div className={styles.bar}>
+                <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} scope={scopePopover} />
+                <div className={styles.barEnd}>
+                  <NotificationCenter language={preferences.language} attention={attention} />
+                  <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>
+                    <p className={accountStyles.account}>
+                      <span className={accountStyles.accountLabel}>{t('shell.signedInLabel')}</span>
+                      <span className={accountStyles.accountName}>{username}</span>
+                    </p>
+                    <PreferencesForm theme={preferences.theme} language={preferences.language} />
+                    <form action={signOutAction} className={accountStyles.signOut}>
+                      <PillButton type="submit">
+                        <NamedIcon name="signOut" size={18} />
+                        {t('shell.signOut')}
+                      </PillButton>
+                    </form>
+                  </AccountMenu>
+                </div>
               </div>
+              <main id="content" className={styles.main}>
+                {notices}
+                {children}
+              </main>
             </div>
-            <main id="content" className={styles.main}>
-              {notices}
-              {children}
-            </main>
-          </div>
-        </ShellFrame>
+          </ShellFrame>
+        </ScopePopoverProvider>
       </UploadsProvider>
     </NotificationsProvider>
   );

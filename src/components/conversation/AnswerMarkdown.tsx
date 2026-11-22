@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import Markdown, { type Components, type UrlTransform } from 'react-markdown';
 
-import type { Tier } from '@/client/conversation';
+import type { TurnTier } from '@/client/conversation';
 
 import { TIER_SEPARATOR } from '../TierLabel';
 import tierStyles from '../TierLabel.module.css';
@@ -26,12 +26,26 @@ export type CitationMark = { readonly offset: number; readonly number: number };
 
 /**
  * Story 3.7: a tier's version of the answer starts at a code-point offset of its Markdown text, shown there as the tier
- * pill (`TierLabel`) with its word.
+ * pill (`TierLabel`) with its word. Story 3.8: the model's own knowledge has `spoken`, what a reader hears for its pill
+ * ("Do conhecimento do modelo, sem fonte."), which also closes that part as a muted line after its last block, where a
+ * superscript would be: at `end` (the offset where the next tier's version starts), or at the answer's end without it.
  */
-export type TierMark = { readonly offset: number; readonly tier: Tier; readonly label: string };
+export type TierMark = {
+  readonly offset: number;
+  readonly tier: TurnTier;
+  readonly label: string;
+  readonly spoken?: string;
+  readonly end?: number;
+};
 
-/** What the step puts in the tree: a citation's superscript or a tier's pill. */
-type Mark = { readonly kind: 'citation'; readonly number: number } | { readonly kind: 'tier'; readonly tier: Tier; readonly label: string };
+/**
+ * What the step puts in the tree: a citation's superscript, a tier's pill, or (Story 3.8) the muted line that closes
+ * the model's own knowledge.
+ */
+type Mark =
+  | { readonly kind: 'citation'; readonly number: number }
+  | { readonly kind: 'tier'; readonly tier: TurnTier; readonly label: string; readonly spoken: string | null }
+  | { readonly kind: 'end'; readonly text: string };
 
 /** Whitespace (line breaks included) and closing emphasis delimiters a mark is moved back over. */
 const MOVED_OVER = /^[\s*_~]$/u;
@@ -214,6 +228,22 @@ function locateInline(child: TreeNode, at: number, source: string, mark: Mark, p
   }
 }
 
+/**
+ * Story 3.8: where the line closing a part lands, from the source offset `at` of its end: after the top-level block that
+ * holds it (the last one ending at or before it when it falls between blocks), so it stands under the part's last
+ * block, before the next tier's pill; in a paragraph of its own when the answer has no block.
+ */
+function closeAt(root: TreeNode, at: number, mark: Mark, places: Places): void {
+  const children = root.children ?? [];
+  const block =
+    children.findLast((node) => startOf(node) < at && at <= endOf(node)) ?? children.findLast((node) => endOf(node) >= 0 && endOf(node) <= at);
+  if (block === undefined) {
+    add(places.alone, root, mark);
+  } else {
+    add(places.below, block, mark);
+  }
+}
+
 /** The visually hidden word said before a superscript's number, as an HTML (hast) element. */
 function hidden(word: string) {
   return {
@@ -230,42 +260,65 @@ function hidden(word: string) {
  * ": " so a reader never runs the word into the text, as `TierLabel` draws it.
  */
 function superscripts(marks: readonly Mark[], word: string): TreeNode[] {
-  return marks.flatMap((mark): TreeNode[] =>
-    mark.kind === 'tier'
-      ? [
-          {
-            type: 'tier',
-            data: {
-              hName: 'span',
-              hProperties: { className: [tierStyles.pill, styles.tierInAnswer], dataTier: mark.tier },
-              hChildren: [{ type: 'text', value: mark.label }],
-            },
+  return marks.flatMap((mark): TreeNode[] => {
+    if (mark.kind === 'end') {
+      return [];
+    }
+    if (mark.kind === 'citation') {
+      return [
+        {
+          type: 'citation',
+          data: {
+            hName: 'sup',
+            hProperties: { className: [styles.citation] },
+            hChildren: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(mark.number) }],
           },
-          {
-            type: 'tierSeparator',
-            data: {
-              hName: 'span',
-              hProperties: { className: [tierStyles.separator] },
-              hChildren: [{ type: 'text', value: TIER_SEPARATOR }],
-            },
-          },
-        ]
-      : [
-          {
-            type: 'citation',
-            data: {
-              hName: 'sup',
-              hProperties: { className: [styles.citation] },
-              hChildren: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(mark.number) }],
-            },
-          },
-        ],
-  );
+        },
+      ];
+    }
+    // Story 3.8: a pill with a sentence of its own is heard as that sentence, not as its word.
+    const pill = { className: [tierStyles.pill, styles.tierInAnswer], dataTier: mark.tier };
+    return [
+      {
+        type: 'tier',
+        data: {
+          hName: 'span',
+          hProperties: mark.spoken === null ? pill : { ...pill, ariaHidden: 'true' },
+          hChildren: [{ type: 'text', value: mark.label }],
+        },
+      },
+      {
+        type: 'tierSeparator',
+        data: {
+          hName: 'span',
+          hProperties: { className: [tierStyles.separator] },
+          hChildren: [{ type: 'text', value: mark.spoken === null ? TIER_SEPARATOR : `${mark.spoken} ` }],
+        },
+      },
+    ];
+  });
 }
 
 /** A paragraph holding only marks. */
 function paragraphOf(marks: readonly Mark[], word: string): TreeNode {
   return { type: 'paragraph', children: superscripts(marks, word) };
+}
+
+/**
+ * Story 3.8: the muted line that closes the model's own knowledge, as a paragraph of its own: not focusable, with no role
+ * of its own, like the pill.
+ */
+function endLineOf(marks: readonly Mark[]): TreeNode[] {
+  return marks.flatMap((mark): TreeNode[] =>
+    mark.kind === 'end'
+      ? [
+          {
+            type: 'modelEnd',
+            data: { hName: 'p', hProperties: { className: [styles.modelEnd] }, hChildren: [{ type: 'text', value: mark.text }] },
+          },
+        ]
+      : [],
+  );
 }
 
 /** A text node split at its marks: text, the marks there, text, and so on (no empty text). */
@@ -307,14 +360,18 @@ function insert(parent: TreeNode, places: Places, word: string): void {
     }
     children.push(...superscripts(places.after.get(child) ?? [], word));
     const below = places.below.get(child);
-    if (below !== undefined) {
-      children.push(paragraphOf(below, word));
+    const cited = below?.filter((mark) => mark.kind !== 'end') ?? [];
+    if (cited.length > 0) {
+      children.push(paragraphOf(cited, word));
     }
+    children.push(...endLineOf(below ?? []));
   }
   const alone = places.alone.get(parent);
-  if (alone !== undefined) {
-    children.push(paragraphOf(alone, word));
+  const marked = alone?.filter((mark) => mark.kind !== 'end') ?? [];
+  if (marked.length > 0) {
+    children.push(paragraphOf(marked, word));
   }
+  children.push(...endLineOf(alone ?? []));
   parent.children = children;
 }
 
@@ -338,9 +395,14 @@ function remarkCitations(text: string, marks: readonly CitationMark[], word: str
       .filter((mark) => Number.isInteger(mark.number) && mark.number >= 1)
       .map((mark) => ({ mark: { kind: 'citation', number: mark.number } as Mark, at: units[placeOf(points, mark.offset)] ?? text.length }));
     // A pill at or past the end of the text would open nothing: it is left out.
-    const opened = tiers
-      .filter((mark) => Number.isInteger(mark.offset) && mark.label !== '' && tierPlaceOf(points, mark.offset) < points.length)
-      .map((mark) => ({ mark: { kind: 'tier', tier: mark.tier, label: mark.label } as Mark, at: units[tierPlaceOf(points, mark.offset)] ?? text.length }));
+    const drawn = tiers.filter(
+      (mark) => Number.isInteger(mark.offset) && mark.label !== '' && tierPlaceOf(points, mark.offset) < points.length,
+    );
+    const opened = drawn.map((mark) => ({
+      mark: { kind: 'tier', tier: mark.tier, label: mark.label, spoken: mark.spoken ?? null } as Mark,
+      at: units[tierPlaceOf(points, mark.offset)] ?? text.length,
+    }));
+
     // At one place, the superscripts of the version that ends come before the pill of the one that starts.
     const placed = [...cited, ...opened].sort((one, other) => one.at - other.at);
     const places: Places = {
@@ -354,6 +416,13 @@ function remarkCitations(text: string, marks: readonly CitationMark[], word: str
     };
     for (const { mark, at } of placed) {
       locate(tree as TreeNode, at, text, mark, places);
+    }
+    // Story 3.8: the line that closes a part with a sentence of its own goes after the block holding its end.
+    for (const mark of drawn) {
+      if (mark.spoken !== undefined && mark.spoken !== '') {
+        const end = units[placeOf(points, mark.end ?? points.length)] ?? text.length;
+        closeAt(tree as TreeNode, end, { kind: 'end', text: mark.spoken }, places);
+      }
     }
     insert(tree as TreeNode, places, word);
   };

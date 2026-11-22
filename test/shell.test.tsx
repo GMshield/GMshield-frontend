@@ -28,6 +28,7 @@ vi.mock('@/client/upload', async (importOriginal) => ({ ...(await importOriginal
 const { Shell } = await import('@/components/Shell');
 const { SIDEBAR_ENTRIES } = await import('@/components/shell-entries');
 const { ShellPanel } = await import('@/components/ShellPanel');
+const { useOptionalScopePopover } = await import('@/components/ScopePopoverContext');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -431,9 +432,37 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(within(screen.getByRole('navigation', { name: ptBR.shell.context })).queryByRole('button', { name: /conhecimento do modelo/ })).toBeNull();
   });
 
+  it('Story 3.8: the shell gives the page the scope popover\'s opener, which opens it with focus inside; none without a scope', async () => {
+    const scope = { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [] };
+    function Opener() {
+      const opener = useOptionalScopePopover();
+      return opener?.available === true ? (
+        <button type="button" onClick={opener.open}>
+          abrir
+        </button>
+      ) : null;
+    }
+    const withScope = (value: typeof scope | null) => (
+      <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="Mestre_Ana" current={{ ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }} scope={value} sidebar="open">
+        <Opener />
+      </Shell>
+    );
+    const { rerender } = render(withScope(scope));
+    await userEvent.setup().click(within(screen.getByRole('main')).getByRole('button', { name: 'abrir' }));
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    const group = within(context).getByRole('group', { name: ptBR.shell.scope.panel });
+    expect(group.hidden).toBe(false);
+    expect(group.contains(document.activeElement)).toBe(true);
+    rerender(withScope(null));
+    expect(screen.queryByRole('button', { name: 'abrir' })).toBeNull();
+  });
+
   it('Story 3.6: under 768px the summary is not shown (the campaign name only), and its popover floats under the bar', () => {
     const css = (name: string) => readFileSync(join(process.cwd(), 'src/components', name), 'utf8');
-    expect(css('ScopePopover.module.css')).toMatch(/@media \(max-width: 767px\) \{\s*\.popover \{\s*display: none;/);
+    // Story 3.8: only the summary's button goes; the popover stays, so the offer under a silent answer opens it.
+    const narrow = /@media \(max-width: 767px\) \{([\s\S]*?)\n\}/.exec(css('ScopePopover.module.css'))?.[1] ?? '';
+    expect(narrow).toMatch(/\.trigger \{\s*display: none;/);
+    expect(narrow).not.toMatch(/\.popover \{[^}]*display: none;/);
     expect(css('ContextBar.module.css')).toMatch(/@media \(max-width: 767px\) \{\s*\.system,\s*\.separator \{\s*display: none;/);
     expect(css('ContextBar.module.css')).toMatch(/^\.bar \{[^}]*position: relative;/m);
     const panel = /^\.panel \{([^}]*)\}/m.exec(css('ScopePopover.module.css'))?.[1] ?? '';

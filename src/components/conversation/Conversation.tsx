@@ -3,12 +3,24 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
-import { parseCitation, parseDone, parseTier, postQuestion, stopTurn, turnEventsUrl, type Citation, type SourceReference, type TierStart } from '@/client/conversation';
+import {
+  MODEL_TIER,
+  parseCitation,
+  parseDone,
+  parseTier,
+  postQuestion,
+  stopTurn,
+  turnEventsUrl,
+  type Citation,
+  type SourceReference,
+  type TierStart,
+} from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
 
+import { useOptionalScopePopover } from '../ScopePopoverContext';
 import { ShellPanel } from '../ShellPanel';
 import { SourceView, type LoadPage } from '../SourceView';
-import { TIER_SEPARATOR, tierWord } from '../TierLabel';
+import { TIER_SEPARATOR, tierSpoken, tierWord } from '../TierLabel';
 import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
@@ -55,7 +67,8 @@ type Connection = 'open' | 'lost' | 'failed';
  * A turn asked since the page opened: its question, then its answer as it is written. Story 2.5: its citations as they
  * arrive, and once it is done its references, or `silent` when it has none. Story 2.6: how it failed, and its stream's
  * connection. Story 2.7: its id once known, which names its references to the source view. Story 3.7: its tier events
- * as they arrive (each tier's version of the answer starts at its offset).
+ * as they arrive (each tier's version of the answer starts at its offset). Story 3.8: whether its model knowledge was
+ * on, as frozen with it (from its `done` event), which decides the offer under a silent answer.
  */
 type ShownTurn = {
   readonly key: number;
@@ -69,6 +82,7 @@ type ShownTurn = {
   readonly tiers: readonly TierStart[];
   readonly references: readonly SourceReference[];
   readonly silent: boolean;
+  readonly modelKnowledge: boolean;
   readonly failure: Failure | null;
   readonly connection: Connection;
 };
@@ -110,17 +124,25 @@ function marksOf(turn: ShownTurn): CitationMark[] {
 }
 
 /**
- * Story 3.7: the tier pills of a finished answer, each with its word in the interface's language. A pill says the
- * sources disagree, so the markers are tidied first: in text order, one whose tier repeats the one before it is dropped,
- * and none is drawn unless at least two tiers are left.
+ * Story 3.7: the tier pills of a finished answer, each with its word in the interface's language. A pill of the scope's
+ * tiers says the sources disagree, so the markers are tidied first: in text order, one whose tier repeats the one before
+ * it is dropped, and none of campaign, system and other is drawn unless at least two of them are left. Story 3.8: the
+ * model's own knowledge is always drawn, even alone, with its sentence (`tierSpoken`), and ends where the next marker
+ * kept starts, or at the answer's end.
  */
 function tierMarksOf(starts: readonly TierStart[], t: Translate): TierMark[] {
   const ordered = [...starts].sort((one, other) => one.offset - other.offset);
   const kept = ordered.filter((start, index) => index === 0 || start.tier !== ordered[index - 1]?.tier);
-  if (new Set(kept.map((start) => start.tier)).size < 2) {
-    return [];
-  }
-  return kept.map((start) => ({ offset: start.offset, tier: start.tier, label: tierWord(start.tier, t) }));
+  const scoped = new Set(kept.filter((start) => start.tier !== MODEL_TIER).map((start) => start.tier));
+  return kept.flatMap((start, index): TierMark[] => {
+    const label = tierWord(start.tier, t);
+    const spoken = tierSpoken(start.tier, t);
+    if (spoken === null) {
+      return scoped.size < 2 ? [] : [{ offset: start.offset, tier: start.tier, label }];
+    }
+    const next = kept[index + 1];
+    return [{ offset: start.offset, tier: start.tier, label, spoken, ...(next === undefined ? {} : { end: next.offset }) }];
+  });
 }
 
 /** The turn's language when the interface has it, else the interface's. */
@@ -193,6 +215,7 @@ function newTurn(key: number, question: string): ShownTurn {
     tiers: [],
     references: [],
     silent: false,
+    modelKnowledge: false,
     failure: null,
     connection: 'open',
   };
@@ -271,10 +294,15 @@ export function NoCampaignConversation({ language }: { readonly language: Langua
  *   the same question again as a new turn, in place of the failed one.
  * - With no accepted source, a line above the composer says so, with the guided upload and the newest material to
  *   review; asking still works.
+ * - Story 3.8: a part from the model's own knowledge opens with the "Conhecimento do modelo" pill (drawn even alone) and
+ *   closes with a muted "Do conhecimento do modelo, sem fonte."; such an answer is not silent. Under a silent answer
+ *   whose turn had model knowledge off, a muted line offers to widen the sources or turn model knowledge on, with
+ *   "Abrir o escopo", which opens the context bar's scope popover with focus inside it.
  */
 export function Conversation({ language, campaignId, hasSources, review, openStream, loadPage }: ConversationProps) {
   const t = translator(language);
   const uploads = useUploads();
+  const scopePopover = useOptionalScopePopover();
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<readonly ShownTurn[]>([]);
   const [spoken, setSpoken] = useState<Spoken>({ text: '', answer: false, references: [], note: '', tiers: [] });
@@ -454,7 +482,8 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             return;
           }
           finish();
-          const done = parseDone(dataOf(event));
+          // Story 3.8: a part marked as the model's own knowledge is not silent, even with no reference.
+          const done = parseDone(dataOf(event), tiers.some((start) => start.tier === MODEL_TIER));
           const kept = [...citations];
           const opened = [...tiers];
           if (done.stopped) {
@@ -467,6 +496,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
               tiers: opened,
               references: done.references,
               silent: false,
+              modelKnowledge: done.modelKnowledge,
             }));
             if (text === '') {
               say(t('conversation.stopped'), false, done.references);
@@ -483,9 +513,12 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             tiers: opened,
             references: done.references,
             silent: done.silent,
+            modelKnowledge: done.modelKnowledge,
           }));
           if (done.silent) {
-            say(translator(languageOf(turnLanguage, language))('conversation.silent'));
+            const turnT = translator(languageOf(turnLanguage, language));
+            // Story 3.8: with model knowledge off, the offer under it is said too, in the same language.
+            say(done.modelKnowledge ? turnT('conversation.silent') : `${turnT('conversation.silent')} ${turnT('conversation.offer')}.`);
           } else {
             say(text, true, done.references, '', tierMarksOf(opened, t));
           }
@@ -739,6 +772,16 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
                 <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
                   <p>{translator(languageOf(turn.language, language))('conversation.silent')}</p>
                 </div>
+              ) : null}
+              {silent && !turn.modelKnowledge ? (
+                <p className={styles.offer} data-testid="silent-offer">
+                  <span>{t('conversation.offer')}</span>
+                  {scopePopover?.available === true ? (
+                    <button type="button" className={styles.offerAction} onClick={scopePopover.open}>
+                      {t('conversation.openScope')}
+                    </button>
+                  ) : null}
+                </p>
               ) : null}
               {silent || hidden || turn.text === '' ? null : (
                 <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>

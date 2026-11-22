@@ -339,3 +339,76 @@ describe('a tier pill opens the version it starts (Story 3.7)', () => {
     expect(container.querySelector('pre')?.previousElementSibling?.querySelector('[data-tier]')).toBe(shownPill);
   });
 });
+
+describe('the model\'s own knowledge opens with its pill and closes with its line (Story 3.8)', () => {
+  const SPOKEN = 'Do conhecimento do modelo, sem fonte.';
+  const model = (offset: number, end?: number): TierMark => ({
+    offset,
+    tier: 'model',
+    label: 'Conhecimento do modelo',
+    spoken: SPOKEN,
+    ...(end === undefined ? {} : { end }),
+  });
+
+  /** Each top-level block: the closing line as END, else its nodes (pills with what a reader hears, superscripts, text). */
+  function blocks(text: string, marks: CitationMark[], tiers: TierMark[]) {
+    const { container } = render(<AnswerMarkdown text={text} linkText={linkText} marks={marks} citationWord="fonte" tiers={tiers} />);
+    return Array.from(container.children).map((block) => {
+      if (/modelEnd/u.test(block.className)) {
+        return [`${block.tagName}:END:${block.textContent}`];
+      }
+      return Array.from(block.childNodes).map((node) => {
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.dataset.tier}:${node.textContent}${node.getAttribute('aria-hidden') === 'true' ? ':hidden' : ''}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        if (node.nodeName === 'SUP') {
+          return `SUP:${node.lastChild?.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      });
+    });
+  }
+
+  it('is heard as its sentence, not its word, and the line goes after its last block at the answer\'s end', () => {
+    const text = 'Na mesa, 2d10.\n\nEm geral, 1d10.\n\nE mais uma linha.';
+    expect(blocks(text, [{ offset: 14, number: 1 }], [model(16)])).toEqual([
+      ['#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', `SEP:${SPOKEN} `, '#text:Em geral, 1d10.'],
+      ['#text:E mais uma linha.'],
+      [`P:END:${SPOKEN}`],
+    ]);
+  });
+
+  it('closes before the next version\'s pill, back over the blank line', () => {
+    const text = 'Em geral, 1d10.\n\nNo livro, 1d10.';
+    const system: TierMark = { offset: 17, tier: 'system', label: 'Sistema' };
+    expect(blocks(text, [{ offset: lengthOf(text), number: 1 }], [model(0, 17), system])).toEqual([
+      ['PILL:model:Conhecimento do modelo:hidden', `SEP:${SPOKEN} `, '#text:Em geral, 1d10.'],
+      [`P:END:${SPOKEN}`],
+      ['PILL:system:Sistema', 'SEP:: ', '#text:No livro, 1d10.', 'SUP:1'],
+    ]);
+  });
+
+  it('closes a list or a code block after the whole block, and the pill and line take no focus and have no role', () => {
+    const text = 'Em geral:\n\n- um\n- dois';
+    const { container } = render(<AnswerMarkdown text={text} linkText={linkText} tiers={[model(0)]} />);
+    expect(container.lastElementChild?.previousElementSibling?.tagName).toBe('UL');
+    expect(container.lastElementChild?.textContent).toBe(SPOKEN);
+    for (const element of container.querySelectorAll('[data-tier], [class*="modelEnd"]')) {
+      expect(element.getAttribute('role')).toBeNull();
+      expect(element.getAttribute('tabindex')).toBeNull();
+    }
+    expect(blocks('Um.\n\n```\ncódigo\n```', [], [model(5)]).at(-1)).toEqual([`P:END:${SPOKEN}`]);
+  });
+
+  it('draws no line for a pill left out, and none for a scope tier', () => {
+    expect(blocks('Um.', [], [model(3)])).toEqual([['#text:Um.']]);
+    expect(blocks('Um.\n\nDois.', [], [{ offset: 0, tier: 'campaign', label: 'Campanha' }])).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', '#text:Um.'],
+      ['#text:Dois.'],
+    ]);
+  });
+});

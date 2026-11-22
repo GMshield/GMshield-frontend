@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useActionState, useId, useOptimistic, useState } from 'react';
+import { startTransition, useActionState, useOptimistic, useState } from 'react';
 
 import { translator, type Language } from '@/messages';
 import { pageOf } from '@/paging';
@@ -38,8 +38,8 @@ export type ScopeControlsProps = {
 /**
  * A campaign's scope controls (Story 3.6), the same in the context bar's popover and in the campaign page's scope tab:
  * the three tier switches, the materials of each tier that is on indented under it (newest first, as the backend lists them, ten a
- * page) with a switch each, and the model-knowledge switch, shown as stored but disabled until Story 3.8 with the reason
- * beside it. A press saves at once: the full settings go to the Server Action on the version last read, the switch
+ * page) with a switch each, and the model-knowledge switch (Story 3.8: it lets the model add its own knowledge, each such
+ * part under its label and with no reference). A press saves at once: the full settings go to the Server Action on the version last read, the switch
  * shows its new state while the save runs, and every switch waits (`aria-busy`). Once saved, one polite line says
  * "Vale a partir da próxima pergunta.". A stale save shows the settings as they are now, with a danger line; any other
  * refusal shows its text and the switches go back to what is stored. Nothing here decides what the campaign may use:
@@ -51,7 +51,6 @@ export function ScopeControls({ campaignId, scope, language, action }: ScopeCont
   // The newest settings in hand: the ones the last answer brought, unless the page has since read newer ones.
   const stored = state.scope !== null && state.scope.version >= scope.version ? state.scope : scope;
   const [shown, propose] = useOptimistic(stored, (_current: Scope, next: Scope) => next);
-  const soon = useId();
   const states = { on: t('campaigns.scope.on'), off: t('campaigns.scope.off') };
 
   function save(next: Scope) {
@@ -64,8 +63,7 @@ export function ScopeControls({ campaignId, scope, language, action }: ScopeCont
     form.set('campaignTier', String(next.campaignTier));
     form.set('systemTier', String(next.systemTier));
     form.set('otherTier', String(next.otherTier));
-    // Model knowledge is stored, not yet changed here (Story 3.8): it goes back as it was read.
-    form.set('modelKnowledge', String(stored.modelKnowledge));
+    form.set('modelKnowledge', String(next.modelKnowledge));
     for (const id of new Set(next.materials.filter((material) => !material.on).map((material) => material.id))) {
       form.append('materialsOff', id);
     }
@@ -113,13 +111,9 @@ export function ScopeControls({ campaignId, scope, language, action }: ScopeCont
             label={t('campaigns.scope.modelKnowledge')}
             checked={shown.modelKnowledge}
             states={states}
-            disabled
-            describedBy={soon}
-            onChange={() => undefined}
+            disabled={pending}
+            onChange={(on) => save({ ...shown, modelKnowledge: on })}
           />
-          <p id={soon} className={styles.note}>
-            {t('campaigns.scope.comingSoon')}
-          </p>
         </li>
       </ul>
     </div>

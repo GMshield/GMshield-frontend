@@ -373,7 +373,7 @@ describe('a campaign page (Story 3.2)', () => {
       const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
       expect(linkTo(html, `/campaigns/${ID}?tab=scope`)).toContain('aria-current="page"');
       expect(html).toContain(messages.campaigns.scope.intro.replace("'", '&#x27;'));
-      // Matrix row "Default": campaign and system on, other off, model knowledge off and disabled with its reason.
+      // Matrix row "Default": campaign and system on, other off, model knowledge off (enabled from Story 3.8).
       expect(switchesOf(html)).toEqual([
         [messages.campaigns.scope.campaign, 'true'],
         ['Notas da sessão 12.md', 'true'],
@@ -384,8 +384,7 @@ describe('a campaign page (Story 3.2)', () => {
         [messages.campaigns.scope.modelKnowledge, 'false'],
       ]);
       expect(html).not.toContain('Atlas de outra mesa.pdf');
-      expect(html).toContain(messages.campaigns.scope.comingSoon);
-      expect(html).toMatch(new RegExp(`aria-label="${messages.campaigns.scope.modelKnowledge}"[^>]*aria-disabled="true"`));
+      expect(html).not.toMatch(new RegExp(`aria-label="${messages.campaigns.scope.modelKnowledge}"[^>]*aria-disabled="true"`));
       expect(html).not.toContain('campaigns.page.scopeStarting');
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }

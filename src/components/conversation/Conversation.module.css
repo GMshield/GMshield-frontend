@@ -305,6 +305,46 @@
   margin-inline-end: var(--space-2);
 }
 
+/*
+ * Story 3.8: the line that closes the model's own knowledge, where a superscript would be: muted, in label type, like
+ * the pill that opened it, and never a control.
+ */
+.answer .modelEnd {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/*
+ * Story 3.8: under a silent answer with model knowledge off, a muted line offering the scope, and its button, which
+ * reads as a link (underlined, the text colour, 24px high at least) and opens the context bar's scope popover.
+ */
+.offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+.offerAction {
+  min-block-size: var(--space-touch-target);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-label-weight);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* The numbered references under a finished answer, above the closing rule, in label type. */
 .references {
   display: flex;

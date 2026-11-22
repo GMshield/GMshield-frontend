@@ -70,9 +70,17 @@
   display: none;
 }
 
-/* Under 768px the bar shows the campaign's name only (ContextBar.module.css). */
+/*
+ * Under 768px the bar shows the campaign's name only (ContextBar.module.css): the summary is not shown, but the popover
+ * stays, so the offer under a silent answer (Story 3.8) can still open it under the bar.
+ */
 @media (max-width: 767px) {
   .popover {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .trigger {
     display: none;
   }
 }

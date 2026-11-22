@@ -58,23 +58,14 @@
   font-weight: normal;
 }
 
-.empty,
-.note {
+.empty {
   margin: 0;
+  margin-left: var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-label-size);
   font-weight: normal;
   line-height: var(--font-label-line-height);
-}
-
-.empty {
-  margin-left: var(--space-4);
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border-left: 1px solid var(--color-border);
 }
 
-/* Why the model-knowledge switch waits: beside it, under its name. */
-.note {
-  margin-top: calc(-1 * var(--space-2));
-  padding: 0 var(--space-2);
-}
