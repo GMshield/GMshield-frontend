@@ -293,7 +293,8 @@
         "material_unknown": "Um dos materiais não está mais nesta campanha, no seu sistema ou nos outros. Recarregue a página para ver o escopo atual."
       },
       "conversation": {
-        "turn_running": "Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la."
+        "turn_running": "Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la.",
+        "turn_not_done": "Só uma resposta concluída pode ser salva."
       }
     }
   },
@@ -652,6 +653,8 @@
     "connectionLost": "Conexão perdida. Tentando de novo…",
     "reconnectFailed": "Não foi possível reconectar.",
     "retry": "Tentar de novo",
+    "bookmark": "Salvar resposta",
+    "unbookmark": "Remover dos itens salvos",
     "dismiss": "Dispensar resposta",
     "dismissed": "Resposta dispensada.",
     "undo": "Desfazer",
@@ -831,5 +834,19 @@
       "unknown": "Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.",
       "confirm": "Excluir conversa"
     }
+  },
+  "saved": {
+    "title": "Itens salvos",
+    "open": "Itens salvos",
+    "close": "Fechar itens salvos",
+    "list": "Respostas salvas",
+    "empty": "Nenhuma resposta salva. Use o marcador sob uma resposta para guardá-la aqui.",
+    "go": "Ir",
+    "goTo": "Ir para a resposta em «{name}»",
+    "switched": "Campanha trocada para «{name}».",
+    "loading": "Carregando os itens salvos…",
+    "retry": "Tentar de novo",
+    "pages": "Páginas dos itens salvos",
+    "separator": " › "
   }
 }

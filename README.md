@@ -901,6 +901,42 @@ they sit in `src/`.
     `conversation` with `conversation.turn_running` ("Esta resposta ainda está sendo escrita. Espere ela terminar para
     dispensá-la."), in pt-BR and en.
   - Deploy order: backend → frontend.
+- **Bookmark answers and find them again (Story 3.12).** Public contract 1.32.0 (the minimum backend contract too).
+  - **The bookmark.** Before dismiss, under each `done` answer that is not silent (none on a silent, stopped, failed or
+    running one; a silent answer cannot be saved, and the backend refuses it too): unset, a
+    filled 28px circle with an outlined bookmark (`bookmark` in `Icons.tsx`), spoken "Salvar resposta"; set, an
+    outlined circle with a filled bookmark (`bookmarkFilled`, drawn filled), spoken "Remover dos itens salvos", with
+    `aria-pressed`. A press changes it at once, then sends `setBookmark(turnId, 'save' | 'remove')`
+    (`src/client/conversation.ts`) after any change still under way for that turn; a refusal of the latest press puts
+    it back and shows its text under the actions (`conversation.turn_not_done`: "Só uma resposta concluída pode ser
+    salva."). Each stored turn's `bookmarked` sets it when the conversation opens.
+  - **The relays.** `src/app/api/v1/turns/[id]/bookmark/route.ts` (`PUT` saves, `DELETE` removes: `bookmarkTurn`,
+    `unbookmarkTurn`) and `src/app/api/v1/saved-answers/route.ts` (`GET`, `savedAnswers` calling the backend's `listSavedAnswers`; `limit` 1–50 and `offset`
+    0–100000 checked before the backend, else `request.invalid`), same-origin only, no session `session.required`.
+    The browser reads a page with `loadSavedAnswers(offset, limit)`.
+  - **The panel.** `src/components/saved/`: `SavedItemsProvider` (beside `ShellFrame`) holds whether it is open, the
+    current campaign and a count `savedChanged()` raises after each bookmark change, so the open panel reads its list
+    again. `SavedItemsButton` sits in the bar before the bell ("Itens salvos"); Ctrl+Shift+S or ⌘⇧S opens or closes it
+    from any signed-in screen, even while a field has focus. `SavedItemsPanel` fills the right slot (`ShellPanel
+    kind="saved"`, `data-panel="saved"`): 340px beside the page at 1280px and more, over it (inert behind) under
+    1280px, a full-screen sheet under 768px. Focus starts on its close control; Esc or the close control closes it and
+    gives focus back to what opened it. Entries newest first, ten a page with a `<Pager compact>` at its foot (the page
+    is the panel's own state, not the address): a meta-line (`area › conversation`, led by the campaign when it is not
+    the current one), the excerpt clamped to three lines, and "Ir". With none saved, one sentence.
+  - **One right panel at a time.** `ShellFrame`'s claim takes the panel's kind and an `onReplaced`: a new claim calls
+    the previous holder's, which closes it without giving focus back (the source view, the search page's source view,
+    a material preview, or the saved items).
+  - **"Ir".** In the current campaign, a link to `/questions/{id}?turn={turnId}` or `/rules/{id}?turn={turnId}`; in
+    another, a form whose Server Action `openSavedAnswerAction` (`campaigns/actions.ts`) chooses that campaign, flashes
+    "Campanha trocada para «…».", revalidates the layout and redirects there (a refusal shows under the pill). Under
+    1280px the panel closes: at once for a link, when the new page arrives for the form. The conversation page passes
+    `?turn=` as `focusTurn`: each turn's `<li>` is `turn-<id>`, and that one is scrolled into view instead of the last
+    and takes focus (`tabIndex={-1}`, never a keyboard stop); a turn not among those loaded leaves it at the last turn.
+  - Strings `conversation.bookmark`, `conversation.unbookmark`, `saved.*` and `errors.codes.conversation.turn_not_done`,
+    in pt-BR and en; the new colour pairs (the set bookmark's outline and icon, the meta-line) are in
+    `test/contrast.test.ts`. The stand-in backend answers `bookmarked: false` on its stored turn, 204 for a bookmark,
+    and two saved answers (one of another campaign).
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

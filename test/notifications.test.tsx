@@ -387,6 +387,30 @@ describe('a list\'s display options, thumbnails and preview', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('Story 3.12: the saved items panel opened over a preview closes it, and focus stays in the new panel', async () => {
+    const { SavedItemsProvider } = await import('@/components/saved/SavedItems');
+    const { SavedItemsPanel } = await import('@/components/saved/SavedItemsPanel');
+    const { ShellFrame } = await import('@/components/ShellPanel');
+    const user = userEvent.setup();
+    const load = vi.fn(async (_id: string, number: number) => page(number));
+    render(
+      <SavedItemsProvider currentCampaignId={null}>
+        <ShellFrame>
+          <ItemList label="Seus arquivos" rows={rows} viewKey="files" view={DEFAULT_VIEW} language="pt-BR" preview={{ load, label: 'Pré-visualizar {name}' }} />
+          <SavedItemsPanel language="pt-BR" action={async (previous) => previous} load={async () => ({ ok: true, items: [], total: 0 })} />
+        </ShellFrame>
+      </SavedItemsProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Pré-visualizar Livro.pdf' }));
+    expect(await screen.findByRole('dialog', { name: 'Livro.pdf' })).toBeTruthy();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('dialog', { name: 'Livro.pdf' })).toBeNull();
+    expect(screen.getAllByRole('complementary')).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar itens salvos' }));
+  });
+
   it('the view menu on its own reports each choice to its owner', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

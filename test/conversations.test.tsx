@@ -292,6 +292,37 @@ describe('a new and an opened conversation (Story 3.10)', () => {
   });
 });
 
+describe('an opened conversation at a saved answer (Story 3.12)', () => {
+  const routes = () => ({
+    'GET /api/v1/conversations/current': CURRENT,
+    [REVIEW]: NO_REVIEW,
+    [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+    [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [{ ...STORED, bookmarked: true }] } },
+  });
+
+  it('`?turn=` marks that turn as the one to open at; anything that is not an id is ignored', async () => {
+    await useBackend(routes());
+    const html = inShell(await RulesConversationPage({ params: params(RULES_ID), searchParams: Promise.resolve({ turn: TURN }) }));
+    expect(html).toMatch(new RegExp(`<li id="turn-${TURN}"[^>]*tabindex="-1"`));
+
+    for (const turn of ['nope', '../me', [TURN, TURN]]) {
+      const ignored = inShell(await RulesConversationPage({ params: params(RULES_ID), searchParams: Promise.resolve({ turn }) }));
+      expect(ignored).toContain(`id="turn-${TURN}"`);
+      expect(ignored).not.toContain('tabindex="-1"');
+    }
+  });
+
+  it('a conversation of the other area opens under its own address, keeping `?turn=`', async () => {
+    await useBackend(routes());
+    expect(
+      await thrownDigest(async () => QuestionsConversationPage({ params: params(RULES_ID), searchParams: Promise.resolve({ turn: TURN }) })),
+    ).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/rules/${RULES_ID}\\?turn=${TURN};`));
+    expect(
+      await thrownDigest(async () => QuestionsConversationPage({ params: params(RULES_ID), searchParams: Promise.resolve({ turn: 'nope' }) })),
+    ).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/rules/${RULES_ID};`));
+  });
+});
+
 describe('rename a conversation (Story 3.10)', () => {
   it('the rename page holds the name and the version, with the way back to the conversation', async () => {
     await useBackend({ [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES } });

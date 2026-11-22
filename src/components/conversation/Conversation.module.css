@@ -527,7 +527,7 @@
 }
 
 /*
- * Story 3.11: an answer's actions, right-aligned under its rule (3.12's bookmark will come before dismiss). Each is a
+ * Story 3.11: an answer's actions, right-aligned under its rule (Story 3.12: the bookmark, then dismiss). Each is a
  * 28px circle filled with the text colour, in a 44px hit area that reaches past the row so the circle's edge meets the
  * rule's end and the row stays as tall as the circle.
  */
@@ -562,8 +562,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   inline-size: var(--answer-action-size);
   block-size: var(--answer-action-size);
+  /* Story 3.12: the edge a set bookmark keeps when its fill goes; the fill's own colour otherwise. */
+  border: 2px solid var(--color-solid);
   border-radius: var(--radius-full);
   background-color: var(--color-solid);
   color: var(--color-on-solid);
@@ -572,6 +575,21 @@
 
 .action:hover .actionCircle {
   opacity: 0.86;
+}
+
+/*
+ * Story 3.12: a saved answer's bookmark inverts: an outlined circle (the text colour) on the page, with the bookmark
+ * filled in the text colour. Its spoken name and aria-pressed say the same.
+ */
+.action[data-set='true'] .actionCircle {
+  border-color: var(--color-text);
+  background-color: transparent;
+  color: var(--color-text);
+}
+
+.action[data-set='true']:hover .actionCircle {
+  opacity: 1;
+  background-color: var(--color-hover);
 }
 
 /* Story 3.11: a dismissed turn's place while its undo lasts: "Resposta dispensada." and "Desfazer", muted. */

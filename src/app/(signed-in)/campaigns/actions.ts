@@ -188,6 +188,38 @@ export async function openConversationAction(previous: CampaignActionState, form
 }
 
 /**
+ * Story 3.12: "Ir" on a saved answer of another campaign (the form's `id`, the campaign, with the answer's
+ * `conversationId`, `area` and `turnId`): that campaign becomes the current one, a toast names it, the shared layout is
+ * rendered again, and its conversation opens at the answer (`?turn=`). A refusal (the campaign archived or gone
+ * meanwhile) comes back as its text beside the control; malformed fields never reach the backend.
+ */
+export async function openSavedAnswerAction(previous: CampaignActionState, form: FormData): Promise<CampaignActionState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  const conversationId = form.get('conversationId');
+  const turnId = form.get('turnId');
+  const area = AREAS.find((word) => word === form.get('area'));
+  if (
+    typeof id !== 'string' ||
+    !ID.test(id) ||
+    typeof conversationId !== 'string' ||
+    !ID.test(conversationId) ||
+    typeof turnId !== 'string' ||
+    !ID.test(turnId) ||
+    area === undefined
+  ) {
+    return { ...previous, error: invalid(language) };
+  }
+  const result = await chooseCampaign((await currentSessionToken()) ?? '', id);
+  if (result.ok) {
+    await flash('success', translator(language)('saved.switched', { name: result.data.name }));
+    revalidatePath('/', 'layout');
+    redirect(`/${area}/${conversationId}?turn=${turnId}`);
+  }
+  return { ...previous, error: errorText(result.problem, language) };
+}
+
+/**
  * "Excluir campanha" in a campaign's confirmation: the backend deletes it (its conversation and its materials go in the
  * background), the shared layout is rendered again (the switcher and the context bar no longer show it), and Minhas
  * Mesas opens without it. A refusal comes back as its text; a malformed id never reaches the backend.

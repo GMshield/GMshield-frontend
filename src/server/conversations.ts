@@ -15,7 +15,8 @@ import { outgoingTraceparent, traceFrom } from './trace';
  * result opens on. From Story 3.10 a campaign's conversations of one area (its campaign page counts them with the
  * same list), one conversation with its stored turns,
  * its rename, and a question that continues a conversation or starts one in an area; from Story 3.10 part B what goes
- * with a conversation and its deletion; from Story 3.11 a turn's dismissal and its undo. The backend takes the owner from
+ * with a conversation and its deletion; from Story 3.11 a turn's dismissal and its undo; from Story 3.12 a turn's
+ * bookmark, its removal and the account's saved answers. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -39,6 +40,9 @@ export type ConversationTurns = Schemas['ConversationTurns'];
 export type ConversationChange = Schemas['ConversationChange'];
 /** Story 3.10 part B: what goes with a conversation if it is deleted (its questions). */
 export type ConversationDeletion = Schemas['ConversationDeletion'];
+/** Story 3.12: a saved answer, and a page of them. */
+export type SavedAnswer = Schemas['SavedAnswer'];
+export type SavedAnswerPage = Schemas['SavedAnswerPage'];
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
 export const AREAS = ['questions', 'rules'] as const;
 export type Area = (typeof AREAS)[number];
@@ -187,6 +191,39 @@ export function dismissTurn(sessionToken: string, turnId: string, options: CallO
 export function restoreTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('conversations.restore', options, (client) =>
     client.DELETE('/api/v1/turns/{turnId}/dismissal', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Saves the turn's answer (Story 3.12): 204, also for a turn saved already; `conversation.turn_not_done` for a turn
+ * that is running, stopped, failed or silent, `request.not_found` for a turn that is not the account's or is of a conversation
+ * being deleted.
+ */
+export function bookmarkTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.bookmark', options, (client) =>
+    client.PUT('/api/v1/turns/{turnId}/bookmark', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/** Removes the turn's answer from the saved answers (Story 3.12): 204, also for one not saved; not found as above. */
+export function unbookmarkTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.unbookmark', options, (client) =>
+    client.DELETE('/api/v1/turns/{turnId}/bookmark', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * One page of the account's saved answers across all its campaigns (Story 3.12), the newest saved first, with the
+ * list's total. A dismissed answer, one of a conversation being deleted and those of an archived campaign or of a
+ * campaign being deleted are left out.
+ */
+export function savedAnswers(
+  sessionToken: string,
+  query: { readonly limit?: number; readonly offset?: number } = {},
+  options: CallOptions = {},
+): Promise<Result<SavedAnswerPage>> {
+  return call('conversations.saved', options, (client) =>
+    client.GET('/api/v1/saved-answers', { params: { header: { 'X-Session-Token': sessionToken }, query } }),
   );
 }
 

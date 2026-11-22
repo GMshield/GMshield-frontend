@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/questions';
@@ -148,6 +148,8 @@ describe('the signed-in shell (Story 1.11)', () => {
     const bell = screen.getByRole('button', { name: ptBR.notifications.title });
     expect(bell.getAttribute('aria-expanded')).toBe('false');
     const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
+    // Story 3.12: the saved items button comes first at the bar's end, before the bell.
+    const saved = screen.getByRole('button', { name: ptBR.saved.open });
     const skip = screen.getByRole('link', { name: ptBR.shell.skip });
     const search = screen.getByRole('search', { name: ptBR.shell.search.label });
     const searchButton = screen.getByRole('link', { name: ptBR.shell.search.open });
@@ -174,7 +176,7 @@ describe('the signed-in shell (Story 1.11)', () => {
         place = 'main';
       } else if (search.contains(focused) || focused === searchButton) {
         place = 'search';
-      } else if (focused === bell || focused === account) {
+      } else if (focused === saved || focused === bell || focused === account) {
         place = 'bar end';
       } else if (focused === skip) {
         place = 'skip';
@@ -705,6 +707,65 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
     expect(css).toMatch(/\.shell:has\(> \[data-wide='open'\]\) \{\s*--sidebar-track: var\(--width-sidebar\);/);
     expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*left: 0;\s*width: 100%;/);
   });
+  it('Story 3.12: sizes the saved items panel in CSS: 340px, over the main column under 1280px, a full-screen sheet under 768px', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.shell\[data-panel='saved'\] \{\s*--panel-track: var\(--width-panel\);/);
+    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\.shell\[data-panel='saved'\] \.panel \{\s*max-width: 100%;/);
+    expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\.shell\[data-panel='saved'\] \.panel \{\s*left: 0;\s*width: 100%;/);
+    // The panel itself is the default slot's 340px (--width-panel); nothing inside it scrolls on its own.
+    expect(css).toMatch(/\n\.panel \{[^}]*width: var\(--width-panel\);/);
+    const savedCss = readFileSync(join(process.cwd(), 'src/components/saved/SavedItems.module.css'), 'utf8');
+    expect(savedCss).not.toMatch(/overflow-y: (auto|scroll)/);
+  });
+
+  it('Story 3.12: the saved items button sits before the bell; Ctrl+Shift+S over the source view opens the panel in its place', async () => {
+    const user = userEvent.setup();
+    const here = '0190a0b0-0000-7000-8000-000000000002';
+    const entry = (n: number, campaignId: string, campaignName: string) => ({
+      turnId: `0190a0b0-0000-7000-8000-00000000010${n}`,
+      conversationId: `0190a0b0-0000-7000-8000-00000000020${n}`,
+      campaignId,
+      campaignName,
+      area: 'questions',
+      conversationName: `Magias ${n}`,
+      savedAt: '2026-11-22T12:00:00Z',
+      excerpt: `Resposta ${n}.`,
+    });
+    const items = [entry(1, here, 'First campaign'), entry(2, '0190a0b0-0000-7000-8000-000000000040', 'A Coroa Partida')];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items, total: 2 }), { status: 200 })));
+    function Opener() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <ShellPanel onReplaced={() => setOpen(false)}>
+          <section role="dialog" aria-label="fonte">
+            <button type="button">Fechar a fonte</button>
+          </section>
+        </ShellPanel>
+      ) : null;
+    }
+    render(shell({ current: { ...CURRENT, id: here } as typeof CURRENT, children: <Opener /> }));
+    const saved = screen.getByRole('button', { name: ptBR.saved.open });
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(saved.parentElement).toBe(bell.closest('div')!.parentElement);
+    expect(saved.compareDocumentPosition(bell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(frame().dataset.panel).toBe('source');
+    screen.getByRole('button', { name: 'Fechar a fonte' }).focus();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('dialog', { name: 'fonte' })).toBeNull();
+    expect(frame().dataset.panel).toBe('saved');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: ptBR.saved.close }));
+    // The shell hands the panel its current campaign: its entry is a link, named without the campaign; the other
+    // campaign's is a form that switches first, its meta-line led by the campaign.
+    const list = await screen.findByRole('list', { name: ptBR.saved.list });
+    const [mine, theirs] = within(list).getAllByRole('listitem');
+    expect(mine!.querySelector('p')!.textContent).toBe('Consultas › Magias 1');
+    expect(within(mine!).getByRole('link', { name: /Magias 1/ }).getAttribute('href')).toContain('?turn=');
+    expect(theirs!.querySelector('p')!.textContent).toBe('A Coroa Partida › Consultas › Magias 2');
+    expect(within(theirs!).getByRole('button', { name: /Magias 2/ }).getAttribute('type')).toBe('submit');
+  });
+
   it('keeps the source view header and footer in view while the panel itself scrolls (keys scroll from any control)', () => {
     const shellCss = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
     expect(shellCss).not.toMatch(/data-panel='source'\] \.panel \{[^}]*overflow: hidden/);

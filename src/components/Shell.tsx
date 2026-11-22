@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { changeScopeAction, chooseCampaignAction } from '@/app/(signed-in)/campaigns/actions';
+import { changeScopeAction, chooseCampaignAction, openSavedAnswerAction } from '@/app/(signed-in)/campaigns/actions';
 import { createImageSetAction, dropSetImageAction, replaceSetImageAction } from '@/app/(signed-in)/image-set-actions';
 import { signOutAction } from '@/app/sign-in/actions';
 import { translator } from '@/messages';
@@ -16,6 +16,8 @@ import { NotificationCenter } from './notifications/NotificationCenter';
 import { NotificationsProvider, type NotificationInput } from './notifications/NotificationsProvider';
 import { PillButton } from './PillButton';
 import { PreferencesForm } from './PreferencesForm';
+import { SavedItemsButton, SavedItemsProvider } from './saved/SavedItems';
+import { SavedItemsPanel } from './saved/SavedItemsPanel';
 import { scopeSummary, type Scope } from './scope';
 import { ScopePopover } from './ScopePopover';
 import { ScopePopoverProvider } from './ScopePopoverContext';
@@ -83,6 +85,8 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * there saves through a Server Action that renders the layout again, so the summary follows.
  * Story 3.9: then the search field (`/` focuses it; on a phone a search button in its place), which opens the search
  * page.
+ * Story 3.12: before the bell, the saved items button (or Ctrl+Shift+S / ⌘⇧S from any screen), which opens the saved
+ * items panel in the right panel slot; its state is beside the frame (`SavedItemsProvider`).
  */
 export function Shell({
   preferences,
@@ -139,58 +143,62 @@ export function Shell({
           <a className={styles.skip} href="#content">
             {t('shell.skip')}
           </a>
-          <ShellFrame panel={panel}>
-            <Sidebar
-              labels={{
-                name: t('shell.name'),
-                home: t('shell.home'),
-                openMenu: t('shell.openMenu'),
-                closeMenu: t('shell.closeMenu'),
-                navigation: t('shell.navigation'),
-                currentCampaign: t('shell.currentCampaign'),
-                entries,
-              }}
-              campaign={switcher('sidebar')}
-              initialState={sidebar}
-              trayRows={trayRows}
-            />
-            <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
-              <div className={styles.bar}>
-                <ContextBar
-                  label={t('shell.context')}
-                  current={current}
-                  none={t('shell.noCampaign')}
-                  switcher={switcher('bar')}
-                  scope={scopePopover}
-                  search={
-                    <SearchField
-                      labels={{ label: t('shell.search.label'), placeholder: t('shell.search.placeholder'), open: t('shell.search.open') }}
-                    />
-                  }
-                />
-                <div className={styles.barEnd}>
-                  <NotificationCenter language={preferences.language} attention={attention} />
-                  <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>
-                    <p className={accountStyles.account}>
-                      <span className={accountStyles.accountLabel}>{t('shell.signedInLabel')}</span>
-                      <span className={accountStyles.accountName}>{username}</span>
-                    </p>
-                    <PreferencesForm theme={preferences.theme} language={preferences.language} />
-                    <form action={signOutAction} className={accountStyles.signOut}>
-                      <PillButton type="submit">
-                        <NamedIcon name="signOut" size={18} />
-                        {t('shell.signOut')}
-                      </PillButton>
-                    </form>
-                  </AccountMenu>
+          <SavedItemsProvider currentCampaignId={current?.id === undefined || current.id === '' ? null : current.id}>
+            <ShellFrame panel={panel}>
+              <Sidebar
+                labels={{
+                  name: t('shell.name'),
+                  home: t('shell.home'),
+                  openMenu: t('shell.openMenu'),
+                  closeMenu: t('shell.closeMenu'),
+                  navigation: t('shell.navigation'),
+                  currentCampaign: t('shell.currentCampaign'),
+                  entries,
+                }}
+                campaign={switcher('sidebar')}
+                initialState={sidebar}
+                trayRows={trayRows}
+              />
+              <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
+                <div className={styles.bar}>
+                  <ContextBar
+                    label={t('shell.context')}
+                    current={current}
+                    none={t('shell.noCampaign')}
+                    switcher={switcher('bar')}
+                    scope={scopePopover}
+                    search={
+                      <SearchField
+                        labels={{ label: t('shell.search.label'), placeholder: t('shell.search.placeholder'), open: t('shell.search.open') }}
+                      />
+                    }
+                  />
+                  <div className={styles.barEnd}>
+                    <SavedItemsButton language={preferences.language} />
+                    <NotificationCenter language={preferences.language} attention={attention} />
+                    <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>
+                      <p className={accountStyles.account}>
+                        <span className={accountStyles.accountLabel}>{t('shell.signedInLabel')}</span>
+                        <span className={accountStyles.accountName}>{username}</span>
+                      </p>
+                      <PreferencesForm theme={preferences.theme} language={preferences.language} />
+                      <form action={signOutAction} className={accountStyles.signOut}>
+                        <PillButton type="submit">
+                          <NamedIcon name="signOut" size={18} />
+                          {t('shell.signOut')}
+                        </PillButton>
+                      </form>
+                    </AccountMenu>
+                  </div>
                 </div>
+                <main id="content" className={styles.main}>
+                  {notices}
+                  {children}
+                </main>
               </div>
-              <main id="content" className={styles.main}>
-                {notices}
-                {children}
-              </main>
-            </div>
-          </ShellFrame>
+              <SavedItemsPanel language={preferences.language} action={openSavedAnswerAction} />
+            </ShellFrame>
+          </SavedItemsProvider>
         </ScopePopoverProvider>
       </UploadsProvider>
     </NotificationsProvider>

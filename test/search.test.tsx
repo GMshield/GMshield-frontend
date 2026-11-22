@@ -186,6 +186,31 @@ describe('the search page (Story 3.9)', () => {
     expect(row.getAttribute('data-open')).toBeNull();
   });
 
+  it('Story 3.12: the saved items panel opened over the source view closes it, and focus stays in the new panel', async () => {
+    const { SavedItemsProvider } = await import('@/components/saved/SavedItems');
+    const { SavedItemsPanel } = await import('@/components/saved/SavedItemsPanel');
+    const { ShellFrame } = await import('@/components/ShellPanel');
+    const user = userEvent.setup();
+    render(
+      <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+        <ShellFrame>
+          {page({ calls: calls([{ ok: true, search: search() }]) })}
+          <SavedItemsPanel language="pt-BR" action={async (previous) => previous} load={async () => ({ ok: true, items: [], total: 0 })} />
+        </ShellFrame>
+      </SavedItemsProvider>,
+    );
+    const row = within(await screen.findByRole('list', { name: 'Resultados' })).getByRole('button');
+    await user.click(row);
+    expect(await screen.findByRole('dialog', { name: 'Livro do Jogador.pdf, Magias › Fire Bolt' })).toBeTruthy();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('dialog', { name: 'Livro do Jogador.pdf, Magias › Fire Bolt' })).toBeNull();
+    expect(screen.getAllByRole('complementary')).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: ptBR.saved.close }));
+    expect(row.getAttribute('data-open')).toBeNull();
+  });
+
   it('says a search that found nothing in one sentence naming the scope searched, filters included', async () => {
     render(page({ calls: calls([{ ok: true, search: search({ results: [] }) }]) }));
     expect(await screen.findByText('Nada encontrado para «Fire Bolt» em Campanha + Sistema.')).toBeTruthy();
