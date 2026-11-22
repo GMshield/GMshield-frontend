@@ -11,6 +11,7 @@ import { errorText, problemFields, translator, type Language, type Translate } f
 import { currentPreferences, currentViews } from '@/preferences';
 import { pageParam } from '@/paging';
 import {
+  conversationDeletion,
   conversationTurns,
   currentConversation,
   getConversation,
@@ -23,7 +24,7 @@ import { listPage } from '@/server/list-page';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { renameConversationAction } from './conversation-actions';
+import { deleteConversationAction, renameConversationAction } from './conversation-actions';
 
 /**
  * The pages of the two conversation areas, Consultas (`/questions`) and Criação de Regras (`/rules`) (Story 3.10): the
@@ -128,8 +129,9 @@ async function reviewLink(token: string): Promise<{ readonly href: string; reado
 
 /**
  * A new conversation of the area (Story 3.10): the current campaign's conversation screen with nothing asked yet (the
- * area's intro and examples, the cursor in the composer); its first question makes the conversation. With no campaign
- * the composer is disabled with the reason (Story 3.2).
+ * area's intro and examples, the cursor in the composer); its first question makes the conversation, which can then be
+ * deleted (Story 3.10 part B; its dialog in words, as no count was read). With no campaign the composer is disabled with
+ * the reason (Story 3.2).
  */
 export async function newConversationPage(area: Area) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
@@ -148,6 +150,7 @@ export async function newConversationPage(area: Area) {
       hasSources={current.data.hasSources}
       review={review}
       area={area}
+      deleteAction={deleteConversationAction}
     />
   );
 }
@@ -155,18 +158,20 @@ export async function newConversationPage(area: Area) {
 /**
  * An opened conversation (Story 3.10): its stored turns with their answers and references, and the composer, which
  * continues it. Another account's id, an unknown one or a malformed one is the single "Não encontrado." page; a
- * conversation of the other area opens under its own area's address.
+ * conversation of the other area opens under its own area's address. Story 3.10 part B: how many questions its deletion
+ * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words.
  */
 export async function openedConversationPage(area: Area, id: string) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
   if (!isId(id)) {
     notFoundFor({ code: 'request.not_found' });
   }
-  const [conversation, turns, current, review] = await Promise.all([
+  const [conversation, turns, current, review, deletion] = await Promise.all([
     getConversation(token ?? '', id),
     conversationTurns(token ?? '', id),
     currentConversation(token ?? ''),
     reviewLink(token ?? ''),
+    conversationDeletion(token ?? '', id),
   ]);
   if (!conversation.ok) {
     notFoundFor(conversation.problem);
@@ -192,6 +197,8 @@ export async function openedConversationPage(area: Area, id: string) {
       conversationId={conversation.data.id}
       name={conversation.data.name}
       stored={turns.data.items}
+      questions={deletion.ok ? deletion.data.questions : null}
+      deleteAction={deleteConversationAction}
     />
   );
 }

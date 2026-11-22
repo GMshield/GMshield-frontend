@@ -1,0 +1,16 @@
+/*
+ * "Excluir" in a conversation's slim top line (Story 3.10 part B). The wrapper adds no box: the pill sits in the top
+ * line beside "Renomear", and a refusal takes a line of its own under the whole row, at its end, so the pills never
+ * move when it shows.
+ */
+.actions {
+  display: contents;
+}
+
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+  text-align: end;
+}

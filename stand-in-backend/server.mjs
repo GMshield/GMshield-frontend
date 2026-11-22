@@ -30,7 +30,8 @@
 // the book (a picture page); a page of the current scope is the notes' text page for the notes' version and the book's
 // picture page for any other. Story 3.10: the starter campaign has one conversation (whatever area is listed), the
 // questions one every question continues; it holds one answered turn, its stored events the stand-in answer's; a
-// rename answers it at version 1 under the new name.
+// rename answers it at version 1 under the new name. Story 3.10 part B: its deletion takes its one question, and a
+// delete of it answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -245,6 +246,7 @@ export const EXAMPLES = {
   },
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
+  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 1 },
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
   'PUT /api/v1/campaigns/{id}/scope': { ...STARTING_SCOPE, version: 1 },

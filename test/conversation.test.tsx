@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UrlStorage } from 'tus-js-client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_PLACES } from '@/components/uploads/types';
 
@@ -1969,7 +1969,17 @@ describe('conversations by area (Story 3.10)', () => {
     events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
   });
 
-  function opened(props: { area?: 'questions' | 'rules'; conversationId?: string | null; name?: string | null; stored?: readonly Stored[] } = {}) {
+  type DeleteAction = NonNullable<import('@/components/conversation/Conversation').ConversationProps['deleteAction']>;
+  function opened(
+    props: {
+      area?: 'questions' | 'rules';
+      conversationId?: string | null;
+      name?: string | null;
+      stored?: readonly Stored[];
+      questions?: number | null;
+      deleteAction?: DeleteAction;
+    } = {},
+  ) {
     return render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
         <Conversation
@@ -1981,6 +1991,8 @@ describe('conversations by area (Story 3.10)', () => {
           conversationId={props.conversationId}
           name={props.name}
           stored={props.stored}
+          questions={props.questions}
+          deleteAction={props.deleteAction}
           openStream={(url) => {
             const stream = new FakeStream(url);
             streams.push(stream);
@@ -1990,6 +2002,19 @@ describe('conversations by area (Story 3.10)', () => {
       </UploadsProvider>,
     );
   }
+
+  beforeAll(() => {
+    // jsdom has no modal dialogs: the smallest stand-in for showModal() and close() (Story 3.10 part B's "Excluir").
+    if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+      HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      };
+      HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute('open');
+        this.dispatchEvent(new Event('close'));
+      };
+    }
+  });
 
   beforeEach(() => {
     streams = [];
@@ -2111,5 +2136,60 @@ describe('conversations by area (Story 3.10)', () => {
     localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:${CONVERSATION}`, 'Rascunho da conversa');
     opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [] });
     await waitFor(() => expect(composer().value).toBe('Rascunho da conversa'));
+  });
+
+  // --- Story 3.10 part B: delete a conversation
+
+  it('"Excluir" follows "Renomear" in the slim line, outlined in danger; its dialog names the questions read with the page plus those asked since', async () => {
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: null }));
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [], questions: 2, deleteAction });
+    const top = screen.getByTestId('conversation-top');
+    const rename = within(top).getByRole('link', { name: 'Renomear' });
+    const pill = within(top).getByRole('button', { name: 'Excluir' });
+    expect(pill.dataset.variant).toBe('danger');
+    expect(rename.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const user = userEvent.setup();
+    await user.click(pill);
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    expect(dialog.textContent).toContain('Vão junto: 2 perguntas e suas respostas. Isso não pode ser desfeito.');
+    // Focus starts on Cancelar.
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+
+    // A question asked on the page goes too: the count follows.
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'E Fireball?{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]!.emit('done', { stopped: false, silent: true, modelKnowledge: false, references: [] }, 1);
+    await user.click(within(top).getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 3 perguntas e suas respostas.');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    await waitFor(() => expect(deleteAction).toHaveBeenCalledTimes(1));
+    expect((deleteAction.mock.calls[0]![1] as FormData).get('id')).toBe(CONVERSATION);
+  });
+
+  it('a conversation made on the page has "Excluir" once it has an id, its dialog in words; a new one has none', async () => {
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: 'Não encontrado.' }));
+    opened({ area: 'rules', deleteAction });
+    expect(within(screen.getByTestId('conversation-top')).queryByRole('button', { name: 'Excluir' })).toBeNull();
+
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'Que regras existem?{Enter}');
+    const pill = await within(screen.getByTestId('conversation-top')).findByRole('button', { name: 'Excluir' });
+    await user.click(pill);
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.',
+    );
+    // A refusal shows under the pill, and focus is back on it.
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    expect((await within(screen.getByTestId('conversation-top')).findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(pill);
+  });
+
+  it('offers no "Excluir" without its Server Action', () => {
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [], questions: 1 });
+    expect(within(screen.getByTestId('conversation-top')).queryByRole('button', { name: 'Excluir' })).toBeNull();
   });
 });

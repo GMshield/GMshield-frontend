@@ -232,6 +232,20 @@
         "required" : [ "name", "version" ],
         "type" : "object"
       },
+      "ConversationDeletion" : {
+        "description" : "What goes with a conversation if it is deleted (contract 1.30.0)",
+        "properties" : {
+          "questions" : {
+            "description" : "How many questions it holds: each goes with its answer, events and source references",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "questions" ],
+        "type" : "object"
+      },
       "ConversationPage" : {
         "description" : "One page of a campaign's conversations of one area (contract 1.29.0)",
         "properties" : {
@@ -1997,7 +2011,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.29.0"
+    "version" : "1.30.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2898,6 +2912,43 @@
       }
     },
     "/api/v1/conversations/{conversationId}" : {
+      "delete" : {
+        "operationId" : "deleteConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's conversations (contract 1.30.0; 202, no body): from now on it is not found on every route (its campaign's list and counts, the conversation, its turns, a question naming it, the campaign's latest questions conversation, and its turns' events, stop and reference pages), its answers still being written are cancelled, and its turns, their events and source references are removed in the background. Nothing of its campaign, of the other conversations, of the searches or of the materials changes. Cannot be undone. request.not_found (404) for any other id, a conversation already being deleted included",
+        "tags" : [ "conversations" ]
+      },
       "get" : {
         "operationId" : "getConversation",
         "parameters" : [ {
@@ -2939,7 +2990,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One of the account's conversations (contract 1.29.0): its campaign, area, name and version; request.not_found (404) for any other id (unknown, another account's, malformed, or of a campaign being deleted)",
+        "summary" : "One of the account's conversations (contract 1.29.0): its campaign, area, name and version; request.not_found (404) for any other id (unknown, another account's, malformed, of a campaign being deleted, or from contract 1.30.0 a conversation being deleted)",
         "tags" : [ "conversations" ]
       },
       "patch" : {
@@ -2994,6 +3045,52 @@
           }
         },
         "summary" : "Renames one of the account's conversations on the version it names (contract 1.29.0): the conversation as stored, its version raised by one. request.conversation_name_invalid (400) for a name outside 1 to 120 code points after trimming (params min and max), request.stale_version (409) when the conversation has left that version, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}/deletion" : {
+      "get" : {
+        "operationId" : "getConversationDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's conversations if it is deleted (contract 1.30.0): how many questions it holds, each with its answer. request.not_found (404) for any other id (unknown, another account's, malformed, or of a conversation or campaign being deleted)",
         "tags" : [ "conversations" ]
       }
     },
@@ -4504,7 +4601,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). From contract 1.26.0 also tier (TurnTierEvent), stored and replayed like citation. A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's",
+        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). From contract 1.26.0 also tier (TurnTierEvent), stored and replayed like citation. A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's, or (contract 1.30.0) of a conversation being deleted",
         "tags" : [ "conversations" ]
       }
     },
@@ -4570,7 +4667,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One page of the version a turn's source reference names: its picture size and text lines (a PDF page) or its text (a text page), and its passages' places, the same shape as MaterialPageView; an unreadable page with no view has picture null and outcome unreadable. The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's, a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "summary" : "One page of the version a turn's source reference names: its picture size and text lines (a PDF page) or its text (a text page), and its passages' places, the same shape as MaterialPageView; an unreadable page with no view has picture null and outcome unreadable. The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's (from contract 1.30.0, one of a conversation being deleted too), a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
         "tags" : [ "conversations" ]
       }
     },
@@ -4637,7 +4734,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The picture of one page of the version a turn's source reference names, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page, or an unreadable page with no view). The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's, a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "summary" : "The picture of one page of the version a turn's source reference names, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page, or an unreadable page with no view). The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's (from contract 1.30.0, one of a conversation being deleted too), a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
         "tags" : [ "conversations" ]
       }
     },
@@ -4676,7 +4773,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Stop the turn's answer (204): its stream ends at once with a done event marked stopped, after the text and citations stored so far, and the worker is told to stop at its next batch. A turn whose answer has ended already is left as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's",
+        "summary" : "Stop the turn's answer (204): its stream ends at once with a done event marked stopped, after the text and citations stored so far, and the worker is told to stop at its next batch. A turn whose answer has ended already is left as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's, or (contract 1.30.0) of a conversation being deleted",
         "tags" : [ "conversations" ]
       }
     },

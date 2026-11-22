@@ -363,7 +363,7 @@ describe('stand-in backend', () => {
     expect(bytes.headers.get('content-type')).toBe('image/webp');
   });
 
-  it('answers the conversations by area (Story 3.10): a list, one conversation, its stored turn and a rename', () => {
+  it('answers the conversations by area (Story 3.10): a list, one conversation, its stored turn, a rename and a delete', () => {
     const campaign = '0190a0b0-0000-7000-8000-000000000002';
     type Schema = { required?: string[] };
     const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
@@ -377,6 +377,12 @@ describe('stand-in backend', () => {
       status: 200,
       body: { id: CONVERSATION_ID, name: 'Viagem ao norte', version: 1 },
     });
+    // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { questions: 1 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
     const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
     expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN] } });
     for (const key of schemas.StoredTurn!.required ?? []) {

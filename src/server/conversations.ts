@@ -14,7 +14,8 @@ import { outgoingTraceparent, traceFrom } from './trace';
  * the library (created as a job, then read by id) and a page of the campaign's current scope, the ground a search
  * result opens on. From Story 3.10 a campaign's conversations of one area (its campaign page counts them with the
  * same list), one conversation with its stored turns,
- * its rename, and a question that continues a conversation or starts one in an area. The backend takes the owner from
+ * its rename, and a question that continues a conversation or starts one in an area; from Story 3.10 part B what goes
+ * with a conversation and its deletion. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -36,6 +37,8 @@ export type ConversationItem = Schemas['Conversation'];
 export type StoredTurn = Schemas['StoredTurn'];
 export type ConversationTurns = Schemas['ConversationTurns'];
 export type ConversationChange = Schemas['ConversationChange'];
+/** Story 3.10 part B: what goes with a conversation if it is deleted (its questions). */
+export type ConversationDeletion = Schemas['ConversationDeletion'];
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
 export const AREAS = ['questions', 'rules'] as const;
 export type Area = (typeof AREAS)[number];
@@ -127,6 +130,31 @@ export function renameConversation(
     client.PATCH('/api/v1/conversations/{conversationId}', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
       body,
+    }),
+  );
+}
+
+/** What goes with one of the account's conversations if it is deleted (Story 3.10 part B); `request.not_found` otherwise. */
+export function conversationDeletion(
+  sessionToken: string,
+  conversationId: string,
+  options: CallOptions = {},
+): Promise<Result<ConversationDeletion>> {
+  return call('conversations.deletion', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}/deletion', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/**
+ * Deletes one of the account's conversations with its questions, answers and references (Story 3.10 part B; 202, no
+ * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ */
+export function deleteConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.delete', options, (client) =>
+    client.DELETE('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
     }),
   );
 }

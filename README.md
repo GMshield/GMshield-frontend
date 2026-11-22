@@ -863,6 +863,22 @@ they sit in `src/`.
     reads it done with two results, the campaign's notes (a text page) and the book (a picture page), each page
     answering on the current-scope path.
   - Deploy order: backend → worker → frontend.
+- **Delete a conversation (Story 3.10 part B).** Public contract 1.30.0 (the minimum backend contract too).
+  - **Where.** An opened conversation's slim top line holds "Excluir" after "Renomear", a danger pill
+    (`src/components/conversation/ConversationDeleteAction.tsx`) that opens the shared `ConfirmationDialog`: "Excluir
+    esta conversa?", "Vão junto: {n} perguntas e suas respostas. Isso não pode ser desfeito." (one question: "Vai
+    junto: 1 pergunta e sua resposta."), and the confirm pill "Excluir conversa"; focus starts on "Cancelar".
+  - **The count.** `openedConversationPage` reads `GET /api/v1/conversations/{id}/deletion` (`conversationDeletion` in
+    `src/server/conversations.ts`) with the conversation; the dialog adds the questions the backend recorded on the
+    page since. A conversation made on the page (its id from its first question), or one whose count could not be read,
+    gets the words-only consequence ("Vão junto: as perguntas desta conversa e suas respostas.").
+  - **The action.** `deleteConversationAction` (`conversation-actions.ts`) reads the conversation for its name and
+    area, calls `DELETE /api/v1/conversations/{id}` (`deleteConversation`, 202), flashes "Conversa «{name}» excluída.",
+    revalidates the layout and opens `/{area}`; a refusal is its text under the pill. A malformed id never reaches the
+    backend. A deleted conversation's address then shows "Não encontrado.".
+  - Every string is in `conversations.delete.*` and `feedback.conversationDeleted`, in pt-BR and en. The stand-in
+    backend answers the preview (`{questions: 1}`) and the delete (202, no body).
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
