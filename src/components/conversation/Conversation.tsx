@@ -27,6 +27,7 @@ import { TIER_SEPARATOR, tierSpoken, tierWord } from '../TierLabel';
 import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
+import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
 import { NamedIcon } from '../Icons';
 import { PillLink } from '../PillLink';
 
@@ -177,6 +178,13 @@ export type ConversationProps = {
   readonly name?: string | null;
   /** Story 3.10: the opened conversation's stored turns, oldest first, each with its events. */
   readonly stored?: readonly StoredTurn[];
+  /**
+   * Story 3.10 part B: how many questions the opened conversation held when the page read it; absent or null when it
+   * was not read (a conversation made on this page, or a count that could not be read).
+   */
+  readonly questions?: number | null;
+  /** Story 3.10 part B: the Server Action behind "Excluir"; without it the conversation offers no delete. */
+  readonly deleteAction?: (previous: ConversationDeleteState, form: FormData) => Promise<ConversationDeleteState>;
   /** The newest material that needs review, when there is one. */
   readonly review: { readonly href: string; readonly name: string } | null;
   /** For tests: how a stream of a turn is opened (the browser's `EventSource` by default). */
@@ -410,6 +418,9 @@ export function NoCampaignConversation({ language, area = 'questions' }: { reado
  *   address with `/{area}/{id}` without leaving the page. An opened conversation shows its stored turns as their events
  *   fold (answers with their superscripts and references, stopped and failed ones marked), follows one still being
  *   written from its last event, and every question continues it. The draft is kept per conversation.
+ * - Story 3.10 part B: once the conversation has an id, "Excluir" follows "Renomear" in the top line; its dialog names
+ *   how many questions go (the count read with the page, plus those asked on it since), or says so in words when no
+ *   count was read (a conversation made on this page).
  */
 export function Conversation({
   language,
@@ -422,6 +433,8 @@ export function Conversation({
   conversationId = null,
   name = null,
   stored = [],
+  questions = null,
+  deleteAction,
 }: ConversationProps) {
   const t = translator(language);
   const uploads = useUploads();
@@ -916,11 +929,14 @@ export function Conversation({
   const areaName = t(`shell.entries.${area}`);
   const title = conversation !== null && conversation.name !== '' ? conversation.name : areaName;
   const lines = Math.min(COMPOSER_MAX_LINES, Math.max(1, draft.split('\n').length));
+  // Story 3.10 part B: the questions read with the page, plus those the backend recorded on it since.
+  const askedHere = turns.slice(stored.length).filter((turn) => turn.id !== null).length;
+  const questionCount = questions === null ? null : questions + askedHere;
 
   return (
     <section className={styles.conversation} aria-label={title}>
       <h1 className={styles.visuallyHidden}>{title}</h1>
-      {/* Story 3.10: the way back to the area's list and, once the conversation has an id, its name and "Renomear". */}
+      {/* Story 3.10: the way back to the area's list and, once the conversation has an id, its name, "Renomear" and "Excluir". */}
       <div className={styles.top} data-testid="conversation-top">
         <Link className={styles.back} href={`/${area}`}>
           <NamedIcon name="back" size={16} />
@@ -930,6 +946,9 @@ export function Conversation({
           <>
             <p className={styles.name}>{conversation.name}</p>
             <PillLink href={`/${area}/${encodeURIComponent(conversation.id)}/edit`}>{t('conversation.rename')}</PillLink>
+            {deleteAction === undefined ? null : (
+              <ConversationDeleteAction id={conversation.id} questions={questionCount} language={language} action={deleteAction} />
+            )}
           </>
         )}
       </div>

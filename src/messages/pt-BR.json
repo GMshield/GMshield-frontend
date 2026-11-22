@@ -703,7 +703,8 @@
     "uploadDone": "«{name}» enviado. A leitura das páginas começou.",
     "uploadFailed": "O envio de «{name}» falhou.",
     "viewSaved": "Exibição salva neste navegador.",
-    "conversationRenamed": "Conversa renomeada para «{name}»."
+    "conversationRenamed": "Conversa renomeada para «{name}».",
+    "conversationDeleted": "Conversa «{name}» excluída."
   },
   "notifications": {
     "title": "Notificações",
@@ -814,6 +815,14 @@
       "save": "Salvar",
       "cancel": "Cancelar",
       "stale": "Esta conversa foi renomeada em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve."
+    },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir esta conversa?",
+      "consequenceOne": "Vai junto: 1 pergunta e sua resposta. Isso não pode ser desfeito.",
+      "consequenceOther": "Vão junto: {count} perguntas e suas respostas. Isso não pode ser desfeito.",
+      "unknown": "Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.",
+      "confirm": "Excluir conversa"
     }
   }
 }

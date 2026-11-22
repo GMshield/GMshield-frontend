@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * Story 3.10 part A, the server's side: each area's list of the current campaign's conversations, a new conversation,
  * an opened one with its stored turns, and the rename (its page and its Server Action). The browser's side (examples,
  * the composer's focus, the address once the first question made the conversation, a stored turn still being written)
- * is in `test/conversation.test.tsx`.
+ * is in `test/conversation.test.tsx`. Story 3.10 part B: "Excluir" on an opened conversation, with the count its page
+ * reads, and its Server Action.
  */
 let cookieJar: Record<string, string> = {};
 const setCookie = vi.fn();
@@ -35,7 +36,8 @@ const { default: NewRulesConversationPage } = await import('@/app/(signed-in)/ru
 const { default: QuestionsConversationPage } = await import('@/app/(signed-in)/questions/[id]/page');
 const { default: RulesConversationPage } = await import('@/app/(signed-in)/rules/[id]/page');
 const { default: RenameRulesConversationPage } = await import('@/app/(signed-in)/rules/[id]/edit/page');
-const { renameConversationAction } = await import('@/app/(signed-in)/conversation-actions');
+const { deleteConversationAction, renameConversationAction } = await import('@/app/(signed-in)/conversation-actions');
+const { default: NewQuestionsConversationPage } = await import('@/app/(signed-in)/questions/new/page');
 const { FLASH_COOKIE, flashFrom } = await import('@/flash-cookie');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
@@ -342,6 +344,103 @@ describe('rename a conversation (Story 3.10)', () => {
     const count = server.calls.length;
     for (const fields of [{ ...typed, id: '../me' }, { ...typed, version: '-1' }, { ...typed, version: '9'.repeat(16) }]) {
       expect((await renameConversationAction(previous, form(fields))).error).toBe('The request is not valid.');
+    }
+    expect(server.calls).toHaveLength(count);
+  });
+});
+
+describe('delete a conversation (Story 3.10 part B)', () => {
+  it('an opened conversation has "Excluir" after "Renomear", outlined in danger, its dialog naming the questions read with the page', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [STORED] } },
+      [`GET /api/v1/conversations/${RULES_ID}/deletion`]: { status: 200, body: { questions: 2 } },
+    };
+    const server = await useBackend(routes);
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = inShell(await RulesConversationPage({ params: params(RULES_ID) }));
+      expect(html).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*>${messages.conversations.delete.action}</button>`));
+      expect(html).toMatch(new RegExp(`<button[^>]*aria-haspopup="dialog"[^>]*>${messages.conversations.delete.action}</button>`));
+      expect(html.indexOf(`>${messages.conversation.rename}</a>`)).toBeLessThan(html.indexOf(`>${messages.conversations.delete.action}</button>`));
+      // The dialog is rendered closed, already naming the count of this conversation.
+      expect(html).toContain(messages.conversations.delete.title);
+      expect(html).toContain(language === 'en' ? 'Going with it: 2 questions and their answers.' : 'Vão junto: 2 perguntas e suas respostas.');
+      expect(html).toContain(`>${messages.conversations.delete.confirm}</button>`);
+      expect(solids(html)).not.toContain(messages.conversations.delete.action);
+    }
+    expect(server.calls.find((call) => call.url === `/api/v1/conversations/${RULES_ID}/deletion`)!.headers['x-session-token']).toBe(SESSION);
+
+    // A count that cannot be read leaves the dialog in words.
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    routes[`GET /api/v1/conversations/${RULES_ID}/deletion`] = problem(503, 'backend.unavailable');
+    const html = inShell(await RulesConversationPage({ params: params(RULES_ID) }));
+    expect(html).toContain('Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.');
+    expect(html).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+  });
+
+  it('a new conversation has no "Excluir" until its first question gives it an id, and is given the delete for then', async () => {
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [STORED] } },
+    });
+    const page = await NewQuestionsConversationPage();
+    const html = inShell(page);
+    expect(html).not.toContain(`>${ptBR.conversations.delete.action}</button>`);
+    expect(html).not.toContain(ptBR.conversations.delete.title);
+    // The Server Action is handed over now, for "Excluir" once the first question made the conversation.
+    expect((page as { props: { deleteAction?: unknown } }).props.deleteAction).toBe(deleteConversationAction);
+    const rules = await NewRulesConversationPage();
+    expect((rules as { props: { deleteAction?: unknown } }).props.deleteAction).toBe(deleteConversationAction);
+    const opened = await RulesConversationPage({ params: params(RULES_ID) });
+    expect((opened as { props: { deleteAction?: unknown } }).props.deleteAction).toBe(deleteConversationAction);
+  });
+
+  it('"Excluir conversa" deletes it, names it in a toast, revalidates the layout and opens its area; a refusal comes back as its text', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = {
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`DELETE /api/v1/conversations/${RULES_ID}`]: { status: 202 },
+    };
+    const server = await useBackend(routes);
+
+    expect(await thrownDigest(() => deleteConversationAction({ error: null }, form({ id: RULES_ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/rules;/);
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    const [name, value] = setCookie.mock.calls[0] as [string, string];
+    expect(name).toBe(FLASH_COOKIE);
+    expect(flashFrom(value)).toEqual({ status: 'success', message: 'Conversa «Fabricar itens» excluída.' });
+    const deleted = server.calls.find((call) => call.method === 'DELETE')!;
+    expect(deleted.url).toBe(`/api/v1/conversations/${RULES_ID}`);
+    expect(deleted.headers['x-session-token']).toBe(SESSION);
+    revalidatePath.mockClear();
+    setCookie.mockClear();
+
+    // A questions conversation opens Consultas, and the toast is in the interface's language.
+    routes[`GET /api/v1/conversations/${FIRST}`] = { status: 200, body: { ...RULES, id: FIRST, area: 'questions', name: 'Fire Bolt' } };
+    routes[`DELETE /api/v1/conversations/${FIRST}`] = { status: 202 };
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await thrownDigest(() => deleteConversationAction({ error: null }, form({ id: FIRST })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/questions;/);
+    expect(flashFrom((setCookie.mock.calls[0] as [string, string])[1])).toEqual({ status: 'success', message: 'Conversation «Fire Bolt» deleted.' });
+    revalidatePath.mockClear();
+
+    // Matrix row "Twice": already deleting, or another owner's: the read refuses, and nothing is deleted.
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    routes[`GET /api/v1/conversations/${RULES_ID}`] = problem(404, 'request.not_found');
+    const before = server.calls.filter((call) => call.method === 'DELETE').length;
+    expect(await deleteConversationAction({ error: null }, form({ id: RULES_ID }))).toEqual({ error: 'Não encontrado.' });
+    expect(server.calls.filter((call) => call.method === 'DELETE')).toHaveLength(before);
+    // Gone between the read and the delete.
+    routes[`GET /api/v1/conversations/${RULES_ID}`] = { status: 200, body: RULES };
+    routes[`DELETE /api/v1/conversations/${RULES_ID}`] = problem(404, 'request.not_found');
+    expect(await deleteConversationAction({ error: null }, form({ id: RULES_ID }))).toEqual({ error: 'Não encontrado.' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    // A malformed id never reaches the backend.
+    const count = server.calls.length;
+    for (const fields of [{ id: '../x' }, {}] as Record<string, string>[]) {
+      expect(await deleteConversationAction({ error: null }, form(fields))).toEqual({ error: 'O pedido não é válido.' });
     }
     expect(server.calls).toHaveLength(count);
   });

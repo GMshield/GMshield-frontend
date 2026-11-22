@@ -26,6 +26,7 @@ const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
 const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
+const { ConversationDeleteAction } = await import('@/components/conversation/ConversationDeleteAction');
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
 const { References } = await import('@/components/conversation/References');
@@ -837,6 +838,95 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
     expect(document.activeElement).toBe(opener);
     expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('ConversationDeleteAction (Story 3.10 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000020';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the count, focus on Cancelar; "Excluir conversa" posts the conversation', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ConversationDeleteAction id={ID} questions={3} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    await user.tab();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    expect(dialog.textContent).toContain('Vão junto: 3 perguntas e suas respostas. Isso não pode ser desfeito.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one question, none, and what goes in words when no count was read, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<ConversationDeleteAction id={ID} questions={1} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vai junto: 1 pergunta e sua resposta. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={0} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this conversation?' });
+    expect(dialog.textContent).toContain('Going with it: 0 questions and their answers. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete conversation' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={1} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 question and its answer. This cannot be undone.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this conversation's questions and their answers. This cannot be undone.");
+  });
+
+  it('"Excluir" ignores clicks while the delete runs; a refusal shows as an alert under it, with focus back on it', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<ConversationDeleteAction id={ID} questions={2} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: 'Não encontrado.' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    expect(document.activeElement).toBe(opener);
   });
 });
 

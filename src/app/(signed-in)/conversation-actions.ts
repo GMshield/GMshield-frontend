@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import type { ConversationDeleteState } from '@/components/conversation/ConversationDeleteAction';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { getConversation, renameConversation } from '@/server/conversations';
+import { deleteConversation, getConversation, renameConversation } from '@/server/conversations';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -63,4 +64,31 @@ export async function renameConversationAction(previous: CampaignFormState, form
   }
   const field = code === 'request.conversation_name_invalid' ? 'name' : null;
   return { values, version: Number(version), error: errorText(result.problem, language), field, stale: false };
+}
+
+/**
+ * "Excluir conversa" in a conversation's confirmation (Story 3.10 part B): the conversation is read for its name and
+ * area, the backend deletes it (its questions, answers and references go in the background), the toast names it, the
+ * shared layout is rendered again, and the area's list opens without it. A refusal comes back as its text; a malformed
+ * id never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
+ */
+export async function deleteConversationAction(_previous: ConversationDeleteState, form: FormData): Promise<ConversationDeleteState> {
+  const { language } = await currentPreferences();
+  const id = form.get('id');
+  if (typeof id !== 'string' || !ID.test(id)) {
+    return { error: invalid(language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const conversation = await getConversation(token, id);
+  if (!conversation.ok) {
+    return { error: errorText(conversation.problem, language) };
+  }
+  const result = await deleteConversation(token, id);
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.conversationDeleted', { name: conversation.data.name }));
+    revalidatePath('/', 'layout');
+    redirect(`/${conversation.data.area}`);
+  }
+  return { error: errorText(result.problem, language) };
 }

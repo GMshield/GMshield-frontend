@@ -703,7 +703,8 @@
     "uploadDone": "«{name}» uploaded. Reading its pages has started.",
     "uploadFailed": "The upload of «{name}» failed.",
     "viewSaved": "Display saved in this browser.",
-    "conversationRenamed": "Conversation renamed to «{name}»."
+    "conversationRenamed": "Conversation renamed to «{name}».",
+    "conversationDeleted": "Conversation «{name}» deleted."
   },
   "notifications": {
     "title": "Notifications",
@@ -814,6 +815,14 @@
       "save": "Save",
       "cancel": "Cancel",
       "stale": "This conversation was renamed elsewhere. The field now shows its current name: make your change again and save."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete this conversation?",
+      "consequenceOne": "Going with it: 1 question and its answer. This cannot be undone.",
+      "consequenceOther": "Going with it: {count} questions and their answers. This cannot be undone.",
+      "unknown": "Going with it: this conversation's questions and their answers. This cannot be undone.",
+      "confirm": "Delete conversation"
     }
   }
 }
