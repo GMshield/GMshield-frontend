@@ -357,10 +357,24 @@ describe("the browser's stop call and stream address (Story 2.6)", () => {
   it('reads a stopped done: never silent, its references kept', async () => {
     const { parseDone } = await import('@/client/conversation');
     const reference = { number: 1, materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
-    expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, references: [] });
-    expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, references: [reference] });
-    expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, references: [] });
-    expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, references: [reference] });
+    expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [] });
+    expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [reference] });
+    expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, modelKnowledge: false, references: [] });
+    expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, modelKnowledge: false, references: [reference] });
+  });
+
+  it('Story 3.8: reads modelKnowledge, true only when said, and keeps an answer with a model part from being silent', async () => {
+    const { parseDone, parseTier } = await import('@/client/conversation');
+    expect(parseDone({ stopped: false, silent: true, modelKnowledge: true, references: [] }).modelKnowledge).toBe(true);
+    expect(parseDone({ stopped: false, silent: true, modelKnowledge: 'true', references: [] }).modelKnowledge).toBe(false);
+    expect(parseDone({ stopped: false, silent: true, references: [] }).modelKnowledge).toBe(false);
+    // A model part with no reference is not silent; without it, no reference is.
+    expect(parseDone({ stopped: false, silent: false, modelKnowledge: true, references: [] }, true).silent).toBe(false);
+    expect(parseDone({ stopped: false, silent: false, modelKnowledge: true, references: [] }, false).silent).toBe(true);
+    // The backend's silent wins.
+    expect(parseDone({ stopped: false, silent: true, modelKnowledge: true, references: [] }, true).silent).toBe(true);
+    expect(parseTier({ tier: 'model', offset: 4 })).toEqual({ tier: 'model', offset: 4 });
+    expect(parseTier({ tier: 'MODEL', offset: 4 })).toBeNull();
   });
 });
 

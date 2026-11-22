@@ -86,21 +86,43 @@ export type Citation = { readonly passageId: string; readonly offset: number };
 /** A tier of the campaign's scope, as the backend labels a source (Story 3.7). */
 export type Tier = NonNullable<components['schemas']['TurnSourceReference']['tier']>;
 
-/** The tiers the backend writes, in tier order. */
+/** The tiers the backend writes on a reference, in tier order. */
 export const TIERS: readonly Tier[] = ['campaign', 'system', 'other'];
 
+/**
+ * A tier word of a turn's `tier` event (`TurnTierEvent`): a tier of the scope (Story 3.7), or `model` (Story 3.8), which
+ * starts a part from the model's own knowledge. A reference never carries `model`.
+ */
+export type TurnTier = components['schemas']['TurnTierEvent']['tier'];
+
+/** The tier word of a part from the model's own knowledge (Story 3.8). */
+export const MODEL_TIER = 'model' satisfies TurnTier;
+
+/** The tier words a turn's `tier` event may carry. */
+export const TURN_TIERS: readonly TurnTier[] = [...TIERS, MODEL_TIER];
+
 /** A tier's version of the answer starts at a code-point offset of its text (Story 3.7, `TurnTierEvent`). */
-export type TierStart = { readonly tier: Tier; readonly offset: number };
+export type TierStart = { readonly tier: TurnTier; readonly offset: number };
 
 function isTier(value: unknown): value is Tier {
   return typeof value === 'string' && (TIERS as readonly string[]).includes(value);
 }
 
+function isTurnTier(value: unknown): value is TurnTier {
+  return typeof value === 'string' && (TURN_TIERS as readonly string[]).includes(value);
+}
+
 /**
- * The `done` event's data: its references, whether the GM stopped the answer (Story 2.6), and whether the sources say
- * nothing (no reference, and not stopped).
+ * The `done` event's data: its references, whether the GM stopped the answer (Story 2.6), whether the sources say
+ * nothing (no reference, no part from the model's knowledge, and not stopped), and (Story 3.8) whether the turn's model
+ * knowledge was on, as frozen when the question was asked.
  */
-export type Done = { readonly stopped: boolean; readonly silent: boolean; readonly references: readonly SourceReference[] };
+export type Done = {
+  readonly stopped: boolean;
+  readonly silent: boolean;
+  readonly modelKnowledge: boolean;
+  readonly references: readonly SourceReference[];
+};
 
 function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -120,16 +142,22 @@ function isReference(value: unknown): value is SourceReference {
 
 /**
  * The data of a `done` event. Only what it carries is shown: a reference that is not well formed is left out, and an
- * answer with no reference left is silent, whatever the event said (no uncited text stays on screen). A stopped answer
- * (Story 2.6) is never silent: its partial text stays, marked stopped, with whatever references it has.
+ * answer with no reference left is silent, whatever the event said (no uncited text stays on screen), unless (Story 3.8)
+ * the turn had a `model` tier event (`modelPart`): that part is marked, so it stays. A stopped answer (Story 2.6) is
+ * never silent: its partial text stays, marked stopped, with whatever references it has. `modelKnowledge` is true only
+ * when the event says so.
  */
-export function parseDone(data: Record<string, unknown> | null): Done {
+export function parseDone(data: Record<string, unknown> | null, modelPart = false): Done {
   const stopped = data?.stopped === true;
+  const modelKnowledge = data?.modelKnowledge === true;
   const references = Array.isArray(data?.references) ? data.references.filter(isReference) : [];
   if (stopped) {
-    return { stopped, silent: false, references };
+    return { stopped, silent: false, modelKnowledge, references };
   }
-  return { stopped, silent: data?.silent === true || references.length === 0, references: data?.silent === true ? [] : references };
+  if (data?.silent === true) {
+    return { stopped, silent: true, modelKnowledge, references: [] };
+  }
+  return { stopped, silent: references.length === 0 && !modelPart, modelKnowledge, references };
 }
 
 /** The data of a `citation` event, or null when it is not one. */
@@ -140,9 +168,12 @@ export function parseCitation(data: Record<string, unknown> | null): Citation | 
   return { passageId: data.passageId, offset: data.offset as number };
 }
 
-/** The data of a `tier` event (Story 3.7), or null when it is not one: a tier the backend writes at an offset from 0. */
+/**
+ * The data of a `tier` event (Story 3.7), or null when it is not one: a tier word the backend writes (`model` too, Story
+ * 3.8) at an offset from 0.
+ */
 export function parseTier(data: Record<string, unknown> | null): TierStart | null {
-  if (!isTier(data?.tier) || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
+  if (!isTurnTier(data?.tier) || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
     return null;
   }
   return { tier: data.tier, offset: data.offset as number };

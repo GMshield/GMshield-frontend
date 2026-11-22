@@ -813,6 +813,28 @@ they sit in `src/`.
   - The stand-in backend's answer is the campaign's house rule ("Notas da campanha.md", reference 1, the text page)
     under a campaign `tier` event, then the book's rule ("Livro do Jogador.pdf", reference 2, the picture page) under a
     system one; each reference carries its tier.
+- **Model knowledge only when I turn it on (Story 3.8).** Public contract 1.27.0 (the minimum backend contract too).
+  - The scope controls' model-knowledge switch is enabled (the "Chega em breve" note is gone): a press saves the whole
+    settings with it turned, like any switch, and "Vale a partir da próxima pergunta." confirms it.
+  - `TurnTierEvent.tier` may be `model` (`TurnTier`, `MODEL_TIER`, `TURN_TIERS` in `src/client/conversation.ts`):
+    the model's own knowledge starts there. A reference never carries it (`TIERS` keeps three words).
+    `TurnDoneEvent.modelKnowledge` is the turn's frozen switch; `parseDone(data, modelPart)` reads it (true only when
+    it is `true`) and does not force a silent answer when the turn had a `model` tier event.
+  - The `model` pill reads "Conhecimento do modelo" / "Model knowledge" (`campaigns.scope.modelKnowledge`) and is drawn
+    even when it is the only marker (the rule of two tiers is for campaign, system and other only). A reader hears
+    "Do conhecimento do modelo, sem fonte." / "From model knowledge, no source." (`conversation.modelSource`, the pill
+    itself `aria-hidden`), and the same sentence closes that part as a muted `p` (`AnswerMarkdown`'s `modelEnd`) after
+    the top-level block holding its end: before the next tier's pill, or at the answer's end. Neither takes focus.
+  - Under a silent answer whose `done.modelKnowledge` is false, a muted line "Ampliar as fontes ou ligar o conhecimento
+    do modelo" with a link-style button "Abrir o escopo" ("Widen the sources or turn on model knowledge" / "Open the
+    scope"); the polite region says the line after the silent sentence, both in the turn's language. The button opens the context bar's scope
+    popover with focus on its first switch through `ScopePopoverProvider` (`src/components/ScopePopoverContext.tsx`,
+    provided by `Shell`; `ScopePopover` registers its opener). Without a popover to open, the line shows without the
+    button. Under 768px the summary's button is hidden but the popover stays, so it still opens under the bar.
+  - The stand-in backend's `done` carries `modelKnowledge: false`.
+  - Deploy order: backend → worker → frontend. The worker before this frontend (the old frontend cannot turn the
+    switch on, so nothing it can set is ignored), and this frontend last so the switch only turns on once the worker
+    honours it.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never

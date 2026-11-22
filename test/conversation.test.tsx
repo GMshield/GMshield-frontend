@@ -20,6 +20,8 @@ const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS } = await import('@/com
 const { UploadsProvider, useUploads } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { errorText } = await import('@/messages');
+const { ScopePopover } = await import('@/components/ScopePopover');
+const { ScopePopoverProvider } = await import('@/components/ScopePopoverContext');
 
 const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const TURN = '0190a0b0-0000-7000-8000-000000000021';
@@ -643,7 +645,8 @@ describe('sources under every answer (Story 2.5)', () => {
     expect(screen.queryByText('Resposta em inglês')).toBeNull();
     expect(screen.queryAllByRole('list', { name: 'Fontes' })).toHaveLength(0);
     expect(document.querySelector('sup')).toBeNull();
-    expect(polite()).toBe('The sources say nothing about this.');
+    // Story 3.8: with model knowledge off (absent), the offer under it is said too, in the same language.
+    expect(polite()).toBe('The sources say nothing about this. Widen the sources or turn on model knowledge.');
     expect(document.querySelector('hr')).not.toBeNull();
   });
 
@@ -1710,5 +1713,243 @@ describe('the campaign\'s version leads (Story 3.7)', () => {
 
     const shownPills = [...document.querySelectorAll('[data-tier]')].filter((pill) => pill.closest('[data-testid="conversation-polite"]') === null);
     expect(shownPills.map((pill) => pill.textContent)).toEqual(['Campaign', 'System', 'Campaign', 'System']);
+  });
+});
+
+describe('model knowledge only when I turn it on (Story 3.8)', () => {
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  const SCOPE = { version: 1, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [] };
+
+  /** The conversation inside the shell's scope popover provider, with the context bar's popover beside it. */
+  function viewWithPopover(language: 'pt-BR' | 'en' = 'pt-BR') {
+    return render(
+      <ScopePopoverProvider>
+        <ScopePopover
+          summary="Campanha + Sistema · conhecimento do modelo desligado"
+          label="Escopo"
+          panel="Escopo da campanha"
+          campaignId={CAMPAIGN}
+          scope={SCOPE}
+          language={language}
+          action={vi.fn(async () => ({ scope: null, error: null, saved: false }))}
+        />
+        <UploadsProvider texts={uploadTexts(language)} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+          <Conversation
+            language={language}
+            campaignId={CAMPAIGN}
+            hasSources
+            review={null}
+            openStream={(url) => {
+              const stream = new FakeStream(url);
+              streams.push(stream);
+              return stream as unknown as EventSource;
+            }}
+          />
+        </UploadsProvider>
+      </ScopePopoverProvider>,
+    );
+  }
+
+  /** The answer's blocks, each as its pills (with what a reader hears for them), texts and superscripts in order. */
+  function blocks(): string[][] {
+    const answer = turns().getAllByRole('paragraph').filter((p) => p.closest('[class*="answer"]') !== null);
+    return answer.map((paragraph) => {
+      if (/modelEnd/u.test(paragraph.className)) {
+        return [`END:${paragraph.textContent}`];
+      }
+      return [...paragraph.childNodes].map((node) => {
+        if (node.nodeName === 'SUP') {
+          return `SUP:${shown(node)}`;
+        }
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.dataset.tier}:${node.textContent}${node.getAttribute('aria-hidden') === 'true' ? ':hidden' : ''}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      });
+    });
+  }
+
+  it('matrix row "On, mixed": citations as before, and the model paragraph opens with its pill and closes with its line', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Na mesa, 2d10.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 2);
+    stream.emit('delta', { text: '\n\n' }, 3);
+    stream.emit('tier', { tier: 'model', offset: 16 }, 4);
+    stream.emit('delta', { text: 'Em geral, 1d10.' }, 5);
+    // Nothing of it shows while the answer streams.
+    expect(document.querySelector('[data-tier]')).toBeNull();
+    stream.emit('done', { silent: false, modelKnowledge: true, references: [reference(1, [PASSAGE_A], { tier: 'campaign' })] }, 6);
+
+    // The model pill is drawn alone (the 3.7 rule of two tiers is for the scope's tiers only); it has no superscript.
+    expect(blocks()).toEqual([
+      ['#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Em geral, 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+    ]);
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+    // A reader hears the sentence for the pill, never the word shown.
+    const polite = screen.getByTestId('conversation-polite');
+    expect(polite.textContent).toContain('Do conhecimento do modelo, sem fonte. Em geral, 1d10.');
+    // Neither the pill nor the line takes focus or has a role.
+    for (const element of document.querySelectorAll<HTMLElement>('[data-tier="model"], [class*="modelEnd"]')) {
+      expect(element.getAttribute('tabindex')).toBeNull();
+      expect(element.getAttribute('role')).toBeNull();
+    }
+  });
+
+  it('closes the model part before the next tier\'s pill, and draws the scope\'s tiers only when two of them disagree', async () => {
+    view();
+    const stream = await ask('How much?');
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    stream.emit('delta', { text: 'At the table, 2d10.' }, 2);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 19 }, 3);
+    stream.emit('delta', { text: '\n\n' }, 4);
+    stream.emit('tier', { tier: 'model', offset: 21 }, 5);
+    stream.emit('delta', { text: 'Usually 1d10.\n\n' }, 6);
+    stream.emit('tier', { tier: 'system', offset: 36 }, 7);
+    stream.emit('delta', { text: 'In the book, 1d10.' }, 8);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 54 }, 9);
+    stream.emit('done', {
+      silent: false,
+      modelKnowledge: true,
+      references: [reference(1, [PASSAGE_A], { tier: 'campaign' }), reference(2, [PASSAGE_B], { tier: 'system' })],
+    }, 10);
+
+    expect(blocks()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', '#text:At the table, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Usually 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+      ['PILL:system:Sistema', 'SEP:: ', '#text:In the book, 1d10.', 'SUP:2'],
+    ]);
+  });
+
+  it('matrix row "On, nothing handed": only the model paragraph, with its pill, is not silent and has no reference', async () => {
+    view({ language: 'en' });
+    const stream = await ask('How much?', 'en');
+    stream.emit('tier', { tier: 'model', offset: 0 }, 1);
+    stream.emit('delta', { text: 'Usually 1d10.' }, 2);
+    stream.emit('done', { silent: false, modelKnowledge: true, references: [] }, 3);
+
+    expect(blocks()).toEqual([
+      ['PILL:model:Model knowledge:hidden', 'SEP:From model knowledge, no source. ', '#text:Usually 1d10.'],
+      ['END:From model knowledge, no source.'],
+    ]);
+    expect(turns().queryByText('The sources say nothing about this.')).toBeNull();
+    expect(screen.queryAllByRole('list', { name: 'Sources' })).toHaveLength(0);
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+  });
+
+  it('keeps a model part even when the done event carries no reference and does not say silent', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('tier', { tier: 'model', offset: 0 }, 1);
+    stream.emit('delta', { text: 'Em geral, 1d10.' }, 2);
+    // An old backend's done with no modelKnowledge: the marked part still stays.
+    stream.emit('done', { silent: false, references: [] }, 3);
+
+    expect(turns().getByText('Em geral, 1d10.')).toBeTruthy();
+    expect(turns().queryByText('As fontes não dizem nada sobre isso.')).toBeNull();
+  });
+
+  it('matrix row "On, silent": the silent sentence and no offer when the turn had model knowledge on', async () => {
+    viewWithPopover();
+    const stream = await ask('Quanto?');
+    stream.emit('done', { silent: true, modelKnowledge: true, references: [] }, 1);
+
+    expect(turns().getByText('As fontes não dizem nada sobre isso.')).toBeTruthy();
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+    expect(polite()).toBe('As fontes não dizem nada sobre isso.');
+  });
+
+  it('matrix row "Off, silent": the offer line under the silent sentence, said too, opens the scope popover', async () => {
+    viewWithPopover();
+    const stream = await ask('Quanto?');
+    stream.emit('delta', { text: 'Texto sem fonte.' }, 1);
+    stream.emit('done', { silent: true, modelKnowledge: false, references: [] }, 2);
+
+    const offer = screen.getByTestId('silent-offer');
+    expect(offer.textContent).toBe('Ampliar as fontes ou ligar o conhecimento do modeloAbrir o escopo');
+    expect(offer.closest('li')).not.toBeNull();
+    expect(polite()).toBe('As fontes não dizem nada sobre isso. Ampliar as fontes ou ligar o conhecimento do modelo.');
+    const trigger = screen.getByRole('button', { name: /^Escopo:/u });
+    const group = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    expect(group.hidden).toBe(true);
+
+    await userEvent.setup().click(within(offer).getByRole('button', { name: 'Abrir o escopo' }));
+
+    expect(group.hidden).toBe(false);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    await waitFor(() => expect(group.contains(document.activeElement)).toBe(true));
+  });
+
+  it('opens the popover from the keyboard with focus inside it (en)', async () => {
+    viewWithPopover('en');
+    const stream = await ask('How much?', 'en');
+    stream.emit('done', { silent: true, modelKnowledge: false, references: [] }, 1);
+
+    const button = within(screen.getByTestId('silent-offer')).getByRole('button', { name: 'Open the scope' });
+    expect(screen.getByTestId('silent-offer').textContent).toBe('Widen the sources or turn on model knowledgeOpen the scope');
+    button.focus();
+    await userEvent.setup().keyboard('{Enter}');
+
+    const group = screen.getByRole('group', { name: 'Escopo da campanha' });
+    await waitFor(() => expect(group.contains(document.activeElement)).toBe(true));
+    expect(document.activeElement?.getAttribute('role')).toBe('switch');
+    // Esc closes it and gives focus back to the offer's button (the summary is hidden under 768px).
+    await userEvent.setup().keyboard('{Escape}');
+    expect(group.hidden).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(button));
+  });
+
+  it('shows the offer without its button where no scope popover is there to open', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('done', { silent: true, references: [] }, 1);
+
+    const offer = screen.getByTestId('silent-offer');
+    expect(offer.textContent).toBe('Ampliar as fontes ou ligar o conhecimento do modelo');
+    expect(within(offer).queryByRole('button')).toBeNull();
+  });
+
+  it('matrix row "Replay": the model pill stays at its place after a reconnection replays from the last event', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('delta', { text: 'Na mesa, 2d10.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 2);
+    stream.emit('delta', { text: '\n\n' }, 3);
+    stream.emit('tier', { tier: 'model', offset: 16 }, 4);
+    vi.useFakeTimers();
+    stream.drop();
+    act(() => vi.advanceTimersByTime(RECONNECT_GIVE_UP_MS));
+    fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
+    expect(streams[1]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=4`);
+    vi.useRealTimers();
+    streams[1]!.open();
+    // The backend replays from the last id; a repeated marker is ignored, so the model pill is drawn once.
+    streams[1]!.emit('tier', { tier: 'model', offset: 16 }, 4);
+    streams[1]!.emit('delta', { text: 'Em geral, 1d10.' }, 5);
+    streams[1]!.emit('done', { silent: false, modelKnowledge: true, references: [reference(1, [PASSAGE_A])] }, 6);
+
+    expect(blocks()).toEqual([
+      ['#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Em geral, 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+    ]);
   });
 });

@@ -98,7 +98,7 @@ describe('a switch (Story 3.6)', () => {
     render(
       <>
         <Switch label="Conhecimento do modelo" checked={false} states={{ on: 'ligado', off: 'desligado' }} onChange={onChange} disabled describedBy="why" />
-        <p id="why">Chega em breve</p>
+        <p id="why">Indisponível agora</p>
       </>,
     );
     const element = screen.getByRole('switch', { name: 'Conhecimento do modelo' });
@@ -114,7 +114,7 @@ describe('a switch (Story 3.6)', () => {
 });
 
 describe('the scope controls (Story 3.6)', () => {
-  it('matrix row "Default": tier switches, the materials of each tier that is on under it, model knowledge disabled with its reason', () => {
+  it('matrix row "Default": tier switches, the materials of each tier that is on under it, and the model-knowledge switch, enabled (Story 3.8)', () => {
     render(<ScopeControls campaignId={CAMPAIGN} scope={SCOPE} language="pt-BR" action={vi.fn<Action>()} />);
     expect(switchNames()).toEqual([T.campaign, 'Notas da sessão 12.md', T.system, 'Livro do Jogador.pdf', 'Bestiário.pdf', T.other, T.modelKnowledge]);
     expect(switchState(T.campaign)).toBe('true');
@@ -126,8 +126,10 @@ describe('the scope controls (Story 3.6)', () => {
     expect(screen.queryByText('Atlas de outra mesa.pdf')).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Materiais: Sistema' })).getAllByRole('switch')).toHaveLength(2);
     const model = screen.getByRole('switch', { name: T.modelKnowledge });
-    expect(model.getAttribute('aria-disabled')).toBe('true');
-    expect(model.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent)).toEqual(['desligado', T.comingSoon]);
+    expect(model.getAttribute('aria-disabled')).toBeNull();
+    // Its state is read after its name; no "coming soon" note any more.
+    expect(model.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent)).toEqual(['desligado']);
+    expect(screen.queryByText('Chega em breve')).toBeNull();
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
@@ -211,17 +213,42 @@ describe('the scope controls (Story 3.6)', () => {
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
-  it('the model-knowledge switch saves nothing, and the stored value goes back unchanged with any other press', async () => {
+  it('matrix row "Switch" (Story 3.8): the model-knowledge switch saves the whole settings with it turned, and says when it applies', async () => {
+    const user = userEvent.setup();
+    const { action, forms, answer } = heldAction();
+    render(<ScopeControls campaignId={CAMPAIGN} scope={SCOPE} language="pt-BR" action={action} />);
+    const model = screen.getByRole('switch', { name: T.modelKnowledge });
+    expect(model.getAttribute('aria-checked')).toBe('false');
+    await user.click(model);
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries([...forms[0]!.entries()].filter(([key]) => key !== 'materialsOff'))).toEqual({
+      campaign: CAMPAIGN,
+      version: '4',
+      campaignTier: 'true',
+      systemTier: 'true',
+      otherTier: 'false',
+      modelKnowledge: 'true',
+    });
+    // It turns at once while it is saved, and waits like every switch.
+    expect(switchState(T.modelKnowledge)).toBe('true');
+    expect(screen.getByRole('switch', { name: T.modelKnowledge }).getAttribute('aria-disabled')).toBe('true');
+    await answer(saved({ ...SCOPE, version: 5, modelKnowledge: true }));
+    expect(switchState(T.modelKnowledge)).toBe('true');
+    expect(screen.getByRole('status').textContent).toBe(SAVED);
+    // The stored value goes with any other press.
+    await user.click(screen.getByRole('switch', { name: T.other }));
+    expect(forms[1]!.get('modelKnowledge')).toBe('true');
+    expect(forms[1]!.get('version')).toBe('5');
+  });
+
+  it('the model-knowledge switch, stored on, turns off with a press (en)', async () => {
     const user = userEvent.setup();
     const { action, forms } = heldAction();
     render(<ScopeControls campaignId={CAMPAIGN} scope={{ ...SCOPE, modelKnowledge: true }} language="en" action={action} />);
     const model = screen.getByRole('switch', { name: en.campaigns.scope.modelKnowledge });
     expect(model.getAttribute('aria-checked')).toBe('true');
     await user.click(model);
-    expect(action).not.toHaveBeenCalled();
-    expect(screen.getByText(en.campaigns.scope.comingSoon)).toBeTruthy();
-    await user.click(screen.getByRole('switch', { name: en.campaigns.scope.other }));
-    expect(forms[0]!.get('modelKnowledge')).toBe('true');
+    expect(forms[0]!.get('modelKnowledge')).toBe('false');
   });
 
   it('pages a tier\'s materials ten at a time with a compact pager that turns pages here, newest first as listed', async () => {

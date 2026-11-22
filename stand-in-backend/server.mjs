@@ -315,11 +315,13 @@ export const EXAMPLES = {
 /**
  * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds one into a
  * Markdown material (a text page). Story 3.7: the answer is the campaign's house rule, then the book's rule; each
- * reference carries its tier, the campaign's (1, the text page) first, then the system's (2, the picture page).
+ * reference carries its tier, the campaign's (1, the text page) first, then the system's (2, the picture page). Story
+ * 3.8: the turn's model knowledge, frozen with it, was off (the starting scope's).
  */
 export const ANSWER_DONE = {
   stopped: false,
   silent: false,
+  modelKnowledge: false,
   references: [
     {
       number: 1,
