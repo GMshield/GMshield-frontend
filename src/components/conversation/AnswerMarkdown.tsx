@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 import Markdown, { type Components, type UrlTransform } from 'react-markdown';
 
+import type { Tier } from '@/client/conversation';
+
+import { TIER_SEPARATOR } from '../TierLabel';
+import tierStyles from '../TierLabel.module.css';
 import styles from './Conversation.module.css';
 
 /** Every node's text, for a link's own words. */
@@ -20,8 +24,20 @@ function textOf(node: ReactNode): string {
 /** A reference's number shown as a superscript at a code-point offset of the answer's Markdown text (Story 2.5). */
 export type CitationMark = { readonly offset: number; readonly number: number };
 
+/**
+ * Story 3.7: a tier's version of the answer starts at a code-point offset of its Markdown text, shown there as the tier
+ * pill (`TierLabel`) with its word.
+ */
+export type TierMark = { readonly offset: number; readonly tier: Tier; readonly label: string };
+
+/** What the step puts in the tree: a citation's superscript or a tier's pill. */
+type Mark = { readonly kind: 'citation'; readonly number: number } | { readonly kind: 'tier'; readonly tier: Tier; readonly label: string };
+
 /** Whitespace (line breaks included) and closing emphasis delimiters a mark is moved back over. */
 const MOVED_OVER = /^[\s*_~]$/u;
+
+/** Whitespace a tier pill is moved forward over, so it opens the paragraph its version starts. */
+const MOVED_FORWARD = /^\s$/u;
 
 /**
  * Where a mark goes, in code points: its offset (an offset past the end goes at the end), moved back over trailing
@@ -32,6 +48,18 @@ function placeOf(points: readonly string[], offset: number): number {
   let at = Math.min(Math.max(0, Math.trunc(offset)), points.length);
   while (at > 0 && MOVED_OVER.test(points[at - 1] ?? '')) {
     at -= 1;
+  }
+  return at;
+}
+
+/**
+ * Where a tier pill goes, in code points (Story 3.7): its offset (past the end goes at the end), moved forward over
+ * whitespace, so it lands at the start of the version it opens, never at the end of the paragraph before.
+ */
+function tierPlaceOf(points: readonly string[], offset: number): number {
+  let at = Math.min(Math.max(0, Math.trunc(offset)), points.length);
+  while (at < points.length && MOVED_FORWARD.test(points[at] ?? '')) {
+    at += 1;
   }
   return at;
 }
@@ -57,21 +85,23 @@ const INLINE_CONTAINERS = new Set(['emphasis', 'strong']);
 const REFERENCE = /^&(?:#\d{1,7}|#[xX][\da-fA-F]{1,6}|[A-Za-z][A-Za-z\d]{0,31});/u;
 
 /**
- * Where each mark lands in the tree: inside a text node (at an index of its value), before a line break, after an inline
- * node, at the start of an inline parent, in a paragraph after a block (a code block, a rule; unwrapped in a tight list
- * item), or in a paragraph of an otherwise empty container. Numbers at one place keep their order.
+ * Where each mark lands in the tree: inside a text node (at an index of its value), before a line break (or, a tier
+ * pill, before an inline node it opens), after an inline node, at the start of an inline parent, in a paragraph after a
+ * block (a code block, a rule; unwrapped in a tight list item; a tier pill in one before the block it opens), or in a
+ * paragraph of an otherwise empty container. Marks at one place keep their order.
  */
 type Places = {
-  readonly inText: Map<TreeNode, Map<number, number[]>>;
-  readonly before: Map<TreeNode, number[]>;
-  readonly after: Map<TreeNode, number[]>;
-  readonly first: Map<TreeNode, number[]>;
-  readonly below: Map<TreeNode, number[]>;
-  readonly alone: Map<TreeNode, number[]>;
+  readonly inText: Map<TreeNode, Map<number, Mark[]>>;
+  readonly before: Map<TreeNode, Mark[]>;
+  readonly after: Map<TreeNode, Mark[]>;
+  readonly first: Map<TreeNode, Mark[]>;
+  readonly below: Map<TreeNode, Mark[]>;
+  readonly above: Map<TreeNode, Mark[]>;
+  readonly alone: Map<TreeNode, Mark[]>;
 };
 
-function add<Key>(map: Map<Key, number[]>, key: Key, number: number): void {
-  map.set(key, [...(map.get(key) ?? []), number]);
+function add<Key>(map: Map<Key, Mark[]>, key: Key, mark: Mark): void {
+  map.set(key, [...(map.get(key) ?? []), mark]);
 }
 
 function startOf(node: TreeNode): number {
@@ -119,18 +149,28 @@ function indexIn(text: TreeNode, source: string, at: number): number {
   return index;
 }
 
+/**
+ * The child holding the offset: at a boundary, the one a superscript follows, and the one a tier pill opens (Story 3.7)
+ * when there is one.
+ */
+function holding(parent: TreeNode, at: number, mark: Mark): TreeNode | undefined {
+  const children = parent.children ?? [];
+  const opened = mark.kind === 'tier' ? children.find((node) => startOf(node) <= at && at < endOf(node)) : undefined;
+  return opened ?? children.find((node) => startOf(node) <= at && at <= endOf(node));
+}
+
 /** Records where a mark at the source offset `at` lands, looking from `parent` down. */
-function locate(parent: TreeNode, at: number, source: string, number: number, places: Places): void {
-  // The first child holding the offset: at a boundary, the one the mark follows.
-  const child = (parent.children ?? []).find((node) => startOf(node) <= at && at <= endOf(node));
+function locate(parent: TreeNode, at: number, source: string, mark: Mark, places: Places): void {
+  const child = holding(parent, at, mark);
   if (child === undefined) {
-    locateBetween(parent, at, source, number, places);
+    locateBetween(parent, at, source, mark, places);
   } else if (PHRASING.has(parent.type)) {
-    locateInline(child, at, source, number, places);
+    locateInline(child, at, source, mark, places);
   } else if (child.type !== 'code' && Array.isArray(child.children)) {
-    locate(child, at, source, number, places);
+    locate(child, at, source, mark, places);
   } else {
-    add(places.below, child, number);
+    // A superscript follows the block it cites; a tier pill opens the block its version starts with.
+    add(mark.kind === 'tier' ? places.above : places.below, child, mark);
   }
 }
 
@@ -138,33 +178,39 @@ function locate(parent: TreeNode, at: number, source: string, number: number, pl
  * A mark between `parent`'s children (on a container's syntax): at the end of the child before it, else at the start of
  * an inline parent, else at the start of the child after it, else in a paragraph of its own (an empty container).
  */
-function locateBetween(parent: TreeNode, at: number, source: string, number: number, places: Places): void {
+function locateBetween(parent: TreeNode, at: number, source: string, mark: Mark, places: Places): void {
   const children = parent.children ?? [];
   const preceding = children.findLast((node) => endOf(node) >= 0 && endOf(node) <= at);
   const following = children.find((node) => startOf(node) >= at);
-  if (preceding !== undefined) {
-    locate(parent, endOf(preceding), source, number, places);
+  if (mark.kind === 'tier' && following !== undefined && (preceding === undefined || !PHRASING.has(parent.type))) {
+    // A tier pill opens what follows it: the next block, or the start of an inline parent.
+    locate(parent, startOf(following), source, mark, places);
+  } else if (preceding !== undefined) {
+    locate(parent, endOf(preceding), source, mark, places);
   } else if (PHRASING.has(parent.type)) {
-    add(places.first, parent, number);
+    add(places.first, parent, mark);
   } else if (following !== undefined) {
-    locate(parent, startOf(following), source, number, places);
+    locate(parent, startOf(following), source, mark, places);
   } else {
-    add(places.alone, parent, number);
+    add(places.alone, parent, mark);
   }
 }
 
-/** A mark on an inline `child`: inside its text, before a line break, inside an emphasis, else right after the node. */
-function locateInline(child: TreeNode, at: number, source: string, number: number, places: Places): void {
+/**
+ * A mark on an inline `child`: inside its text, before a line break, inside an emphasis (a tier pill at an inline node's
+ * start goes before it), else right after the node.
+ */
+function locateInline(child: TreeNode, at: number, source: string, mark: Mark, places: Places): void {
   if (child.type === 'text') {
-    const marks = places.inText.get(child) ?? new Map<number, number[]>();
-    add(marks, indexIn(child, source, at), number);
+    const marks = places.inText.get(child) ?? new Map<number, Mark[]>();
+    add(marks, indexIn(child, source, at), mark);
     places.inText.set(child, marks);
-  } else if (child.type === 'break') {
-    add(places.before, child, number);
+  } else if (child.type === 'break' || (mark.kind === 'tier' && at <= startOf(child))) {
+    add(places.before, child, mark);
   } else if (INLINE_CONTAINERS.has(child.type)) {
-    locate(child, at, source, number, places);
+    locate(child, at, source, mark, places);
   } else {
-    add(places.after, child, number);
+    add(places.after, child, mark);
   }
 }
 
@@ -178,25 +224,52 @@ function hidden(word: string) {
   };
 }
 
-/** A superscript with a visually hidden word ("fonte ") and the number, in the reference's accent. */
-function superscripts(numbers: readonly number[], word: string): TreeNode[] {
-  return numbers.map((number) => ({
-    type: 'citation',
-    data: {
-      hName: 'sup',
-      hProperties: { className: [styles.citation] },
-      hChildren: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(number) }],
-    },
-  }));
+/**
+ * A superscript with a visually hidden word ("fonte ") and the number, in the reference's accent; or (Story 3.7) a tier
+ * pill: an outlined span with the tier's word, not focusable and with no role of its own, followed by a visually hidden
+ * ": " so a reader never runs the word into the text, as `TierLabel` draws it.
+ */
+function superscripts(marks: readonly Mark[], word: string): TreeNode[] {
+  return marks.flatMap((mark): TreeNode[] =>
+    mark.kind === 'tier'
+      ? [
+          {
+            type: 'tier',
+            data: {
+              hName: 'span',
+              hProperties: { className: [tierStyles.pill, styles.tierInAnswer], dataTier: mark.tier },
+              hChildren: [{ type: 'text', value: mark.label }],
+            },
+          },
+          {
+            type: 'tierSeparator',
+            data: {
+              hName: 'span',
+              hProperties: { className: [tierStyles.separator] },
+              hChildren: [{ type: 'text', value: TIER_SEPARATOR }],
+            },
+          },
+        ]
+      : [
+          {
+            type: 'citation',
+            data: {
+              hName: 'sup',
+              hProperties: { className: [styles.citation] },
+              hChildren: [...(word === '' ? [] : [hidden(word)]), { type: 'text', value: String(mark.number) }],
+            },
+          },
+        ],
+  );
 }
 
-/** A paragraph holding only superscripts. */
-function paragraphOf(numbers: readonly number[], word: string): TreeNode {
-  return { type: 'paragraph', children: superscripts(numbers, word) };
+/** A paragraph holding only marks. */
+function paragraphOf(marks: readonly Mark[], word: string): TreeNode {
+  return { type: 'paragraph', children: superscripts(marks, word) };
 }
 
-/** A text node split at its marks: text, the superscripts there, text, and so on (no empty text). */
-function split(text: TreeNode, marks: Map<number, number[]>, word: string): TreeNode[] {
+/** A text node split at its marks: text, the marks there, text, and so on (no empty text). */
+function split(text: TreeNode, marks: Map<number, Mark[]>, word: string): TreeNode[] {
   const value = text.value ?? '';
   const nodes: TreeNode[] = [];
   let from = 0;
@@ -220,6 +293,10 @@ function insert(parent: TreeNode, places: Places, word: string): void {
   }
   const children: TreeNode[] = superscripts(places.first.get(parent) ?? [], word);
   for (const child of parent.children) {
+    const above = places.above.get(child);
+    if (above !== undefined) {
+      children.push(paragraphOf(above, word));
+    }
     children.push(...superscripts(places.before.get(child) ?? [], word));
     const marks = places.inText.get(child);
     if (marks === undefined) {
@@ -249,7 +326,7 @@ function insert(parent: TreeNode, places: Places, word: string): void {
  * the `li` after the `pre`); one on or inside inline code or a link goes right after it. Marks at one place keep their
  * order.
  */
-function remarkCitations(text: string, marks: readonly CitationMark[], word: string) {
+function remarkCitations(text: string, marks: readonly CitationMark[], word: string, tiers: readonly TierMark[] = []) {
   return () => (tree: { type: string }) => {
     const points = Array.from(text);
     // The UTF-16 offset of each code-point offset.
@@ -257,20 +334,26 @@ function remarkCitations(text: string, marks: readonly CitationMark[], word: str
     for (const point of points) {
       units.push((units.at(-1) ?? 0) + point.length);
     }
-    const placed = marks
+    const cited = marks
       .filter((mark) => Number.isInteger(mark.number) && mark.number >= 1)
-      .map((mark) => ({ number: mark.number, at: units[placeOf(points, mark.offset)] ?? text.length }))
-      .sort((one, other) => one.at - other.at);
+      .map((mark) => ({ mark: { kind: 'citation', number: mark.number } as Mark, at: units[placeOf(points, mark.offset)] ?? text.length }));
+    // A pill at or past the end of the text would open nothing: it is left out.
+    const opened = tiers
+      .filter((mark) => Number.isInteger(mark.offset) && mark.label !== '' && tierPlaceOf(points, mark.offset) < points.length)
+      .map((mark) => ({ mark: { kind: 'tier', tier: mark.tier, label: mark.label } as Mark, at: units[tierPlaceOf(points, mark.offset)] ?? text.length }));
+    // At one place, the superscripts of the version that ends come before the pill of the one that starts.
+    const placed = [...cited, ...opened].sort((one, other) => one.at - other.at);
     const places: Places = {
       inText: new Map(),
       before: new Map(),
       after: new Map(),
       first: new Map(),
       below: new Map(),
+      above: new Map(),
       alone: new Map(),
     };
-    for (const mark of placed) {
-      locate(tree as TreeNode, mark.at, text, mark.number, places);
+    for (const { mark, at } of placed) {
+      locate(tree as TreeNode, at, text, mark, places);
     }
     insert(tree as TreeNode, places, word);
   };
@@ -290,6 +373,8 @@ export type AnswerMarkdownProps = {
   readonly marks?: readonly CitationMark[];
   /** The visually hidden word said before a superscript's number ("fonte"), so a reader hears "fonte 1". */
   readonly citationWord?: string;
+  /** Story 3.7: the tier pills of a finished answer, at code-point offsets of `text`, each with its word. */
+  readonly tiers?: readonly TierMark[];
 };
 
 /**
@@ -297,8 +382,9 @@ export type AnswerMarkdownProps = {
  * images are dropped, and a link is shown as its words with its address (any address, `addressAsText`), never as an
  * anchor. Nothing is set as HTML.
  * Story 2.5: each mark becomes a superscript with its reference's number at its code-point offset (`remarkCitations`).
+ * Story 3.7: each tier mark becomes its tier pill at the start of the version it opens.
  */
-export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }: AnswerMarkdownProps) {
+export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '', tiers = [] }: AnswerMarkdownProps) {
   const components: Components = {
     img: () => null,
     a: ({ href, children }) => {
@@ -313,7 +399,7 @@ export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '' }
       disallowedElements={['img']}
       urlTransform={addressAsText}
       components={components}
-      remarkPlugins={[remarkCitations(text, marks, citationWord)]}
+      remarkPlugins={[remarkCitations(text, marks, citationWord, tiers)]}
     >
       {text}
     </Markdown>

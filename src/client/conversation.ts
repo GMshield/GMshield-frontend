@@ -83,6 +83,19 @@ export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceRef
 /** A citation of the answer: a passage id at a code-point offset of the answer's text (`TurnCitationEvent`). */
 export type Citation = { readonly passageId: string; readonly offset: number };
 
+/** A tier of the campaign's scope, as the backend labels a source (Story 3.7). */
+export type Tier = NonNullable<components['schemas']['TurnSourceReference']['tier']>;
+
+/** The tiers the backend writes, in tier order. */
+export const TIERS: readonly Tier[] = ['campaign', 'system', 'other'];
+
+/** A tier's version of the answer starts at a code-point offset of its text (Story 3.7, `TurnTierEvent`). */
+export type TierStart = { readonly tier: Tier; readonly offset: number };
+
+function isTier(value: unknown): value is Tier {
+  return typeof value === 'string' && (TIERS as readonly string[]).includes(value);
+}
+
 /**
  * The `done` event's data: its references, whether the GM stopped the answer (Story 2.6), and whether the sources say
  * nothing (no reference, and not stopped).
@@ -100,7 +113,9 @@ function isReference(value: unknown): value is SourceReference {
   const reference = value as Record<string, unknown>;
   return Number.isInteger(reference.number) && (reference.number as number) >= 1
     && typeof reference.materialName === 'string' && isStrings(reference.sectionPath)
-    && Number.isInteger(reference.page) && isStrings(reference.passageIds) && typeof reference.removed === 'boolean';
+    && Number.isInteger(reference.page) && isStrings(reference.passageIds) && typeof reference.removed === 'boolean'
+    // Story 3.7: a tier is optional (none on a reference stored before it), and only one the backend writes.
+    && (reference.tier === undefined || isTier(reference.tier));
 }
 
 /**
@@ -123,6 +138,14 @@ export function parseCitation(data: Record<string, unknown> | null): Citation | 
     return null;
   }
   return { passageId: data.passageId, offset: data.offset as number };
+}
+
+/** The data of a `tier` event (Story 3.7), or null when it is not one: a tier the backend writes at an offset from 0. */
+export function parseTier(data: Record<string, unknown> | null): TierStart | null {
+  if (!isTier(data?.tier) || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
+    return null;
+  }
+  return { tier: data.tier, offset: data.offset as number };
 }
 
 /** A page a turn's reference names (Story 2.7), as the relay answers it: the shape of a material's page. */

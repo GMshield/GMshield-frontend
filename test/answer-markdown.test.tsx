@@ -1,7 +1,8 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AnswerMarkdown, type CitationMark } from '@/components/conversation/AnswerMarkdown';
+import type { Tier } from '@/client/conversation';
+import { AnswerMarkdown, type CitationMark, type TierMark } from '@/components/conversation/AnswerMarkdown';
 
 afterEach(cleanup);
 
@@ -268,5 +269,73 @@ describe('a mark on syntax goes where the text says', () => {
     expect(next.tagName).toBe('P');
     expect(next.textContent).toBe('fonte 1');
     expect(container.lastElementChild!.textContent).toBe('Depois.');
+  });
+});
+
+describe('a tier pill opens the version it starts (Story 3.7)', () => {
+  const pill = (offset: number, tier: Tier = 'system', label = 'Sistema'): TierMark => ({ offset, tier, label });
+
+  /** Each block's nodes in order: pills, their hidden separators, superscripts, and the text or element around them. */
+  function parts(text: string, marks: CitationMark[], tiers: TierMark[]) {
+    const { container } = render(<AnswerMarkdown text={text} linkText={linkText} marks={marks} citationWord="fonte" tiers={tiers} />);
+    const blocks = Array.from(container.children).map((block) =>
+      Array.from(block.childNodes).map((node) => {
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.textContent}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        if (node.nodeName === 'SUP') {
+          return `SUP:${node.lastChild?.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      }),
+    );
+    return { container, blocks };
+  }
+
+  it('goes forward over the blank line to open the next paragraph, after the superscript that ends the one before', () => {
+    const text = 'Na mesa, 2d10.\n\nNo livro, 1d10.';
+    const { blocks } = parts(text, [{ offset: 14, number: 1 }, { offset: lengthOf(text), number: 2 }], [pill(0, 'campaign', 'Campanha'), pill(14)]);
+    expect(blocks).toEqual([
+      ['PILL:Campanha', 'SEP:: ', '#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:Sistema', 'SEP:: ', '#text:No livro, 1d10.', 'SUP:2'],
+    ]);
+  });
+
+  it('puts the superscript that ends a version before the pill that opens the next at the same place', () => {
+    expect(parts('Um.Dois.', [{ offset: 3, number: 1 }], [pill(3)]).blocks).toEqual([['#text:Um.', 'SUP:1', 'PILL:Sistema', 'SEP:: ', '#text:Dois.']]);
+  });
+
+  it('stands before an emphasis or a link that opens the version, never inside it', () => {
+    expect(parts('**Fire Bolt** causa 1d10.', [], [pill(0)]).blocks).toEqual([['PILL:Sistema', 'SEP:: ', 'STRONG:Fire Bolt', '#text: causa 1d10.']]);
+    expect(parts('Um.\n\n[Livro](http://x) diz 1d10.', [], [pill(3)]).blocks[1]).toEqual(['PILL:Sistema', 'SEP:: ', 'SPAN:Livro (http://x)', '#text: diz 1d10.']);
+  });
+
+  it('opens a heading or a list item', () => {
+    expect(parts('Um.\n\n# Regra do livro', [], [pill(3)]).blocks[1]).toEqual(['PILL:Sistema', 'SEP:: ', '#text:Regra do livro']);
+    const { container } = parts('Um.\n\n- Regra do livro', [], [pill(3)]);
+    expect(container.querySelector('li [data-tier]')?.textContent).toBe('Sistema');
+  });
+
+  it('leaves out a pill at or past the end of the text: it would open nothing', () => {
+    expect(parts('Um.', [], [pill(3)]).blocks).toEqual([['#text:Um.']]);
+    expect(parts('Um.\n\n', [], [pill(3)]).blocks).toEqual([['#text:Um.']]);
+    expect(parts('Um.', [], [pill(99)]).blocks).toEqual([['#text:Um.']]);
+  });
+
+  it('is a plain span with its word: no role, no focus, never in code, and the text is unchanged', () => {
+    const text = 'Um.\n\n```\ncódigo\n```\n\nDois.';
+    const { container } = parts(text, [], [pill(8)]);
+    const shownPill = container.querySelector<HTMLElement>('[data-tier]')!;
+    expect(shownPill.tagName).toBe('SPAN');
+    expect(shownPill.getAttribute('role')).toBeNull();
+    expect(shownPill.getAttribute('tabindex')).toBeNull();
+    expect(container.querySelector('code [data-tier]')).toBeNull();
+    expect(container.querySelector('pre code')?.textContent).toBe('código\n');
+    expect(container.textContent?.replace('Sistema: ', '').replaceAll(/\s+/gu, ' ')).toBe('Um. código Dois.');
+    // A pill on code goes in a paragraph right before the block it opens (a superscript goes after the block it cites).
+    expect(container.querySelector('pre')?.previousElementSibling?.querySelector('[data-tier]')).toBe(shownPill);
   });
 });

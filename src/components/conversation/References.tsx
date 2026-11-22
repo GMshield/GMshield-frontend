@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { SourceReference } from '@/client/conversation';
 import type { Translate } from '@/messages';
 
+import { TierLabel } from '../TierLabel';
 import styles from './Conversation.module.css';
 
 /** One reference as one line: the material's name, the section path joined with " › ", and "p. N". */
@@ -27,7 +28,8 @@ export type ReferencesProps = {
  * The numbered source references under a finished answer (Story 2.5), in label type, one line each. A removed source is
  * struck through and followed by "fonte removida". Only what the backend sent is shown. Story 2.7: the line of a
  * reference that is not removed is a button, named by its line, that opens its page in the source view; a removed one
- * stays struck through and opens nothing.
+ * stays struck through and opens nothing. Story 3.7: a reference stored with its tier shows that tier's pill before its
+ * line (frozen when the answer was written; a removed source keeps it); one stored before then shows none.
  */
 export function References({ references, t, onOpen }: ReferencesProps) {
   return (
@@ -51,6 +53,7 @@ export function References({ references, t, onOpen }: ReferencesProps) {
         }
         return (
           <li key={reference.number} value={reference.number}>
+            {reference.tier === undefined ? null : <TierLabel tier={reference.tier} t={t} className={styles.referenceTier} />}
             {shown}
           </li>
         );

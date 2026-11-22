@@ -300,6 +300,11 @@
   margin-inline-start: 0.1em;
 }
 
+/* Story 3.7: a tier pill (TierLabel) opening a tier's version of the answer, before its first word. */
+.tierInAnswer {
+  margin-inline-end: var(--space-2);
+}
+
 /* The numbered references under a finished answer, above the closing rule, in label type. */
 .references {
   display: flex;
@@ -333,6 +338,11 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+/* Story 3.7: a reference's tier pill, before its line. */
+.referenceTier {
+  margin-inline-end: var(--space-2);
 }
 
 /* A removed source: struck through, then "fonte removida". */

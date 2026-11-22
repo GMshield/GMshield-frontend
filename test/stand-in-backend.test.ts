@@ -276,6 +276,18 @@ describe('stand-in backend', () => {
     for (const reference of ANSWER_DONE.references) {
       expectShape('TurnSourceReference', reference as Record<string, unknown>);
     }
+    // Story 3.7: a tier event opens each version, the campaign's first, and each reference carries its tier.
+    const tierEnum = (schemas.TurnSourceReference!.properties as Record<string, { enum?: string[] }>).tier?.enum;
+    expect(ANSWER_DONE.references.map((reference) => reference.tier)).toEqual(['campaign', 'system']);
+    for (const reference of ANSWER_DONE.references) {
+      expect(tierEnum).toContain(reference.tier);
+    }
+    const tiers = [...text.matchAll(/event:tier\ndata:(.*)\n/g)].map((match) => JSON.parse(match[1]!) as { tier: string; offset: number });
+    expect(tiers.map((tier) => tier.tier)).toEqual(['campaign', 'system']);
+    expect(tiers[0]!.offset).toBe(0);
+    expectShape('TurnTierEvent', tiers[1]! as unknown as Record<string, unknown>);
+    const deltas = [...text.matchAll(/event:delta\ndata:(.*)\n/g)].map((match) => (JSON.parse(match[1]!) as { text: string }).text).join('');
+    expect(Array.from(deltas).slice(tiers[1]!.offset).join('')).toMatch(/^No livro/);
     expect(ANSWER_DONE.silent).toBe(false);
     // Story 2.6: done says whether the GM stopped the answer, and the stop route answers 204.
     expect(ANSWER_DONE.stopped).toBe(false);
@@ -284,17 +296,17 @@ describe('stand-in backend', () => {
     expect(await stopped.text()).toBe('');
   });
 
-  it('answers the reference pages (Story 2.7): reference 1 the picture page its passage is on, reference 2 a text page', async () => {
+  it('answers the reference pages (Story 2.7): reference 2 the picture page its passage is on, reference 1 a text page', async () => {
     const turn = '0190a0b0-0000-7000-8000-000000000021';
-    const [first, second] = ANSWER_DONE.references;
-    const picture = answer(contract, 'GET', `/api/v1/turns/${turn}/references/1/pages/13`, 't');
+    const [textReference, pictureReference] = ANSWER_DONE.references;
+    const picture = answer(contract, 'GET', `/api/v1/turns/${turn}/references/2/pages/13`, 't');
     expect(picture).toMatchObject({ status: 200, type: 'application/json', body: { page: 13, picture: { width: 1545, height: 2000 }, text: null } });
     const pictureBody = picture.body as { passages: { id: string; boxes: number[][] }[] };
-    expect(pictureBody.passages.map((passage) => passage.id)).toEqual(first!.passageIds);
-    const text = answer(contract, 'GET', `/api/v1/turns/${turn}/references/2/pages/2`, 't');
+    expect(pictureBody.passages.map((passage) => passage.id)).toEqual(pictureReference!.passageIds);
+    const text = answer(contract, 'GET', `/api/v1/turns/${turn}/references/1/pages/2`, 't');
     expect(text).toMatchObject({ status: 200, body: { page: 2, picture: null, lines: [] } });
     expect(text.body).toEqual(REFERENCE_TEXT_PAGE);
-    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(second!.passageIds);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(textReference!.passageIds);
     const [start, end] = REFERENCE_TEXT_PAGE.passages[0]!.range;
     expect(Array.from(REFERENCE_TEXT_PAGE.text).slice(start, end).join('')).toBe('Fire Bolt causa 1d10 de dano de fogo.');
     // Both shapes are MaterialPageView's, as the contract says.
@@ -305,7 +317,7 @@ describe('stand-in backend', () => {
       expect(text.body, key).toHaveProperty(key);
     }
     running = await startStandIn();
-    const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/1/pages/13/picture`);
+    const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/2/pages/13/picture`);
     expect(bytes.status).toBe(200);
     expect(bytes.headers.get('content-type')).toBe('image/webp');
   });

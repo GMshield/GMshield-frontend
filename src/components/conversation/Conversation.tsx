@@ -3,14 +3,15 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
-import { parseCitation, parseDone, postQuestion, stopTurn, turnEventsUrl, type Citation, type SourceReference } from '@/client/conversation';
-import { errorText, translator, type Language } from '@/messages';
+import { parseCitation, parseDone, parseTier, postQuestion, stopTurn, turnEventsUrl, type Citation, type SourceReference, type TierStart } from '@/client/conversation';
+import { errorText, translator, type Language, type Translate } from '@/messages';
 
 import { ShellPanel } from '../ShellPanel';
 import { SourceView, type LoadPage } from '../SourceView';
+import { TIER_SEPARATOR, tierWord } from '../TierLabel';
 import { useUploads } from '../uploads/UploadsProvider';
 
-import { AnswerMarkdown, type CitationMark } from './AnswerMarkdown';
+import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { NamedIcon } from '../Icons';
 
 import styles from './Conversation.module.css';
@@ -53,7 +54,8 @@ type Connection = 'open' | 'lost' | 'failed';
 /**
  * A turn asked since the page opened: its question, then its answer as it is written. Story 2.5: its citations as they
  * arrive, and once it is done its references, or `silent` when it has none. Story 2.6: how it failed, and its stream's
- * connection. Story 2.7: its id once known, which names its references to the source view.
+ * connection. Story 2.7: its id once known, which names its references to the source view. Story 3.7: its tier events
+ * as they arrive (each tier's version of the answer starts at its offset).
  */
 type ShownTurn = {
   readonly key: number;
@@ -64,6 +66,7 @@ type ShownTurn = {
   readonly text: string;
   readonly problem: unknown;
   readonly citations: readonly Citation[];
+  readonly tiers: readonly TierStart[];
   readonly references: readonly SourceReference[];
   readonly silent: boolean;
   readonly failure: Failure | null;
@@ -71,14 +74,15 @@ type ShownTurn = {
 };
 
 /**
- * What the polite region says: plain words, or an answer (rendered) followed by a note (Story 2.6: "Interrompida") and
- * its references as a list.
+ * What the polite region says: plain words, or an answer (rendered, with its tier pills, Story 3.7) followed by a note
+ * (Story 2.6: "Interrompida") and its references as a list.
  */
 type Spoken = {
   readonly text: string;
   readonly answer: boolean;
   readonly references: readonly SourceReference[];
   readonly note: string;
+  readonly tiers: readonly TierMark[];
 };
 
 /** A running answer's stream, as the page holds it: closed on leaving, reopened by "Tentar de novo". */
@@ -103,6 +107,20 @@ function marksOf(turn: ShownTurn): CitationMark[] {
     const number = numbers.get(citation.passageId);
     return number === undefined ? [] : [{ offset: citation.offset, number }];
   });
+}
+
+/**
+ * Story 3.7: the tier pills of a finished answer, each with its word in the interface's language. A pill says the
+ * sources disagree, so the markers are tidied first: in text order, one whose tier repeats the one before it is dropped,
+ * and none is drawn unless at least two tiers are left.
+ */
+function tierMarksOf(starts: readonly TierStart[], t: Translate): TierMark[] {
+  const ordered = [...starts].sort((one, other) => one.offset - other.offset);
+  const kept = ordered.filter((start, index) => index === 0 || start.tier !== ordered[index - 1]?.tier);
+  if (new Set(kept.map((start) => start.tier)).size < 2) {
+    return [];
+  }
+  return kept.map((start) => ({ offset: start.offset, tier: start.tier, label: tierWord(start.tier, t) }));
 }
 
 /** The turn's language when the interface has it, else the interface's. */
@@ -172,6 +190,7 @@ function newTurn(key: number, question: string): ShownTurn {
     text: '',
     problem: null,
     citations: [],
+    tiers: [],
     references: [],
     silent: false,
     failure: null,
@@ -258,7 +277,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
   const uploads = useUploads();
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<readonly ShownTurn[]>([]);
-  const [spoken, setSpoken] = useState<Spoken>({ text: '', answer: false, references: [], note: '' });
+  const [spoken, setSpoken] = useState<Spoken>({ text: '', answer: false, references: [], note: '', tiers: [] });
   const [alerted, setAlerted] = useState('');
   const counter = useRef(0);
   const followers = useRef(new Map<number, Follower>());
@@ -299,10 +318,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
    * Says `text` politely; an answer is said as it reads, its Markdown rendered as on the screen, then its note, then
    * its references as a list.
    */
-  const say = useCallback((text: string, answer = false, references: readonly SourceReference[] = [], note = '') => {
-    // A zero-width space alternates so that the same words are said again.
-    setSpoken((previous) => ({ text: previous.text === text ? `${text}\u200b` : text, answer, references, note }));
-  }, []);
+  const say = useCallback(
+    (text: string, answer = false, references: readonly SourceReference[] = [], note = '', tiers: readonly TierMark[] = []) => {
+      // A zero-width space alternates so that the same words are said again.
+      setSpoken((previous) => ({ text: previous.text === text ? `${text}\u200b` : text, answer, references, note, tiers }));
+    },
+    [],
+  );
 
   /** Says `text` at once, in the assertive region (Story 2.6: a failure). */
   const announce = useCallback((text: string) => {
@@ -332,6 +354,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
       const open = openStream ?? ((url: string) => new EventSource(url));
       let text = '';
       const citations: Citation[] = [];
+      const tiers: TierStart[] = [];
       let lastId: string | null = null;
       let current: EventSource | null = null;
       let ended = false;
@@ -419,6 +442,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             citations.push(citation);
           }
         });
+        stream.addEventListener('tier', (event) => {
+          // Story 3.7: kept, not shown, like a citation: the pills appear with the superscripts once the answer is done.
+          const start = parseTier(dataOf(event));
+          if (start !== null && fresh(event)) {
+            tiers.push(start);
+          }
+        });
         stream.addEventListener('done', (event) => {
           if (!fresh(event)) {
             return;
@@ -426,6 +456,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
           finish();
           const done = parseDone(dataOf(event));
           const kept = [...citations];
+          const opened = [...tiers];
           if (done.stopped) {
             // Story 2.6: the text so far stays, marked stopped, with its references; never the silent sentence.
             change(key, (turn) => ({
@@ -433,13 +464,14 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
               status: 'stopped',
               connection: 'open',
               citations: kept,
+              tiers: opened,
               references: done.references,
               silent: false,
             }));
             if (text === '') {
               say(t('conversation.stopped'), false, done.references);
             } else {
-              say(text, true, done.references, t('conversation.stopped'));
+              say(text, true, done.references, t('conversation.stopped'), tierMarksOf(opened, t));
             }
             return;
           }
@@ -448,13 +480,14 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
             status: 'done',
             connection: 'open',
             citations: kept,
+            tiers: opened,
             references: done.references,
             silent: done.silent,
           }));
           if (done.silent) {
             say(translator(languageOf(turnLanguage, language))('conversation.silent'));
           } else {
-            say(text, true, done.references);
+            say(text, true, done.references, '', tierMarksOf(opened, t));
           }
         });
         stream.addEventListener('error', (event) => {
@@ -715,6 +748,7 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
                     linkText={linkText}
                     marks={finished ? marksOf(turn) : []}
                     citationWord={translator(languageOf(turn.language, language))('conversation.citation')}
+                    tiers={finished ? tierMarksOf(turn.tiers, t) : []}
                   />
                 </div>
               )}
@@ -809,12 +843,13 @@ export function Conversation({ language, campaignId, hasSources, review, openStr
         </form>
       </div>
       <div className={styles.visuallyHidden} aria-live="polite" data-testid="conversation-polite">
-        {spoken.answer ? <AnswerMarkdown text={spoken.text} linkText={linkText} /> : spoken.text}
+        {spoken.answer ? <AnswerMarkdown text={spoken.text} linkText={linkText} tiers={spoken.tiers} /> : spoken.text}
         {spoken.note === '' ? null : <p>{spoken.note}</p>}
         {spoken.references.length === 0 ? null : (
           <ol aria-label={t('conversation.references')}>
             {spoken.references.map((reference) => (
               <li key={reference.number} value={reference.number}>
+                {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
                 {referenceLine(reference, t)}
               </li>
             ))}

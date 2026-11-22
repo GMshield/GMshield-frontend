@@ -1,0 +1,30 @@
+/*
+ * Story 3.7: a tier label. An outlined pill with no fill, in the meta type, its edge and its word in the muted text
+ * colour: it names where a version or a reference comes from and is never a control (no hover, no pointer).
+ */
+.pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--space-5);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* The ": " a reader hears after the word, so it never runs into the text that follows; never seen. */
+.separator {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
