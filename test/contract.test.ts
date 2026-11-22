@@ -27,6 +27,9 @@ describe('contract version', () => {
     expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.24.0');
     expect(meetsMinimum('1.24.0')).toBe(true);
     expect(meetsMinimum('1.24.1')).toBe(true);
+    // Story 3.5: the contract copy is 1.25.0 (a campaign's scope settings and the current-scope page); nothing here
+    // uses them yet, so the minimum stays 1.24.0 and a 1.25.0 backend meets it.
+    expect(meetsMinimum('1.25.0')).toBe(true);
     expect(meetsMinimum('1.23.0')).toBe(false);
     expect(meetsMinimum('1.22.0')).toBe(false);
     expect(meetsMinimum('1.21.0')).toBe(false);
