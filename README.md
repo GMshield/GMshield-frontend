@@ -879,9 +879,32 @@ they sit in `src/`.
   - Every string is in `conversations.delete.*` and `feedback.conversationDeleted`, in pt-BR and en. The stand-in
     backend answers the preview (`{questions: 1}`) and the delete (202, no body).
   - Deploy order: backend → frontend.
+- **Dismiss an answer (Story 3.11).** Public contract 1.31.0 (the minimum backend contract too).
+  - **Where.** Under the rule of each finished (`done`) or stopped answer, right-aligned, a 28px circle filled with the
+    text colour, with an X (`dismiss` in `Icons.tsx`) and a 44px hit area, spoken "Dispensar resposta". None while an
+    answer is written, nor on a failed turn; the row leaves room before it for 3.12's bookmark.
+  - **The relay.** `src/app/api/v1/turns/[id]/dismissal/route.ts`: `PUT` dismisses, `DELETE` undoes (`dismissTurn` and
+    `restoreTurn` in `src/server/conversations.ts`), same-origin only, a malformed id "not found" without reaching the
+    backend, no session `session.required`; the backend's 204 or problem goes back as it is. The browser calls it with
+    `setDismissal(turnId, 'dismiss' | 'restore')` (`src/client/conversation.ts`).
+  - **Dismiss.** The question and answer are replaced at once by "Resposta dispensada." and a "Desfazer" pill, which
+    takes focus while the polite region says the line; the PUT is sent. A refused PUT brings the answer back with the
+    refusal under its actions (focus on its dismiss button when it was on the pill).
+  - **Undo.** "Desfazer" within `UNDO_MS` (10 s) sends the DELETE once the PUT has answered (it never overtakes it), its
+    pill pending meanwhile; on 204 the turn shows again where it was, with focus on its dismiss button. A refused DELETE
+    keeps the line with the refusal in it until the time ends. The time does not end a line whose undo is under way:
+    that undo's answer does (refused after the time, the line goes then).
+  - **After `UNDO_MS`** the line goes; focus on its pill moves to the composer. Dismissed turns stay in the component's
+    state behind a flag, so the count of questions asked here still works; the delete dialog's count leaves them out,
+    and a conversation whose every turn is gone shows its intro again, as a reload would.
+  - Strings `conversation.dismiss`, `conversation.dismissed` and `conversation.undo`, and the errors category
+    `conversation` with `conversation.turn_running` ("Esta resposta ainda está sendo escrita. Espere ela terminar para
+    dispensá-la."), in pt-BR and en.
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,
+  `scope`, `conversation`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 

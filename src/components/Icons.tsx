@@ -60,7 +60,8 @@ export type IconName =
   | 'moon'
   | 'picture'
   | 'signOut'
-  | 'search';
+  | 'search'
+  | 'dismiss';
 
 const PATHS: Readonly<Record<IconName, string>> = {
   questions: 'M4 5h16v11H9l-5 4z',
@@ -90,6 +91,8 @@ const PATHS: Readonly<Record<IconName, string>> = {
   picture: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15.5 9.5h.01',
   signOut: 'M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
+  /** Story 3.11: an answer's dismiss action, an X drawn inside its filled circle. */
+  dismiss: 'M7 7l10 10M17 7L7 17',
 };
 
 /** An icon by its name, 20px unless a size is given. */

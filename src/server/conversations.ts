@@ -15,7 +15,7 @@ import { outgoingTraceparent, traceFrom } from './trace';
  * result opens on. From Story 3.10 a campaign's conversations of one area (its campaign page counts them with the
  * same list), one conversation with its stored turns,
  * its rename, and a question that continues a conversation or starts one in an area; from Story 3.10 part B what goes
- * with a conversation and its deletion. The backend takes the owner from
+ * with a conversation and its deletion; from Story 3.11 a turn's dismissal and its undo. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -166,6 +166,27 @@ export function deleteConversation(sessionToken: string, conversationId: string,
 export function stopTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('conversations.stop', options, (client) =>
     client.POST('/api/v1/turns/{turnId}/stop', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Dismisses the turn's answer (Story 3.11): 204, also for a turn dismissed already; `conversation.turn_running` for a
+ * turn whose answer is still being written, `request.not_found` for a turn that is not the account's or is of a
+ * conversation being deleted.
+ */
+export function dismissTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.dismiss', options, (client) =>
+    client.PUT('/api/v1/turns/{turnId}/dismissal', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Undoes the dismissal of the turn's answer (Story 3.11): 204, also for a turn that is shown; `request.not_found` as
+ * {@link dismissTurn}.
+ */
+export function restoreTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.restore', options, (client) =>
+    client.DELETE('/api/v1/turns/{turnId}/dismissal', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
   );
 }
 

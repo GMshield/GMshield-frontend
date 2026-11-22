@@ -22,16 +22,18 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 3.11: it dismisses an answer and undoes the dismissal, added in 1.31.0.
     // Story 3.10 part B: it previews and deletes a conversation, added in 1.30.0.
     // Story 3.10: it lists, reads and renames conversations by area and continues one, added in 1.29.0.
     // Story 3.9: it creates and reads searches of the library, added in 1.28.0. Story 3.8: it reads done's modelKnowledge and the model tier event, added in 1.27.0. Story 3.7: the frontend shows
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.30.0');
-    expect(meetsMinimum('1.30.0')).toBe(true);
-    expect(meetsMinimum('1.30.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.31.0');
     expect(meetsMinimum('1.31.0')).toBe(true);
+    expect(meetsMinimum('1.31.1')).toBe(true);
+    expect(meetsMinimum('1.32.0')).toBe(true);
+    expect(meetsMinimum('1.30.0')).toBe(false);
     expect(meetsMinimum('1.29.0')).toBe(false);
     expect(meetsMinimum('1.28.0')).toBe(false);
     expect(meetsMinimum('1.27.0')).toBe(false);

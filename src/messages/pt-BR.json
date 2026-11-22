@@ -218,7 +218,8 @@
       "ingestion": "Este arquivo não pôde ser processado.",
       "page": "Esta página não pôde ser mostrada.",
       "material": "A ação no material não pôde ser feita.",
-      "scope": "O escopo não pôde ser alterado."
+      "scope": "O escopo não pôde ser alterado.",
+      "conversation": "A ação na conversa não pôde ser feita."
     },
     "codes": {
       "request": {
@@ -290,6 +291,9 @@
       },
       "scope": {
         "material_unknown": "Um dos materiais não está mais nesta campanha, no seu sistema ou nos outros. Recarregue a página para ver o escopo atual."
+      },
+      "conversation": {
+        "turn_running": "Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la."
       }
     }
   },
@@ -648,6 +652,9 @@
     "connectionLost": "Conexão perdida. Tentando de novo…",
     "reconnectFailed": "Não foi possível reconectar.",
     "retry": "Tentar de novo",
+    "dismiss": "Dispensar resposta",
+    "dismissed": "Resposta dispensada.",
+    "undo": "Desfazer",
     "refused": "O modelo recusou este pedido. Reformule a pergunta e envie de novo.",
     "questionFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.",
     "sourceFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta.",
