@@ -196,8 +196,11 @@ function isPassage(value: unknown): boolean {
   return typeof passage.id === 'string' && boxes && range;
 }
 
-/** Whether the relay's answer is a page: its numbers, its picture's size or none, its lines, text and passages. */
-function isPage(value: unknown): value is SourcePage {
+/**
+ * Whether the relay's answer is a page: its numbers, its picture's size or none, its lines, text and passages (Story 3.9:
+ * the search's page relay checks it too).
+ */
+export function isSourcePage(value: unknown): value is SourcePage {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -236,7 +239,7 @@ export async function fetchReferencePage(turnId: string, number: number, page: n
       signal,
     });
     const body: unknown = await response.json().catch(() => null);
-    return response.status === 200 && isPage(body) ? body : null;
+    return response.status === 200 && isSourcePage(body) ? body : null;
   } catch {
     return null;
   }

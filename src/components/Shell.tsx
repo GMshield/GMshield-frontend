@@ -19,6 +19,7 @@ import { PreferencesForm } from './PreferencesForm';
 import { scopeSummary, type Scope } from './scope';
 import { ScopePopover } from './ScopePopover';
 import { ScopePopoverProvider } from './ScopePopoverContext';
+import { SearchField } from './search/SearchField';
 import styles from './Shell.module.css';
 import { ShellFrame } from './ShellPanel';
 import { ADD_FILE, SIDEBAR_ENTRIES, type EntryKey } from './shell-entries';
@@ -80,6 +81,8 @@ const IMAGE_SETS = { create: createImageSetAction, replace: replaceSetImageActio
  * the account menu (the account, the theme and the language, "Sair").
  * Story 3.6: after the campaign, the context bar holds its scope summary, which opens the scope popover; each switch
  * there saves through a Server Action that renders the layout again, so the summary follows.
+ * Story 3.9: then the search field (`/` focuses it; on a phone a search button in its place), which opens the search
+ * page.
  */
 export function Shell({
   preferences,
@@ -153,7 +156,18 @@ export function Shell({
             />
             <div className={styles.column} data-behind-sidebar="" data-behind-panel="">
               <div className={styles.bar}>
-                <ContextBar label={t('shell.context')} current={current} none={t('shell.noCampaign')} switcher={switcher('bar')} scope={scopePopover} />
+                <ContextBar
+                  label={t('shell.context')}
+                  current={current}
+                  none={t('shell.noCampaign')}
+                  switcher={switcher('bar')}
+                  scope={scopePopover}
+                  search={
+                    <SearchField
+                      labels={{ label: t('shell.search.label'), placeholder: t('shell.search.placeholder'), open: t('shell.search.open') }}
+                    />
+                  }
+                />
                 <div className={styles.barEnd}>
                   <NotificationCenter language={preferences.language} attention={attention} />
                   <AccountMenu username={username} label={t('shell.account', { username })} title={t('shell.accountMenu')}>

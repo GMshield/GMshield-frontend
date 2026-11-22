@@ -40,6 +40,28 @@ export const REFERENCE_TEXT_PAGE: {
   outcome: string;
 };
 export const ANSWER_EVENTS: string;
+/** Story 3.9: the versions of the two materials the stand-in search finds, the search's id, and the search done. */
+export const NOTES_VERSION: string;
+export const BOOK_VERSION: string;
+export const SEARCH_ID: string;
+export type StandInSearchResult = {
+  passageId: string;
+  versionId: string;
+  materialName: string;
+  sectionPath: string[];
+  page: number;
+  firstWords: string;
+  tier: 'campaign' | 'system' | 'other';
+};
+export const SEARCH_DONE: {
+  id: string;
+  campaignId: string;
+  query: string;
+  tier: null;
+  materialId: null;
+  state: 'done';
+  results: StandInSearchResult[];
+};
 /** Story 3.7: the stand-in answer's two versions, the campaign's house rule, then the book's rule. */
 export const HOUSE_RULE: string;
 export const BOOK_RULE: string;

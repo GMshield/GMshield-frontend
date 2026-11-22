@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 
 import { fetchReferencePage, referencePictureUrl, type SourcePage, type SourceReference } from '@/client/conversation';
+import { fetchScopePage, scopePictureUrl } from '@/client/search';
 import { translator, type Language } from '@/messages';
 
 import { CloseIcon } from './Icons';
@@ -10,19 +11,48 @@ import { PageView } from './PageView';
 import { PillButton } from './PillButton';
 import styles from './SourceView.module.css';
 
-/** How a page is read: the relay's fetcher by default; tests give their own. */
+/** How a page a turn's reference names is read: the relay's fetcher by default; tests give their own. */
 export type LoadPage = (turnId: string, number: number, page: number, signal: AbortSignal) => Promise<SourcePage | null>;
 
-export type SourceViewProps = {
-  /** The turn whose reference is open. */
-  readonly turnId: string;
-  /** The open reference: its number names it to the backend; its page is where the view opens. */
-  readonly reference: SourceReference;
+/** How a page of the campaign's current scope is read (Story 3.9): the relay's fetcher by default; tests give their own. */
+export type LoadScopePage = (campaignId: string, versionId: string, page: number, signal: AbortSignal) => Promise<SourcePage | null>;
+
+/**
+ * The ground a page is served on (AD-9), other than a turn's reference (Story 3.9): the campaign's current scope, a
+ * version of which a search result names.
+ */
+export type ScopeGround = { readonly kind: 'scope'; readonly campaignId: string; readonly versionId: string };
+
+/** What the view shows of where the page comes from, and what it marks: a reference, or a search result's place. */
+export type SourceSpot = Pick<SourceReference, 'materialName' | 'sectionPath' | 'page' | 'passageIds'>;
+
+type Common = {
   readonly language: Language;
-  /** Called by the close control and by Esc; the caller gives focus back to the reference. */
+  /** Called by the close control and by Esc; the caller gives focus back to what opened it. */
   readonly onClose: () => void;
-  readonly load?: LoadPage;
 };
+
+export type SourceViewProps = Common &
+  (
+    | {
+        /** The turn whose reference is open: the ground "a source reference stored with a turn" (Story 2.7). */
+        readonly turnId: string;
+        /** The open reference: its number names it to the backend; its page is where the view opens. */
+        readonly reference: SourceReference;
+        readonly ground?: undefined;
+        readonly load?: LoadPage;
+        readonly loadScope?: undefined;
+      }
+    | {
+        /** Story 3.9: the ground "the current scope", for a search result. */
+        readonly ground: ScopeGround;
+        /** The result's place: its page is where the view opens, its passage the one marked. */
+        readonly reference: SourceSpot;
+        readonly turnId?: undefined;
+        readonly load?: undefined;
+        readonly loadScope?: LoadScopePage;
+      }
+  );
 
 /** The page shown: loading, loaded, or one that could not be opened. */
 type Shown = { readonly page: number } & (
@@ -32,7 +62,7 @@ type Shown = { readonly page: number } & (
 );
 
 /** The source line of the header: the material's name and the section path joined with " › ". */
-function sourceLine(reference: SourceReference): string {
+function sourceLine(reference: SourceSpot): string {
   return reference.sectionPath.length === 0 ? reference.materialName : `${reference.materialName}, ${reference.sectionPath.join(' › ')}`;
 }
 
@@ -54,8 +84,17 @@ function sourceLine(reference: SourceReference): string {
  *   panel scrolls, never the conversation behind it.
  *
  * The page is read from this site's relays only, never stored.
+ *
+ * Story 3.9: the page is read on a ground. With `turnId`, a turn's reference, as above; with `ground` of kind `scope`,
+ * the campaign's current scope (a search result's version and page, its passage marked). Everything else is the same.
  */
-export function SourceView({ turnId, reference, language, onClose, load = fetchReferencePage }: SourceViewProps) {
+export function SourceView(props: SourceViewProps) {
+  const { reference, language, onClose } = props;
+  const scope = props.ground ?? null;
+  const turnId = props.turnId ?? null;
+  const number = props.ground === undefined ? props.reference.number : null;
+  const load = props.load ?? fetchReferencePage;
+  const loadScope = props.loadScope ?? fetchScopePage;
   const t = translator(language);
   const titleId = useId();
   const viewRef = useRef<HTMLDialogElement>(null);
@@ -73,9 +112,15 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
     closeRef.current?.focus();
   }, []);
 
+  const campaignId = scope?.campaignId ?? null;
+  const versionId = scope?.versionId ?? null;
   useEffect(() => {
     const controller = new AbortController();
-    void load(turnId, reference.number, page, controller.signal).then((view) => {
+    const read =
+      campaignId !== null && versionId !== null
+        ? loadScope(campaignId, versionId, page, controller.signal)
+        : load(turnId ?? '', number ?? 0, page, controller.signal);
+    void read.then((view) => {
       if (controller.signal.aborted) {
         return;
       }
@@ -87,7 +132,7 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
       setShown({ page, state: 'loaded', view });
     });
     return () => controller.abort();
-  }, [load, page, reference.number, turnId, attempt]);
+  }, [load, loadScope, page, number, turnId, campaignId, versionId, attempt]);
 
   const atLast = total === null || page >= total;
   /** Moves one page. A control that reaches the end is disabled: its focus goes to a control still enabled. */
@@ -178,7 +223,11 @@ export function SourceView({ turnId, reference, language, onClose, load = fetchR
     body = (
       <PageView
         page={shown.view}
-        pictureSrc={referencePictureUrl(turnId, reference.number, shown.view.page)}
+        pictureSrc={
+          campaignId !== null && versionId !== null
+            ? scopePictureUrl(campaignId, versionId, shown.view.page)
+            : referencePictureUrl(turnId ?? '', number ?? 0, shown.view.page)
+        }
         language={language}
         cited={reference.passageIds}
         caption={false}

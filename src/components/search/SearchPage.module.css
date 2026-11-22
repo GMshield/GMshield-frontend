@@ -1,0 +1,211 @@
+/*
+ * Story 3.9: the search page. Its own field at the top (a bordered box, then the solid "Buscar"), the filters in a
+ * toolbar (tier chips, then the material select), then one line of state or the results: rows that read in two lines,
+ * the passage's first words over its tier and place, in a bordered list like every list page's, and the shared pager.
+ */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.fieldRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fieldIcon {
+  position: absolute;
+  left: var(--space-4);
+  display: inline-flex;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4) 0 calc(var(--space-4) + var(--space-6));
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--motion-fade) ease-out;
+}
+
+.input:hover {
+  border-color: var(--color-text);
+}
+
+.input[aria-invalid='true'] {
+  border-width: 2px;
+  border-color: var(--color-danger);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+
+.materialField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-left: auto;
+}
+
+.materialLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+}
+
+.select {
+  min-width: 0;
+  max-width: 20rem;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-label-size);
+}
+
+.select:hover {
+  border-color: var(--color-text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.failedText {
+  margin: 0;
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+  list-style: none;
+}
+
+.result + .result {
+  border-top: 1px solid var(--color-border);
+}
+
+/* A row: the passage's first words, then its tier and place, the whole row the control that opens its page. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: calc(var(--space-touch-target) + var(--space-5));
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fade) ease-out;
+}
+
+.result:first-child .row {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.result:last-child .row {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.result:only-child .row {
+  border-radius: var(--radius-md);
+}
+
+.row:hover {
+  background-color: var(--color-hover);
+}
+
+/* The row whose page is open in the source view. */
+.row[data-open='true'] {
+  background-color: var(--color-surface-active);
+}
+
+.words {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.placeLine {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .materialField {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .select {
+    flex: 1;
+    max-width: none;
+  }
+}

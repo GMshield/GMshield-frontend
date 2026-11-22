@@ -19,9 +19,17 @@ export const SCOPE_TIERS = [
  * what the switches the backend answered say; it works nothing out.
  */
 export function scopeSummary(scope: Pick<Scope, 'campaignTier' | 'systemTier' | 'otherTier' | 'modelKnowledge'>, t: Translate): string {
-  const on = SCOPE_TIERS.filter(({ key }) => scope[key]).map(({ tier }) => t(`shell.scope.${tier}`));
   return t('shell.scope.summary', {
-    tiers: on.length === 0 ? t('shell.scope.none') : on.join(' + '),
+    tiers: scopeTiers(scope, t),
     model: t(scope.modelKnowledge ? 'shell.scope.modelOn' : 'shell.scope.modelOff'),
   });
+}
+
+/**
+ * The first part of {@link scopeSummary}: the tiers that are on, named and joined by " + ", or "Nenhuma fonte". Story 3.9:
+ * the sentence of a search that found nothing names the scope searched with it (model knowledge has no part in a search).
+ */
+export function scopeTiers(scope: Pick<Scope, 'campaignTier' | 'systemTier' | 'otherTier'>, t: Translate): string {
+  const on = SCOPE_TIERS.filter(({ key }) => scope[key]).map(({ tier }) => t(`shell.scope.${tier}`));
+  return on.length === 0 ? t('shell.scope.none') : on.join(' + ');
 }

@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ANSWER_DONE, REFERENCE_TEXT_PAGE, STARTING_SCOPE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
+import {
+  ANSWER_DONE,
+  BOOK_VERSION,
+  NOTES_VERSION,
+  REFERENCE_TEXT_PAGE,
+  SEARCH_DONE,
+  SEARCH_ID,
+  STARTING_SCOPE,
+  answer,
+  exampleOf,
+  loadContract,
+} from '../stand-in-backend/server.mjs';
 
 import { CONTRACT_PATH, startStandIn, type Running } from './support/servers';
 
@@ -318,6 +329,33 @@ describe('stand-in backend', () => {
     }
     running = await startStandIn();
     const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/2/pages/13/picture`);
+    expect(bytes.status).toBe(200);
+    expect(bytes.headers.get('content-type')).toBe('image/webp');
+  });
+
+  it('answers a search (Story 3.9): recorded with its id, done with a result in the campaign and one in the system, each page opening', async () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    expect(answer(contract, 'POST', `/api/v1/campaigns/${campaign}/searches`, 't')).toMatchObject({ status: 202, body: { id: SEARCH_ID } });
+    const read = answer(contract, 'GET', `/api/v1/searches/${SEARCH_ID}`, 't');
+    expect(read).toMatchObject({ status: 200, body: SEARCH_DONE });
+    expect(SEARCH_DONE.results.map((result) => result.tier)).toEqual(['campaign', 'system']);
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    for (const key of schemas.Search!.required ?? []) {
+      expect(SEARCH_DONE, key).toHaveProperty(key);
+    }
+    for (const key of schemas.SearchResult!.required ?? []) {
+      expect(SEARCH_DONE.results[0], key).toHaveProperty(key);
+    }
+    // A result's page, on the ground of the current scope: the notes' text page, the book's picture page.
+    const notes = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/sources/${NOTES_VERSION}/pages/2`, 't');
+    expect(notes.body).toEqual(REFERENCE_TEXT_PAGE);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual([SEARCH_DONE.results[0]!.passageId]);
+    const book = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/sources/${BOOK_VERSION}/pages/13`, 't');
+    expect(book).toMatchObject({ status: 200, body: { page: 13, picture: { width: 1545, height: 2000 } } });
+    expect((book.body as { passages: { id: string }[] }).passages.map((passage) => passage.id)).toEqual([SEARCH_DONE.results[1]!.passageId]);
+    running = await startStandIn();
+    const bytes = await fetch(`${running.url}/api/v1/campaigns/${campaign}/sources/${BOOK_VERSION}/pages/13/picture`);
     expect(bytes.status).toBe(200);
     expect(bytes.headers.get('content-type')).toBe('image/webp');
   });
