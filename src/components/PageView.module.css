@@ -34,6 +34,26 @@
   max-height: var(--page-height, none);
 }
 
+/*
+ * A zoomed page (2026-11-23): the room it had when it fitted, its own size set by its width and height attributes
+ * (ZoomablePage measures the fitted size), scrolling inside that room in both directions.
+ */
+.view[data-zoomed] {
+  display: block;
+  width: 100%;
+  height: var(--page-height, auto);
+  max-height: var(--page-height, none);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.view[data-zoomed] .page {
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+}
+
 /* Shown until the picture arrives, and behind a picture with transparent parts. */
 .frame {
   fill: var(--color-surface);
@@ -43,6 +63,14 @@
 .line {
   fill: transparent;
   cursor: text;
+}
+
+/*
+ * What the GM selects on a page picture (2026-11-23): a translucent highlight over the printed words. The global
+ * ::selection paints a solid bar in the theme's text colour, which hid the selected lines of the picture.
+ */
+.line::selection {
+  background-color: var(--color-page-selection);
 }
 
 /* A text page: its own line breaks and blank lines, wrapped to the column. */

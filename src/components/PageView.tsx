@@ -158,6 +158,7 @@ export function PageView({
   cited = [],
   caption = true,
   fit = false,
+  zoomed = null,
 }: {
   readonly page: Page;
   readonly pictureSrc: string;
@@ -169,6 +170,11 @@ export function PageView({
    * `--page-height`, keeping its shape. Without it the page is as wide as its column, whatever its height.
    */
   readonly fit?: boolean;
+  /**
+   * A zoomed picture page's size in CSS pixels (2026-11-23, `ZoomablePage`), or null at the size `fit` gives it. A
+   * zoomed page keeps the room it had and scrolls inside it.
+   */
+  readonly zoomed?: { readonly width: number; readonly height: number } | null;
 }) {
   const t = translator(language);
   const position = t('pageView.position', { page: page.page, total: page.pageTotal });
@@ -192,9 +198,12 @@ export function PageView({
   // than any screen, and the stylesheet's two limits (the column's width, the room's height) bring it down to the
   // largest size that keeps the shape. Attributes, not a style: the Content-Security-Policy allows no style attribute.
   const grown = fit ? Math.ceil(FIT_SIZE / Math.max(Math.min(picture.width, picture.height), 1)) : 0;
-  const size = fit ? { width: picture.width * grown, height: picture.height * grown } : {};
+  let size: { width?: number; height?: number } = fit ? { width: picture.width * grown, height: picture.height * grown } : {};
+  if (zoomed !== null) {
+    size = { width: Math.round(zoomed.width), height: Math.round(zoomed.height) };
+  }
   return (
-    <figure className={styles.view} data-kind="picture" data-fit={fit ? 'room' : undefined}>
+    <figure className={styles.view} data-kind="picture" data-fit={fit ? 'room' : undefined} data-zoomed={zoomed === null ? undefined : ''}>
       <svg className={styles.page} viewBox={`0 0 ${picture.width} ${picture.height}`} role="group" aria-label={position} {...size}>
         <rect className={styles.frame} width={picture.width} height={picture.height} />
         <image href={pictureSrc} width={picture.width} height={picture.height} aria-hidden="true" />
