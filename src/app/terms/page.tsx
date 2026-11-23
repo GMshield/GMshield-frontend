@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { translator } from '@/messages';
@@ -7,6 +8,10 @@ import legal from '../legal.module.css';
 import styles from '../page.module.css';
 
 const PARAGRAPHS = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: translator((await currentPreferences()).language)('legal.terms.title') };
+}
 
 /** The draft terms of use (Story 1.9), marked "Rascunho / Draft"; Epic 10 replaces it with the reviewed text. */
 export default async function TermsPage() {

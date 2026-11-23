@@ -11,7 +11,29 @@
 // image set (Story 1.21) is created with two images, and leaving one out answers it waiting. Story 2.4: the current
 // conversation has sources (all indexed: no indexing count), a question is recorded in Portuguese, and a turn's events
 // (text/event-stream) are a short cited answer and `done`. Story 2.7: the page of reference 1 is the picture page whose
-// passage it cites, and the page of reference 2 a text page with the cited passage's range.
+// passage it cites, and the page of reference 2 a text page with the cited passage's range. Story 3.1: the systems list
+// holds the starter system (no edition, no description, version 0), whose one campaign is the current campaign; a new
+// system is "D&D" 5.2.1, and an edit answers the starter system at version 1. Story 3.1 part B: the starter system's
+// deletion takes its one campaign, its one conversation and no material; a delete answers 202 with no body. Story 3.2:
+// the starter campaign (in use, version 0) is the only campaign, with its system; a new campaign is "Mesa de quinta" of
+// the starter system; a rename, archive or restore answers the starter campaign at version 1, a choice the starter
+// campaign, and its conversation holds one question. Story 3.2 part B: the starter campaign's deletion takes its one
+// conversation and no material; a delete answers 202 with no body. Story 3.3: a material belongs to the starter
+// campaign (version 0, 134 MB), and a change of where it belongs answers it in the starter system at version 1.
+// Story 3.4: a material has no other version serving; once accepted (or moved) it is ready and may be reprocessed, and a
+// reprocess answers a new version waiting while the accepted one, its 444 pages, keeps serving. Story 3.4 part B: a
+// material has no superseded version (`superseded: []`); its deletion takes its one version and its 444 pages, and a
+// delete of it, or of one of its versions, answers 202 with no body. Story 3.6: a campaign's scope is the starting one
+// (campaign and system on, other and model knowledge off, version 0) with two campaign materials, one of the system and
+// one of another campaign, all on; a change answers the same settings at version 1. Story 3.9: a search is recorded
+// (202 with its id) and reads as done with two results, a passage of the campaign's notes (a text page) then one of
+// the book (a picture page); a page of the current scope is the notes' text page for the notes' version and the book's
+// picture page for any other. Story 3.10: the starter campaign has one conversation (whatever area is listed), the
+// questions one every question continues; it holds one answered turn, its stored events the stand-in answer's; a
+// rename answers it at version 1 under the new name. Story 3.10 part B: its deletion takes its one question, and a
+// delete of it answers 202 with no body. Story 3.12: its stored turn is not saved (`bookmarked: false`), a bookmark and
+// its removal answer 204 (as the contract declares), and the saved answers are two: the stored turn's answer in the
+// starter campaign and one in another campaign ("A Coroa Partida").
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -120,9 +142,128 @@ function templateToPattern(template) {
   return new RegExp(`^${pattern}$`);
 }
 
+/** Story 3.1: the starter system of a first sign-in, as the backend answers it, and its one campaign. */
+export const STARTER_SYSTEM = {
+  id: '0190a0b0-0000-7000-8000-000000000001',
+  name: 'Sistema sem nome',
+  edition: null,
+  description: null,
+  version: 0,
+};
+const STARTER_CAMPAIGN = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+/** Story 3.2: the starter campaign as a list row (its system's name and edition) and as one campaign (with its version). */
+const STARTER_ROW = { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name, edition: null }, archived: false };
+const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, version: 0 };
+/** Story 3.3: where the example material belongs, the starter campaign, and the same material moved to its system. */
+const IN_STARTER_CAMPAIGN = { campaign: { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name } }, systems: [] };
+const IN_STARTER_SYSTEM = { campaign: null, systems: [{ id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name }] };
+
+/** Story 3.6: the starting scope of a campaign, with a few materials in each tier (newest first within a tier). */
+export const STARTING_SCOPE = {
+  version: 0,
+  campaignTier: true,
+  systemTier: true,
+  otherTier: false,
+  modelKnowledge: false,
+  materials: [
+    { id: '0190a0b0-0000-7000-8000-000000000060', name: 'Notas da campanha.md', tier: 'campaign', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', tier: 'campaign', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000061', name: 'Guia do Mestre.pdf', tier: 'system', on: true },
+    { id: '0190a0b0-0000-7000-8000-000000000062', name: 'Bestiário de outra mesa.pdf', tier: 'other', on: true },
+  ],
+};
+
+/** Story 3.9: the versions of the two materials a search finds, and the search, done with a result in each. */
+export const NOTES_VERSION = '0190a0b0-0000-7000-8000-000000000070';
+export const BOOK_VERSION = '0190a0b0-0000-7000-8000-000000000071';
+export const SEARCH_ID = '0190a0b0-0000-7000-8000-000000000072';
+export const SEARCH_DONE = {
+  id: SEARCH_ID,
+  campaignId: STARTER_CAMPAIGN.id,
+  query: 'Fire Bolt',
+  tier: null,
+  materialId: null,
+  state: 'done',
+  results: [
+    {
+      passageId: '0190a0b0-0000-7000-8000-000000000010',
+      versionId: NOTES_VERSION,
+      materialName: 'Notas da campanha.md',
+      sectionPath: ['Magias'],
+      page: 2,
+      firstWords: 'Fire Bolt causa 1d10 de dano de fogo.',
+      tier: 'campaign',
+    },
+    {
+      passageId: '0190a0b0-0000-7000-8000-000000000009',
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Spells', 'Fire Bolt'],
+      page: 13,
+      firstWords: 'Fire Bolt. Evocation cantrip. You hurl a mote of fire at a creature or an object within range.',
+      tier: 'system',
+    },
+  ],
+};
+
+/** Story 3.10: the starter campaign's questions conversation, the one the stand-in's turns belong to. */
+export const CONVERSATION_ID = '0190a0b0-0000-7000-8000-000000000020';
+export const CONVERSATION = {
+  id: CONVERSATION_ID,
+  campaignId: '0190a0b0-0000-7000-8000-000000000002',
+  area: 'questions',
+  name: 'Quanto dano causa Fire Bolt?',
+  version: 0,
+};
+
 /** Answers chosen here rather than built from the contract's schemas, by `METHOD template`. */
 export const EXAMPLES = {
-  'GET /api/v1/materials': { items: [] },
+  'GET /api/v1/campaigns/current': STARTER,
+  'PUT /api/v1/campaigns/current': STARTER,
+  'GET /api/v1/campaigns/{id}': STARTER,
+  'PATCH /api/v1/campaigns/{id}': { ...STARTER, version: 1 },
+  'GET /api/v1/campaigns': { items: [STARTER_ROW], total: 1 },
+  'POST /api/v1/campaigns': {
+    id: '0190a0b0-0000-7000-8000-000000000040',
+    name: 'Mesa de quinta',
+    system: STARTER_SYSTEM,
+    archived: false,
+    version: 0,
+  },
+  'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+  // Story 3.10: one conversation, whatever area is asked (the stand-in reads no query).
+  'GET /api/v1/campaigns/{campaignId}/conversations': {
+    items: [
+      {
+        id: CONVERSATION_ID,
+        area: 'questions',
+        name: CONVERSATION.name,
+        questions: 1,
+        createdAt: '2026-11-22T12:00:00Z',
+        lastAskedAt: '2026-11-22T12:00:00Z',
+        version: 0,
+      },
+    ],
+    total: 1,
+  },
+  'GET /api/v1/conversations/{conversationId}': CONVERSATION,
+  'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
+  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 1 },
+  'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
+  'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
+  'PUT /api/v1/campaigns/{id}/scope': { ...STARTING_SCOPE, version: 1 },
+  'GET /api/v1/systems': { items: [STARTER_SYSTEM], total: 1 },
+  'GET /api/v1/systems/{id}': STARTER_SYSTEM,
+  'POST /api/v1/systems': {
+    id: '0190a0b0-0000-7000-8000-000000000030',
+    name: 'D&D',
+    edition: '5.2.1',
+    description: 'As regras básicas, sem suplementos.',
+    version: 0,
+  },
+  'PATCH /api/v1/systems/{id}': { ...STARTER_SYSTEM, version: 1 },
+  'GET /api/v1/systems/{id}/deletion': { campaigns: 1, conversations: 1, materials: 0 },
+  'GET /api/v1/materials': { items: [], total: 0 },
   'GET /api/v1/materials/{id}': {
     id: '0190a0b0-0000-7000-8000-000000000003',
     name: 'Livro do Jogador.pdf',
@@ -132,7 +273,17 @@ export const EXAMPLES = {
     pages: { done: 40, total: 444, text: { done: 40, total: 364 }, image: { done: 0, total: 80 }, readDirectly: 40, readByOcr: 0, unreadable: 0, reading: 'text' },
     // Story 1.20: a processing material allows no action.
     actions: [],
+    // Story 3.3: its version, size and place.
+    version: 0,
+    size: 134217728,
+    belonging: IN_STARTER_CAMPAIGN,
+    // Story 3.4: no other version serves beside it.
+    serving: null,
+    // Story 3.4 part B: and none was superseded.
+    superseded: [],
   },
+  // Story 3.4 part B: what the material's deletion takes.
+  'GET /api/v1/materials/{id}/deletion': { versions: 1, pages: 444 },
   // Story 1.20: the report of a book under review, and the book once accepted.
   'GET /api/v1/materials/{id}/report': {
     outline: [
@@ -151,7 +302,41 @@ export const EXAMPLES = {
     state: 'ready',
     kind: 'rulebook',
     pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
+    // Story 3.4: a ready material may be reprocessed (and replaced).
+    actions: ['reprocess'],
+    version: 0,
+    size: 134217728,
+    belonging: IN_STARTER_CAMPAIGN,
+    serving: null,
+    superseded: [],
+  },
+  // Story 3.4: the book reprocessed from its stored original: a new version waits, and the accepted one keeps serving.
+  'POST /api/v1/materials/{id}/reprocess': {
+    id: '0190a0b0-0000-7000-8000-000000000003',
+    name: 'Livro do Jogador.pdf',
+    state: 'waiting',
+    kind: 'rulebook',
+    pages: { done: 0, total: 444, text: { done: 0, total: 0 }, image: { done: 0, total: 0 }, readDirectly: 0, readByOcr: 0, unreadable: 0, reading: null },
     actions: [],
+    version: 0,
+    size: 134217728,
+    belonging: IN_STARTER_CAMPAIGN,
+    serving: { pages: 444, size: 134217728 },
+    superseded: [],
+  },
+  // Story 3.3: the book moved to the starter system.
+  'PATCH /api/v1/materials/{id}': {
+    id: '0190a0b0-0000-7000-8000-000000000003',
+    name: 'Livro do Jogador.pdf',
+    state: 'ready',
+    kind: 'rulebook',
+    pages: { done: 444, total: 444, text: { done: 364, total: 364 }, image: { done: 80, total: 80 }, readDirectly: 364, readByOcr: 78, unreadable: 2, reading: null },
+    actions: ['reprocess'],
+    version: 1,
+    size: 134217728,
+    belonging: IN_STARTER_SYSTEM,
+    serving: null,
+    superseded: [],
   },
   // Story 1.21: a set of two images, created with its order; the set once its failed image is left out.
   'POST /api/v1/image-sets': {
@@ -176,6 +361,8 @@ export const EXAMPLES = {
     indexing: null,
     indexingFailed: null,
   },
+  'POST /api/v1/campaigns/{campaignId}/searches': { id: SEARCH_ID },
+  'GET /api/v1/searches/{searchId}': SEARCH_DONE,
   'POST /api/v1/campaigns/{campaignId}/turns': {
     id: '0190a0b0-0000-7000-8000-000000000021',
     conversationId: '0190a0b0-0000-7000-8000-000000000020',
@@ -197,36 +384,41 @@ export const EXAMPLES = {
 };
 
 /**
- * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds a second, into
- * a Markdown material (a text page).
+ * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds one into a
+ * Markdown material (a text page). Story 3.7: the answer is the campaign's house rule, then the book's rule; each
+ * reference carries its tier, the campaign's (1, the text page) first, then the system's (2, the picture page). Story
+ * 3.8: the turn's model knowledge, frozen with it, was off (the starting scope's).
  */
 export const ANSWER_DONE = {
   stopped: false,
   silent: false,
+  modelKnowledge: false,
   references: [
     {
       number: 1,
-      materialName: 'Livro do Jogador.pdf',
-      sectionPath: ['Spells', 'Fire Bolt'],
-      page: 13,
-      passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
-      removed: false,
-    },
-    {
-      number: 2,
       materialName: 'Notas da campanha.md',
       sectionPath: ['Magias'],
       page: 2,
       passageIds: ['0190a0b0-0000-7000-8000-000000000010'],
       removed: false,
+      tier: 'campaign',
+    },
+    {
+      number: 2,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Spells', 'Fire Bolt'],
+      page: 13,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
+      removed: false,
+      tier: 'system',
     },
   ],
 };
 
-/** Story 2.7: the page of reference 1, the picture page of Story 1.19 whose passage reference 1 cites. */
+/** Story 2.7: the page of reference 2, the picture page of Story 1.19 whose passage reference 2 cites. */
 export const REFERENCE_PAGE = EXAMPLES['GET /api/v1/materials/{id}/pages/{page}'];
 
-/** Story 2.7: the page of reference 2, a text page whose cited passage is code points 10 to 46 of its text. */
+/** Story 2.7: the page of reference 1, a text page whose cited passage is code points 10 to 46 of its text. */
 export const REFERENCE_TEXT_PAGE = {
   page: 2,
   pageTotal: 3,
@@ -238,18 +430,79 @@ export const REFERENCE_TEXT_PAGE = {
 };
 
 const REFERENCE_PAGE_PATH = /^\/api\/v1\/turns\/[^/]+\/references\/([^/]+)\/pages\/[^/]+$/;
+/** Story 3.9: a page of the current scope, by version. */
+const SOURCE_PAGE_PATH = /^\/api\/v1\/campaigns\/[^/]+\/sources\/([^/]+)\/pages\/[^/]+$/;
+
+/** Story 3.7: the two versions of the stand-in answer, the campaign's house rule first, then the book's rule. */
+export const HOUSE_RULE = 'Na mesa, **Fire Bolt** causa 2d10 de dano de fogo.';
+export const BOOK_RULE = 'No livro, **Fire Bolt** causa 1d10 de dano de fogo.';
+const BOOK_AT = Array.from(HOUSE_RULE).length + 2;
 
 /**
  * Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its
- * references; Story 2.6: not stopped). `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the contract
- * declares.
+ * references; Story 2.6: not stopped). Story 3.7: the sources disagree, so a `tier` event opens each version: the
+ * campaign's at 0, the system's after the blank line. `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the
+ * contract declares.
  */
 export const ANSWER_EVENTS = [
-  'id:1\nevent:delta\ndata:{"text":"**Fire Bolt** causa 1d10 de dano de fogo."}\n\n',
-  'id:2\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000009","offset":40}\n\n',
-  'id:3\nevent:citation\ndata:{"passageId":"0190a0b0-0000-7000-8000-000000000010","offset":40}\n\n',
-  `id:4\nevent:done\ndata:${JSON.stringify(ANSWER_DONE)}\n\n`,
-].join('');
+  ['tier', { tier: 'campaign', offset: 0 }],
+  ['delta', { text: HOUSE_RULE }],
+  ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000010', offset: BOOK_AT - 2 }],
+  ['delta', { text: '\n\n' }],
+  ['tier', { tier: 'system', offset: BOOK_AT }],
+  ['delta', { text: BOOK_RULE }],
+  ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+  ['done', ANSWER_DONE],
+]
+  .map(([name, data], index) => `id:${index + 1}\nevent:${name}\ndata:${JSON.stringify(data)}\n\n`)
+  .join('');
+
+/** Story 3.10: the stand-in answer's events as a conversation's stored turn carries them, by sequence. */
+export const STORED_TURN = {
+  id: '0190a0b0-0000-7000-8000-000000000021',
+  question: CONVERSATION.name,
+  language: 'pt-BR',
+  createdAt: '2026-11-22T12:00:00Z',
+  events: [
+    ['tier', { tier: 'campaign', offset: 0 }],
+    ['delta', { text: HOUSE_RULE }],
+    ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000010', offset: BOOK_AT - 2 }],
+    ['delta', { text: '\n\n' }],
+    ['tier', { tier: 'system', offset: BOOK_AT }],
+    ['delta', { text: BOOK_RULE }],
+    ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+    ['done', ANSWER_DONE],
+  ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
+  bookmarked: false,
+};
+EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN] };
+
+/** Story 3.12: the saved answers: the stored turn's, in the starter campaign, then one in another campaign. */
+EXAMPLES['GET /api/v1/saved-answers'] = {
+  items: [
+    {
+      turnId: STORED_TURN.id,
+      conversationId: CONVERSATION_ID,
+      campaignId: CONVERSATION.campaignId,
+      campaignName: STARTER_CAMPAIGN.name,
+      area: 'questions',
+      conversationName: CONVERSATION.name,
+      savedAt: '2026-11-22T12:05:00Z',
+      excerpt: 'Fire Bolt causa 1d10 de dano de fogo.',
+    },
+    {
+      turnId: '0190a0b0-0000-7000-8000-000000000051',
+      conversationId: '0190a0b0-0000-7000-8000-000000000050',
+      campaignId: '0190a0b0-0000-7000-8000-000000000040',
+      campaignName: 'A Coroa Partida',
+      area: 'rules',
+      conversationName: 'Descanso longo',
+      savedAt: '2026-11-22T12:01:00Z',
+      excerpt: 'Um descanso longo dura oito horas.',
+    },
+  ],
+  total: 2,
+};
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
@@ -286,7 +539,11 @@ export function answer(contract, method, pathname, traceId) {
     }
     const reference = REFERENCE_PAGE_PATH.exec(pathname)?.[1];
     if (reference !== undefined && method.toUpperCase() === 'GET') {
-      return { status: 200, type, body: reference === '2' ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
+      return { status: 200, type, body: reference === '1' ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
+    }
+    const source = SOURCE_PAGE_PATH.exec(pathname)?.[1];
+    if (source !== undefined && method.toUpperCase() === 'GET') {
+      return { status: 200, type, body: source === NOTES_VERSION ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});

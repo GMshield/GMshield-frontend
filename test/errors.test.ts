@@ -14,10 +14,15 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 // (Story 1.7), sign-in and sessions (Story 1.9, AccountProblems.java), and the renewal and the service
 // credential (Story 1.10, AccountProblems.java and ServiceCredentialFilter.java), the upload (Story 1.13,
 // UploadProblems.java; Story 1.21 adds the image set's two), the page routes (Story 1.19, PageProblems.java), and the
-// review actions (Story 1.20, MaterialProblems.java).
+// review actions (Story 1.20, MaterialProblems.java), and the systems (Story 3.1, LibraryProblems.java), and a scope
+// change naming a material in none of the campaign's tiers (Story 3.5, CampaignScopes.java; shown from Story 3.6), and a
+// dismissal of an answer still being written (Story 3.11, ConversationProblems.java), and a bookmark of an answer that
+// is not done (Story 3.12).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
-    'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required'],
+    'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required',
+    'system_name_invalid', 'system_edition_invalid', 'system_description_invalid', 'system_name_taken', 'campaign_name_invalid',
+    'campaign_name_taken', 'stale_version'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
   session: ['required', 'renewal_required', 'already_renewed'],
@@ -26,7 +31,9 @@ const BACKEND_CODES = {
     'file_checksum_mismatch', 'expired', 'metadata_invalid', 'set_too_large', 'image_not_failed'],
   ingestion: ['password_required', 'file_unreadable', 'too_many_steps'],
   page: ['ground_unknown'],
-  material: ['action_unavailable'],
+  material: ['action_unavailable', 'version_in_progress', 'not_ready'],
+  scope: ['material_unknown'],
+  conversation: ['turn_running', 'turn_not_done'],
 } as const;
 
 function leaves(value: unknown): string[] {
@@ -150,8 +157,8 @@ describe('ingestion texts (Story 1.15)', () => {
 
 describe('t(path, params)', () => {
   it('returns the text at a path in the chosen language', () => {
-    expect(translator('pt-BR')('preferences.apply')).toBe('Aplicar');
-    expect(translator('en')('preferences.apply')).toBe('Apply');
+    expect(translator('pt-BR')('preferences.theme')).toBe('Tema');
+    expect(translator('en')('preferences.theme')).toBe('Theme');
     expect(translator('pt-BR')('dialog.cancel')).toBe('Cancelar');
     expect(translator('en')('dialog.cancel')).toBe('Cancel');
     expect(translator('en')('preferences.languages.pt-BR')).toBe('Português (Brasil)');
@@ -167,7 +174,7 @@ describe('t(path, params)', () => {
     const t = translator('en') as (path: string) => string;
     expect(() => t('preferences')).toThrow('No message at preferences');
     expect(() => t('nope.nothing')).toThrow();
-    expect(() => t('preferences.apply.more')).toThrow();
+    expect(() => t('preferences.theme.more')).toThrow();
   });
 });
 

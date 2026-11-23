@@ -1,0 +1,9 @@
+/* A fixed 18px box at the end of a link: its usual mark, or the spinner while the page is on its way. */
+.hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}

@@ -1,0 +1,120 @@
+/* Where a material belongs (Story 3.3): three full-width choice rows, each with its picker under its explanation. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each choice is a box of its own: the chosen one has a heavier edge and the active background. */
+.choices > li {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+}
+
+.choices > li:has(> .choice input:checked) {
+  border-color: var(--color-text);
+}
+
+.row {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-field);
+}
+
+.row:has(> .choice input:checked) {
+  background-color: var(--color-surface-active);
+}
+
+/* The radio in the first column, beside its label and, below the label, its explanation. */
+.choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  width: 100%;
+  min-height: var(--space-touch-target);
+  cursor: pointer;
+}
+
+.choice input {
+  grid-row: 1 / span 2;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--color-text);
+}
+
+.choiceLabel {
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.choiceDescription {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: 400;
+  line-height: var(--font-body-line-height);
+}
+
+/* A row's picker, under its text: indented to the label's column. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0 calc(18px + var(--space-3));
+  padding: 0;
+  border: 0;
+}
+
+.pickerLabel {
+  padding: 0;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.select {
+  width: 100%;
+  max-width: 36rem;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+}
+
+/*
+ * The systems to tick: in as many columns as fit, so a library of twenty systems is a few rows and not a column of
+ * twenty. It has no scroll of its own: the dialog's step, or the page, is the one thing that scrolls.
+ */
+.checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0 var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--space-touch-target);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-text);
+}

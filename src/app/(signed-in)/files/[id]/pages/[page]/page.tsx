@@ -1,3 +1,6 @@
+import { PageHeader } from '@/components/PageHeader';
+import { PillButton } from '@/components/PillButton';
+import { PillLink } from '@/components/PillLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -21,6 +24,12 @@ const PAGE = /^[1-9]\d{0,6}$/;
  * material or with no view) shows the single "Não encontrado." page. Since Story 1.20 a picture page sits beside a
  * "Texto extraído" column, which holds its lines' text or says that none was extracted, and an unreadable page whose
  * reading crashed (no picture and no text) says it could not be opened.
+ *
+ * Usability pass, third round (2026-11-21): the header turns the page and jumps to any page by its number. On a wide
+ * screen the picture is as tall as the window leaves room for, and the extracted text beside it scrolls within the
+ * same height, so the whole page is seen at once and nothing is turned by scrolling; the links under the page stay for
+ * a narrow screen, where the picture and the text are one column. The header says "Página 13 de 364" once, so the
+ * picture carries no second caption.
  */
 export default async function MaterialPageView({
   params,
@@ -43,25 +52,47 @@ export default async function MaterialPageView({
   const base = `/files/${encodeURIComponent(id)}`;
   return (
     <>
-      <h1 className={styles.heading}>
-        {material.ok ? (
-          <Link className={styles.back} href={base}>
-            {material.data.name}
-          </Link>
-        ) : (
-          t('pageView.position', { page: view.page, total: view.pageTotal })
-        )}
-      </h1>
+      <PageHeader
+        title={t('pageView.position', { page: view.page, total: view.pageTotal })}
+        back={material.ok ? { href: base, label: material.data.name } : { href: '/files', label: t('shell.entries.files') }}
+        // Usability pass: the page is turned from the top, without scrolling past a tall picture to reach the links, and
+        // any page is one number away ("Ir para a página"), not hundreds of presses of "Próxima página".
+        actions={
+          <>
+            {view.page > 1 ? <PillLink href={`${base}/pages/${view.page - 1}`}>{t('pageView.previous')}</PillLink> : null}
+            {view.pageTotal > 1 ? (
+              <form className={styles.jump} action={`${base}/pages`} method="get">
+                <label className={styles.jumpLabel} htmlFor="page-jump">
+                  {t('paging.goTo')}
+                </label>
+                <input
+                  id="page-jump"
+                  className={styles.jumpInput}
+                  type="number"
+                  name="page"
+                  min={1}
+                  max={view.pageTotal}
+                  defaultValue={view.page}
+                  inputMode="numeric"
+                  required
+                />
+                <PillButton type="submit">{t('paging.go')}</PillButton>
+              </form>
+            ) : null}
+            {view.page < view.pageTotal ? <PillLink href={`${base}/pages/${view.page + 1}`}>{t('pageView.next')}</PillLink> : null}
+          </>
+        }
+      />
       {view.picture === null && view.text === null ? (
         <figure className={styles.unopened}>
           <p className={styles.unopenedText}>{t('pageView.unopened')}</p>
           <figcaption className={styles.caption}>{t('pageView.position', { page: view.page, total: view.pageTotal })}</figcaption>
         </figure>
       ) : view.picture === null ? (
-        <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} />
+        <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} caption={false} />
       ) : (
         <div className={styles.beside}>
-          <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} />
+          <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} caption={false} fit />
           <section className={styles.extracted} aria-labelledby="extracted-text">
             <h2 id="extracted-text" className={styles.extractedHeading}>
               {t('pageView.extracted')}

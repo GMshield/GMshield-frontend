@@ -18,7 +18,8 @@ vi.mock('next/navigation', async (importOriginal) => ({
 const { createElement } = await import('react');
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
-const { default: SystemsPage } = await import('@/app/(signed-in)/systems/page');
+// A page still to be built: the layout tests' plain page.
+const { default: CharactersPage } = await import('@/app/(signed-in)/characters/page');
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
@@ -35,6 +36,8 @@ const CAMPAIGN = {
 
 const MATERIALS = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=failed&limit=50';
 const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
+/** Story 3.3: a material's version and place, which every material of the contract carries (here: none). */
+const PLACE = { version: 0, belonging: { campaign: null, systems: [] }, serving: null, superseded: [] };
 
 let backend: Scripted | undefined;
 async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<Scripted> {
@@ -82,23 +85,28 @@ describe('the signed-in layout (Story 1.11)', () => {
   it('loads the account and its current campaign with the session, and shows them in the shell', async () => {
     const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN });
     cookieJar['__Host-gmshield-lang'] = 'en';
-    const html = await layoutHtml(await SystemsPage());
+    const html = await layoutHtml(await CharactersPage());
 
     expect(html).toContain('Untitled system');
     expect(html).toContain('First campaign');
-    expect(html).toContain('Signed in as Mestre_Ana');
+    // Usability pass: the account menu, in the bar, names the account under a small label.
+    expect(html).toMatch(/Signed in as<\/span><span[^>]*>Mestre_Ana<\/span>/);
+    expect(html).toContain('aria-label="Account of Mestre_Ana"');
     expect(html).toContain('<main');
     expect(html).toContain('<h1');
-    expect(html).toContain('Here you will see and organise your game systems.');
+    expect(html).toContain('Here you will keep the characters of your campaigns.');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
     expect(html.indexOf('aria-label="System and campaign"')).toBeLessThan(html.indexOf('<main'));
     expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/scope',
       'GET /api/v1/campaigns/current',
+      'GET /api/v1/campaigns?limit=50',
       'GET /api/v1/conversations/current',
       MATERIALS,
       'GET /api/v1/me',
+      'GET /api/v1/systems?limit=50',
     ]);
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
@@ -142,10 +150,10 @@ describe('the signed-in layout (Story 1.11)', () => {
 
   it('no campaign: the shell says so; a campaign that cannot be loaded: a notice in the main column', async () => {
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
-    let html = await layoutHtml(await FilesPage());
+    let html = await layoutHtml(await CharactersPage());
     expect(html).toContain('Nenhuma campanha');
     expect(html).not.toContain('role="status"');
-    expect(html).toContain('Aqui você vai ver os arquivos que enviou e o estado de cada um.');
+    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
     await backend!.close();
 
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(503, 'server.unavailable') });
@@ -156,12 +164,9 @@ describe('the signed-in layout (Story 1.11)', () => {
   });
 
   it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
+    // Story 3.10: Criação de Regras is no longer a placeholder (its list is in test/conversations.test.tsx).
     const pages = {
-      rules: (await import('@/app/(signed-in)/rules/page')).default,
-      campaigns: (await import('@/app/(signed-in)/campaigns/page')).default,
-      systems: SystemsPage,
-      characters: (await import('@/app/(signed-in)/characters/page')).default,
-      files: FilesPage,
+      characters: CharactersPage,
     } as const;
     const ptBR = (await import('@/messages/pt-BR.json')).default;
     const en = (await import('@/messages/en.json')).default;
@@ -175,10 +180,9 @@ describe('the signed-in layout (Story 1.11)', () => {
         expect(messages.placeholder[key], `${language} ${key}`).not.toMatch(/!|\p{Extended_Pictographic}/u);
       }
     }
-    expect(ptBR.placeholder.rules).toBe('Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.');
   });
 
-  it('the questions page (Story 2.4) is the conversation: the composer, and with no source the empty state', async () => {
+  it('a new conversation (Story 2.4, from Story 3.10 at /questions/new) is the composer, and with no source the empty state', async () => {
     const conversation = { campaignId: '0190a0b0-0000-7000-8000-000000000002', hasSources: false };
     const review = { items: [{ id: MATERIAL_ID, name: 'Bestiário.pdf', state: 'needs_review', kind: 'rulebook' }] };
     const server = await useBackend({
@@ -188,8 +192,8 @@ describe('the signed-in layout (Story 1.11)', () => {
       'GET /api/v1/conversations/current': { status: 200, body: conversation },
       'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: review },
     });
-    requestHeaders = { 'x-gmshield-path': '/questions' };
-    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/page');
+    requestHeaders = { 'x-gmshield-path': '/questions/new' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/new/page');
 
     let html = await layoutHtml(await QuestionsPage());
 
@@ -220,6 +224,118 @@ describe('the signed-in layout (Story 1.11)', () => {
   });
 });
 
+describe('the campaign switcher in the layout (Story 3.2)', () => {
+  it('lists the campaigns in use with their system, the current one marked "atual" and not a choice', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      'GET /api/v1/campaigns?limit=50': {
+        status: 200,
+        body: {
+          items: [
+            { id: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta', system: { id: '0190a0b0-0000-7000-8000-000000000030', name: 'D&D', edition: '5.2.1' }, archived: false },
+            { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system', edition: null }, archived: false },
+          ],
+        },
+      },
+    });
+    const html = await layoutHtml();
+
+    expect(server.calls.find((call) => call.url === '/api/v1/campaigns?limit=50')?.headers['x-session-token']).toBe(SESSION);
+    // Under the logo and in the context bar: one list each.
+    expect(html.match(/aria-label="Suas campanhas"/g)).toHaveLength(2);
+    expect(html).toContain('Mesa de quinta');
+    expect(html).toContain('D&amp;D 5.2.1');
+    expect(html).toContain('Untitled system');
+    // The other campaign is a choice: a submit button posting its id.
+    expect(html).toMatch(/<input type="hidden" name="id" value="0190a0b0-0000-7000-8000-000000000040"\/><button type="submit"[^>]*>.*?Mesa de quinta/);
+    // The current one is marked in words and is not a choice.
+    const marked = [...html.matchAll(/<span[^>]*aria-current="true"[^>]*>(.*?)<\/span><\/li>/g)].map((match) => match[1]!);
+    expect(marked).toHaveLength(2);
+    for (const item of marked) {
+      expect(item).toContain('First campaign');
+      expect(item).toContain('atual');
+    }
+    expect(html).not.toContain('name="id" value="0190a0b0-0000-7000-8000-000000000002"');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+});
+
+describe("the context bar's scope summary (Story 3.6)", () => {
+  const SCOPE = 'GET /api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/scope';
+  const scope = (fields: Record<string, boolean>) => ({
+    status: 200,
+    body: { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [], ...fields },
+  });
+  /** The scope summary's button: its spoken name and the summary shown. */
+  const summaryOf = (html: string) => /<button[^>]*aria-label="(?:Escopo|Scope): ([^"]*)"[^>]*aria-expanded="false"[^>]*><span[^>]*>([^<]*)<\/span>/.exec(html);
+
+  it('reads the current campaign\'s scope with the session and shows its summary after the campaign, in both languages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [SCOPE]: scope({}) };
+    const server = await useBackend(routes);
+    let html = await layoutHtml();
+    expect(summaryOf(html)?.[2]).toBe('Campanha + Sistema · conhecimento do modelo desligado');
+    expect(summaryOf(html)?.[1]).toBe('Campanha + Sistema · conhecimento do modelo desligado');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === SCOPE)?.headers['x-session-token']).toBe(SESSION);
+    // After the campaign's name, inside the context bar.
+    const bar = html.slice(html.indexOf('aria-label="Sistema e campanha"'), html.indexOf('<main'));
+    expect(bar.indexOf('First campaign')).toBeLessThan(bar.indexOf('Campanha + Sistema'));
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = await layoutHtml();
+    expect(summaryOf(html)?.[2]).toBe('Campaign + System · model knowledge off');
+    // Every tier off: no sources; the other tier and model knowledge on.
+    routes[SCOPE] = scope({ campaignTier: false, systemTier: false });
+    expect(summaryOf(await layoutHtml())?.[2]).toBe('No sources · model knowledge off');
+    routes[SCOPE] = scope({ campaignTier: false, otherTier: true, modelKnowledge: true });
+    expect(summaryOf(await layoutHtml())?.[2]).toBe('System + Other · model knowledge on');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+
+  it('a scope that cannot be read: system › campaign without a summary, and the page still renders', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [SCOPE]: problem(503, 'server.unavailable') });
+    const html = await layoutHtml(await CharactersPage());
+    expect(summaryOf(html)).toBeNull();
+    expect(html).not.toContain('conhecimento do modelo');
+    expect(html).toContain('Untitled system');
+    expect(html).toContain('First campaign');
+    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
+  });
+
+  it('no current campaign: no summary, and no scope is asked for', async () => {
+    const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
+    const html = await layoutHtml();
+    expect(summaryOf(html)).toBeNull();
+    expect(html).not.toContain('conhecimento do modelo');
+    expect(server.calls.map((call) => call.url).filter((url) => url.endsWith('/scope'))).toEqual([]);
+  });
+});
+
+describe('the questions page with no campaign (Story 3.2)', () => {
+  it('shows the composer disabled with the reason and a link to a new campaign, not "Não encontrado."', async () => {
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': problem(404, 'request.not_found'),
+      'GET /api/v1/campaigns?limit=50': { status: 200, body: { items: [] } },
+      [MATERIALS]: { status: 200, body: { items: [] } },
+      'GET /api/v1/conversations/current': problem(404, 'request.not_found'),
+      'GET /api/v1/materials?state=needs_review&limit=1': { status: 200, body: { items: [] } },
+    });
+    requestHeaders = { 'x-gmshield-path': '/questions/new' };
+    const { default: QuestionsPage } = await import('@/app/(signed-in)/questions/new/page');
+
+    const html = await layoutHtml(await QuestionsPage());
+
+    expect(html).toContain('Não há campanha em uso: crie uma para fazer perguntas.');
+    expect(html).toMatch(/<textarea[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*aria-label="Enviar"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Enviar"/);
+    expect(html).toContain('href="/campaigns/new"');
+    expect(html).not.toContain('Não encontrado.');
+    // The switcher says there is none, and still offers a new campaign.
+    expect(html).toContain('Nenhuma campanha');
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+  });
+});
+
 describe('the upload tray and the material page (Story 1.14)', () => {
   const uploading = {
     id: MATERIAL_ID,
@@ -244,8 +360,10 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     // No live upload in this tab: the row is interrupted, and offers Retomar.
     expect(html).toContain('Envio interrompido.');
     expect(html).toContain('Retomar');
-    expect(html).toContain('precisa de revisão');
-    expect(html).toContain('data-state="needs_review"');
+    // Usability pass: a material that needs review is no longer "in progress". It waits for the GM in the notice
+    // and under the bell, and the tray keeps the files in motion.
+    expect(html).toContain('Bestiário.pdf precisa de revisão.');
+    expect(html).not.toContain('data-state="needs_review"');
     // "Adicionar Arquivo" is a button now, with the tray just before it; the dialog is in the page, closed.
     expect(html.indexOf('Arquivos em andamento')).toBeLessThan(html.indexOf('Adicionar Arquivo'));
     expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>.*Adicionar Arquivo<\/button>/);
@@ -269,7 +387,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
 
   it('the material page shows the name and the state pill, in both languages', async () => {
     const server = await useBackend({
-      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'waiting' } },
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'waiting' } },
     });
     let html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
     expect(html).toContain('<h1');
@@ -287,7 +405,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const key = `GET /api/v1/materials/${MATERIAL_ID}`;
     const routes: Record<string, { status: number; body: unknown }> = {};
     const answer = (body: Record<string, unknown>) => {
-      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, ...body } };
     };
     const page = async (language?: 'en') => {
       if (language === undefined) {
@@ -331,7 +449,7 @@ describe('the upload tray and the material page (Story 1.14)', () => {
     const key = `GET /api/v1/materials/${MATERIAL_ID}`;
     const routes: Record<string, { status: number; body: unknown }> = {};
     const answer = (body: Record<string, unknown>) => {
-      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...body } };
+      routes[key] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, ...body } };
     };
     const page = async (language?: 'en') => {
       if (language === undefined) {
@@ -439,7 +557,7 @@ describe('a page of a material (Story 1.19)', () => {
     const routes: Record<string, { status: number; body: unknown }> = {};
     await useBackend(routes);
     for (const state of ['needs_review', 'ready']) {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state } };
       const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
       expect(html, state).toContain(`href="/files/${MATERIAL_ID}/pages/1"`);
       expect(html).toContain('Ver páginas');
@@ -448,7 +566,7 @@ describe('a page of a material (Story 1.19)', () => {
     expect(renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }))).toContain('View pages');
     delete cookieJar['__Host-gmshield-lang'];
     for (const state of ['uploading', 'waiting', 'processing', 'failed']) {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state } };
       const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
       expect(html, state).not.toContain('/pages/');
     }
@@ -457,12 +575,14 @@ describe('a page of a material (Story 1.19)', () => {
   it('shows the page with its number, its name back to the material, and both page links in the middle', async () => {
     const server = await useBackend({
       [PAGE_13]: { status: 200, body: picturePage },
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review' } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'needs_review' } },
     });
     let html = await route('13');
     expect(server.calls.find((call) => `${call.method} ${call.url}` === PAGE_13)?.headers['x-session-token']).toBe(SESSION);
     expect(html).toContain('Página 13 de 364');
-    expect(html).toMatch(/<h1[^>]*><a[^>]*href="\/files\/0190a0b0-0000-7000-8000-000000000003"[^>]*>Livro do Jogador.pdf<\/a><\/h1>/);
+    // Usability pass: the material's name is the way back above the title, and the title is the page's place.
+    expect(html).toMatch(/<a[^>]*href="\/files\/0190a0b0-0000-7000-8000-000000000003"[^>]*>(<svg.*?<\/svg>)?Livro do Jogador.pdf<\/a>/);
+    expect(html).toMatch(/<h1[^>]*>Página 13 de 364<\/h1>/);
     expect(html).toContain(`href="/api/v1/materials/${MATERIAL_ID}/pages/13/picture?ground=review"`);
     expect(html).toContain('Plate | 1,500 gp | 18');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/12"`);
@@ -478,7 +598,7 @@ describe('a page of a material (Story 1.19)', () => {
 
   it('hides the previous link on the first page and the next link on the last', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready' } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'ready' } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`]: { status: 200, body: { ...picturePage, page: 1 } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/364?ground=review`]: { status: 200, body: { ...picturePage, page: 364 } },
       [`GET /api/v1/materials/${MATERIAL_ID}/pages/2?ground=review`]: {
@@ -502,7 +622,7 @@ describe('a page of a material (Story 1.19)', () => {
   });
 
   it("a page the backend does not serve, another owner's, or a malformed number is the single not-found page", async () => {
-    await useBackend({ [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'processing' } } });
+    await useBackend({ [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'processing' } } });
     for (const page of ['13', '0', '013', 'x', '-1', '99999999']) {
       const thrown = await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page }) }).then(
         () => null,
@@ -558,13 +678,15 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
   };
   const numeral = (html: string, name: string) => new RegExp(`data-numeral="${name}"><dt[^>]*>[^<]*</dt><dd[^>]*>(\\d+)</dd>`).exec(html)?.[1];
-  // The page's pills, before the (closed) confirmation dialog and its own pills.
+  // Story 3.4 part B: the page without its header, whose "Excluir" has a confirmation of its own.
+  const withoutHeader = (html: string) => html.replace(/<header[^>]*>.*?<\/header>/s, '');
+  // The page's pills, before the (closed) confirmation dialog and its own pills; not "Onde pertence"'s (Story 3.3).
   const buttons = (html: string) =>
-    [...(html.split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
+    [...(withoutHeader(html).replace(/<section[^>]*aria-labelledby="material-place".*?<\/section>/s, '').split('<dialog')[0] ?? '').matchAll(/<button[^>]*data-variant="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => `${match[2]}:${match[1]}`);
 
   it('a material that needs review shows its report: numerals, warnings as facts, unreadable pages as links, the outline by level', async () => {
     const server = await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', state: 'needs_review', actions: ['accept', 'reprocess', 'discard'], pages: reviewPages } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro do Jogador.pdf', ...PLACE, state: 'needs_review', actions: ['accept', 'reprocess', 'discard'], pages: reviewPages } },
       [REPORT]: { status: 200, body: report },
     });
     let html = await page();
@@ -586,7 +708,7 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Armaduras &lt;b&gt;pesadas&lt;/b&gt;');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
     // The actions it allows: Aceitar the one solid pill.
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Reprocessar páginas com falha:default', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Reprocessar páginas com falha:default', 'Descartar:danger']);
     expect(html).toContain('name="id" value="0190a0b0-0000-7000-8000-000000000003"');
     expect(html).toContain('<dialog');
     expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000003/pages/1"');
@@ -595,30 +717,47 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('Quality report');
     expect(html).toContain('3 pages could not be read.');
     expect(html).toContain('Pages 40 to 41');
-    expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:default']);
+    expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:danger']);
   });
 
   it('shows only the actions the material allows: read-only when ready, retry and discard when failed, none while processing', async () => {
     const routes: Record<string, { status: number; body: unknown }> = { [REPORT]: { status: 200, body: { outline: [], unreadable: [], warnings: [{ code: 'report.outline_empty', count: 0 }] } } };
     const server = await useBackend(routes);
     const answer = (body: Record<string, unknown>) => {
-      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...body } };
+      routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, ...body } };
     };
 
     // Nothing to reprocess.
     answer({ state: 'needs_review', actions: ['accept', 'discard'], pages: { ...reviewPages, unreadable: 0 } });
     let html = await page();
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
     expect(html).toContain('Nenhuma seção foi encontrada no texto.');
     expect(html).not.toContain('Páginas ilegíveis');
 
-    // Accepted: the report, read-only, and the pill "pronto".
-    answer({ state: 'ready', actions: [], pages: reviewPages });
+    // Accepted: the report, read-only, and the pill "pronto". Story 3.4: "Substituir" and "Reprocessar", two plain pills,
+    // with no confirmation (nothing is removed).
+    answer({ state: 'ready', actions: ['reprocess'], pages: reviewPages });
     html = await page();
     expect(html).toContain('pronto');
     expect(html).toContain('Relatório de qualidade');
+    expect(buttons(html)).toEqual(['Substituir:default', 'Reprocessar:default']);
+    expect(html).not.toContain('Reprocessar páginas com falha');
+    expect(withoutHeader(html)).not.toContain('<dialog');
+    expect(html).not.toContain('data-serving');
+
+    // Story 3.4: a new version under review, the ready one serving beside it.
+    answer({ state: 'needs_review', actions: ['accept', 'discard'], pages: { ...reviewPages, unreadable: 0 }, serving: { pages: 320, size: 1000 } });
+    html = await page();
+    expect(html).toContain('A versão anterior (320 páginas) continua em uso enquanto a nova não for aceita.');
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
+    answer({ state: 'uploading', actions: [], serving: { pages: 1, size: 1000 } });
+    expect(await page()).toContain('A versão anterior (1 página) continua em uso enquanto a nova não for aceita.');
+    answer({ state: 'waiting', actions: [], serving: { pages: null, size: null } });
+    html = await page();
+    expect(html).toContain('A versão anterior continua em uso enquanto a nova não for aceita.');
     expect(buttons(html)).toEqual([]);
-    expect(html).not.toContain('<dialog');
+    answer({ state: 'processing', actions: [], serving: { pages: 320, size: 1000 } });
+    expect(await page('en')).toContain('The previous version (320 pages) stays in use while the new one is not accepted.');
 
     // Failed: why, then Tentar de novo and Descartar.
     answer({ state: 'failed', failure: 'ingestion.step_failed', actions: ['retry', 'discard'] });
@@ -626,13 +765,13 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     html = await page();
     expect(html).toContain('Este arquivo não pôde ser processado.');
     expect(html.indexOf('Este arquivo não pôde ser processado.')).toBeLessThan(html.indexOf('Tentar de novo'));
-    expect(buttons(html)).toEqual(['Tentar de novo:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Tentar de novo:solid', 'Descartar:danger']);
     expect(html).not.toContain('Relatório de qualidade');
     expect(server.calls.map((call) => call.url)).not.toContain(`/api/v1/materials/${MATERIAL_ID}/report`);
 
     // Retry impossible: only Descartar.
     answer({ state: 'failed', failure: 'ingestion.password_required', actions: ['discard'] });
-    expect(buttons(await page())).toEqual(['Descartar:default']);
+    expect(buttons(await page())).toEqual(['Descartar:danger']);
 
     // Processing (after reprocess or retry) and discarded: no action, no report.
     for (const state of ['processing', 'discarded']) {
@@ -646,16 +785,17 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
 
   it('a report that cannot be loaded is a sentence, never a code', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: ['accept', 'discard'], pages: reviewPages } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: ['accept', 'discard'], pages: reviewPages } },
       [REPORT]: problem(503, 'server.unavailable'),
     });
     const html = await page();
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
     expect(html).not.toContain('server.unavailable');
-    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:default']);
+    expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
   });
 
-  it('the signed-in layout names the newest material that needs review in a warning notice that links to it', async () => {
+  // Usability pass (2026-11-21): no notice across every page for a material; the bell lists each one that waits.
+  it('the signed-in layout lists every material that needs review or failed under the bell, with a link, and counts them', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': CAMPAIGN,
@@ -666,32 +806,49 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
             { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] },
             { id: '0190a0b0-0000-7000-8000-000000000006', name: 'Bestiário.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
             { id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: ['accept', 'discard'] },
+            { id: '0190a0b0-0000-7000-8000-000000000008', name: 'Scan.pdf', state: 'failed', actions: ['retry', 'discard'] },
           ],
         },
       },
     };
     await useBackend(routes);
     let html = await layoutHtml();
-    expect(html).toMatch(/<div role="status"[^>]*data-status="warning"/);
-    expect(html).toContain('Bestiário.pdf precisa de revisão.');
-    expect(html).toContain('href="/files/0190a0b0-0000-7000-8000-000000000006">Revisar</a>');
-    expect(html).not.toContain('Antigo.pdf precisa de revisão.');
-    expect(html).toContain('aria-label="Dispensar aviso"');
+    const bar = (text: string) => text.slice(0, text.indexOf('<main'));
+    const column = (text: string) => text.slice(text.indexOf('<main'));
+    // Under the bell, before the main column: the ones to review first, then the failed one; each with its link.
+    expect(bar(html)).toContain('aria-label="Notificações, 3 novas"');
+    expect(bar(html)).toContain('Bestiário.pdf precisa de revisão.');
+    expect(bar(html)).toContain('href="/files/0190a0b0-0000-7000-8000-000000000006">Revisar</a>');
+    expect(bar(html)).toContain('Antigo.pdf precisa de revisão.');
+    expect(bar(html)).toContain('Scan.pdf falhou.');
+    expect(bar(html)).toContain('href="/files/0190a0b0-0000-7000-8000-000000000008">Abrir</a>');
+    expect(bar(html).indexOf('Antigo.pdf precisa de revisão.')).toBeLessThan(bar(html).indexOf('Scan.pdf falhou.'));
+    // Nothing about them across the page, and nothing announced on load.
+    expect(column(html)).not.toContain('precisa de revisão');
+    expect(html).not.toContain('role="status"');
+    // The tray keeps the file in motion alone.
+    expect(html).toContain('Enviando.pdf');
+    expect(html).not.toContain('data-state="failed"');
     cookieJar['__Host-gmshield-lang'] = 'en';
     html = await layoutHtml();
-    expect(html).toContain('Bestiário.pdf needs review.');
-    expect(html).toContain('>Review</a>');
+    expect(bar(html)).toContain('Bestiário.pdf needs review.');
+    expect(bar(html)).toContain('>Review</a>');
+    expect(bar(html)).toContain('Scan.pdf failed.');
 
-    // Accepted (no longer in the tray's states): the notice is gone.
+    // Accepted (no longer in the tray's states): nothing waits, and the bell counts nothing.
     routes[MATERIALS] = { status: 200, body: { items: [{ id: '0190a0b0-0000-7000-8000-000000000007', name: 'Enviando.pdf', state: 'processing', actions: [] }] } };
-    expect(await layoutHtml()).not.toContain('role="status"');
+    html = await layoutHtml();
+    expect(html).toContain('aria-label="Notifications"');
+    expect(html).not.toContain('needs review');
 
-    // With a campaign notice, both show, one line each: the campaign's first.
+    // A campaign that cannot be loaded is still a notice across the page: it is the page's own state.
     routes['GET /api/v1/campaigns/current'] = problem(503, 'server.unavailable');
     routes[MATERIALS] = { status: 200, body: { items: [{ id: MATERIAL_ID, name: 'Antigo.pdf', state: 'needs_review', actions: [] }] } };
     html = await layoutHtml();
-    expect(html.match(/role="status"/g)).toHaveLength(2);
-    expect(html.indexOf('data-status="danger"')).toBeLessThan(html.indexOf('Antigo.pdf needs review.'));
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(column(html)).toContain('data-status="danger"');
+    expect(column(html)).not.toContain('Antigo.pdf needs review.');
+    expect(bar(html)).toContain('Antigo.pdf needs review.');
   });
 });
 
@@ -719,7 +876,7 @@ describe('the indexing notice', () => {
       [CONVERSATION]: conversation({ remaining: 2000 }),
     };
     const server = await useBackend(routes);
-    let html = await layoutHtml(await SystemsPage());
+    let html = await layoutHtml(await CharactersPage());
 
     // Matrix row "Indexing": the SRD's 2,000 passages pending.
     expect(notices(html)).toEqual([['warning', 'Atenção Preparando as fontes para busca: faltam 2.000 trechos', false]]);
@@ -790,7 +947,7 @@ describe('the indexing notice', () => {
     expect(notices(html)).toEqual([]);
   });
 
-  it('stacks under a campaign error and a material that needs review, one line each, in that order', async () => {
+  it('stacks under a campaign error, one line each, in that order; a material that needs review is the bell\'s', async () => {
     const routes: Record<string, { status: number; body: unknown }> = {
       'GET /api/v1/me': ME,
       'GET /api/v1/campaigns/current': problem(503, 'server.unavailable'),
@@ -802,19 +959,19 @@ describe('the indexing notice', () => {
 
     expect(notices(html)).toEqual([
       ['danger', 'Erro O serviço está indisponível agora. Tente de novo em instantes.', true],
-      ['warning', 'Atenção Bestiário.pdf precisa de revisão. Revisar', true],
       ['warning', 'Atenção Preparando as fontes para busca: faltam 150 trechos', false],
     ]);
-    // The first two can be dismissed; the indexing notice cannot.
-    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(2);
+    // The first can be dismissed; the indexing notice cannot.
+    expect(html.match(/aria-label="Dispensar aviso"/g)).toHaveLength(1);
     expect(html.lastIndexOf('Dispensar aviso')).toBeLessThan(html.indexOf('Preparando as fontes'));
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    // Usability pass: the material that needs review is under the bell, before the main column.
+    expect(html.indexOf('Bestiário.pdf precisa de revisão.')).toBeLessThan(html.indexOf('<main'));
 
-    // The campaign loads again: the review and indexing notices stay, in that order.
+    // The campaign loads again: the indexing notice stays.
     routes['GET /api/v1/campaigns/current'] = CAMPAIGN;
     html = await layoutHtml();
-    expect(notices(html).map(([status]) => status)).toEqual(['warning', 'warning']);
-    expect(html.indexOf('precisa de revisão')).toBeLessThan(html.indexOf('Preparando as fontes'));
+    expect(notices(html).map(([status]) => status)).toEqual(['warning']);
   });
 });
 
@@ -826,7 +983,7 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 
   it('a picture page sits beside "Texto extraído", which holds its lines, or says none was extracted', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: [] } },
       [at(13)]: {
         status: 200,
         body: {
@@ -861,16 +1018,229 @@ describe('a page beside its extracted text (Story 1.20)', () => {
 
   it('an unreadable page whose reading crashed says it could not be opened, with its number and both links', async () => {
     await useBackend({
-      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', state: 'needs_review', actions: [] } },
+      [MATERIAL]: { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'needs_review', actions: [] } },
       [at(9)]: { status: 200, body: { page: 9, pageTotal: 30, picture: null, lines: [], text: null, passages: [], outcome: 'unreadable' } },
     });
     const html = await route('9');
     expect(html).toContain('Esta página não pôde ser aberta.');
     expect(html).toContain('Página 9 de 30');
-    expect(html).not.toContain('<svg');
+    // No page picture: the only drawing left is the arrow of the way back.
+    expect(html).not.toContain('<image');
+    expect(html).not.toContain('role="group"');
     expect(html).not.toContain('/picture');
     expect(html).not.toContain('Texto extraído');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/8"`);
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/10"`);
+  });
+});
+
+describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
+  const FILES = 'GET /api/v1/materials?state=uploading&state=waiting&state=processing&state=needs_review&state=ready&state=superseded&state=failed&limit=10';
+  const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+  const OTHER_SYSTEM = '0190a0b0-0000-7000-8000-000000000030';
+  const IN_CAMPAIGN = { campaign: { id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D' } }, systems: [] };
+  const pages = { done: 320, total: 320, text: { done: 320, total: 320 }, image: { done: 0, total: 0 }, readDirectly: 320, readByOcr: 0, unreadable: 0, reading: null };
+  const files = [
+    { id: MATERIAL_ID, name: 'Livro.pdf', state: 'ready', actions: [], version: 1, size: 1234567, pages, belonging: IN_CAMPAIGN, serving: null },
+    {
+      id: '0190a0b0-0000-7000-8000-000000000006',
+      name: 'Bestiário.pdf',
+      state: 'needs_review',
+      actions: [],
+      version: 0,
+      size: 2000,
+      pages: { ...pages, total: 1 },
+      belonging: { campaign: null, systems: [{ id: SYSTEM, name: 'D&D' }, { id: OTHER_SYSTEM, name: 'Pathfinder' }] },
+      serving: null,
+    },
+    { id: '0190a0b0-0000-7000-8000-000000000007', name: 'Solto.md', state: 'uploading', actions: [], version: 0, belonging: { campaign: null, systems: [] }, serving: null },
+  ];
+
+  it('lists every material but a discarded one, each with its state, size, pages and place, opening its page', async () => {
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: files, total: 3 } },
+    });
+    requestHeaders = { 'x-gmshield-path': '/files' };
+
+    const html = await layoutHtml(await FilesPage());
+
+    expect(html).toMatch(/<h1[^>]*>Meus Arquivos<\/h1>/);
+    // "Adicionar Arquivo" is the page's one solid pill, and opens the guided upload.
+    expect(html).toMatch(/<main.*<button(?=[^>]*aria-haspopup="dialog")(?=[^>]*data-variant="solid")[^>]*>Adicionar Arquivo<\/button>/s);
+    expect(html).toContain('aria-label="Seus arquivos"');
+    expect(html).toContain(`href="/files/${MATERIAL_ID}"`);
+    expect(html).toMatch(/Livro\.pdf<\/span><span[^>]*><span[^>]*data-state="ready"[^>]*>.*?pronto.*?<span[^>]*>1,2 MB · 320 páginas · Campanha Mesa de sexta<\/span>/s);
+    expect(html).toContain('>2 KB · 1 página · D&amp;D e Pathfinder</span>');
+    expect(html).toContain('>Sem lugar</span>');
+    // Third round of the usability pass: one page says how many files there are; nothing is added by "Carregar mais".
+    expect(html).toContain('3 itens');
+    expect(html).not.toContain('Carregar mais');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === FILES)?.headers['x-session-token']).toBe(SESSION);
+  });
+
+  it('an empty list says so in one sentence, with "Adicionar Arquivo" its only action; a list that cannot load says why', async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: { status: 200, body: { items: [], total: 0 } } });
+    let html = await layoutHtml(await FilesPage());
+    expect(html).toContain('Os arquivos que você enviar aparecem aqui, com o estado de cada um.');
+    expect(html).not.toContain('aria-label="Seus arquivos"');
+    await backend!.close();
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [FILES]: problem(503, 'server.unavailable') });
+    html = await layoutHtml(await FilesPage());
+    expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+  });
+
+  it('a page the backend left empty (every material on it was leaving) is not the empty sentence while the list has rows', async () => {
+    // A material whose every place is being deleted is counted but left out of its page until the deletion is done.
+    await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: [], total: 1 } },
+    });
+    const html = await layoutHtml(await FilesPage());
+    expect(html).not.toContain('Os arquivos que você enviar aparecem aqui');
+    expect(html).toContain('aria-label="Seus arquivos"');
+    expect(html).toContain('1 item');
+  });
+
+  it('a long list is paged: ten files a page, the rows shown of the total, and a page link keeps the address', async () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => ({
+      ...files[2]!,
+      id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
+      name: `Arquivo ${index + 1}.md`,
+    }));
+    const server = await useBackend({
+      'GET /api/v1/me': ME,
+      'GET /api/v1/campaigns/current': CAMPAIGN,
+      [FILES]: { status: 200, body: { items: twelve.slice(0, 10), nextCursor: twelve[9]!.id, total: 12 } },
+      [`${FILES}&offset=10`]: { status: 200, body: { items: twelve.slice(10), total: 12 } },
+    });
+    let html = await layoutHtml(await FilesPage());
+    expect(html).toContain('1–10 de 12');
+    expect(html).toContain('Arquivo 10.md');
+    expect(html).not.toContain('Arquivo 11.md');
+    // Above the rows and under them: the page is turned without scrolling to the end of the list.
+    expect(html).toContain('aria-label="Paginação, acima da lista"');
+    expect(html).toContain('aria-label="Paginação"');
+    expect([...html.matchAll(/href="\/files\?page=2"/g)].length).toBeGreaterThanOrEqual(3);
+    html = await layoutHtml(await FilesPage({ searchParams: Promise.resolve({ page: '2' }) }));
+    expect(html).toContain('11–12 de 12');
+    expect(html).toContain('Arquivo 12.md');
+    expect(html).not.toContain('Arquivo 10.md');
+    // One call a page: its size, and its start from the second page on.
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).filter((call) => call.includes('state=ready'))).toEqual([FILES, `${FILES}&offset=10`]);
+  });
+
+  it('a material page says where it belongs, with "Alterar", reading the campaigns and systems it can be given', async () => {
+    const server = await useBackend({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: files[0] },
+      'GET /api/v1/campaigns?limit=50': { status: 200, body: { items: [{ id: CAMPAIGN.body.id, name: 'Mesa de sexta', system: { id: SYSTEM, name: 'D&D', edition: null }, archived: false }] } },
+      'GET /api/v1/systems?limit=50': { status: 200, body: { items: [{ id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }] } },
+    });
+    let html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('aria-labelledby="material-place"');
+    expect(html).toContain('>Onde pertence</h2>');
+    expect(html).toContain('Na campanha Mesa de sexta, do sistema D&amp;D.');
+    expect(html).toMatch(/<button[^>]*data-variant="default"[^>]*>Alterar<\/button>/);
+    expect(server.calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual(
+      [
+        'GET /api/v1/campaigns?limit=50',
+        `GET /api/v1/materials/${MATERIAL_ID}`,
+        // Story 3.4 part B: what "Excluir" would take, for its confirmation.
+        `GET /api/v1/materials/${MATERIAL_ID}/deletion`,
+        // Usability pass: a ready material with pages shows its first page beside its facts.
+        `GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`,
+        `GET /api/v1/materials/${MATERIAL_ID}/report`,
+        'GET /api/v1/systems?limit=50',
+      ].sort(),
+    );
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('In the campaign Mesa de sexta, of the system D&amp;D.');
+  });
+
+  it('a material page whose campaigns and systems cannot be loaded says why instead of offering "Alterar"', async () => {
+    await useBackend({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: files[2] },
+      'GET /api/v1/campaigns?limit=50': problem(503, 'server.unavailable'),
+      'GET /api/v1/systems?limit=50': problem(503, 'server.unavailable'),
+    });
+    const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('Em nenhum lugar: nenhuma pergunta usa este arquivo.');
+    expect(html).not.toMatch(/>Alterar<\/button>/);
+    expect(html).toMatch(/aria-labelledby="material-place".*O serviço está indisponível agora\. Tente de novo em instantes\./s);
+  });
+});
+
+describe('deleting a material and its previous versions on its page (Story 3.4 part B)', () => {
+  const MATERIAL = `GET /api/v1/materials/${MATERIAL_ID}`;
+  const DELETION = `GET /api/v1/materials/${MATERIAL_ID}/deletion`;
+  const ready = { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, state: 'waiting', actions: [] };
+  const page = async (language?: 'en') => {
+    if (language === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = language;
+    }
+    return renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+  };
+  const header = (html: string) => /<header[^>]*>.*?<\/header>/s.exec(html)?.[0] ?? '';
+
+  it('"Excluir" is a danger pill in the header, whose confirmation names the file, its versions and pages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [MATERIAL]: { status: 200, body: ready },
+      [DELETION]: { status: 200, body: { versions: 2, pages: 640 } },
+    };
+    const server = await useBackend(routes);
+    let html = await page();
+    expect(header(html)).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+    expect(header(html)).toContain('Excluir «Livro.pdf»?');
+    expect(header(html)).toContain('Vão junto: 2 versões e 640 páginas lidas, com as imagens e o texto extraído.');
+    expect(header(html)).toContain('>Excluir arquivo</button>');
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === DELETION)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    html = await page('en');
+    expect(header(html)).toMatch(/<button[^>]*data-variant="danger"[^>]*>Delete<\/button>/);
+    expect(header(html)).toContain('Going with it: 2 versions and 640 pages read,');
+
+    // Without the counts, the confirmation names what goes in words.
+    routes[DELETION] = problem(503, 'server.unavailable');
+    html = await page();
+    expect(header(html)).toContain('Vão junto todas as versões deste arquivo e as páginas lidas delas,');
+    expect(html).not.toContain('server.unavailable');
+  });
+
+  it('"Versões anteriores" lists the superseded versions, newest first, each with "Remover"; no card without any', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [MATERIAL]: { status: 200, body: ready } };
+    await useBackend(routes);
+    let html = await page();
+    expect(html).not.toContain('Versões anteriores');
+
+    routes[MATERIAL] = {
+      status: 200,
+      body: {
+        ...ready,
+        superseded: [
+          { id: '0190a0b0-0000-7000-8000-00000000000b', createdAt: '2026-11-15T14:00:00Z', pages: 320, size: 134217728 },
+          { id: '0190a0b0-0000-7000-8000-00000000000a', createdAt: '2026-11-10T14:00:00Z', pages: null, size: null },
+        ],
+      },
+    };
+    html = await page();
+    expect(html).toContain('>Versões anteriores</h2>');
+    expect(html).toContain('Enviada em 15 de nov. de 2026 · 320 páginas · 134,2 MB');
+    expect(html.indexOf('15 de nov. de 2026')).toBeLessThan(html.indexOf('10 de nov. de 2026'));
+    expect(html.match(/<button[^>]*data-variant="danger"[^>]*>Remover<\/button>/g)).toHaveLength(2);
+    // After "Onde pertence", in the facts.
+    expect(html.indexOf('aria-labelledby="material-place"')).toBeLessThan(html.indexOf('Versões anteriores'));
+    expect(html).toContain('Remover esta versão?');
+    html = await page('en');
+    expect(html).toContain('>Previous versions</h2>');
+    expect(html).toContain('Uploaded on Nov 10, 2026');
+
+    // A backend before 1.24.0 sends no `superseded`: no card.
+    routes[MATERIAL] = { status: 200, body: Object.fromEntries(Object.entries(ready).filter(([key]) => key !== 'superseded')) };
+    expect(await page()).not.toContain('Versões anteriores');
   });
 });

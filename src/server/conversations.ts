@@ -10,7 +10,13 @@ import { outgoingTraceparent, traceFrom } from './trace';
 /**
  * The GM's conversation through the backend (Story 2.4): the current conversation, a new turn, the relay of a
  * turn's answer as server-sent events, the GM's stop of an answer (Story 2.6), and a page a turn's source reference
- * names (Story 2.7). The backend takes the owner from
+ * names (Story 2.7). From Story 3.9 a search of
+ * the library (created as a job, then read by id) and a page of the campaign's current scope, the ground a search
+ * result opens on. From Story 3.10 a campaign's conversations of one area (its campaign page counts them with the
+ * same list), one conversation with its stored turns,
+ * its rename, and a question that continues a conversation or starts one in an area; from Story 3.10 part B what goes
+ * with a conversation and its deletion; from Story 3.11 a turn's dismissal and its undo; from Story 3.12 a turn's
+ * bookmark, its removal and the account's saved answers. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -21,6 +27,27 @@ export type CurrentConversation = Schemas['CurrentConversation'];
 export type Turn = Schemas['Turn'];
 /** A page a reference names (Story 2.7): the same shape as a material's page on the review ground. */
 export type ReferencePage = Schemas['MaterialPageView'];
+/** A search of the library (Story 3.9): its query, filters, state and, once done, its results. */
+export type Search = Schemas['Search'];
+export type SearchCreated = Schemas['SearchCreated'];
+export type NewSearch = Schemas['NewSearch'];
+/** Story 3.10: a conversation in a list, a page of them, one conversation, its stored turns and a rename. */
+export type ConversationSummary = Schemas['ConversationSummary'];
+export type ConversationPage = Schemas['ConversationPage'];
+export type ConversationItem = Schemas['Conversation'];
+export type StoredTurn = Schemas['StoredTurn'];
+export type ConversationTurns = Schemas['ConversationTurns'];
+export type ConversationChange = Schemas['ConversationChange'];
+/** Story 3.10 part B: what goes with a conversation if it is deleted (its questions). */
+export type ConversationDeletion = Schemas['ConversationDeletion'];
+/** Story 3.12: a saved answer, and a page of them. */
+export type SavedAnswer = Schemas['SavedAnswer'];
+export type SavedAnswerPage = Schemas['SavedAnswerPage'];
+/** The areas of the sidebar a conversation belongs to (Story 3.10). */
+export const AREAS = ['questions', 'rules'] as const;
+export type Area = (typeof AREAS)[number];
+/** Where a question goes (Story 3.10): a conversation to continue, or the area of a new one. */
+export type QuestionTarget = { readonly conversationId?: string; readonly area?: Area };
 
 /** A campaign or turn id as the backend mints it (a UUID); anything else is one nowhere. */
 const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
@@ -38,12 +65,100 @@ export function currentConversation(sessionToken: string, options: CallOptions =
   );
 }
 
-/** Records a question on the campaign: the turn, its conversation and its language. */
-export function askQuestion(sessionToken: string, campaignId: string, question: string, options: CallOptions = {}): Promise<Result<Turn>> {
+/**
+ * Records a question on the campaign: the turn, its conversation and its language. Story 3.10: in the conversation
+ * `target` names, or in a new one of its area; with neither, the campaign's latest questions conversation.
+ */
+export function askQuestion(
+  sessionToken: string,
+  campaignId: string,
+  question: string,
+  options: CallOptions = {},
+  target: QuestionTarget = {},
+): Promise<Result<Turn>> {
   return call('conversations.ask', options, (client) =>
     client.POST('/api/v1/campaigns/{campaignId}/turns', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
-      body: { question },
+      body: { question, ...(target.conversationId === undefined ? {} : { conversationId: target.conversationId }), ...(target.area === undefined ? {} : { area: target.area }) },
+    }),
+  );
+}
+
+/**
+ * One page of the campaign's conversations of `area` (Story 3.10), the most recently asked first, with the list's
+ * total; `request.not_found` for a campaign that is not the account's.
+ */
+export function listConversations(
+  sessionToken: string,
+  campaignId: string,
+  area: Area,
+  query: { readonly limit?: number; readonly offset?: number } = {},
+  options: CallOptions = {},
+): Promise<Result<ConversationPage>> {
+  return call('conversations.list', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/conversations', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId }, query: { area, ...query } },
+    }),
+  );
+}
+
+/** One conversation of the account (Story 3.10): its campaign, area, name and version; `request.not_found` otherwise. */
+export function getConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<ConversationItem>> {
+  return call('conversations.get', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/** A conversation's newest 200 turns, oldest first, each with its stored events (Story 3.10). */
+export function conversationTurns(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<ConversationTurns>> {
+  return call('conversations.turns', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}/turns', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/**
+ * Renames a conversation on the version it was read at (Story 3.10); `request.stale_version` when it changed since,
+ * `request.conversation_name_invalid` for a name outside its limits.
+ */
+export function renameConversation(
+  sessionToken: string,
+  conversationId: string,
+  body: ConversationChange,
+  options: CallOptions = {},
+): Promise<Result<ConversationItem>> {
+  return call('conversations.rename', options, (client) =>
+    client.PATCH('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+      body,
+    }),
+  );
+}
+
+/** What goes with one of the account's conversations if it is deleted (Story 3.10 part B); `request.not_found` otherwise. */
+export function conversationDeletion(
+  sessionToken: string,
+  conversationId: string,
+  options: CallOptions = {},
+): Promise<Result<ConversationDeletion>> {
+  return call('conversations.deletion', options, (client) =>
+    client.GET('/api/v1/conversations/{conversationId}/deletion', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+    }),
+  );
+}
+
+/**
+ * Deletes one of the account's conversations with its questions, answers and references (Story 3.10 part B; 202, no
+ * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ */
+export function deleteConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.delete', options, (client) =>
+    client.DELETE('/api/v1/conversations/{conversationId}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
     }),
   );
 }
@@ -55,6 +170,60 @@ export function askQuestion(sessionToken: string, campaignId: string, question: 
 export function stopTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('conversations.stop', options, (client) =>
     client.POST('/api/v1/turns/{turnId}/stop', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Dismisses the turn's answer (Story 3.11): 204, also for a turn dismissed already; `conversation.turn_running` for a
+ * turn whose answer is still being written, `request.not_found` for a turn that is not the account's or is of a
+ * conversation being deleted.
+ */
+export function dismissTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.dismiss', options, (client) =>
+    client.PUT('/api/v1/turns/{turnId}/dismissal', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Undoes the dismissal of the turn's answer (Story 3.11): 204, also for a turn that is shown; `request.not_found` as
+ * {@link dismissTurn}.
+ */
+export function restoreTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.restore', options, (client) =>
+    client.DELETE('/api/v1/turns/{turnId}/dismissal', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Saves the turn's answer (Story 3.12): 204, also for a turn saved already; `conversation.turn_not_done` for a turn
+ * that is running, stopped, failed or silent, `request.not_found` for a turn that is not the account's or is of a conversation
+ * being deleted.
+ */
+export function bookmarkTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.bookmark', options, (client) =>
+    client.PUT('/api/v1/turns/{turnId}/bookmark', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/** Removes the turn's answer from the saved answers (Story 3.12): 204, also for one not saved; not found as above. */
+export function unbookmarkTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.unbookmark', options, (client) =>
+    client.DELETE('/api/v1/turns/{turnId}/bookmark', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * One page of the account's saved answers across all its campaigns (Story 3.12), the newest saved first, with the
+ * list's total. A dismissed answer, one of a conversation being deleted and those of an archived campaign or of a
+ * campaign being deleted are left out.
+ */
+export function savedAnswers(
+  sessionToken: string,
+  query: { readonly limit?: number; readonly offset?: number } = {},
+  options: CallOptions = {},
+): Promise<Result<SavedAnswerPage>> {
+  return call('conversations.saved', options, (client) =>
+    client.GET('/api/v1/saved-answers', { params: { header: { 'X-Session-Token': sessionToken }, query } }),
   );
 }
 
@@ -73,6 +242,49 @@ export function referencePage(
   return call('conversations.reference_page', options, (client) =>
     client.GET('/api/v1/turns/{turnId}/references/{number}/pages/{page}', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { turnId, number: Number(number), page: Number(page) } },
+    }),
+  );
+}
+
+/**
+ * Starts a search of the campaign's scope (Story 3.9), narrowed by its filters: 202 with the search's id;
+ * `request.invalid` for a blank query, one past 500 code points or a filter that is not one, `request.not_found` for a
+ * campaign that is not the account's.
+ */
+export function createSearch(sessionToken: string, campaignId: string, body: NewSearch, options: CallOptions = {}): Promise<Result<SearchCreated>> {
+  return call('conversations.search', options, (client) =>
+    client.POST('/api/v1/campaigns/{campaignId}/searches', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
+      body,
+    }),
+  );
+}
+
+/**
+ * A search of the account (Story 3.9): its state and, once done, its results as they stand in its campaign's current
+ * scope; `request.not_found` for anything that is not the account's (pruned, or of a campaign deleted since, too).
+ */
+export function getSearch(sessionToken: string, searchId: string, options: CallOptions = {}): Promise<Result<Search>> {
+  return call('conversations.search_read', options, (client) =>
+    client.GET('/api/v1/searches/{searchId}', { params: { header: { 'X-Session-Token': sessionToken }, path: { searchId } } }),
+  );
+}
+
+/**
+ * One page of a version of the campaign's current scope (Story 3.5's ground, opened by a search result in Story 3.9);
+ * `request.not_found` for a version outside that scope, a campaign that is not the account's or a page that is not
+ * one.
+ */
+export function scopeSourcePage(
+  sessionToken: string,
+  campaignId: string,
+  versionId: string,
+  page: string,
+  options: CallOptions = {},
+): Promise<Result<ReferencePage>> {
+  return call('conversations.scope_page', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/sources/{versionId}/pages/{page}', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId, versionId, page: Number(page) } },
     }),
   );
 }

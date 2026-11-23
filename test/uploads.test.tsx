@@ -4,7 +4,7 @@ import type { PreviousUpload, UrlStorage } from 'tus-js-client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UploadOptions, UploadResult } from '@/client/upload';
-import type { ImageSetCalls, ImageSetCreate, SetCallResult } from '@/components/uploads/types';
+import { NO_PLACES, type Belonging, type ImageSetCalls, type ImageSetCreate, type SetCallResult } from '@/components/uploads/types';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -63,16 +63,21 @@ const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { trayRows, REFRESH_MS } = await import('@/components/uploads/UploadTray');
 const { MaterialRefresher } = await import('@/components/MaterialRefresher');
 const { Conversation } = await import('@/components/conversation/Conversation');
+const { MaterialActions } = await import('@/components/MaterialActions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
-const BELONGING = {
-  campaign: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' },
-  system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' },
+const CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000002';
+const SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000001';
+/** Story 3.3: what the guided upload offers: the campaigns in use, the systems, the current campaign. */
+const BELONGING: Belonging = {
+  campaigns: [{ id: CAMPAIGN_ID, name: 'Primeira campanha', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } }],
+  systems: [{ id: SYSTEM_ID, name: 'Sistema sem nome' }],
+  current: CAMPAIGN_ID,
 };
 const LABELS = {
   name: 'GMshield',
-  menu: 'Menu',
+  home: 'GMshield, ir para Consultas',
   openMenu: 'Abrir menu',
   closeMenu: 'Fechar menu',
   navigation: 'Navegação principal',
@@ -134,7 +139,7 @@ function setCalls(): ImageSetCalls & { created: ImageSetCreate[]; replaced: unkn
 }
 
 function view(
-  options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: typeof BELONGING | null; sets?: ImageSetCalls } = {},
+  options: { rows?: Material[]; storage?: UrlStorage; language?: 'pt-BR' | 'en'; belonging?: Belonging; sets?: ImageSetCalls } = {},
 ) {
   const storage = options.storage ?? memoryStorage();
   const tree = (rows: Material[]) => (
@@ -144,7 +149,7 @@ function view(
       urlStorage={storage}
       {...(options.sets === undefined ? {} : { imageSets: options.sets })}
     >
-      <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={rows} />
+      <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={rows} />
     </UploadsProvider>
   );
   const rendered = render(tree(options.rows ?? []));
@@ -240,8 +245,8 @@ describe('the guided upload (Story 1.14)', () => {
 
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getByText('Passo 3 de 4')).toBeTruthy();
-    expect(within(modal).getByRole('radio', { name: /Só em Primeira campanha/ })).toBeTruthy();
-    await user.click(within(modal).getByRole('radio', { name: /Em todas as campanhas de Sistema sem nome/ }));
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
+    await user.click(within(modal).getByRole('radio', { name: /Um sistema/ }));
 
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getByText('Passo 4 de 4')).toBeTruthy();
@@ -252,7 +257,7 @@ describe('the guided upload (Story 1.14)', () => {
     expect(within(modal).queryByText(/Passo/)).toBeNull();
     expect(within(modal).getByRole('heading', { name: 'Enviando' })).toBeTruthy();
     expect(uploads).toHaveLength(1);
-    expect(uploads[0]!.options.metadata).toEqual({ kind: 'supplement', language: 'pt-BR', system: BELONGING.system.id });
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'supplement', language: 'pt-BR', systems: SYSTEM_ID });
     expect(uploads[0]!.options.resumeUrl).toBeUndefined();
     expect(container.querySelectorAll('[style]')).toHaveLength(0);
   });
@@ -347,7 +352,7 @@ describe('the guided upload (Story 1.14)', () => {
     });
     expect(uploads.map((upload) => upload.file.name)).toEqual(['a.pdf', 'b.pdf', 'c.md']);
     for (const upload of uploads) {
-      expect(upload.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: BELONGING.campaign.id });
+      expect(upload.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
     }
     // The server's refusal shows in the progress step, and is said at once.
     expect(modal.textContent).toContain('Este formato não é aceito');
@@ -358,18 +363,66 @@ describe('the guided upload (Story 1.14)', () => {
 
   it('without a campaign offers only "nowhere yet", and sends no belonging', async () => {
     const user = userEvent.setup();
-    view({ belonging: null });
+    view({ belonging: NO_PLACES });
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     await choose(pdf());
     const modal = dialog();
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     expect(within(modal).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual([
-      'Em nenhum lugar por enquantoVocê ainda não tem campanha, então o arquivo fica guardado sem uma.',
+      'Em nenhum lugar por enquantoVocê ainda não tem campanha nem sistema, então o arquivo fica guardado sem um.',
     ]);
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
     expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect' });
+  });
+
+  it('offers every campaign in use grouped by system, one system or several systems, the current campaign first (Story 3.3)', async () => {
+    const user = userEvent.setup();
+    const PATHFINDER = '0190a0b0-0000-7000-8000-000000000030';
+    const places: Belonging = {
+      campaigns: [
+        { id: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } },
+        { id: '0190a0b0-0000-7000-8000-000000000041', name: 'Mesa de sábado', system: { id: PATHFINDER, name: 'Pathfinder' } },
+        { id: CAMPAIGN_ID, name: 'Primeira campanha', system: { id: SYSTEM_ID, name: 'Sistema sem nome' } },
+      ],
+      systems: [
+        { id: PATHFINDER, name: 'Pathfinder' },
+        { id: SYSTEM_ID, name: 'Sistema sem nome' },
+      ],
+      current: CAMPAIGN_ID,
+    };
+    view({ belonging: places });
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    const modal = dialog();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+
+    // Three full-width rows, each with its explanation; the current campaign is chosen first.
+    expect(within(modal).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)).toEqual(['campaign', 'system', 'systems']);
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
+    const campaign = within(modal).getByRole('combobox', { name: 'Campanha' }) as HTMLSelectElement;
+    expect(campaign.value).toBe(CAMPAIGN_ID);
+    expect([...campaign.querySelectorAll('optgroup')].map((group) => `${group.label}: ${[...group.querySelectorAll('option')].map((option) => option.textContent).join(', ')}`)).toEqual([
+      'Sistema sem nome: Mesa de quinta, Primeira campanha',
+      'Pathfinder: Mesa de sábado',
+    ]);
+    // Picking in a row's picker chooses that row.
+    await user.selectOptions(within(modal).getByRole('combobox', { name: 'Sistema' }), PATHFINDER);
+    expect((within(modal).getByRole('radio', { name: /Um sistema/ }) as HTMLInputElement).checked).toBe(true);
+    // Several systems with none ticked cannot go on.
+    await user.click(within(modal).getByRole('radio', { name: /Vários sistemas/ }));
+    const next = within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    expect(within(modal).getByRole('alert').textContent).toBe('Marque pelo menos um sistema.');
+    await user.click(within(modal).getByRole('checkbox', { name: 'Sistema sem nome' }));
+    await user.click(within(modal).getByRole('checkbox', { name: 'Pathfinder' }));
+    expect(next.disabled).toBe(false);
+    await user.click(next);
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    // In the systems' order, whatever the order ticked.
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', systems: `${PATHFINDER},${SYSTEM_ID}` });
   });
 
   it('under 1280px, opening it closes the sidebar sheet first, so no dialog sits on another', async () => {
@@ -399,22 +452,22 @@ describe('the guided upload (Story 1.14)', () => {
 
   it('follows a campaign that arrives while it stays mounted, and sends it', async () => {
     const user = userEvent.setup();
-    const tree = (belonging: typeof BELONGING | null) => (
+    const tree = (belonging: Belonging) => (
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={belonging} urlStorage={memoryStorage()}>
-        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
       </UploadsProvider>
     );
-    const { rerender } = render(tree(null));
+    const { rerender } = render(tree(NO_PLACES));
     rerender(tree(BELONGING));
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     await choose(pdf());
     const modal = dialog();
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
-    expect((within(modal).getByRole('radio', { name: /Só em Primeira campanha/ }) as HTMLInputElement).checked).toBe(true);
+    expect((within(modal).getByRole('radio', { name: /Uma campanha/ }) as HTMLInputElement).checked).toBe(true);
     await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
     await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
-    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: BELONGING.campaign.id });
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
   });
 
   it('speaks English', async () => {
@@ -423,6 +476,71 @@ describe('the guided upload (Story 1.14)', () => {
     await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
     expect(within(dialog()).getByText('Step 1 of 4')).toBeTruthy();
     expect(within(dialog()).getByRole('heading', { name: en.upload.dialog.title })).toBeTruthy();
+  });
+
+  // Usability pass (2026-11-21).
+  it('takes files dropped on its drop area as it takes chosen ones, lights up while files are over it, and ignores anything else dragged', async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    const modal = dialog();
+    const drop = within(modal).getByTestId('upload-drop');
+    expect(drop.textContent).toContain('Arraste os arquivos para cá, ou');
+    expect(within(drop).getByRole('button', { name: 'Escolher arquivos' })).toBeTruthy();
+
+    // Text dragged over it is not for it: nothing lights up and nothing is added.
+    fireEvent.dragOver(drop, { dataTransfer: { types: ['text/plain'], files: [] } });
+    expect(drop.dataset.over).toBeUndefined();
+    fireEvent.drop(drop, { dataTransfer: { types: ['text/plain'], files: [] } });
+    expect(within(modal).queryByRole('list', { name: 'Arquivos escolhidos' })).toBeNull();
+
+    const files = [pdf('Livro.pdf'), fileOf('planilha.xlsx', new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]))];
+    fireEvent.dragEnter(drop, { dataTransfer: { types: ['Files'], files } });
+    expect(drop.dataset.over).toBe('true');
+    expect(drop.textContent).toContain('Solte para adicionar');
+    fireEvent.dragLeave(drop);
+    expect(drop.dataset.over).toBeUndefined();
+    fireEvent.dragOver(drop, { dataTransfer: { types: ['Files'], files } });
+    fireEvent.drop(drop, { dataTransfer: { types: ['Files'], files } });
+    expect(drop.dataset.over).toBeUndefined();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    // Each file is a row: what the check said, and an icon button that removes it, named after the file.
+    const rows = within(within(modal).getByRole('list', { name: 'Arquivos escolhidos' })).getAllByRole('listitem');
+    expect(rows.map((row) => row.dataset.check)).toEqual(['accepted', 'refused']);
+    expect(rows[0]!.textContent).toContain('Livro.pdf');
+    expect(rows[0]!.textContent).toContain('Pronto para enviar');
+    expect(rows[1]!.textContent).toContain('Não enviado:');
+    expect(urgent()).toContain('planilha.xlsx');
+    await user.click(within(rows[1]!).getByRole('button', { name: 'Remover planilha.xlsx' }));
+    expect(within(modal).getAllByRole('listitem')).toHaveLength(1);
+    expect((within(modal).getByRole('button', { name: 'Próximo' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('draws the step count as marks filled up to the current step, and shows a sent file\'s percentage beside its state', async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    await choose(pdf());
+    const modal = dialog();
+    const marks = () => [...modal.querySelectorAll('[aria-hidden="true"] > span')].filter((mark) => mark.parentElement?.previousElementSibling?.textContent?.startsWith('Passo'));
+    expect(marks().map((mark) => (mark as HTMLElement).dataset.done ?? 'no')).toEqual(['true', 'no', 'no', 'no']);
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 2 de 4')).toBeTruthy();
+    expect(marks().map((mark) => (mark as HTMLElement).dataset.done ?? 'no')).toEqual(['true', 'true', 'no', 'no']);
+    // "Voltar" comes before the main action in the actions.
+    const actions = within(modal).getAllByRole('button').map((button) => button.textContent);
+    expect(actions.indexOf('Voltar')).toBeLessThan(actions.indexOf('Próximo'));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    act(() => uploads[0]!.options.onProgress?.(3000, 6000));
+    expect(within(modal).getByText('enviando · 50%')).toBeTruthy();
+    // Never past 100, whatever is counted.
+    act(() => uploads[0]!.options.onProgress?.(9000, 6000));
+    expect(within(modal).getByText('enviando · 100%')).toBeTruthy();
   });
 });
 
@@ -791,7 +909,7 @@ describe('photos as the pages of one material (Story 1.21)', () => {
         name: 'Ficha do herói',
         kind: 'rulebook',
         language: 'detect',
-        campaign: BELONGING.campaign.id,
+        campaign: CAMPAIGN_ID,
         images: [
           { name: 'foto-1.jpg', length: 6000 },
           { name: 'foto-2.png', length: 6000 },
@@ -813,6 +931,47 @@ describe('photos as the pages of one material (Story 1.21)', () => {
     await settle();
     expect(polite()).toBe('Ficha do herói: aguardando.');
   });
+
+  for (const [choice, ticked, systems] of [
+    [/Um sistema/, [], [SYSTEM_ID]],
+    [/Vários sistemas/, ['Sistema sem nome', 'Pathfinder'], ['0190a0b0-0000-7000-8000-000000000030', SYSTEM_ID]],
+  ] as const) {
+    it(`sends a set to ${String(choice)} with its systems and no campaign (Story 3.3)`, async () => {
+      const user = userEvent.setup();
+      const sets = setCalls();
+      const places: Belonging = {
+        ...BELONGING,
+        systems: [
+          { id: '0190a0b0-0000-7000-8000-000000000030', name: 'Pathfinder' },
+          { id: SYSTEM_ID, name: 'Sistema sem nome' },
+        ],
+      };
+      view({ sets, belonging: places });
+      await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+      await choose(jpeg('foto-1.jpg'));
+      const modal = dialog();
+      await nextSteps(modal, 2);
+      await user.click(within(modal).getByRole('radio', { name: choice }));
+      if (choice.source === 'Um sistema') {
+        await user.selectOptions(within(modal).getByRole('combobox', { name: 'Sistema' }), SYSTEM_ID);
+      }
+      for (const name of ticked) {
+        await user.click(within(modal).getByRole('checkbox', { name }));
+      }
+      await nextSteps(modal, 1);
+      await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+      await settle();
+
+      expect(sets.created[0]).toEqual({
+        name: 'foto-1.jpg',
+        kind: 'rulebook',
+        language: 'detect',
+        systems,
+        images: [{ name: 'foto-1.jpg', length: 6000 }],
+      });
+      expect(sets.created[0]).not.toHaveProperty('campaign');
+    });
+  }
 
   it('reorders by Alt+arrows on a row and by its buttons, announcing each move politely, and sends that order', async () => {
     const user = userEvent.setup();
@@ -1132,8 +1291,8 @@ describe("the conversation's empty state (Story 2.4)", () => {
     const user = userEvent.setup();
     render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()}>
-        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" menu={<p>menu</p>} trayRows={[]} />
-        <Conversation language="pt-BR" campaignId={BELONGING.campaign.id} hasSources={false} review={null} />
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
+        <Conversation language="pt-BR" campaignId={CAMPAIGN_ID} hasSources={false} review={null} />
       </UploadsProvider>,
     );
     expect(screen.queryByRole('dialog', { name: 'Adicionar arquivos' })).toBeNull();
@@ -1182,5 +1341,101 @@ describe('the upload id of an address (Story 1.14)', () => {
     expect(uploadIdOf('/api/v1/uploads/abc//')).toBe('abc');
     expect(uploadIdOf('')).toBe('');
     expect(uploadIdOf('/'.repeat(50_000))).toBe('');
+  });
+});
+
+describe('a new version of a material (Story 3.4)', () => {
+  const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000003';
+  const postAction = vi.fn(async () => ({ error: null }));
+
+  /** The shell's provider and sidebar (the only dialog) beside a ready material's actions. */
+  function replaceView(sets?: ImageSetCalls) {
+    return render(
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={BELONGING} urlStorage={memoryStorage()} {...(sets === undefined ? {} : { imageSets: sets })}>
+        <Sidebar labels={LABELS} campaign="Primeira campanha" initialState="open" trayRows={[]} />
+        <MaterialActions id={MATERIAL_ID} name="Livro.pdf" actions={['reprocess']} pages={10} ready language="pt-BR" action={postAction} />
+      </UploadsProvider>,
+    );
+  }
+
+  it('"Substituir" opens the guided upload for the material: one file, no kind, place or language, sent with the material only', async () => {
+    const user = userEvent.setup();
+    replaceView();
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+
+    const modal = screen.getByRole('dialog', { name: 'Substituir Livro.pdf' });
+    expect((modal as HTMLDialogElement).open).toBe(true);
+    expect(within(modal).getByText('Passo 1 de 1')).toBeTruthy();
+    expect(within(modal).getByRole('heading', { name: 'Qual é a nova versão?' })).toBeTruthy();
+    const send = within(modal).getByRole('button', { name: 'Enviar' }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(within(modal).queryByRole('button', { name: 'Próximo' })).toBeNull();
+
+    // A file beside photos, or two files, is not one new version.
+    await choose(pdf(), jpeg('foto.jpg'));
+    expect(within(modal).getByRole('alert').textContent).toBe('Escolha um só arquivo, ou só fotos.');
+    expect(send.disabled).toBe(true);
+    await user.click(within(modal).getByRole('button', { name: 'Remover foto.jpg' }));
+    await choose(pdf('Outro.pdf'));
+    expect(send.disabled).toBe(true);
+    await user.click(within(modal).getByRole('button', { name: 'Remover Outro.pdf' }));
+    expect(within(modal).queryByRole('alert')).toBeNull();
+    expect(send.disabled).toBe(false);
+
+    await user.click(send);
+
+    expect(within(modal).getByRole('heading', { name: 'Enviando' })).toBeTruthy();
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.file.name).toBe('Livro do Jogador.pdf');
+    expect(uploads[0]!.options.metadata).toEqual({ material: MATERIAL_ID });
+    expect(postAction).not.toHaveBeenCalled();
+  });
+
+  it('several photos are the pages of the new version, in their order, with no name to give', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    replaceView(sets);
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+    const modal = dialog();
+    await choose(jpeg('a.jpg'), png('b.png'));
+    expect(within(modal).getByText('Passo 1 de 2')).toBeTruthy();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    expect(within(modal).getByText('Passo 2 de 2')).toBeTruthy();
+    expect(within(modal).queryByLabelText('Nome do material')).toBeNull();
+    await user.click(within(modal).getByRole('button', { name: 'Descer a.jpg' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+
+    await vi.waitFor(() => expect(sets.created).toHaveLength(1));
+    expect(sets.created[0]).toEqual({
+      name: 'Livro.pdf',
+      material: MATERIAL_ID,
+      images: [
+        { name: 'b.png', length: 6000 },
+        { name: 'a.jpg', length: 6000 },
+      ],
+    });
+    await vi.waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]!.options.resumeUrl).toMatch(/upload-1-1$/);
+  });
+
+  it('one photo is a set of one under the material\'s name, and "Adicionar Arquivo" opens the usual dialog again', async () => {
+    const user = userEvent.setup();
+    const sets = setCalls();
+    replaceView(sets);
+    await user.click(screen.getByRole('button', { name: 'Substituir' }));
+    await choose(jpeg('a.jpg'));
+    await user.click(within(dialog()).getByRole('button', { name: 'Enviar' }));
+    await vi.waitFor(() => expect(sets.created).toEqual([{ name: 'Livro.pdf', material: MATERIAL_ID, images: [{ name: 'a.jpg', length: 6000 }] }]));
+    await user.keyboard('{Escape}');
+    expect(dialog().open).toBe(false);
+    // Opened by "Substituir", the dialog never sends focus to the sidebar's "Adicionar Arquivo".
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    expect(screen.getByRole('dialog', { name: 'Adicionar arquivos' })).toBeTruthy();
+    expect(within(dialog()).getByText('Passo 1 de 4')).toBeTruthy();
   });
 });

@@ -1,0 +1,299 @@
+/*
+ * A list page's rows (Story 3.1). Usability pass (2026-11-21): a toolbar (the filters, then "Exibição"), and rows that
+ * read in two lines behind an icon or a thumbnail, as a list or as a grid of cards, comfortable or compact.
+ */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+
+.toolbarStart {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.toolbarEnd {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+  list-style: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.item + .item {
+  border-top: 1px solid var(--color-border);
+}
+
+/* The row: the lead, then the name over the detail, then the state and the arrow that says it opens a page. */
+.row {
+  display: grid;
+  flex: 1;
+  grid-template-areas:
+    'lead label state chevron'
+    'lead detail state chevron';
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0 var(--space-4);
+  min-width: 0;
+  min-height: calc(var(--space-touch-target) + var(--space-5));
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.item:first-child .row {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.item:last-child .row {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.link {
+  transition: background-color var(--motion-fade) ease-out;
+}
+
+.link:hover {
+  background-color: var(--color-hover);
+}
+
+.link:hover .label,
+.link:focus-visible .label {
+  text-decoration: underline;
+}
+
+.lead {
+  grid-area: lead;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-hover);
+  color: var(--color-text-muted);
+}
+
+/* A first page is taller than wide: its thumbnail keeps that shape, within the height every row has. */
+.lead[data-kind='thumbnail'] {
+  width: calc(var(--space-touch-target) - var(--space-2));
+  height: calc(var(--space-touch-target) + var(--space-1));
+  margin-inline: var(--space-1);
+}
+
+.thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.label {
+  grid-area: label;
+  align-self: end;
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  grid-area: detail;
+  align-self: start;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* A row with a name alone: the name sits in the middle of the row. */
+.row:not(:has(.detail)) .label {
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.state {
+  grid-area: state;
+  display: inline-flex;
+}
+
+.chevron {
+  grid-area: chevron;
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+/* "Pré-visualizar": beside the row, never inside its link. */
+.preview {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  margin-right: var(--space-3);
+  padding: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.preview:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+/* Where some rows offer a preview, the others keep its room, so every state and arrow sits in the same column. */
+.list[data-layout='list']:has(.preview) .item:not(:has(.preview)) .row {
+  padding-right: calc(var(--space-touch-target) + var(--space-3) + var(--space-4));
+}
+
+/* Compact: one line a row, for a long list. */
+.list[data-density='compact'][data-layout='list'] .row {
+  grid-template-areas: 'lead label detail state chevron';
+  grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto auto;
+  min-height: var(--space-touch-target);
+  padding-block: var(--space-1);
+}
+
+.list[data-density='compact'][data-layout='list'] .label,
+.list[data-density='compact'][data-layout='list'] .detail {
+  grid-row: auto;
+  align-self: center;
+}
+
+.list[data-density='compact'][data-layout='list'] .lead {
+  width: var(--space-8);
+  height: var(--space-8);
+}
+
+/* A grid of cards: the thumbnail or the icon on top, then the name, the state and the detail. */
+.list[data-layout='grid'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+}
+
+.list[data-layout='grid'][data-density='compact'] {
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--space-3);
+}
+
+.list[data-layout='grid'] .item,
+.list[data-layout='grid'] .item + .item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+.list[data-layout='grid'] .row,
+.list[data-layout='grid'] .item:first-child .row,
+.list[data-layout='grid'] .item:last-child .row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.list[data-layout='grid'] .lead {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+.list[data-layout='grid'][data-density='compact'] .lead[data-kind='icon'] {
+  aspect-ratio: 3 / 1;
+}
+
+.list[data-layout='grid'] .label,
+.list[data-layout='grid'] .detail {
+  align-self: flex-start;
+}
+
+.list[data-layout='grid'] .chevron {
+  display: none;
+}
+
+.list[data-layout='grid'] .preview {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-2);
+  background-color: var(--color-popover);
+}
+
+@media (max-width: 767px) {
+  /* A phone: no arrow (the whole row is the target), less room around the row. */
+  .list[data-layout='list'] .chevron {
+    display: none;
+  }
+
+  .list[data-layout='list'] .row {
+    padding-inline: var(--space-3);
+  }
+
+  .list[data-layout='list']:has(.preview) .item:not(:has(.preview)) .row {
+    padding-right: var(--space-3);
+  }
+
+  .preview {
+    margin-right: var(--space-2);
+  }
+
+  /* A phone: the state goes under the detail, so a long name keeps the row's width. */
+  .list[data-layout='list'] .row {
+    grid-template-areas:
+      'lead label'
+      'lead detail'
+      'lead state';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .list[data-density='compact'][data-layout='list'] .row {
+    grid-template-areas:
+      'lead label'
+      'lead detail'
+      'lead state';
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}

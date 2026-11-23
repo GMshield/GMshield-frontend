@@ -121,9 +121,28 @@ function pairs(theme: Theme, page: Rgb): [string, Rgb, Rgb][] {
     ['solid pill', opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))],
     ['danger pill', opaque(role(theme, 'on-status')), opaque(role(theme, 'danger'))],
   ];
+  // The usability pass (2026-11-21): the floating surface (menus, toasts, dialogs), the hover and pressed overlays, and
+  // the tints behind a state pill and a notice.
+  const popover = opaque(role(theme, 'popover'));
+  list.push(['text on popover', text, popover]);
+  list.push(['muted text on popover', muted, popover]);
+  list.push(['text on active row in a popover', text, over(role(theme, 'surface-active'), popover)]);
+  for (const overlay of ['hover', 'pressed']) {
+    list.push([`text on ${overlay} over canvas`, text, over(role(theme, overlay), page)]);
+    list.push([`text on ${overlay} over surface`, text, over(role(theme, overlay), surface)]);
+    list.push([`muted text on ${overlay} over surface`, muted, over(role(theme, overlay), surface)]);
+    list.push([`pill text on ${overlay} over the control`, text, over(role(theme, overlay), over(role(theme, 'control'), page))]);
+  }
   for (const status of ['danger', 'warning', 'success']) {
     list.push([`${status} on surface`, opaque(role(theme, status)), surface]);
     list.push([`${status} on dialog`, opaque(role(theme, status)), dialog]);
+    // An outlined danger pill and an error line sit on the canvas; a toast's and a menu's words on the popover.
+    list.push([`${status} on canvas`, opaque(role(theme, status)), page]);
+    list.push([`${status} on popover`, opaque(role(theme, status)), popover]);
+    const tint = role(theme, `${status}-soft`);
+    list.push([`text on the ${status} tint over surface`, text, over(tint, surface)]);
+    list.push([`text on the ${status} tint over canvas`, text, over(tint, page)]);
+    list.push([`${status} word on its tint over surface`, opaque(role(theme, status)), over(tint, surface)]);
   }
   const fieldBorder = role(theme, 'field-border');
   if (fieldBorder[3] > 0) {
@@ -138,6 +157,43 @@ function expectAA(theme: Theme, page: Rgb) {
   }
   // The focus ring sits outside its control (outline-offset), on the canvas itself.
   expect(ratio(opaque(role(theme, 'accent')), page), `${theme}: accent on canvas`).toBeGreaterThanOrEqual(NON_TEXT);
+  // Usability pass: the edge of a field and of a pill is what says "this is a control": 3:1 against what it sits on
+  // and against its own fill (WCAG 1.4.11), on the canvas, on a panel and on a floating surface.
+  const surface = over(role(theme, 'surface'), page);
+  const popover = opaque(role(theme, 'popover'));
+  for (const edge of ['field-border', 'control-border']) {
+    const colour = opaque(role(theme, edge));
+    for (const [name, ground] of [['canvas', page], ['surface', surface], ['popover', popover]] as const) {
+      expect(ratio(colour, ground), `${theme}: ${edge} on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+    }
+    expect(ratio(colour, over(role(theme, 'field'), page)), `${theme}: ${edge} on the field`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  // Story 3.6: a switch. Off, its muted knob on the control's fill, on a panel and on a floating surface; on, the canvas
+  // knob on the solid track, and the track itself against what it sits on (WCAG 1.4.11).
+  for (const [name, ground] of [['surface', surface], ['popover', popover]] as const) {
+    const track = over(role(theme, 'control'), ground);
+    expect(ratio(opaque(role(theme, 'text-muted')), track), `${theme}: off switch knob on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+    expect(ratio(opaque(role(theme, 'solid')), ground), `${theme}: on switch track on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  expect(ratio(opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))), `${theme}: on switch knob`).toBeGreaterThanOrEqual(NON_TEXT);
+  // Story 3.7: a tier pill is outlined in the muted text colour with its word in it, on the canvas (an answer) and on a
+  // panel: the word 4.5:1 (the muted text pairs above) and the edge 3:1 (WCAG 1.4.11).
+  for (const [name, ground] of [['canvas', page], ['surface', surface]] as const) {
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill edge on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: tier pill word on ${name}`).toBeGreaterThanOrEqual(AA);
+  }
+  // Story 3.12: an answer's bookmark. Not set, its outline icon on the solid circle; set, an outlined circle with a filled
+  // icon, both in the text colour, on the canvas and on the hover over it (WCAG 1.4.11). The saved items panel's words
+  // are the text and muted text on the surface (the pairs above); its button in the bar is the bell's.
+  expect(ratio(opaque(role(theme, 'on-solid')), opaque(role(theme, 'solid'))), `${theme}: bookmark icon on its circle`).toBeGreaterThanOrEqual(NON_TEXT);
+  for (const [name, ground] of [['canvas', page], ['hover over canvas', over(role(theme, 'hover'), page)]] as const) {
+    expect(ratio(opaque(role(theme, 'text')), ground), `${theme}: set bookmark outline and icon on ${name}`).toBeGreaterThanOrEqual(NON_TEXT);
+  }
+  for (const [name, ground] of [['surface', surface], ['hover over surface', over(role(theme, 'hover'), surface)]] as const) {
+    expect(ratio(opaque(role(theme, 'text-muted')), ground), `${theme}: saved item meta-line on ${name}`).toBeGreaterThanOrEqual(AA);
+  }
+  // The current sidebar entry is found by more than tone, but the tone alone must still be seen on the panel.
+  expect(ratio(over(role(theme, 'surface-active'), surface), surface), `${theme}: active row on surface`).toBeGreaterThan(1.15);
 }
 
 /** The canvas the illustrated theme shows: the scrim over one backdrop pixel (opaque). */
@@ -268,6 +324,18 @@ describe('stylesheets', () => {
     }
   });
 
+  it('draw the tier pill outlined in the muted text colour, with no fill, in the meta type (Story 3.7)', () => {
+    const css = readFileSync(join(ROOT, 'src/components/TierLabel.module.css'), 'utf8');
+    const pill = /^\.pill \{([^}]*)\}/m.exec(css)?.[1] ?? '';
+    expect(pill).toMatch(/border: 1px solid var\(--color-text-muted\);/);
+    expect(pill).toMatch(/border-radius: var\(--radius-full\);/);
+    expect(pill).toMatch(/background: none;/);
+    expect(pill).toMatch(/color: var\(--color-text-muted\);/);
+    expect(pill).toMatch(/font-size: var\(--font-meta-size\);/);
+    expect(pill).toMatch(/font-weight: var\(--font-meta-weight\);/);
+    expect(pill).not.toMatch(/cursor|:hover/);
+  });
+
   it('no component sets a style attribute (the CSP blocks them)', () => {
     for (const path of SOURCES.filter((p) => p.endsWith('.tsx'))) {
       expect(readFileSync(path, 'utf8'), relative(ROOT, path)).not.toMatch(/\bstyle=/);
@@ -283,14 +351,24 @@ describe('stylesheets', () => {
     for (const [file, selector] of [
       ['components/PillButton.module.css', '.pill'],
       ['components/Notice.module.css', '.link'],
-      ['components/PreferencesForm.module.css', '.option'],
+      ['components/PreferencesForm.module.css', '.segment'],
       ['app/page.module.css', '.link'],
       // Story 1.11: the shell's controls.
       ['components/Sidebar.module.css', '.entry'],
       ['components/Sidebar.module.css', '.add'],
-      ['components/LogoMenu.module.css', '.trigger'],
+      // Usability pass: the logo is a link home, and the account menu sits in the bar.
+      ['components/Sidebar.module.css', '.home'],
+      ['components/AccountMenu.module.css', '.trigger'],
+      ['components/Shell.module.css', '.skip'],
       ['components/ContextBar.module.css', '.link'],
       ['components/ContextBar.module.css', '.bar'],
+      // Third round: the pager's arrows and numbers (one rule for both), and the page jump's field.
+      ['components/Pager.module.css', '.step,\n.page'],
+      ['components/Pager.module.css', '.gap'],
+      // Story 3.6: a switch (the whole row) and the scope summary in the context bar.
+      ['components/Switch.module.css', '.switch'],
+      ['components/ScopePopover.module.css', '.trigger'],
+      ['app/(signed-in)/files/[id]/pages/[page]/page.module.css', '.jumpInput'],
     ] as const) {
       const body = hitArea(rules(file), selector);
       expect(body, `${file} ${selector}`).toMatch(/min-height: var\(--space-touch-target\)/);

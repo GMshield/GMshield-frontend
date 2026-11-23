@@ -61,7 +61,42 @@
   cursor: pointer;
 }
 
+.close:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+/* A material's preview (usability pass, 2026-11-21): its name, and under it the way to its own page. */
+.titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.titles .title {
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+.openLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/*
+ * Third round: the page is no taller than the panel leaves between its header and its footer (never under 20rem), so
+ * the whole page shows without scrolling the panel and the cited passage is in view when it opens.
+ */
 .body {
+  --page-height: max(20rem, calc(100dvh - 10.5rem));
   flex: 1;
 }
 
@@ -69,7 +104,7 @@
 .frame {
   width: 100%;
   aspect-ratio: 3 / 4;
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
 }
@@ -78,7 +113,7 @@
 .unopened {
   margin: 0;
   padding: var(--space-4);
-  border: 1px solid var(--color-rule);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
   color: var(--color-text);

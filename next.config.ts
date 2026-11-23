@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Images are self-hosted and served as they are: no optimizer writing a cache on disk.
   images: { unoptimized: true },
+  // No development indicator: `next dev` puts it under the page, which adds 46px of scrolling to every screen that
+  // fills the window and so hides what the layout really does. Compile and runtime errors still show.
+  devIndicators: false,
 };
 
 export default nextConfig;

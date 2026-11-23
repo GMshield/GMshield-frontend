@@ -1,11 +1,21 @@
+/*
+ * The buttons (usability pass, 2026-11-21): three levels that read apart at a glance.
+ * - `.pill`: the default, an outlined tonal pill for secondary actions.
+ * - `.solid`: the single main action of a screen, filled with the text colour.
+ * - `.danger`: a destructive action, outlined in the danger colour, so that it never outweighs the main action beside
+ *   it; the confirmation dialog fills its own (ConfirmationDialog.module.css), the last step before the thing goes.
+ * - `.quiet`: no outline, for an action inside a row or a toolbar.
+ * Every one shows hover, pressed and disabled states.
+ */
 .pill {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
   min-width: var(--space-touch-target);
   min-height: var(--space-touch-target);
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-5);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-full);
   background-color: var(--color-control);
@@ -15,7 +25,21 @@
   font-size: var(--font-label-size);
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color var(--motion-fade) ease-out,
+    border-color var(--motion-fade) ease-out;
+}
+
+.pill:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+.pill:active:not(:disabled, [aria-disabled='true']) {
+  background-image: linear-gradient(var(--color-pressed), var(--color-pressed));
 }
 
 .pill:disabled {
@@ -29,9 +53,42 @@
   backdrop-filter: none;
 }
 
+.solid:hover:not(:disabled, [aria-disabled='true']) {
+  background-image: none;
+  opacity: 0.86;
+}
+
+.solid:active:not(:disabled, [aria-disabled='true']) {
+  background-image: none;
+  opacity: 0.74;
+}
+
 .danger {
   border-color: var(--color-danger);
-  background-color: var(--color-danger);
-  color: var(--color-on-status);
+  background-color: transparent;
+  color: var(--color-danger);
   backdrop-filter: none;
+}
+
+/* Hovered, it fills: the danger colour under the canvas colour is a pair measured in every theme. */
+.danger:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger);
+  background-image: none;
+  color: var(--color-on-status);
+}
+
+.quiet {
+  border-color: transparent;
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+.quiet:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: transparent;
+}
+
+/* A smaller pill inside a row or a toolbar: 36px to the eye, 44px to the pointer (its margin is part of the target). */
+.compact {
+  padding: 0 var(--space-4);
 }

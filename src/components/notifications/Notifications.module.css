@@ -1,0 +1,282 @@
+/*
+ * The notifications (usability pass, 2026-11-21): the toasts at the top of the window, in the middle, and the bell's
+ * list. The middle of the top is the one place no page uses: titles sit on the left, actions on the right, the composer
+ * at the bottom. No shadow lifts them: a floating surface has its own opaque colour and an edge, and its status is a bar
+ * on its left, an icon and a word.
+ */
+.toasts {
+  position: fixed;
+  top: var(--space-2);
+  left: 50%;
+  z-index: 40;
+  width: min(var(--width-toast), calc(100vw - 2 * var(--space-4)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toastList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toast,
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.toast {
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+  border: 1px solid var(--color-field-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+  pointer-events: auto;
+  transition:
+    opacity var(--motion-slide) ease-out,
+    transform var(--motion-slide) ease-out;
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-2)));
+  }
+}
+
+.toast[data-status='success'] {
+  border-left-color: var(--color-success);
+}
+
+.toast[data-status='warning'] {
+  border-left-color: var(--color-warning);
+}
+
+.toast[data-status='danger'] {
+  border-left-color: var(--color-danger);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  padding-top: 2px;
+  color: var(--color-text-muted);
+}
+
+[data-status='success'] > .icon {
+  color: var(--color-success);
+}
+
+[data-status='warning'] > .icon {
+  color: var(--color-warning);
+}
+
+[data-status='danger'] > .icon {
+  color: var(--color-danger);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-body-weight);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+.word {
+  font-weight: var(--font-label-weight);
+}
+
+.link {
+  color: inherit;
+  font-weight: var(--font-label-weight);
+}
+
+.dismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  margin: calc(-1 * var(--space-2)) 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  background-color: var(--color-hover);
+}
+
+.dismiss svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The bell and its list. */
+.center {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.bell:hover,
+.bell[aria-expanded='true'] {
+  background-color: var(--color-hover);
+}
+
+/* How many wait: a number on the bell, in the solid pair (the text colour and the canvas), never a colour alone. */
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border: 2px solid var(--color-canvas);
+  border-radius: var(--radius-full);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(24rem, calc(100vw - 2 * var(--space-4)));
+  max-height: min(70vh, 32rem);
+  padding: var(--space-4);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--space-touch-target);
+  margin: calc(-1 * var(--space-2)) 0;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+.clear {
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.clear:hover {
+  background-color: var(--color-hover);
+}
+
+.group {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: var(--space-3) 0;
+}
+
+.item + .item {
+  border-top: 1px solid var(--color-border);
+}
+
+.time {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-body-line-height);
+  font-variant-numeric: tabular-nums;
+}
+
+.none {
+  margin: 0;
+  padding: var(--space-4) 0;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* "Mais 7 em Meus Arquivos": under the first few things that wait, the way to the rest. */
+.more {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}

@@ -1,0 +1,173 @@
+import { NamedIcon } from '@/components/Icons';
+import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
+import Link from 'next/link';
+
+import { notFoundFor } from '@/app/not-found';
+import { CampaignAction } from '@/components/CampaignAction';
+import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
+import { Notice } from '@/components/Notice';
+import { PillLink } from '@/components/PillLink';
+import { ScopeControls } from '@/components/ScopeControls';
+import { errorText, translator } from '@/messages';
+import { currentPreferences } from '@/preferences';
+import { AREAS, listConversations } from '@/server/conversations';
+import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
+import { currentSessionToken } from '@/server/session-cookies';
+
+import styles from '../../systems/systems.module.css';
+import { archiveCampaignAction, changeScopeAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
+import { systemLabel } from '../rows';
+
+const TABS = ['overview', 'scope', 'conversations'] as const;
+type Tab = (typeof TABS)[number];
+
+function tabOf(value: unknown): Tab {
+  return TABS.find((tab) => tab === value) ?? 'overview';
+}
+
+/**
+ * A campaign's page (Story 3.2): its name, then "Usar esta campanha" (the one solid pill, when it is in use and not the
+ * current one; the current one says so instead), "Renomear" and "Arquivar" or "Restaurar" (reversible, so with no
+ * confirmation), and three tabs chosen by `?tab=`:
+ * - overview (the default): the name, the system (a link to its page) and "Arquivada" when archived;
+ * - scope (Story 3.6): the scope controls inline, the same as the context bar's popover ({@link ScopeControls}): the
+ *   three tier switches, the materials of each tier that is on with a switch each, and the model-knowledge switch (disabled until
+ *   Story 3.8); a press saves at once. When the scope cannot be read, a notice says why;
+ * - conversations: from Story 3.10 one row per area (Consultas, Criação de Regras) with how many conversations the
+ *   campaign has there and "Abrir", which makes the campaign current and opens that area's list (for an archived
+ *   campaign, which cannot be current, a sentence asks to restore it instead); one sentence when it has none in either.
+ * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
+ * "Não encontrado." page.
+ *
+ * Story 3.2 part B: "Excluir", a danger pill last in the header ({@link CampaignDeleteAction}), for any campaign
+ * (archived, current or the last one), whose confirmation names what goes with the counts the backend gives for this
+ * campaign; without them it names what goes in words.
+ */
+export default async function CampaignPage({
+  params,
+  searchParams,
+}: {
+  readonly params: Promise<{ readonly id: string }>;
+  readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
+}) {
+  const [{ id }, query, { language }, token] = await Promise.all([params, searchParams, currentPreferences(), currentSessionToken()]);
+  const t = translator(language);
+  const tab = tabOf(query.tab);
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const [campaign, current, deletion] = await Promise.all([
+    getCampaign(token ?? '', id),
+    currentCampaign(token ?? ''),
+    campaignDeletion(token ?? '', id),
+  ]);
+  if (!campaign.ok) {
+    notFoundFor(campaign.problem);
+    return <Notice status="danger" language={language} message={errorText(campaign.problem, language)} dismissible={false} />;
+  }
+  const { name, system, archived, version } = campaign.data;
+  const campaignId = campaign.data.id;
+  const isCurrent = current.ok && current.data.id === campaignId;
+  const here = `/campaigns/${encodeURIComponent(campaignId)}`;
+  const [areas, scope] = await Promise.all([
+    tab === 'conversations'
+      ? Promise.all(AREAS.map(async (area) => ({ area, list: await listConversations(token ?? '', campaignId, area, { limit: 1 }) })))
+      : null,
+    tab === 'scope' ? getCampaignScope(token ?? '', campaignId) : null,
+  ]);
+  const refused = areas?.map(({ list }) => list).find((list) => !list.ok);
+  const counted = areas?.map(({ area, list }) => ({ area, total: list.ok ? list.data.total : 0 })) ?? [];
+  return (
+    <>
+      <PageHeader
+        title={name}
+        back={{ href: archived ? '/campaigns?archived=true' : '/campaigns', label: t('shell.entries.campaigns') }}
+        actions={
+          <>
+            {isCurrent || archived ? null : (
+              <CampaignAction label={t('campaigns.page.use')} variant="solid" fields={{ id: campaignId }} action={chooseCampaignAction} />
+            )}
+            <PillLink href={`${here}/edit`}>{t('campaigns.page.rename')}</PillLink>
+            <CampaignAction
+              // Keyed by the campaign alone: the refresh after the action keeps the pill, so a refusal's alert stays shown.
+              key={campaignId}
+              label={t(archived ? 'campaigns.page.restore' : 'campaigns.page.archive')}
+              fields={{ id: campaignId, version: String(version), archived: archived ? 'false' : 'true' }}
+              action={archiveCampaignAction}
+            />
+            <CampaignDeleteAction
+              key={`delete-${campaignId}`}
+              id={campaignId}
+              counts={deletion.ok ? deletion.data : null}
+              language={language}
+              action={deleteCampaignAction}
+            />
+          </>
+        }
+      >
+        {archived ? <PageSubtitle>{t('campaigns.page.archived')}</PageSubtitle> : null}
+        {isCurrent ? (
+          <PageSubtitle>
+            <span className={styles.badge}>
+              <NamedIcon name="check" size={14} />
+              {t('campaigns.page.isCurrent')}
+            </span>
+          </PageSubtitle>
+        ) : null}
+      </PageHeader>
+      <Tabs
+        label={t('campaigns.page.sections')}
+        tabs={TABS.map((key) => ({ key, href: `${here}?tab=${key}`, label: t(`campaigns.page.${key}`), current: key === tab }))}
+      />
+      {tab === 'overview' ? (
+        <dl className={styles.details}>
+          <div className={styles.detail}>
+            <dt>{t('campaigns.page.name')}</dt>
+            <dd>{name}</dd>
+          </div>
+          <div className={styles.detail}>
+            <dt>{t('campaigns.page.system')}</dt>
+            <dd>
+              <Link className={styles.inlineLink} href={`/systems/${encodeURIComponent(system.id)}`}>
+                {systemLabel(system, t)}
+              </Link>
+            </dd>
+          </div>
+          {archived ? (
+            <div className={styles.detail}>
+              <dt>{t('campaigns.page.state')}</dt>
+              <dd>{t('campaigns.page.archived')}</dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+      {scope === null ? null : scope.ok ? (
+        <section className={`${styles.panel} ${styles.scope}`} aria-label={t('shell.scope.panel')}>
+          <p className={styles.description}>{t('campaigns.scope.intro')}</p>
+          <ScopeControls key={campaignId} campaignId={campaignId} scope={scope.data} language={language} action={changeScopeAction} />
+        </section>
+      ) : (
+        <Notice status="danger" language={language} message={errorText(scope.problem, language)} dismissible={false} />
+      )}
+      {areas === null ? null : refused !== undefined && !refused.ok ? (
+        <Notice status="danger" language={language} message={errorText(refused.problem, language)} dismissible={false} />
+      ) : counted.every(({ total }) => total === 0) ? (
+        <EmptyState icon="questions" text={t('campaigns.page.noConversation')} />
+      ) : (
+        <ul className={styles.conversations} aria-label={t('campaigns.page.conversationList')}>
+          {counted.map(({ area, total }) => (
+            <li key={area} className={styles.conversation}>
+              <span className={styles.conversationName}>{t(`shell.entries.${area}`)}</span>
+              <span className={styles.count}>
+                {total === 1 ? t('campaigns.page.conversationsOne') : t('campaigns.page.conversationsOther', { count: total })}
+              </span>
+              {archived ? (
+                <span className={styles.count}>{t('campaigns.page.restoreToOpen')}</span>
+              ) : (
+                <CampaignAction label={t('campaigns.page.open')} fields={{ id: campaignId, area }} action={openConversationAction} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}

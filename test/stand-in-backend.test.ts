@@ -1,6 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ANSWER_DONE, REFERENCE_TEXT_PAGE, answer, exampleOf, loadContract } from '../stand-in-backend/server.mjs';
+import {
+  ANSWER_DONE,
+  BOOK_VERSION,
+  CONVERSATION,
+  CONVERSATION_ID,
+  STORED_TURN,
+  NOTES_VERSION,
+  REFERENCE_TEXT_PAGE,
+  SEARCH_DONE,
+  SEARCH_ID,
+  STARTING_SCOPE,
+  answer,
+  exampleOf,
+  loadContract,
+} from '../stand-in-backend/server.mjs';
 
 import { CONTRACT_PATH, startStandIn, type Running } from './support/servers';
 
@@ -60,6 +74,71 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
   });
 
+  it('answers the campaign paths (Story 3.2): the starter campaign listed, a new one, a change, a choice and its conversation', () => {
+    const system = { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome', edition: null };
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+    expect(answer(contract, 'GET', '/api/v1/campaigns', 't')).toMatchObject({
+      status: 200,
+      body: { items: [{ ...campaign, system, archived: false }] },
+    });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}`, 't')).toMatchObject({
+      status: 200,
+      body: { ...campaign, archived: false, version: 0 },
+    });
+    expect(answer(contract, 'POST', '/api/v1/campaigns', 't')).toMatchObject({
+      status: 201,
+      body: { name: 'Mesa de quinta', system: { id: system.id }, archived: false, version: 0 },
+    });
+    expect(answer(contract, 'PATCH', `/api/v1/campaigns/${campaign.id}`, 't')).toMatchObject({ status: 200, body: { ...campaign, version: 1 } });
+    expect(answer(contract, 'PUT', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: { ...campaign, version: 0 } });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/conversation`, 't')).toMatchObject({
+      status: 200,
+      body: { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+    });
+  });
+
+  it("answers a campaign's scope (Story 3.6): the starting one with materials in every tier, and a change at version 1", () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    const read = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/scope`, 't');
+    expect(read).toMatchObject({ status: 200, body: { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false } });
+    expect(read.body).toBe(STARTING_SCOPE);
+    // In tier order (campaign, system, other), each on, so a test-mode shell shows every tier's materials.
+    expect(STARTING_SCOPE.materials.map((material) => material.tier)).toEqual(['campaign', 'campaign', 'system', 'other']);
+    expect(STARTING_SCOPE.materials.every((material) => material.on)).toBe(true);
+    expect(new Set(STARTING_SCOPE.materials.map((material) => material.id)).size).toBe(STARTING_SCOPE.materials.length);
+    expect(answer(contract, 'PUT', `/api/v1/campaigns/${campaign}/scope`, 't')).toMatchObject({
+      status: 200,
+      body: { ...STARTING_SCOPE, version: 1 },
+    });
+  });
+
+  it('answers the systems paths (Story 3.1): the starter system in the list, its campaign, a new system and an edit', () => {
+    const system = { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome', edition: null, description: null, version: 0 };
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
+    expect(answer(contract, 'GET', '/api/v1/systems', 't')).toMatchObject({ status: 200, body: { items: [system] } });
+    expect(answer(contract, 'GET', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: system });
+    expect(answer(contract, 'GET', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: { ...campaign, system } });
+    expect(answer(contract, 'GET', '/api/v1/campaigns', 't')).toMatchObject({ status: 200, body: { items: [{ ...campaign, archived: false }] } });
+    expect(answer(contract, 'POST', '/api/v1/systems', 't')).toMatchObject({
+      status: 201,
+      body: { name: 'D&D', edition: '5.2.1', version: 0 },
+    });
+    expect(answer(contract, 'PATCH', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 200, body: { ...system, version: 1 } });
+    // Story 3.1 part B: what the starter system's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/systems/${system.id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { campaigns: 1, conversations: 1, materials: 0 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toEqual({ status: 202, type: null, body: null });
+    expect(answer(contract, 'PUT', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
+    // Story 3.2 part B: what the starter campaign's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { conversations: 1, materials: 0 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/campaigns/${campaign.id}`, 't')).toEqual({ status: 202, type: null, body: null });
+  });
+
   it('answers the upload paths (Story 1.13) with their tus headers, and a part with the offset it reaches', async () => {
     const created = answer(contract, 'POST', '/api/v1/uploads', 't');
     expect(created.status).toBe(201);
@@ -90,13 +169,66 @@ describe('stand-in backend', () => {
     });
   });
 
+  it('answers a material with no superseded version, its deletion count, and both deletes with 202 (Story 3.4 part B)', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({ status: 200, body: { superseded: [] } });
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { versions: 1, pages: 444 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/materials/${id}`, 't')).toEqual({ status: 202, type: null, body: null });
+    expect(answer(contract, 'DELETE', `/api/v1/materials/${id}/versions/0190a0b0-0000-7000-8000-00000000000a`, 't')).toEqual({
+      status: 202,
+      type: null,
+      body: null,
+    });
+  });
+
+  it('answers where a material belongs (Story 3.3): the starter campaign, and a change to its system at version 1', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    const campaign = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' } };
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({
+      status: 200,
+      body: { version: 0, size: 134217728, belonging: { campaign, systems: [] } },
+    });
+    expect(answer(contract, 'PATCH', `/api/v1/materials/${id}`, 't')).toMatchObject({
+      status: 200,
+      body: { id, version: 1, belonging: { campaign: null, systems: [{ id: '0190a0b0-0000-7000-8000-000000000001', name: 'Sistema sem nome' }] } },
+    });
+    // Every other action's material carries a version and a place too, as the contract requires.
+    for (const action of ['reprocess', 'retry', 'discard']) {
+      const body = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't').body as { version?: unknown; belonging?: unknown };
+      expect(typeof body.version, action).toBe('number');
+      expect(body.belonging, action).toBeTruthy();
+    }
+  });
+
+  it('answers a reprocess of a ready material (Story 3.4) as a new version waiting while the accepted one serves', () => {
+    const id = '0190a0b0-0000-7000-8000-000000000003';
+    expect(answer(contract, 'POST', `/api/v1/materials/${id}/reprocess`, 't')).toMatchObject({
+      status: 200,
+      body: { id, state: 'waiting', actions: [], serving: { pages: 444, size: 134217728 } },
+    });
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}`, 't')).toMatchObject({ status: 200, body: { serving: null } });
+    // Every material answer carries serving, as the contract requires.
+    for (const [method, path] of [
+      ['POST', 'accept'],
+      ['POST', 'retry'],
+      ['POST', 'discard'],
+      ['PATCH', ''],
+    ] as const) {
+      const body = answer(contract, method, `/api/v1/materials/${id}${path === '' ? '' : `/${path}`}`, 't').body as Record<string, unknown>;
+      expect('serving' in body, `${method} ${path}`).toBe(true);
+    }
+  });
+
   it('answers the report and the actions (Story 1.20): an outline with its warnings, and a material for each action', () => {
     const id = '0190a0b0-0000-7000-8000-000000000003';
     expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({
       status: 200,
       body: { outline: [{ level: 1, title: 'Equipment', page: 92 }, { level: 2 }], unreadable: [{ firstPage: 40, lastPage: 41 }] },
     });
-    expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: [] } });
+    expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: ['reprocess'] } });
     for (const action of ['reprocess', 'retry', 'discard']) {
       const answered = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't');
       expect(answered.status, action).toBe(200);
@@ -158,6 +290,18 @@ describe('stand-in backend', () => {
     for (const reference of ANSWER_DONE.references) {
       expectShape('TurnSourceReference', reference as Record<string, unknown>);
     }
+    // Story 3.7: a tier event opens each version, the campaign's first, and each reference carries its tier.
+    const tierEnum = (schemas.TurnSourceReference!.properties as Record<string, { enum?: string[] }>).tier?.enum;
+    expect(ANSWER_DONE.references.map((reference) => reference.tier)).toEqual(['campaign', 'system']);
+    for (const reference of ANSWER_DONE.references) {
+      expect(tierEnum).toContain(reference.tier);
+    }
+    const tiers = [...text.matchAll(/event:tier\ndata:(.*)\n/g)].map((match) => JSON.parse(match[1]!) as { tier: string; offset: number });
+    expect(tiers.map((tier) => tier.tier)).toEqual(['campaign', 'system']);
+    expect(tiers[0]!.offset).toBe(0);
+    expectShape('TurnTierEvent', tiers[1]! as unknown as Record<string, unknown>);
+    const deltas = [...text.matchAll(/event:delta\ndata:(.*)\n/g)].map((match) => (JSON.parse(match[1]!) as { text: string }).text).join('');
+    expect(Array.from(deltas).slice(tiers[1]!.offset).join('')).toMatch(/^No livro/);
     expect(ANSWER_DONE.silent).toBe(false);
     // Story 2.6: done says whether the GM stopped the answer, and the stop route answers 204.
     expect(ANSWER_DONE.stopped).toBe(false);
@@ -166,17 +310,17 @@ describe('stand-in backend', () => {
     expect(await stopped.text()).toBe('');
   });
 
-  it('answers the reference pages (Story 2.7): reference 1 the picture page its passage is on, reference 2 a text page', async () => {
+  it('answers the reference pages (Story 2.7): reference 2 the picture page its passage is on, reference 1 a text page', async () => {
     const turn = '0190a0b0-0000-7000-8000-000000000021';
-    const [first, second] = ANSWER_DONE.references;
-    const picture = answer(contract, 'GET', `/api/v1/turns/${turn}/references/1/pages/13`, 't');
+    const [textReference, pictureReference] = ANSWER_DONE.references;
+    const picture = answer(contract, 'GET', `/api/v1/turns/${turn}/references/2/pages/13`, 't');
     expect(picture).toMatchObject({ status: 200, type: 'application/json', body: { page: 13, picture: { width: 1545, height: 2000 }, text: null } });
     const pictureBody = picture.body as { passages: { id: string; boxes: number[][] }[] };
-    expect(pictureBody.passages.map((passage) => passage.id)).toEqual(first!.passageIds);
-    const text = answer(contract, 'GET', `/api/v1/turns/${turn}/references/2/pages/2`, 't');
+    expect(pictureBody.passages.map((passage) => passage.id)).toEqual(pictureReference!.passageIds);
+    const text = answer(contract, 'GET', `/api/v1/turns/${turn}/references/1/pages/2`, 't');
     expect(text).toMatchObject({ status: 200, body: { page: 2, picture: null, lines: [] } });
     expect(text.body).toEqual(REFERENCE_TEXT_PAGE);
-    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(second!.passageIds);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(textReference!.passageIds);
     const [start, end] = REFERENCE_TEXT_PAGE.passages[0]!.range;
     expect(Array.from(REFERENCE_TEXT_PAGE.text).slice(start, end).join('')).toBe('Fire Bolt causa 1d10 de dano de fogo.');
     // Both shapes are MaterialPageView's, as the contract says.
@@ -187,9 +331,66 @@ describe('stand-in backend', () => {
       expect(text.body, key).toHaveProperty(key);
     }
     running = await startStandIn();
-    const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/1/pages/13/picture`);
+    const bytes = await fetch(`${running.url}/api/v1/turns/${turn}/references/2/pages/13/picture`);
     expect(bytes.status).toBe(200);
     expect(bytes.headers.get('content-type')).toBe('image/webp');
+  });
+
+  it('answers a search (Story 3.9): recorded with its id, done with a result in the campaign and one in the system, each page opening', async () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    expect(answer(contract, 'POST', `/api/v1/campaigns/${campaign}/searches`, 't')).toMatchObject({ status: 202, body: { id: SEARCH_ID } });
+    const read = answer(contract, 'GET', `/api/v1/searches/${SEARCH_ID}`, 't');
+    expect(read).toMatchObject({ status: 200, body: SEARCH_DONE });
+    expect(SEARCH_DONE.results.map((result) => result.tier)).toEqual(['campaign', 'system']);
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    for (const key of schemas.Search!.required ?? []) {
+      expect(SEARCH_DONE, key).toHaveProperty(key);
+    }
+    for (const key of schemas.SearchResult!.required ?? []) {
+      expect(SEARCH_DONE.results[0], key).toHaveProperty(key);
+    }
+    // A result's page, on the ground of the current scope: the notes' text page, the book's picture page.
+    const notes = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/sources/${NOTES_VERSION}/pages/2`, 't');
+    expect(notes.body).toEqual(REFERENCE_TEXT_PAGE);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual([SEARCH_DONE.results[0]!.passageId]);
+    const book = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/sources/${BOOK_VERSION}/pages/13`, 't');
+    expect(book).toMatchObject({ status: 200, body: { page: 13, picture: { width: 1545, height: 2000 } } });
+    expect((book.body as { passages: { id: string }[] }).passages.map((passage) => passage.id)).toEqual([SEARCH_DONE.results[1]!.passageId]);
+    running = await startStandIn();
+    const bytes = await fetch(`${running.url}/api/v1/campaigns/${campaign}/sources/${BOOK_VERSION}/pages/13/picture`);
+    expect(bytes.status).toBe(200);
+    expect(bytes.headers.get('content-type')).toBe('image/webp');
+  });
+
+  it('answers the conversations by area (Story 3.10): a list, one conversation, its stored turn, a rename and a delete', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const listed = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/conversations`, 't');
+    expect(listed).toMatchObject({ status: 200, body: { total: 1, items: [{ id: CONVERSATION_ID, area: 'questions', questions: 1 }] } });
+    for (const key of schemas.ConversationSummary!.required ?? []) {
+      expect((listed.body as { items: unknown[] }).items[0], key).toHaveProperty(key);
+    }
+    expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toMatchObject({ status: 200, body: CONVERSATION });
+    expect(answer(contract, 'PATCH', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toMatchObject({
+      status: 200,
+      body: { id: CONVERSATION_ID, name: 'Viagem ao norte', version: 1 },
+    });
+    // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
+    expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
+      status: 200,
+      body: { questions: 1 },
+    });
+    expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
+    const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
+    expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN] } });
+    for (const key of schemas.StoredTurn!.required ?? []) {
+      expect(STORED_TURN, key).toHaveProperty(key);
+    }
+    // The stored events are the streamed answer's, by sequence, ending with its done.
+    expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 8, type: 'done', data: ANSWER_DONE });
   });
 
   it('answers any other path with a 404 problem detail', async () => {

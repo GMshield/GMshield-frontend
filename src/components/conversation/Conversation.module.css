@@ -1,8 +1,53 @@
 .conversation {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-6);
+  inline-size: 100%;
+  max-inline-size: var(--width-prose);
   min-block-size: 100%;
+  margin-inline: auto;
+}
+
+/*
+ * A conversation with nothing asked yet (usability pass, 2026-11-21): what the screen is for, in the middle of the
+ * column, above the composer at the bottom.
+ */
+.intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) 0;
+  text-align: center;
+}
+
+.introIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--space-16);
+  block-size: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.introTitle {
+  margin: 0;
+  font-size: var(--font-page-title-size);
+  font-weight: var(--font-page-title-weight);
+  line-height: var(--font-page-title-line-height);
+  letter-spacing: -0.01em;
+}
+
+.introText {
+  max-inline-size: 44ch;
+  margin: 0;
+  color: var(--color-text-muted);
 }
 
 .turns {
@@ -14,16 +59,35 @@
   list-style: none;
 }
 
+.turns:empty {
+  display: none;
+}
+
 .turn {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* A question just asked is brought to the top of the window, with this much room above it. */
+  scroll-margin-top: var(--space-6);
 }
 
+/*
+ * The newest turn of a conversation that already has others is as tall as the window above the composer, so its
+ * question can come to the top and its answer is written in view, never under the docked composer. The first turn
+ * needs no room: it starts at the top of the page.
+ */
+.turn:last-child:not(:first-child) {
+  min-height: calc(100dvh - 9rem);
+}
+
+/* The GM's question heads its turn: heavier than the answer under it, behind a bar, so the two read apart. */
 .question {
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-body-size);
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--color-field-border);
+  color: var(--color-text);
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
   line-height: var(--font-body-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -85,34 +149,64 @@
   inline-size: 100%;
   margin: 0;
   border: 0;
-  border-block-start: 1px solid var(--color-rule);
+  border-block-start: 1px solid var(--color-border);
 }
 
 /* The composer stays at the bottom of the column, above the on-screen keyboard on a phone. */
+/* The composer stays at the bottom of the window, over the canvas, whatever the length of the conversation. */
 .dock {
   position: sticky;
   inset-block-end: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-block-start: auto;
-  padding-block: var(--space-3);
+  gap: var(--space-3);
+  margin-block: auto calc(-1 * var(--space-12));
+  padding-block: var(--space-3) var(--space-5);
   background-color: var(--color-canvas);
 }
 
+@media (width < 768px) {
+  .dock {
+    margin-block-end: calc(-1 * var(--space-8));
+    padding-block-end: var(--space-3);
+  }
+}
+
+/* Over the illustration the dock is glass, as the panels are, wider than the column so its edge is not at the text's. */
+:root[data-theme='illustrated'] .dock {
+  margin-inline: calc(-1 * var(--space-4));
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* What keeps a question from being answered (no accepted source, no campaign): a warning line above the composer. */
 .empty {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-inline-start: 4px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  background-image: linear-gradient(var(--color-warning-soft), var(--color-warning-soft));
   font-size: var(--font-body-size);
   line-height: var(--font-body-line-height);
 }
 
+.empty > span {
+  flex: 1 1 14rem;
+}
+
 .emptyAction {
+  display: inline-flex;
+  align-items: center;
   min-block-size: var(--space-touch-target);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-full);
   background-color: var(--color-control);
@@ -136,7 +230,7 @@
   flex: 1;
   min-block-size: var(--space-12);
   max-block-size: calc(6lh + 2 * var(--space-3));
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-field-border);
   border-radius: calc(var(--space-12) / 2);
   background-color: var(--color-field);
@@ -154,6 +248,7 @@
 }
 
 /* A 48px outlined circle with an arrow. */
+/* Send, and Stop while an answer is written: the screen's main action, filled with the text colour. */
 .send {
   display: inline-flex;
   flex: none;
@@ -162,11 +257,20 @@
   inline-size: var(--space-12);
   block-size: var(--space-12);
   padding: 0;
-  border: 1px solid var(--color-control-border);
+  border: 1px solid var(--color-solid);
   border-radius: var(--radius-full);
-  background-color: var(--color-control);
-  color: var(--color-text);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
   cursor: pointer;
+  transition: opacity var(--motion-fade) ease-out;
+}
+
+.send:hover:not(:disabled) {
+  opacity: 0.86;
+}
+
+.field:hover:not(:disabled) {
+  border-color: var(--color-text);
 }
 
 .visuallyHidden {
@@ -196,11 +300,56 @@
   margin-inline-start: 0.1em;
 }
 
+/* Story 3.7: a tier pill (TierLabel) opening a tier's version of the answer, before its first word. */
+.tierInAnswer {
+  margin-inline-end: var(--space-2);
+}
+
+/*
+ * Story 3.8: the line that closes the model's own knowledge, where a superscript would be: muted, in label type, like
+ * the pill that opened it, and never a control.
+ */
+.answer .modelEnd {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/*
+ * Story 3.8: under a silent answer with model knowledge off, a muted line offering the scope, and its button, which
+ * reads as a link (underlined, the text colour, 24px high at least) and opens the context bar's scope popover.
+ */
+.offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+.offerAction {
+  min-block-size: var(--space-touch-target);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-label-weight);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* The numbered references under a finished answer, above the closing rule, in label type. */
 .references {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 0;
   margin: 0;
   padding-inline-start: var(--space-6);
   color: var(--color-text-muted);
@@ -218,7 +367,7 @@
 /* Story 2.7: a reference's line is a button that opens its page; it reads as the line, underlined, 24px high at least. */
 .reference {
   display: inline-block;
-  min-block-size: var(--space-6);
+  min-block-size: var(--space-touch-target);
   margin: 0;
   padding: 0;
   border: 0;
@@ -229,6 +378,11 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+/* Story 3.7: a reference's tier pill, before its line. */
+.referenceTier {
+  margin-inline-end: var(--space-2);
 }
 
 /* A removed source: struck through, then "fonte removida". */
@@ -272,7 +426,7 @@
 
 .retry {
   min-block-size: var(--space-touch-target);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-full);
   background-color: var(--color-control);
@@ -287,4 +441,172 @@
 .retry:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* Story 3.2: with no campaign the composer is disabled, and looks it. */
+.field:disabled,
+.send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/*
+ * Story 3.10: the slim line at the top of a conversation: the way back to its area's list, its name and "Renomear".
+ * It takes one line on a wide screen; on a narrow one the name wraps under the way back.
+ */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-inline-size: 0;
+}
+
+.back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--space-touch-target);
+  margin-inline-start: calc(-1 * var(--space-2));
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-decoration: none;
+}
+
+.back:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+.name {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Story 3.10: the three example questions of a new conversation, each a button that fills the composer. */
+.examples {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.example {
+  min-block-size: var(--space-touch-target);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-align: center;
+  cursor: pointer;
+}
+
+.example:hover {
+  border-color: var(--color-text);
+}
+
+/*
+ * Story 3.11: an answer's actions, right-aligned under its rule (Story 3.12: the bookmark, then dismiss). Each is a
+ * 28px circle filled with the text colour, in a 44px hit area that reaches past the row so the circle's edge meets the
+ * rule's end and the row stays as tall as the circle.
+ */
+.actions {
+  --answer-action-size: calc(var(--space-6) + var(--space-1));
+  --answer-action-overhang: calc((var(--answer-action-size) - var(--space-touch-target)) / 2);
+
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: calc(-1 * var(--space-1));
+}
+
+.action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--space-touch-target);
+  block-size: var(--space-touch-target);
+  margin-block: var(--answer-action-overhang);
+  margin-inline-end: var(--answer-action-overhang);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-on-solid);
+  cursor: pointer;
+}
+
+.actionCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: var(--answer-action-size);
+  block-size: var(--answer-action-size);
+  /* Story 3.12: the edge a set bookmark keeps when its fill goes; the fill's own colour otherwise. */
+  border: 2px solid var(--color-solid);
+  border-radius: var(--radius-full);
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+  transition: opacity var(--motion-fade) ease-out;
+}
+
+.action:hover .actionCircle {
+  opacity: 0.86;
+}
+
+/*
+ * Story 3.12: a saved answer's bookmark inverts: an outlined circle (the text colour) on the page, with the bookmark
+ * filled in the text colour. Its spoken name and aria-pressed say the same.
+ */
+.action[data-set='true'] .actionCircle {
+  border-color: var(--color-text);
+  background-color: transparent;
+  color: var(--color-text);
+}
+
+.action[data-set='true']:hover .actionCircle {
+  opacity: 1;
+  background-color: var(--color-hover);
+}
+
+/* Story 3.11: a dismissed turn's place while its undo lasts: "Resposta dispensada." and "Desfazer", muted. */
+.dismissedTurn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  scroll-margin-top: var(--space-6);
+}
+
+.dismissedLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
 }

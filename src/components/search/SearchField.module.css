@@ -1,0 +1,118 @@
+/*
+ * Story 3.9: the context bar's search field, a bordered box with a search icon and the "/" key it answers to, between
+ * where the GM is and the bell. Under 768px, or in a bar narrower than 560px, it gives way to a search button that opens
+ * the search page.
+ */
+.form {
+  position: relative;
+  display: flex;
+  flex: 0 1 18rem;
+  align-items: center;
+  min-width: 10rem;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--space-touch-target);
+  padding: 0 calc(var(--space-4) + var(--space-5)) 0 calc(var(--space-4) + var(--space-5));
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-label-size);
+  transition: border-color var(--motion-fade) ease-out;
+}
+
+.input:hover {
+  border-color: var(--color-text);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+/* The browser's own clear control would cover the key hint; Esc clears the field. */
+.input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.icon,
+.key {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.icon {
+  left: var(--space-3);
+}
+
+.key {
+  right: var(--space-3);
+  justify-content: center;
+  min-width: var(--space-5);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-meta-size);
+  line-height: var(--font-meta-line-height);
+}
+
+/* Typing hides the key hint: it is said once, before the GM starts. */
+.input:not(:placeholder-shown) + .key {
+  display: none;
+}
+
+.hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The phone's search button: a round control the size of a touch target, in the bar's text colour. */
+.open {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+}
+
+.open:hover {
+  background-color: var(--color-hover);
+}
+
+@media (max-width: 767px) {
+  .form {
+    display: none;
+  }
+
+  .open {
+    display: inline-flex;
+  }
+}
+
+/*
+ * A narrow bar at any window width (the main column beside an open source view): the trail keeps its room, and the field
+ * gives way to the search button as on a phone.
+ */
+@container bar (max-width: 560px) {
+  .form {
+    display: none;
+  }
+
+  .open {
+    display: inline-flex;
+  }
+}

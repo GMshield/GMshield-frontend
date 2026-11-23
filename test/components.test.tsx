@@ -5,6 +5,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 type SetCall = { name: string; value: string; options: Record<string, unknown> };
 const setCalls: SetCall[] = [];
+// A list asks for the router (it starts again from the first page when the rows a page change); here there is none.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ refresh: () => undefined, push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
+}));
 vi.mock('next/headers', () => ({
   headers: async () => new Headers(),
   cookies: async () => ({
@@ -19,7 +24,13 @@ const { Notice } = await import('@/components/Notice');
 const { PreferencesForm } = await import('@/components/PreferencesForm');
 const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
+const { SystemActions } = await import('@/components/SystemActions');
+const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
+const { ConversationDeleteAction } = await import('@/components/conversation/ConversationDeleteAction');
+const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
+const { SupersededVersions } = await import('@/components/SupersededVersions');
 const { References } = await import('@/components/conversation/References');
+const { TierLabel, tierWord } = await import('@/components/TierLabel');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
 
@@ -268,32 +279,49 @@ describe('Notice', () => {
 });
 
 describe('PreferencesForm', () => {
-  it('has two labelled radio groups with the current choice, and an "Aplicar" pill', () => {
+  // Usability pass (2026-11-21): segmented controls of submit buttons; a press applies that one choice at once.
+  it('has two labelled groups of buttons, the current choice pressed, and no "Aplicar" step', () => {
     const { container } = render(<PreferencesForm theme="dark" language="pt-BR" />);
     const theme = screen.getByRole('group', { name: 'Tema' });
     const language = screen.getByRole('group', { name: 'Idioma' });
-    expect(within(theme).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).value)).toEqual(['illustrated', 'dark', 'light']);
-    expect(within(theme).getByRole('radio', { name: 'Escuro' })).toHaveProperty('checked', true);
-    expect(within(language).getByRole('radio', { name: 'Português (Brasil)' })).toHaveProperty('checked', true);
-    expect(within(language).getByRole('radio', { name: 'English' })).toHaveProperty('checked', false);
-    expect(screen.getByRole('button', { name: 'Aplicar' })).toHaveProperty('type', 'submit');
+    const themes = within(theme).getAllByRole('button') as HTMLButtonElement[];
+    expect(themes.map((button) => [button.name, button.value, button.type])).toEqual([
+      ['theme', 'illustrated', 'submit'],
+      ['theme', 'dark', 'submit'],
+      ['theme', 'light', 'submit'],
+    ]);
+    expect(themes.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    // Each theme has an icon beside its name; the name alone names the button.
+    expect(themes.every((button) => button.querySelector('svg[aria-hidden="true"]') !== null)).toBe(true);
+    expect(within(language).getByRole('button', { name: 'Português (Brasil)' }).getAttribute('aria-pressed')).toBe('true');
+    const english = within(language).getByRole('button', { name: 'English' }) as HTMLButtonElement;
+    expect([english.name, english.value, english.getAttribute('aria-pressed'), english.lang]).toEqual(['language', 'en', 'false', 'en']);
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aplicar' })).toBeNull();
+    expect(screen.getByRole('form', { name: 'Preferências' }).dataset.layout).toBe('stack');
     expectNoStyleAttribute(container);
   });
 
   it('labels everything in English', () => {
     render(<PreferencesForm theme="illustrated" language="en" />);
     expect(screen.getByRole('form', { name: 'Preferences' })).toBeTruthy();
-    expect(within(screen.getByRole('group', { name: 'Theme' })).getByRole('radio', { name: 'Illustrated' })).toHaveProperty('checked', true);
+    expect(within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', { name: 'Illustrated' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('group', { name: 'Language' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeTruthy();
+    cleanup();
+    // At the top of the sign-in screen: the same groups, side by side.
+    render(<PreferencesForm theme="illustrated" language="en" layout="inline" />);
+    expect(screen.getByRole('form', { name: 'Preferences' }).dataset.layout).toBe('inline');
+    expect(screen.getByRole('group', { name: 'Theme' })).toBeTruthy();
   });
 
-  it('submits the choice to the Server Action, which sets both cookies', async () => {
+  it('a press posts that one choice to the Server Action, which sets its cookie and leaves the other alone', async () => {
     const user = userEvent.setup();
+    setCalls.length = 0;
     render(<PreferencesForm theme="illustrated" language="pt-BR" />);
-    await user.click(screen.getByRole('radio', { name: 'Claro' }));
-    await user.click(screen.getByRole('radio', { name: 'English' }));
-    await user.click(screen.getByRole('button', { name: 'Aplicar' }));
+    await user.click(screen.getByRole('button', { name: 'Claro' }));
+    await vi.waitFor(() => expect(setCalls).toHaveLength(1));
+    expect(setCalls.map(({ name, value }) => [name, value])).toEqual([['__Host-gmshield-theme', 'light']]);
+    await user.click(screen.getByRole('button', { name: 'English' }));
     await vi.waitFor(() => expect(setCalls).toHaveLength(2));
     expect(setCalls.map(({ name, value }) => [name, value])).toEqual([
       ['__Host-gmshield-theme', 'light'],
@@ -527,7 +555,7 @@ describe('MaterialActions (Story 1.20)', () => {
     expect(pills.map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
       'Aceitar:solid',
       'Reprocessar páginas com falha:default',
-      'Descartar:default',
+      'Descartar:danger',
     ]);
     // From the keyboard: Tab to Aceitar, Enter posts it.
     await user.tab();
@@ -540,10 +568,33 @@ describe('MaterialActions (Story 1.20)', () => {
     rerender(<MaterialActions id={ID} name="Livro.pdf" actions={['retry', 'discard']} pages={undefined} language="en" action={action} />);
     expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual([
       'Try again:solid',
-      'Discard:default',
+      'Discard:danger',
     ]);
     rerender(<MaterialActions id={ID} name="Livro.pdf" actions={[]} pages={444} language="en" action={action} />);
     expect(container.querySelector('form')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('a ready material shows "Substituir" and "Reprocessar", two plain pills; Reprocessar posts at once, with no confirmation (Story 3.4)', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container, rerender } = render(
+      <MaterialActions id={ID} name="Livro.pdf" actions={['reprocess']} pages={444} ready language="pt-BR" action={action} />,
+    );
+    const pills = within(container.querySelector('form')!).getAllByRole('button');
+    expect(pills.map((pill) => `${pill.textContent}:${pill.dataset.variant}`)).toEqual(['Substituir:default', 'Reprocessar:default']);
+    expect(pills[0]!.getAttribute('aria-haspopup')).toBe('dialog');
+    // Outside the shell there is no guided upload to open: nothing is posted.
+    await user.click(pills[0]!);
+    expect(posted).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Reprocessar' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, action: 'reprocess' }]));
+    expect(container.querySelector('dialog')).toBeNull();
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={['reprocess']} pages={444} ready language="en" action={action} />);
+    expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => pill.textContent)).toEqual(['Replace', 'Reprocess']);
+    // A ready material whose backend offers no action still offers its replacement.
+    rerender(<MaterialActions id={ID} name="Livro.pdf" actions={[]} pages={444} ready language="pt-BR" action={action} />);
+    expect(within(container.querySelector('form')!).getAllByRole('button').map((pill) => pill.textContent)).toEqual(['Substituir']);
     expectNoStyleAttribute(container);
   });
 
@@ -597,6 +648,446 @@ describe('MaterialActions (Story 1.20)', () => {
   });
 });
 
+describe('SystemActions (Story 3.1 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000030';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the counts; Cancelar or Esc closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(
+      <SystemActions id={ID} counts={{ campaigns: 2, conversations: 3, materials: 1 }} language="pt-BR" action={action} />,
+    );
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog.
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir este sistema?' });
+    expect(dialog.textContent).toContain(
+      'Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, none, and what goes in words when the counts are missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(
+      <SystemActions id={ID} counts={{ campaigns: 1, conversations: 1, materials: 1 }} language="pt-BR" action={action} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 campanha, 1 conversa e 1 material ligado só a ele.');
+    await user.keyboard('{Escape}');
+    rerender(<SystemActions id={ID} counts={{ campaigns: 0, conversations: 0, materials: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this system?' });
+    expect(dialog.textContent).toContain(
+      'Going with it: 0 campaigns, 0 conversations and 0 materials linked only to it. This cannot be undone.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Delete system' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<SystemActions id={ID} counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele.',
+    );
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<SystemActions id={ID} counts={{ campaigns: 1, conversations: 0, materials: 0 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('CampaignDeleteAction (Story 3.2 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000040';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the counts; Cancelar or Esc closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 3, materials: 2 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog.
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta campanha?' });
+    expect(dialog.textContent).toContain('Vão junto: 3 conversas e 2 materiais desta campanha. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, none, and what goes in words when the counts are missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 1 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 conversa e 1 material desta campanha.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 0, materials: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this campaign?' });
+    expect(dialog.textContent).toContain('Going with it: 0 conversations and 0 materials of this campaign. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete campaign' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 4 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 conversation and 4 materials of this campaign.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<CampaignDeleteAction id={ID} counts={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this campaign's conversations and materials. This cannot be undone.");
+  });
+
+  it('"Excluir" ignores clicks while the delete runs, and takes them again once it ends', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: null }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(true);
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('ConversationDeleteAction (Story 3.10 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000020';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the count, focus on Cancelar; "Excluir conversa" posts the conversation', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ConversationDeleteAction id={ID} questions={3} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    await user.tab();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    expect(dialog.textContent).toContain('Vão junto: 3 perguntas e suas respostas. Isso não pode ser desfeito.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one question, none, and what goes in words when no count was read, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<ConversationDeleteAction id={ID} questions={1} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vai junto: 1 pergunta e sua resposta. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={0} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this conversation?' });
+    expect(dialog.textContent).toContain('Going with it: 0 questions and their answers. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete conversation' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={1} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 question and its answer. This cannot be undone.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this conversation's questions and their answers. This cannot be undone.");
+  });
+
+  it('"Excluir" ignores clicks while the delete runs; a refusal shows as an alert under it, with focus back on it', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<ConversationDeleteAction id={ID} questions={2} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: 'Não encontrado.' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe('MaterialDeleteAction (Story 3.4 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000003';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('Excluir is a danger pill that opens the confirmation with the name and the counts; "Excluir arquivo" posts the material', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 2, pages: 640 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Livro.pdf»?' });
+    expect(dialog.textContent).toContain(
+      'Vão junto: 2 versões e 640 páginas lidas, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir arquivo' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('names one of each, the versions alone when no page was read, and what goes in words without counts, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 1 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 versão e 1 página lida, com as imagens e o texto extraído.');
+    await user.keyboard('{Escape}');
+    // No page was read: its versions alone, with the uploaded file.
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 0 }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto: 1 versão, com o arquivo enviado e tudo o que foi lido dele. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    expect(screen.getByRole('dialog').textContent).not.toContain('0 páginas');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 3, pages: 0 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete «Livro.pdf»?' });
+    expect(dialog.textContent).toContain('Going with it: 3 versions, with the uploaded file and everything read from it.');
+    expect(within(dialog).getByRole('button', { name: 'Delete file' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto todas as versões deste arquivo e as páginas lidas delas,');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: every version of this file and the pages read from them,');
+    await user.keyboard('{Escape}');
+    rerender(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 2, pages: 1 }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 2 versions and 1 page read, with their pictures and extracted text.');
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Não encontrado.' });
+    render(<MaterialDeleteAction id={ID} name="Livro.pdf" counts={{ versions: 1, pages: 3 }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir arquivo' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe('SupersededVersions (Story 3.4 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000003';
+  const NEWER = { id: '0190a0b0-0000-7000-8000-00000000000b', createdAt: '2026-11-15T14:00:00Z', pages: 320, size: 134217728 };
+  const OLDER = { id: '0190a0b0-0000-7000-8000-00000000000a', createdAt: '2026-11-10T14:00:00Z', pages: 1, size: null };
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+
+  it('is not shown when no version was superseded', () => {
+    const { container } = render(<SupersededVersions materialId={ID} versions={[]} language="pt-BR" action={recorder().action} />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('lists each version with its day, pages and size, and "Remover" opens one confirmation that posts that version', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<SupersededVersions materialId={ID} versions={[NEWER, OLDER]} language="pt-BR" action={action} />);
+    expect(screen.getByRole('heading', { name: 'Versões anteriores' })).toBeTruthy();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'Enviada em 15 de nov. de 2026 · 320 páginas · 134,2 MB',
+      'Enviada em 10 de nov. de 2026 · 1 página',
+    ]);
+    const removes = screen.getAllByRole('button', { name: /^Remover/ });
+    expect(removes).toHaveLength(2);
+    expect(removes.map((button) => button.textContent)).toEqual(['Remover', 'Remover']);
+    expect(removes[0]!.dataset.variant).toBe('danger');
+    expect(removes[1]!.getAttribute('aria-label')).toBe('Remover a versão enviada em 10 de nov. de 2026');
+    // One dialog for every row: dialogs never stack.
+    expect(container.querySelectorAll('dialog')).toHaveLength(1);
+
+    await user.click(removes[0]!);
+    const dialog = screen.getByRole('dialog', { name: 'Remover esta versão?' });
+    expect(dialog.textContent).toContain(
+      'Saem as 320 páginas lidas desta versão, com as imagens e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(removes[0]);
+    expect(posted).toEqual([]);
+
+    await user.click(removes[1]!);
+    expect(screen.getByRole('dialog').textContent).toContain('Sai a página lida desta versão,');
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Remover versão' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, versionId: OLDER.id }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('says the version goes in words when its pages are not known, in English too, and shows a refusal as an alert', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'Only a previous version can be removed. The page has been updated.' });
+    render(<SupersededVersions materialId={ID} versions={[{ ...OLDER, pages: null, size: 2048 }]} language="en" action={action} />);
+    expect(screen.getByRole('heading', { name: 'Previous versions' })).toBeTruthy();
+    expect(screen.getByRole('listitem').querySelector('span')?.textContent).toBe('Uploaded on Nov 10, 2026 · 2 KB');
+    const remove = screen.getByRole('button', { name: 'Remove the version uploaded on Nov 10, 2026' });
+    await user.click(remove);
+    const dialog = screen.getByRole('dialog', { name: 'Remove this version?' });
+    expect(dialog.textContent).toContain('This version goes, with everything read from it.');
+    await user.click(within(dialog).getByRole('button', { name: 'Remove version' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Only a previous version can be removed. The page has been updated.');
+    expect(document.activeElement).toBe(remove);
+  });
+});
+
 describe('HTML in a material name or section path is text (Story 2.8)', () => {
   const NAME = '<img src="https://example.invalid/x.png" onerror="alert(1)">.pdf';
   const SECTION = '<script>alert(1)</script>';
@@ -635,5 +1126,156 @@ describe('HTML in a material name or section path is text (Story 2.8)', () => {
     expect(screen.getByRole('dialog', { name: LINE })).toBeTruthy();
     expect(await screen.findByRole('alert')).toBeTruthy();
     expectNoElementFromText(container);
+  });
+});
+
+describe('ItemList (Story 3.1)', () => {
+  const row = (id: string, label: string, href: string | null = null) => ({ id, label, detail: null, href, state: null });
+
+  it('shows the rows, each opening its page when it has one; without paging it is a plain list', async () => {
+    const { ItemList } = await import('@/components/ItemList');
+    const { container } = render(
+      <ItemList label="Seus sistemas" rows={[{ ...row('a', 'D&D', '/systems/a'), detail: '5.2.1' }, row('b', 'Segundo', '/systems/b'), row('c', 'Terceiro')]} />,
+    );
+    const list = screen.getByRole('list', { name: 'Seus sistemas' });
+    expect(within(list).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/systems/a', '/systems/b']);
+    expect(within(list).getAllByRole('link')[0]!.textContent).toBe('D&D5.2.1');
+    // A row without a page opens nothing.
+    expect(screen.getByText('Terceiro').closest('a')).toBeNull();
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    // No pager, no display menu, and nothing that adds rows: the rows are what the server gave.
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('a paged list names the rows shown and links to the other pages, with no style attribute', async () => {
+    const { ItemList } = await import('@/components/ItemList');
+    const { DEFAULT_VIEW } = await import('@/view-cookie');
+    const { container } = render(
+      <ItemList
+        label="Lista"
+        rows={[row('a', 'D&D', '/systems/a')]}
+        pages={{ paging: { page: 2, pages: 3, total: 21, from: 11, to: 20 }, path: '/systems' }}
+        viewKey="systems"
+        view={DEFAULT_VIEW}
+        language="en"
+      />,
+    );
+    const pager = screen.getByRole('navigation', { name: 'Pagination' });
+    expect(within(pager).getAllByRole('link').map((link) => `${link.textContent}:${link.getAttribute('href')}`)).toEqual([
+      'Previous:/systems',
+      '1:/systems',
+      '2:/systems?page=2',
+      '3:/systems?page=3',
+      'Next:/systems?page=3',
+    ]);
+    expect(screen.getAllByText('11–20 of 21')).toHaveLength(2);
+    expectNoStyleAttribute(container);
+  });
+});
+
+type SystemFormState = import('@/app/(signed-in)/systems/form-state').SystemFormState;
+
+describe('SystemForm (Story 3.1)', () => {
+  const labels = { name: 'Nome', edition: 'Edição (opcional)', description: 'Descrição (opcional)', submit: 'Salvar', cancel: 'Cancelar' };
+  const start = { values: { name: 'D&D', edition: '5.2.1', description: '' }, version: 3, error: null, field: null, stale: false };
+
+  it('labels its fields, marks the name required, has one solid pill and "Cancelar", and posts the id and version', async () => {
+    const { SystemForm } = await import('@/components/SystemForm');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: SystemFormState, form: FormData) => Promise<SystemFormState>>(async () => start);
+    const { container } = render(<SystemForm labels={labels} initial={start} id="s1" cancelHref="/systems/s1" action={action} />);
+    expect(screen.getByLabelText('Nome').getAttribute('aria-required')).toBe('true');
+    expect(screen.getByLabelText('Edição (opcional)').getAttribute('aria-required')).toBeNull();
+    expect(screen.getByLabelText('Descrição (opcional)').tagName).toBe('TEXTAREA');
+    // No maxLength: the backend counts code points after trimming, and its field problem decides.
+    expect(container.querySelectorAll('[maxlength]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Salvar' }).dataset.variant).toBe('solid');
+    expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/systems/s1');
+    expect(container.querySelectorAll('[data-variant="solid"]')).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const sent = action.mock.calls[0]![1];
+    expect(sent.get('id')).toBe('s1');
+    expect(sent.get('version')).toBe('3');
+    expect(sent.get('name')).toBe('D&D');
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a refusal under its field and keeps what was typed; a stale edit says so and shows the current values', async () => {
+    const { SystemForm } = await import('@/components/SystemForm');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ ...start, values: { ...start.values, name: 'd&d', edition: '2024' }, error: 'Você já tem um sistema com este nome e esta edição.', field: 'name' })
+      .mockResolvedValueOnce({ values: { name: 'D&D (casa)', edition: '', description: 'Novo.' }, version: 5, error: 'Este sistema foi alterado em outro lugar.', field: null, stale: true })
+      .mockResolvedValueOnce({ values: { name: 'D&D (casa)', edition: '', description: 'Novo.' }, version: 5, error: null, field: null, stale: false });
+    render(<SystemForm labels={labels} initial={start} id="s1" cancelHref="/systems/s1" action={action} />);
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    await user.clear(name);
+    await user.type(name, 'd&d');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Você já tem um sistema com este nome e esta edição.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe(alert.id);
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('d&d');
+    expect(screen.getByLabelText('Edição (opcional)').getAttribute('aria-invalid')).toBe('false');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const stale = await screen.findByText('Este sistema foi alterado em outro lugar.');
+    expect(stale.getAttribute('role')).toBe('alert');
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('D&D (casa)');
+    expect((screen.getByLabelText('Edição (opcional)') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Descrição (opcional)') as HTMLTextAreaElement).value).toBe('Novo.');
+    expect(screen.getByLabelText('Nome').getAttribute('aria-invalid')).toBe('false');
+    // The next save names the current version.
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
+  });
+});
+
+describe('TierLabel (Story 3.7)', () => {
+  afterEach(cleanup);
+
+  it('is an outlined pill with the tier\'s word, never focusable and with no role of its own', () => {
+    const pt = translator('pt-BR');
+    const en = translator('en');
+    const { container } = render(
+      <p>
+        <TierLabel tier="campaign" t={pt} />
+        <TierLabel tier="system" t={pt} />
+        <TierLabel tier="other" t={pt} />
+        <TierLabel tier="campaign" t={en} className="extra" />
+      </p>,
+    );
+    const pills = Array.from(container.querySelectorAll<HTMLElement>('span[data-tier]'));
+    expect(pills.map((pill) => pill.textContent)).toEqual(['Campanha', 'Sistema', 'Outros', 'Campaign']);
+    expect(pills.map((pill) => pill.dataset.tier)).toEqual(['campaign', 'system', 'other', 'campaign']);
+    for (const pill of pills) {
+      expect(pill.className).toMatch(/pill/);
+      expect(pill.getAttribute('role')).toBeNull();
+      expect(pill.getAttribute('tabindex')).toBeNull();
+      expect(pill.getAttribute('aria-hidden')).toBeNull();
+    }
+    expect(pills[3]!.className).toMatch(/extra/);
+    // Each word is followed by a visually hidden ": ", so a reader never runs it into what follows.
+    expect(pills.map((pill) => pill.nextElementSibling?.textContent)).toEqual([': ', ': ', ': ', ': ']);
+    expect(pills.every((pill) => /separator/u.test(pill.nextElementSibling?.className ?? ''))).toBe(true);
+    expect(container.textContent).toBe('Campanha: Sistema: Outros: Campaign: ');
+    // The words are the scope's own ("shell.scope.*"), so a tier reads the same everywhere.
+    expect(tierWord('other', en)).toBe(en('shell.scope.other'));
+  });
+
+  it('is drawn on a reference line before its button, and not at all for a reference without a tier', () => {
+    const t = translator('pt-BR');
+    const base = { materialName: 'Livro.pdf', sectionPath: [], page: 3, passageIds: ['p'], removed: false };
+    render(<References references={[{ ...base, number: 1, tier: 'system' }, { ...base, number: 2 }]} t={t} onOpen={() => undefined} />);
+    const items = screen.getAllByRole('listitem');
+    expect(items[0]!.firstElementChild?.textContent).toBe('Sistema');
+    expect(items[0]!.querySelector('[data-tier] + span + button')).not.toBeNull();
+    expect(items[1]!.querySelector('[data-tier]')).toBeNull();
   });
 });

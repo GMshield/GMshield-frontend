@@ -22,6 +22,8 @@ const LANGUAGES = new Set(['pt-BR', 'en', 'detect']);
 const MAX_IMAGES = 500;
 const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_NAME = 255;
+/** Story 3.3: the most systems a material may belong to. */
+const MAX_SYSTEMS = 100;
 
 const INVALID = { ok: false, problem: { status: 400, category: 'request', code: 'request.invalid', params: {} } } as const;
 const SESSION_REQUIRED = { ok: false, problem: { status: 401, category: 'session', code: 'session.required', params: {} } } as const;
@@ -38,6 +40,11 @@ function isImage(value: unknown): value is SetImage {
   return isName(name) && Number.isSafeInteger(length) && (length as number) >= 1 && (length as number) <= MAX_BYTES;
 }
 
+/** Story 3.3: one to 100 system ids. */
+function isSystems(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= MAX_SYSTEMS && value.every((id) => typeof id === 'string' && ID.test(id));
+}
+
 function isPosition(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= MAX_IMAGES;
 }
@@ -50,38 +57,43 @@ function failed(status: number, problem: unknown): SetCallResult<never> {
   };
 }
 
-/** The set's creation: its name, the answers of the dialog and its images in their confirmed order. */
+/**
+ * The set's creation: its name, the answers of the dialog and its images in their confirmed order. From Story 3.4, for a
+ * new version of a material, its name, the material and the images, with no answer: the material keeps its own kind,
+ * language and place, and the backend refuses any of them beside it.
+ */
 export async function createImageSetAction(request: ImageSetCreate): Promise<SetCallResult<{ id: string; materialId: string; images: { position: number; uploadId: string }[] }>> {
   if (typeof request !== 'object' || request === null) {
     return INVALID;
   }
-  const { name, kind, language, campaign, system, images } = request as Partial<ImageSetCreate>;
-  if (
-    !isName(name) ||
-    !KINDS.has(String(kind)) ||
-    !LANGUAGES.has(String(language)) ||
-    (campaign !== undefined && (typeof campaign !== 'string' || !ID.test(campaign))) ||
-    (system !== undefined && (typeof system !== 'string' || !ID.test(system))) ||
-    (campaign !== undefined && system !== undefined) ||
-    !Array.isArray(images) ||
-    images.length === 0 ||
-    images.length > MAX_IMAGES ||
-    !images.every(isImage)
-  ) {
+  const { name, kind, language, campaign, systems, material, images } = request as Partial<Record<keyof ImageSetCreate, unknown>>;
+  const imagesValid = Array.isArray(images) && images.length > 0 && images.length <= MAX_IMAGES && images.every(isImage);
+  const replacing = material !== undefined;
+  const detailsValid = replacing
+    ? typeof material === 'string' && ID.test(material) && kind === undefined && language === undefined && campaign === undefined && systems === undefined
+    : KINDS.has(String(kind)) &&
+      LANGUAGES.has(String(language)) &&
+      (campaign === undefined || (typeof campaign === 'string' && ID.test(campaign))) &&
+      (systems === undefined || isSystems(systems)) &&
+      (campaign === undefined || systems === undefined);
+  if (!isName(name) || !detailsValid || !imagesValid) {
     return INVALID;
   }
   const token = await currentSessionToken();
   if (token === null) {
     return SESSION_REQUIRED;
   }
-  const body: ImageSetRequest = {
-    name,
-    kind: kind as ImageSetRequest['kind'],
-    language: language as ImageSetRequest['language'],
-    images: images.map((image) => ({ name: image.name, length: image.length })),
-    ...(campaign === undefined ? {} : { campaign }),
-    ...(system === undefined ? {} : { system }),
-  };
+  const chosen = (images as readonly SetImage[]).map((image) => ({ name: image.name, length: image.length }));
+  const body: ImageSetRequest = replacing
+    ? { name, material: material as string, images: chosen }
+    : {
+        name,
+        kind: kind as ImageSetRequest['kind'],
+        language: language as ImageSetRequest['language'],
+        images: chosen,
+        ...(campaign === undefined ? {} : { campaign: campaign as string }),
+        ...(systems === undefined ? {} : { systems: [...(systems as readonly string[])] }),
+      };
   const result = await createImageSet(token, body);
   if (!result.ok) {
     return failed(result.status, result.problem);

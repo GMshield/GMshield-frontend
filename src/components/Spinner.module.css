@@ -1,0 +1,33 @@
+/* A ring in the current text colour with a gap, turning once a second; still under "reduce motion". */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-full);
+  animation: turn 800ms linear infinite;
+}
+
+.spinner[data-size='14'] {
+  width: 14px;
+  height: 14px;
+}
+
+.spinner[data-size='18'] {
+  width: 18px;
+  height: 18px;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

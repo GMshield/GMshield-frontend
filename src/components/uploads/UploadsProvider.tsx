@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { defaultOptions, type UrlStorage } from 'tus-js-client';
 
 import { startUpload, UPLOADS_ENDPOINT, type UploadFile, type UploadHandle } from '@/client/upload';
+import { translator } from '@/messages';
 
 import {
   fill,
@@ -18,6 +19,8 @@ import {
   type SetProblem,
   type UploadTexts,
 } from './types';
+import { useNotifications } from '../notifications/NotificationsProvider';
+
 import styles from './Uploads.module.css';
 
 /** How long an unfinished upload lives on the server: a stored resume entry older than this is gone. */
@@ -51,6 +54,15 @@ export type LiveSet = { readonly key: string; readonly name: string; readonly id
 /** An image of a set the tray acts on (Story 1.21): the set, its material and name, and the image's place. */
 export type SetTarget = { readonly setId: string; readonly materialId: string; readonly setName: string; readonly position: number };
 
+/**
+ * Story 3.4: the material the guided upload replaces (its id and name), when it was opened from the material's page to
+ * send a new version of it.
+ */
+export type ReplaceTarget = { readonly materialId: string; readonly name: string };
+
+/** What the guided upload is opened for: new materials, or (Story 3.4) a new version of one. */
+export type UploadOpening = { readonly replace?: ReplaceTarget };
+
 /** A resume entry this browser keeps (tus-js-client's URL storage), as the tray reads it. */
 export type StoredUpload = {
   readonly storageKey: string;
@@ -72,7 +84,8 @@ type QueuedSet = {
   readonly kind: 'set';
   readonly key: string;
   readonly name: string;
-  readonly answers: Answers;
+  /** The dialog's answers; for a new version of a material (Story 3.4), that material, which keeps its own. */
+  readonly about: Answers | { readonly material: string };
   readonly members: readonly { readonly key: string; readonly file: UploadFile }[];
 };
 /** Story 1.21: a failed image's new upload to ask for, then to send. */
@@ -98,6 +111,11 @@ export type Uploads = {
    * (Story 1.21) one material whose pages are its images, in their order. Returns the sending.
    */
   send(plan: SendPlan, answers: Answers): number;
+  /**
+   * Story 3.4: queues a new version of the material `target`, one file or one set of images (its pages, in their order),
+   * sent as `send` sends; the material keeps its name, kind, language and place. Returns the sending.
+   */
+  replaceMaterial(target: ReplaceTarget, plan: SendPlan): number;
   /** Goes on with an upload the server has, from its offset: never a new upload. `member` names an image's set. */
   resume(uploadId: string, file: UploadFile, member?: SetTarget): void;
   /**
@@ -116,12 +134,22 @@ export type Uploads = {
   announce(text: string, urgent?: boolean): void;
   /** Story 2.4: whether the guided upload is open; the sidebar's control and the conversation's empty state open it. */
   readonly uploadOpen: boolean;
-  /** Opens the guided upload (Story 2.4: from the conversation's empty state too). */
-  openUpload(): void;
+  /** Story 3.4: the material the guided upload replaces while it is open for that; null otherwise. */
+  readonly replace: ReplaceTarget | null;
+  /**
+   * Opens the guided upload (Story 2.4: from the conversation's empty state too); from Story 3.4, with `replace`, to send
+   * a new version of that material (from its page).
+   */
+  openUpload(opening?: UploadOpening): void;
   closeUpload(): void;
 };
 
 const UploadsContext = createContext<Uploads | null>(null);
+
+/** The uploads of the shell, or null outside it (a component that also renders alone, as in its tests). */
+export function useOptionalUploads(): Uploads | null {
+  return useContext(UploadsContext);
+}
 
 export function useUploads(): Uploads {
   const value = useContext(UploadsContext);
@@ -158,26 +186,36 @@ function unavailable(): SetCallResult<never> {
   return { ok: false, problem: thrown() };
 }
 
-/** The metadata of one sending: the answers, with the campaign's or the system's id. */
-export function metadataFor(answers: Answers, belonging: Belonging): Record<string, string> {
+/**
+ * The metadata of one sending: the answers, with the campaign's id or (Story 3.3) the systems' ids, comma-separated
+ * under `systems`; nothing for none.
+ */
+export function metadataFor(answers: Answers): Record<string, string> {
   const metadata: Record<string, string> = { kind: answers.kind, language: answers.language };
-  if (belonging !== null && answers.belonging === 'campaign') {
-    metadata.campaign = belonging.campaign.id;
-  } else if (belonging !== null && answers.belonging === 'system') {
-    metadata.system = belonging.system.id;
+  const place = answers.belonging;
+  if (place.choice === 'campaign') {
+    metadata.campaign = place.campaign;
+  } else if (place.choice === 'system') {
+    metadata.systems = place.system;
+  } else if (place.choice === 'systems') {
+    metadata.systems = place.systems.join(',');
   }
   return metadata;
 }
 
-/** Where a set belongs: the current campaign or its system, as the dialog's answer says (Story 1.21). */
-function setPlace(answers: Answers, belonging: Belonging): { campaign?: string; system?: string } {
-  if (belonging !== null && answers.belonging === 'campaign') {
-    return { campaign: belonging.campaign.id };
+/** Where a set belongs, as the dialog's answer says (Story 1.21; several systems from Story 3.3). */
+function setPlace(answers: Answers): { campaign?: string; systems?: readonly string[] } {
+  const place = answers.belonging;
+  switch (place.choice) {
+    case 'campaign':
+      return { campaign: place.campaign };
+    case 'system':
+      return { systems: [place.system] };
+    case 'systems':
+      return { systems: place.systems };
+    case 'none':
+      return {};
   }
-  if (belonging !== null && answers.belonging === 'system') {
-    return { system: belonging.system.id };
-  }
-  return {};
 }
 
 async function readStored(storage: UrlStorage): Promise<StoredUpload[]> {
@@ -219,7 +257,11 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   const [polite, setPolite] = useState('');
   const [urgent, setUrgent] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const openUpload = useCallback(() => setUploadOpen(true), []);
+  const [replace, setReplace] = useState<ReplaceTarget | null>(null);
+  const openUpload = useCallback((opening?: UploadOpening) => {
+    setReplace(opening?.replace ?? null);
+    setUploadOpen(true);
+  }, []);
   const closeUpload = useCallback(() => setUploadOpen(false), []);
   const queue = useRef<Queued[]>([]);
   const running = useRef(false);
@@ -227,9 +269,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
   const handles = useRef(new Map<string, UploadHandle>());
   const counter = useRef(0);
   const textsRef = useRef(texts);
+  const { notify } = useNotifications();
+  const notifyRef = useRef(notify);
   useEffect(() => {
     textsRef.current = texts;
-  }, [texts]);
+    notifyRef.current = notify;
+  }, [texts, notify]);
 
   const announce = useCallback((text: string, now = false) => {
     // A zero-width space alternates so that the same words are said again.
@@ -270,8 +315,12 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
       change(key, (upload) => ({ ...upload, phase: 'failed', problem }));
       // A refusal (the format, the size) is said at once; anything else politely.
       const refused = (problem as { status?: unknown } | null)?.status;
-      const words = `${stateWords(name, 'failed')} ${problemText(problem, textsRef.current.errors)}`;
+      const reason = problemText(problem, textsRef.current.errors);
+      const words = `${stateWords(name, 'failed')} ${reason}`;
       announce(words, refused === 415 || refused === 413 || refused === 400 || refused === 422);
+      // Usability pass: seen too, wherever the GM is, and kept under the bell. Quiet: the line above already says it.
+      const t = translator(textsRef.current.language);
+      notifyRef.current({ status: 'danger', message: `${t('feedback.uploadFailed', { name })} ${reason}`, quiet: true });
     },
     [announce, change, stateWords],
   );
@@ -313,6 +362,14 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         change(key, (upload) => ({ ...upload, phase: 'waiting', sent: upload.size, materialId: result.materialId }));
         if (options.quiet !== true) {
           announce(stateWords(name, 'waiting'));
+          // Usability pass: the upload's end is seen wherever the GM is, with the way to the file. Quiet, as above.
+          const t = translator(textsRef.current.language);
+          notifyRef.current({
+            status: 'success',
+            message: t('feedback.uploadDone', { name }),
+            link: { href: `/files/${encodeURIComponent(result.materialId)}`, label: t('material.notice.open') },
+            quiet: true,
+          });
         }
         return result.state;
       } catch (error) {
@@ -334,14 +391,13 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
     async (item: QueuedSet) => {
       announce(stateWords(item.name, 'uploading'));
       let created: Awaited<ReturnType<ImageSetCalls['create']>>;
+      const chosen = item.members.map(({ file }) => ({ name: file.name, length: file.size }));
       try {
-        created = await imageSets.create({
-          name: item.name,
-          kind: item.answers.kind,
-          language: item.answers.language,
-          ...setPlace(item.answers, belonging),
-          images: item.members.map(({ file }) => ({ name: file.name, length: file.size })),
-        });
+        created = await imageSets.create(
+          'material' in item.about
+            ? { name: item.name, material: item.about.material, images: chosen }
+            : { name: item.name, kind: item.about.kind, language: item.about.language, ...setPlace(item.about), images: chosen },
+        );
       } catch {
         created = { ok: false, problem: thrown() };
       }
@@ -385,7 +441,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         announce(stateWords(item.name, 'waiting'));
       }
     },
-    [addressOf, announce, belonging, change, failWith, imageSets, router, sendFile, stateWords],
+    [addressOf, announce, change, failWith, imageSets, router, sendFile, stateWords],
   );
 
   /** Story 1.21: a failed image's new upload at its place, then the file sent to it. */
@@ -454,7 +510,7 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
     (plan: SendPlan, answers: Answers) => {
       counter.current += 1;
       const batch = counter.current;
-      const metadata = metadataFor(answers, belonging);
+      const metadata = metadataFor(answers);
       for (const file of plan.files) {
         const key = addLive(file, batch, null, null, null);
         queue.current.push({ kind: 'file', key, file, metadata });
@@ -464,12 +520,33 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
         const setKey = `set-${counter.current}`;
         // Added last first, so the live list (newest first) shows them in their order.
         const members = [...set.files].reverse().map((file) => ({ key: addLive(file, batch, null, null, { key: setKey, name: set.name, id: null, position: 0 }), file })).reverse();
-        queue.current.push({ kind: 'set', key: setKey, name: set.name, answers, members });
+        queue.current.push({ kind: 'set', key: setKey, name: set.name, about: answers, members });
       }
       void pump();
       return batch;
     },
-    [addLive, belonging, pump],
+    [addLive, pump],
+  );
+
+  const replaceMaterial = useCallback(
+    (target: ReplaceTarget, plan: SendPlan) => {
+      counter.current += 1;
+      const batch = counter.current;
+      // Only the material is named: a kind, a language or a place with it is refused (Story 3.4).
+      for (const file of plan.files) {
+        const key = addLive(file, batch, null, null, null);
+        queue.current.push({ kind: 'file', key, file, metadata: { material: target.materialId } });
+      }
+      for (const set of plan.sets) {
+        counter.current += 1;
+        const setKey = `set-${counter.current}`;
+        const members = [...set.files].reverse().map((file) => ({ key: addLive(file, batch, null, null, { key: setKey, name: set.name, id: null, position: 0 }), file })).reverse();
+        queue.current.push({ kind: 'set', key: setKey, name: set.name, about: { material: target.materialId }, members });
+      }
+      void pump();
+      return batch;
+    },
+    [addLive, pump],
   );
 
   const resume = useCallback(
@@ -549,16 +626,18 @@ export function UploadsProvider({ texts, belonging, urlStorage, endpoint, imageS
       stored,
       dismissed,
       send,
+      replaceMaterial,
       resume,
       replaceImage,
       dropImage,
       dismiss,
       announce,
       uploadOpen,
+      replace,
       openUpload,
       closeUpload,
     }),
-    [texts, belonging, live, stored, dismissed, send, resume, replaceImage, dropImage, dismiss, announce, uploadOpen, openUpload, closeUpload],
+    [texts, belonging, live, stored, dismissed, send, replaceMaterial, resume, replaceImage, dropImage, dismiss, announce, uploadOpen, replace, openUpload, closeUpload],
   );
 
   return (

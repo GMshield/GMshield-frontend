@@ -1,0 +1,175 @@
+/*
+ * Story 3.12: the saved items. The bar's button (beside the bell, drawn as it is), and the panel the shell's right slot
+ * holds (Shell.module.css sizes and places the slot: 340px, over the page under 1280px, a sheet under 768px). The panel
+ * scrolls as a whole: its list is paged (ten a page), so nothing inside it scrolls on its own.
+ */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.button:hover,
+.button[aria-expanded='true'] {
+  background-color: var(--color-hover);
+}
+
+.view {
+  /* A non-modal <dialog> in the flow of its panel, as the source view: none of the browser's own dialog box. */
+  position: static;
+  inset: auto;
+  max-width: none;
+  max-height: none;
+  width: auto;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: var(--space-4);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  margin-block-start: calc(-1 * var(--space-4));
+  padding-block: var(--space-4) var(--space-2);
+  background-color: var(--color-surface);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.close:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+}
+
+.failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One saved answer: its meta-line across the top, then its excerpt (three lines at most) with "Ir" at its end, so an
+ * entry is no taller than its words; a rule between entries.
+ */
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-1) var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.entry:first-child {
+  padding-block-start: 0;
+}
+
+.meta {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  overflow-wrap: anywhere;
+}
+
+.excerpt {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-body-size);
+  line-height: var(--font-body-line-height);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* "Ir" at the excerpt's end: a link, or (another campaign) a form whose refusal shows on a line of its own under it. */
+.go {
+  grid-column: 2;
+}
+
+.goForm {
+  display: contents;
+}
+
+.refused {
+  grid-column: 1 / -1;
+  justify-self: end;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.foot {
+  margin-block-start: auto;
+}

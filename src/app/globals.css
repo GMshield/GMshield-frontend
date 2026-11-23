@@ -60,6 +60,30 @@ textarea {
 
 a {
   color: inherit;
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Text the GM selects: the theme's own colours, at full contrast. */
+::selection {
+  background-color: var(--color-text);
+  color: var(--color-canvas);
+}
+
+/* A control that cannot be used now says so by its look as well as its cursor (aria-disabled keeps its focus). */
+button:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 /* The focus ring: every focusable element, every theme. Nothing removes it. */
@@ -71,5 +95,11 @@ a {
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-slide: 0ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fade: 0ms;
   }
 }

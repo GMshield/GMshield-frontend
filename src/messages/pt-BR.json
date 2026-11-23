@@ -9,8 +9,6 @@
   },
   "shell": {
     "name": "GMshield",
-    "menu": "Menu de GMshield",
-    "signedInAs": "Conectado como {username}",
     "signOut": "Sair",
     "openMenu": "Abrir menu",
     "closeMenu": "Fechar menu",
@@ -18,6 +16,11 @@
     "currentCampaign": "Campanha atual",
     "noCampaign": "Nenhuma campanha",
     "context": "Sistema e campanha",
+    "switchCampaign": "Trocar de campanha",
+    "campaignChoices": "Suas campanhas",
+    "currentMark": "atual",
+    "allCampaigns": "Ver todas as mesas",
+    "newCampaign": "Nova campanha",
     "entries": {
       "questions": "Consultas",
       "rules": "Criação de Regras",
@@ -26,6 +29,27 @@
       "characters": "Personagens",
       "files": "Meus Arquivos",
       "addFile": "Adicionar Arquivo"
+    },
+    "account": "Conta de {username}",
+    "accountMenu": "Conta e preferências",
+    "signedInLabel": "Conectado como",
+    "home": "GMshield, ir para Consultas",
+    "skip": "Pular para o conteúdo",
+    "scope": {
+      "label": "Escopo",
+      "panel": "Escopo da campanha",
+      "campaign": "Campanha",
+      "system": "Sistema",
+      "other": "Outros",
+      "none": "Nenhuma fonte",
+      "modelOff": "conhecimento do modelo desligado",
+      "modelOn": "conhecimento do modelo ligado",
+      "summary": "{tiers} · {model}"
+    },
+    "search": {
+      "label": "Buscar nas fontes",
+      "placeholder": "Buscar nas fontes",
+      "open": "Buscar nas fontes"
     }
   },
   "placeholder": {
@@ -35,6 +59,118 @@
     "systems": "Aqui você vai ver e organizar seus sistemas de jogo.",
     "characters": "Aqui você vai guardar os personagens das suas campanhas.",
     "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um."
+  },
+  "systems": {
+    "new": "Novo sistema",
+    "list": "Seus sistemas",
+    "empty": "Um sistema reúne as campanhas e os materiais de um jogo.",
+    "edition": "Edição {edition}",
+    "form": {
+      "newTitle": "Novo sistema",
+      "editTitle": "Editar sistema",
+      "name": "Nome",
+      "edition": "Edição (opcional)",
+      "description": "Descrição (opcional)",
+      "create": "Criar sistema",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Este sistema foi alterado em outro lugar. Os campos agora mostram os valores atuais: faça sua alteração de novo e salve."
+    },
+    "page": {
+      "edit": "Editar",
+      "delete": "Excluir",
+      "sections": "Seções do sistema",
+      "campaigns": "Campanhas",
+      "materials": "Materiais",
+      "campaignList": "Campanhas deste sistema",
+      "materialList": "Materiais deste sistema",
+      "noCampaigns": "Este sistema ainda não tem campanhas.",
+      "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas."
+    },
+    "delete": {
+      "title": "Excluir este sistema?",
+      "consequence": "Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele. Isso não pode ser desfeito.",
+      "campaignsOne": "1 campanha",
+      "campaignsOther": "{count} campanhas",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
+      "materialsOne": "1 material ligado só a ele",
+      "materialsOther": "{count} materiais ligados só a ele",
+      "confirm": "Excluir sistema"
+    }
+  },
+  "campaigns": {
+    "new": "Nova campanha",
+    "list": "Suas campanhas",
+    "archivedList": "Campanhas arquivadas",
+    "filters": "Quais campanhas",
+    "inUse": "Em uso",
+    "archived": "Arquivadas",
+    "empty": "Uma campanha reúne as conversas e os materiais de uma mesa de jogo.",
+    "emptyArchived": "Nenhuma campanha arquivada.",
+    "systemEdition": "{name} {edition}",
+    "form": {
+      "newTitle": "Nova campanha",
+      "renameTitle": "Renomear campanha",
+      "name": "Nome",
+      "system": "Sistema",
+      "create": "Criar campanha",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Esta campanha foi alterada em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve.",
+      "noSystem": "Uma campanha pertence a um sistema, e você ainda não tem nenhum.",
+      "createSystem": "Criar um sistema"
+    },
+    "page": {
+      "use": "Usar esta campanha",
+      "isCurrent": "Esta é a campanha atual.",
+      "rename": "Renomear",
+      "archive": "Arquivar",
+      "restore": "Restaurar",
+      "delete": "Excluir",
+      "archived": "Arquivada",
+      "sections": "Seções da campanha",
+      "overview": "Visão geral",
+      "scope": "Escopo",
+      "conversations": "Conversas",
+      "name": "Nome",
+      "system": "Sistema",
+      "state": "Situação",
+      "conversationList": "Conversas desta campanha",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
+      "open": "Abrir",
+      "restoreToOpen": "Restaure a campanha para abrir a conversa.",
+      "noConversation": "Esta campanha ainda não tem conversas."
+    },
+    "delete": {
+      "title": "Excluir esta campanha?",
+      "consequence": "Vão junto: {conversations} e {materials} desta campanha. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.",
+      "conversationsOne": "1 conversa",
+      "conversationsOther": "{count} conversas",
+      "materialsOne": "1 material",
+      "materialsOther": "{count} materiais",
+      "confirm": "Excluir campanha"
+    },
+    "scope": {
+      "intro": "As respostas desta campanha usam só as fontes ligadas aqui.",
+      "campaign": "Campanha",
+      "system": "Sistema",
+      "other": "Outros sistemas e campanhas",
+      "modelKnowledge": "Conhecimento do modelo",
+      "on": "ligado",
+      "off": "desligado",
+      "materials": "Materiais: {tier}",
+      "pages": "Páginas dos materiais: {tier}",
+      "noMaterials": "Nenhum material pronto.",
+      "stale": "O escopo foi alterado em outro lugar. Os interruptores agora mostram o escopo atual: faça sua alteração de novo."
+    }
+  },
+  "files": {
+    "list": "Seus arquivos",
+    "empty": "Os arquivos que você enviar aparecem aqui, com o estado de cada um."
   },
   "notFound": {
     "title": "Não encontrado.",
@@ -52,8 +188,7 @@
     "languages": {
       "pt-BR": "Português (Brasil)",
       "en": "English"
-    },
-    "apply": "Aplicar"
+    }
   },
   "dialog": {
     "cancel": "Cancelar"
@@ -82,7 +217,9 @@
       "upload": "O envio não pôde continuar.",
       "ingestion": "Este arquivo não pôde ser processado.",
       "page": "Esta página não pôde ser mostrada.",
-      "material": "A ação no material não pôde ser feita."
+      "material": "A ação no material não pôde ser feita.",
+      "scope": "O escopo não pôde ser alterado.",
+      "conversation": "A ação na conversa não pôde ser feita."
     },
     "codes": {
       "request": {
@@ -98,7 +235,15 @@
         "sign_in_refused": "O Google não confirmou a entrada. Tente de novo.",
         "username_taken": "Este nome de usuário já está em uso.",
         "username_invalid": "Use de {min} a {max} caracteres: letras de a a z, maiúsculas ou minúsculas, números, \"_\", \".\" e \"-\".",
-        "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar."
+        "terms_required": "Aceite os termos de uso e o aviso de privacidade para continuar.",
+        "system_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "system_edition_invalid": "A edição pode ter até {max} caracteres.",
+        "system_description_invalid": "A descrição pode ter até {max} caracteres.",
+        "system_name_taken": "Você já tem um sistema com este nome e esta edição.",
+        "campaign_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "campaign_name_taken": "Este sistema já tem uma campanha com este nome, talvez arquivada.",
+        "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
+        "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
@@ -138,7 +283,18 @@
         "ground_unknown": "Esta página não pode ser aberta a partir daqui."
       },
       "material": {
-        "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada."
+        "action_unavailable": "Esta ação não está disponível no estado atual do material. A página foi atualizada.",
+        "belonging_invalid": "Escolha uma campanha ou pelo menos um sistema que você tenha.",
+        "version_in_progress": "Este material já tem uma versão a caminho. Espere ela terminar, ou aceite, tente de novo ou descarte essa versão, antes de começar outra.",
+        "not_ready": "Este material não tem uma versão pronta para substituir ou reprocessar.",
+        "version_not_removable": "Só uma versão anterior pode ser removida. A página foi atualizada."
+      },
+      "scope": {
+        "material_unknown": "Um dos materiais não está mais nesta campanha, no seu sistema ou nos outros. Recarregue a página para ver o escopo atual."
+      },
+      "conversation": {
+        "turn_running": "Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la.",
+        "turn_not_done": "Só uma resposta concluída pode ser salva."
       }
     }
   },
@@ -235,8 +391,10 @@
       "label": "Ações",
       "accept": "Aceitar",
       "reprocess": "Reprocessar páginas com falha",
+      "reprocessReady": "Reprocessar",
       "retry": "Tentar de novo",
-      "discard": "Descartar"
+      "discard": "Descartar",
+      "replace": "Substituir"
     },
     "discard": {
       "title": "Descartar «{name}»?",
@@ -244,14 +402,68 @@
       "pagesOther": "Saem as {pages} páginas lidas deste arquivo, com suas imagens e o texto extraído, o sumário e o arquivo enviado. Isso não pode ser desfeito.",
       "noPages": "Sai o arquivo enviado, com tudo o que foi lido dele. Isso não pode ser desfeito."
     },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir «{name}»?",
+      "consequence": "Vão junto: {versions} e {pages}, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "noPages": "Vão junto: {versions}, com o arquivo enviado e tudo o que foi lido dele. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "unknown": "Vão junto todas as versões deste arquivo e as páginas lidas delas, com as imagens e o texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito.",
+      "versionsOne": "1 versão",
+      "versionsOther": "{count} versões",
+      "pagesOne": "1 página lida",
+      "pagesOther": "{count} páginas lidas",
+      "confirm": "Excluir arquivo"
+    },
+    "superseded": {
+      "label": "Versões anteriores",
+      "row": "Enviada em {date}",
+      "remove": "Remover",
+      "removeLabel": "Remover a versão enviada em {date}",
+      "title": "Remover esta versão?",
+      "consequenceOne": "Sai a página lida desta versão, com a imagem e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "consequenceOther": "Saem as {pages} páginas lidas desta versão, com as imagens e o texto extraído. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "consequenceNoPages": "Sai esta versão, com tudo o que foi lido dela. As respostas que a citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "confirm": "Remover versão"
+    },
+    "serving": {
+      "pagesOne": "A versão anterior (1 página) continua em uso enquanto a nova não for aceita.",
+      "pagesOther": "A versão anterior ({pages} páginas) continua em uso enquanto a nova não for aceita.",
+      "noPages": "A versão anterior continua em uso enquanto a nova não for aceita."
+    },
     "notice": {
       "needsReview": "{name} precisa de revisão.",
-      "review": "Revisar"
+      "review": "Revisar",
+      "failed": "{name} falhou.",
+      "open": "Abrir"
+    },
+    "place": {
+      "campaign": "Campanha {campaign}",
+      "system": "Sistema {system}",
+      "thisSystem": "Sistema",
+      "none": "Sem lugar"
+    },
+    "pageCount": {
+      "one": "1 página",
+      "other": "{count} páginas"
+    },
+    "belonging": {
+      "label": "Onde pertence",
+      "campaign": "Na campanha {campaign}, do sistema {system}.",
+      "system": "Em todas as campanhas do sistema {system}.",
+      "systems": "Em todas as campanhas dos sistemas {systems}.",
+      "none": "Em nenhum lugar: nenhuma pergunta usa este arquivo.",
+      "change": "Alterar",
+      "formLabel": "Onde este arquivo fica",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "saved": "Vale a partir da próxima pergunta.",
+      "stale": "Este arquivo foi alterado em outro lugar. A escolha agora mostra onde ele fica: faça sua alteração de novo e salve."
     }
   },
   "upload": {
     "dialog": {
       "title": "Adicionar arquivos",
+      "replaceTitle": "Substituir {name}",
       "step": "Passo {step} de {total}",
       "close": "Fechar",
       "back": "Voltar",
@@ -271,7 +483,13 @@
           "empty": "{name} está vazio, então não será enviado.",
           "too_large": "{name} tem mais de 2 GB, o máximo que o GMshield aceita, então não será enviado.",
           "format": "{name} está num formato que o GMshield não aceita, então não será enviado. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP ou HEIC."
-        }
+        },
+        "drop": "Arraste os arquivos para cá, ou",
+        "dropNow": "Solte para adicionar",
+        "chosen": "Arquivos escolhidos",
+        "replaceQuestion": "Qual é a nova versão?",
+        "replaceLead": "Escolha um arquivo, ou as fotos que viram as páginas da nova versão. Ela é lida e revisada como um arquivo novo, e a versão atual continua em uso até você aceitar a nova.",
+        "replaceOne": "Escolha um só arquivo, ou só fotos."
       },
       "set": {
         "question": "Como ficam as {count} fotos?",
@@ -326,17 +544,26 @@
       "belonging": {
         "question": "Onde ele fica?",
         "campaign": {
-          "label": "Só em {campaign}",
-          "description": "As respostas desta campanha usam o arquivo; as outras campanhas não."
+          "label": "Uma campanha",
+          "description": "Só as respostas desta campanha usam o arquivo; as outras campanhas, mesmo do mesmo sistema, não."
         },
         "system": {
-          "label": "Em todas as campanhas de {system}",
+          "label": "Um sistema",
           "description": "As respostas de qualquer campanha deste sistema usam o arquivo."
+        },
+        "systems": {
+          "label": "Vários sistemas",
+          "description": "As respostas das campanhas de cada sistema marcado usam o arquivo."
         },
         "none": {
           "label": "Em nenhum lugar por enquanto",
-          "description": "Você ainda não tem campanha, então o arquivo fica guardado sem uma."
-        }
+          "description": "Você ainda não tem campanha nem sistema, então o arquivo fica guardado sem um."
+        },
+        "campaignField": "Campanha",
+        "systemField": "Sistema",
+        "systemsField": "Sistemas",
+        "systemsRequired": "Marque pelo menos um sistema.",
+        "pick": "Escolha"
       },
       "language": {
         "question": "Em que idioma ele está?",
@@ -397,7 +624,6 @@
     "loadFailed": "Não foi possível carregar esta página."
   },
   "conversation": {
-    "heading": "Consultas",
     "turns": "Perguntas e respostas",
     "question": "Pergunta",
     "answer": "Resposta",
@@ -415,6 +641,9 @@
     },
     "link": "{text} ({address})",
     "silent": "As fontes não dizem nada sobre isso.",
+    "modelSource": "Do conhecimento do modelo, sem fonte.",
+    "offer": "Ampliar as fontes ou ligar o conhecimento do modelo",
+    "openScope": "Abrir o escopo",
     "references": "Fontes",
     "citation": "fonte",
     "sourceRemoved": "fonte removida",
@@ -424,6 +653,11 @@
     "connectionLost": "Conexão perdida. Tentando de novo…",
     "reconnectFailed": "Não foi possível reconectar.",
     "retry": "Tentar de novo",
+    "bookmark": "Salvar resposta",
+    "unbookmark": "Remover dos itens salvos",
+    "dismiss": "Dispensar resposta",
+    "dismissed": "Resposta dispensada.",
+    "undo": "Desfazer",
     "refused": "O modelo recusou este pedido. Reformule a pergunta e envie de novo.",
     "questionFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque ela parece tentar mudar as instruções do assistente. Reformule a pergunta e envie de novo.",
     "sourceFlagged": "O filtro de segurança do provedor de IA bloqueou esta pergunta porque um trecho das fontes consultadas parece uma instrução ao assistente. Revise os arquivos usados como fonte ou reformule a pergunta.",
@@ -434,6 +668,185 @@
       "upload": "Enviar um arquivo",
       "review": "Revisar {name}"
     },
-    "close": "Fechar a fonte"
+    "close": "Fechar a fonte",
+    "noCampaign": "Não há campanha em uso: crie uma para fazer perguntas.",
+    "newCampaign": "Nova campanha",
+    "intro": {
+      "title": "O que você quer consultar?",
+      "text": "Pergunte sobre as regras da campanha. Cada resposta cita o arquivo e a página de onde veio.",
+      "rulesTitle": "Que regra você quer criar?",
+      "rulesText": "Veja primeiro o que as fontes já dizem. Cada resposta cita o arquivo e a página de onde veio.",
+      "examples": "Exemplos de perguntas"
+    },
+    "examples": {
+      "questions": {
+        "one": "Como funciona o descanso dos personagens?",
+        "two": "Quais são as regras de combate à distância?",
+        "three": "O que a campanha diz sobre viagens?"
+      },
+      "rules": {
+        "one": "Que regras já existem sobre fabricar itens?",
+        "two": "Como o sistema define a dificuldade de um teste?",
+        "three": "Quais regras da casa esta campanha tem?"
+      }
+    },
+    "rename": "Renomear"
+  },
+  "feedback": {
+    "systemCreated": "Sistema «{name}» criado.",
+    "systemChanged": "Alterações em «{name}» salvas.",
+    "systemDeleted": "Sistema excluído.",
+    "campaignCreated": "Campanha «{name}» criada.",
+    "campaignRenamed": "Campanha renomeada para «{name}».",
+    "campaignArchived": "Campanha «{name}» arquivada.",
+    "campaignRestored": "Campanha «{name}» restaurada.",
+    "campaignChosen": "«{name}» é a campanha atual.",
+    "campaignDeleted": "Campanha excluída.",
+    "material": {
+      "accept": "«{name}» aceito. As respostas passam a usá-lo assim que estiver preparado para busca.",
+      "reprocess": "Reprocessando as páginas com falha de «{name}».",
+      "retry": "O processamento de «{name}» recomeçou.",
+      "discard": "«{name}» descartado."
+    },
+    "materialDeleted": "Arquivo «{name}» excluído.",
+    "versionRemoved": "Versão anterior removida.",
+    "uploadDone": "«{name}» enviado. A leitura das páginas começou.",
+    "uploadFailed": "O envio de «{name}» falhou.",
+    "viewSaved": "Exibição salva neste navegador.",
+    "conversationRenamed": "Conversa renomeada para «{name}».",
+    "conversationDeleted": "Conversa «{name}» excluída."
+  },
+  "notifications": {
+    "title": "Notificações",
+    "openOne": "Notificações, 1 nova",
+    "openOther": "Notificações, {count} novas",
+    "toasts": "Avisos",
+    "empty": "Nenhuma notificação nesta visita.",
+    "attention": "Esperando por você",
+    "more": "Mais {count} em Meus Arquivos",
+    "recent": "Nesta visita",
+    "clear": "Limpar",
+    "dismiss": "Dispensar aviso",
+    "status": {
+      "success": "Pronto.",
+      "warning": "Atenção.",
+      "danger": "Erro.",
+      "info": "Aviso."
+    }
+  },
+  "view": {
+    "menu": "Exibição",
+    "layout": "Disposição",
+    "list": "Lista",
+    "grid": "Grade",
+    "density": "Espaçamento",
+    "comfortable": "Confortável",
+    "compact": "Compacto",
+    "previews": "Miniaturas",
+    "showPreviews": "Mostrar miniaturas",
+    "filter": "Filtrar por estado",
+    "states": {
+      "all": "Todos",
+      "ready": "Prontos",
+      "review": "Para revisar",
+      "progress": "Em andamento",
+      "failed": "Com falha"
+    },
+    "emptyFilter": "Nenhum arquivo neste estado.",
+    "clearFilter": "Ver todos",
+    "perPage": "Por página"
+  },
+  "preview": {
+    "open": "Pré-visualizar {name}",
+    "title": "Pré-visualização",
+    "openFile": "Abrir arquivo",
+    "close": "Fechar pré-visualização",
+    "none": "Este arquivo ainda não tem páginas para mostrar.",
+    "heading": "Primeira página",
+    "thumbnail": "Primeira página de {name}"
+  },
+  "errorPage": {
+    "title": "Esta página não pôde ser mostrada.",
+    "lead": "Algo falhou ao montá-la. Tente de novo; se continuar, volte ao início.",
+    "retry": "Tentar de novo",
+    "home": "Ir para o início"
+  },
+  "paging": {
+    "label": "Paginação",
+    "labelTop": "Paginação, acima da lista",
+    "previous": "Anterior",
+    "next": "Próxima",
+    "page": "Página {page}",
+    "current": "Página {page}, página atual",
+    "position": "Página {page} de {pages}",
+    "range": "{from}–{to} de {total}",
+    "totalOne": "1 item",
+    "totalOther": "{total} itens",
+    "go": "Ir",
+    "goTo": "Ir para a página",
+    "outline": "Páginas do sumário",
+    "unreadable": "Páginas da lista de páginas ilegíveis"
+  },
+  "search": {
+    "title": "Busca",
+    "subtitle": "Por sentido ou pelas palavras exatas, só nas fontes da campanha atual.",
+    "field": "O que você procura?",
+    "submit": "Buscar",
+    "invalid": "Escreva de 1 a 500 caracteres.",
+    "searching": "Procurando nas fontes…",
+    "results": "Resultados",
+    "tiers": "Camada",
+    "allTiers": "Todas",
+    "material": "Material",
+    "allMaterials": "Todos os materiais",
+    "empty": "Nada encontrado para «{query}» em {scope}.",
+    "emptyFiltered": "{scope}, só {filter}",
+    "start": "Escreva o que procura e pressione Enter.",
+    "failed": "A busca não pôde terminar.",
+    "timeout": "A busca demorou demais para responder.",
+    "retry": "Tentar de novo",
+    "notFound": "Não encontrado.",
+    "noCampaign": "Escolha ou crie uma campanha para buscar nas fontes dela.",
+    "newCampaign": "Nova campanha"
+  },
+  "conversations": {
+    "new": "Nova conversa",
+    "listQuestions": "Conversas de Consultas",
+    "listRules": "Conversas de Criação de Regras",
+    "emptyQuestions": "Nenhuma conversa ainda. Comece uma para consultar as regras da campanha.",
+    "emptyRules": "Nenhuma conversa ainda. Comece uma para preparar uma regra da campanha.",
+    "questionsOne": "1 pergunta",
+    "questionsOther": "{count} perguntas",
+    "lastAsked": "última em {date}",
+    "detail": "{questions} · {last}",
+    "form": {
+      "renameTitle": "Renomear conversa",
+      "name": "Nome",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Esta conversa foi renomeada em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve."
+    },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir esta conversa?",
+      "consequenceOne": "Vai junto: 1 pergunta e sua resposta. Isso não pode ser desfeito.",
+      "consequenceOther": "Vão junto: {count} perguntas e suas respostas. Isso não pode ser desfeito.",
+      "unknown": "Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.",
+      "confirm": "Excluir conversa"
+    }
+  },
+  "saved": {
+    "title": "Itens salvos",
+    "open": "Itens salvos",
+    "close": "Fechar itens salvos",
+    "list": "Respostas salvas",
+    "empty": "Nenhuma resposta salva. Use o marcador sob uma resposta para guardá-la aqui.",
+    "go": "Ir",
+    "goTo": "Ir para a resposta em «{name}»",
+    "switched": "Campanha trocada para «{name}».",
+    "loading": "Carregando os itens salvos…",
+    "retry": "Tentar de novo",
+    "pages": "Páginas dos itens salvos",
+    "separator": " › "
   }
 }

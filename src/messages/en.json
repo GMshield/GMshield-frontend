@@ -9,8 +9,6 @@
   },
   "shell": {
     "name": "GMshield",
-    "menu": "GMshield menu",
-    "signedInAs": "Signed in as {username}",
     "signOut": "Sign out",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -18,6 +16,11 @@
     "currentCampaign": "Current campaign",
     "noCampaign": "No campaign",
     "context": "System and campaign",
+    "switchCampaign": "Switch campaign",
+    "campaignChoices": "Your campaigns",
+    "currentMark": "current",
+    "allCampaigns": "See all tables",
+    "newCampaign": "New campaign",
     "entries": {
       "questions": "Questions",
       "rules": "Rule Creation",
@@ -26,6 +29,27 @@
       "characters": "Characters",
       "files": "My Files",
       "addFile": "Add File"
+    },
+    "account": "Account of {username}",
+    "accountMenu": "Account and preferences",
+    "signedInLabel": "Signed in as",
+    "home": "GMshield, go to Questions",
+    "skip": "Skip to content",
+    "scope": {
+      "label": "Scope",
+      "panel": "Campaign scope",
+      "campaign": "Campaign",
+      "system": "System",
+      "other": "Other",
+      "none": "No sources",
+      "modelOff": "model knowledge off",
+      "modelOn": "model knowledge on",
+      "summary": "{tiers} · {model}"
+    },
+    "search": {
+      "label": "Search the sources",
+      "placeholder": "Search the sources",
+      "open": "Search the sources"
     }
   },
   "placeholder": {
@@ -35,6 +59,118 @@
     "systems": "Here you will see and organise your game systems.",
     "characters": "Here you will keep the characters of your campaigns.",
     "files": "Here you will see the files you have sent and the state of each one."
+  },
+  "systems": {
+    "new": "New system",
+    "list": "Your systems",
+    "empty": "A system holds the campaigns and materials of one game.",
+    "edition": "Edition {edition}",
+    "form": {
+      "newTitle": "New system",
+      "editTitle": "Edit system",
+      "name": "Name",
+      "edition": "Edition (optional)",
+      "description": "Description (optional)",
+      "create": "Create system",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This system was changed elsewhere. The fields now show its current values: make your change again and save."
+    },
+    "page": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "sections": "System sections",
+      "campaigns": "Campaigns",
+      "materials": "Materials",
+      "campaignList": "Campaigns of this system",
+      "materialList": "Materials of this system",
+      "noCampaigns": "This system has no campaigns yet.",
+      "noMaterials": "No material belongs to this system or its campaigns."
+    },
+    "delete": {
+      "title": "Delete this system?",
+      "consequence": "Going with it: {campaigns}, {conversations} and {materials}. This cannot be undone.",
+      "unknown": "Going with it: this system's campaigns, their conversations and the materials linked only to it. This cannot be undone.",
+      "campaignsOne": "1 campaign",
+      "campaignsOther": "{count} campaigns",
+      "conversationsOne": "1 conversation",
+      "conversationsOther": "{count} conversations",
+      "materialsOne": "1 material linked only to it",
+      "materialsOther": "{count} materials linked only to it",
+      "confirm": "Delete system"
+    }
+  },
+  "campaigns": {
+    "new": "New campaign",
+    "list": "Your campaigns",
+    "archivedList": "Archived campaigns",
+    "filters": "Which campaigns",
+    "inUse": "In use",
+    "archived": "Archived",
+    "empty": "A campaign holds the conversations and materials of one game table.",
+    "emptyArchived": "No archived campaign.",
+    "systemEdition": "{name} {edition}",
+    "form": {
+      "newTitle": "New campaign",
+      "renameTitle": "Rename campaign",
+      "name": "Name",
+      "system": "System",
+      "create": "Create campaign",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This campaign was changed elsewhere. The field now shows its current name: make your change again and save.",
+      "noSystem": "A campaign belongs to a system, and you have none yet.",
+      "createSystem": "Create a system"
+    },
+    "page": {
+      "use": "Use this campaign",
+      "isCurrent": "This is the current campaign.",
+      "rename": "Rename",
+      "archive": "Archive",
+      "restore": "Restore",
+      "delete": "Delete",
+      "archived": "Archived",
+      "sections": "Campaign sections",
+      "overview": "Overview",
+      "scope": "Scope",
+      "conversations": "Conversations",
+      "name": "Name",
+      "system": "System",
+      "state": "State",
+      "conversationList": "Conversations of this campaign",
+      "conversationsOne": "1 conversation",
+      "conversationsOther": "{count} conversations",
+      "open": "Open",
+      "restoreToOpen": "Restore the campaign to open the conversation.",
+      "noConversation": "This campaign has no conversations yet."
+    },
+    "delete": {
+      "title": "Delete this campaign?",
+      "consequence": "Going with it: {conversations} and {materials} of this campaign. This cannot be undone.",
+      "unknown": "Going with it: this campaign's conversations and materials. This cannot be undone.",
+      "conversationsOne": "1 conversation",
+      "conversationsOther": "{count} conversations",
+      "materialsOne": "1 material",
+      "materialsOther": "{count} materials",
+      "confirm": "Delete campaign"
+    },
+    "scope": {
+      "intro": "This campaign's answers use only the sources switched on here.",
+      "campaign": "Campaign",
+      "system": "System",
+      "other": "Other systems and campaigns",
+      "modelKnowledge": "Model knowledge",
+      "on": "on",
+      "off": "off",
+      "materials": "Materials: {tier}",
+      "pages": "Pages of the materials: {tier}",
+      "noMaterials": "No ready material.",
+      "stale": "The scope was changed elsewhere. The switches now show the current scope: make your change again."
+    }
+  },
+  "files": {
+    "list": "Your files",
+    "empty": "The files you send show here, with the state of each one."
   },
   "notFound": {
     "title": "Not found.",
@@ -52,8 +188,7 @@
     "languages": {
       "pt-BR": "Português (Brasil)",
       "en": "English"
-    },
-    "apply": "Apply"
+    }
   },
   "dialog": {
     "cancel": "Cancel"
@@ -82,7 +217,9 @@
       "upload": "The upload could not continue.",
       "ingestion": "This file could not be processed.",
       "page": "This page could not be shown.",
-      "material": "The action on the material could not be done."
+      "material": "The action on the material could not be done.",
+      "scope": "The scope could not be changed.",
+      "conversation": "The action on the conversation could not be done."
     },
     "codes": {
       "request": {
@@ -98,7 +235,15 @@
         "sign_in_refused": "Google did not confirm the sign-in. Try again.",
         "username_taken": "This username is already in use.",
         "username_invalid": "Use {min} to {max} characters: letters a to z in upper or lower case, digits, \"_\", \".\" and \"-\".",
-        "terms_required": "Accept the terms of use and the privacy notice to continue."
+        "terms_required": "Accept the terms of use and the privacy notice to continue.",
+        "system_name_invalid": "The name needs {min} to {max} characters.",
+        "system_edition_invalid": "The edition can have at most {max} characters.",
+        "system_description_invalid": "The description can have at most {max} characters.",
+        "system_name_taken": "You already have a system with this name and edition.",
+        "campaign_name_invalid": "The name needs {min} to {max} characters.",
+        "campaign_name_taken": "This system already has a campaign with this name, perhaps an archived one.",
+        "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
+        "conversation_name_invalid": "The name needs {min} to {max} characters."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",
@@ -138,7 +283,18 @@
         "ground_unknown": "This page cannot be opened from here."
       },
       "material": {
-        "action_unavailable": "This action is not available in the material's current state. The page has been updated."
+        "action_unavailable": "This action is not available in the material's current state. The page has been updated.",
+        "belonging_invalid": "Choose one of your campaigns or at least one of your systems.",
+        "version_in_progress": "This material already has a version on its way. Wait for it to finish, or accept, retry or discard it, before starting another one.",
+        "not_ready": "This material has no ready version to replace or reprocess.",
+        "version_not_removable": "Only a previous version can be removed. The page has been updated."
+      },
+      "scope": {
+        "material_unknown": "One of the materials is no longer in this campaign, its system or the others. Reload the page to see the current scope."
+      },
+      "conversation": {
+        "turn_running": "This answer is still being written. Wait for it to finish before dismissing it.",
+        "turn_not_done": "Only a finished answer can be saved."
       }
     }
   },
@@ -235,8 +391,10 @@
       "label": "Actions",
       "accept": "Accept",
       "reprocess": "Reprocess failed pages",
+      "reprocessReady": "Reprocess",
       "retry": "Try again",
-      "discard": "Discard"
+      "discard": "Discard",
+      "replace": "Replace"
     },
     "discard": {
       "title": "Discard «{name}»?",
@@ -244,14 +402,68 @@
       "pagesOther": "The {pages} pages read from this file go, with their pictures and extracted text, the outline and the uploaded file. This cannot be undone.",
       "noPages": "The uploaded file goes, with everything read from it. This cannot be undone."
     },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete «{name}»?",
+      "consequence": "Going with it: {versions} and {pages}, with their pictures and extracted text. Answers that cited this file show «source removed». This cannot be undone.",
+      "noPages": "Going with it: {versions}, with the uploaded file and everything read from it. Answers that cited this file show «source removed». This cannot be undone.",
+      "unknown": "Going with it: every version of this file and the pages read from them, with their pictures and extracted text. Answers that cited this file show «source removed». This cannot be undone.",
+      "versionsOne": "1 version",
+      "versionsOther": "{count} versions",
+      "pagesOne": "1 page read",
+      "pagesOther": "{count} pages read",
+      "confirm": "Delete file"
+    },
+    "superseded": {
+      "label": "Previous versions",
+      "row": "Uploaded on {date}",
+      "remove": "Remove",
+      "removeLabel": "Remove the version uploaded on {date}",
+      "title": "Remove this version?",
+      "consequenceOne": "The page read from this version goes, with its picture and extracted text. Answers that cited it show «source removed». This cannot be undone.",
+      "consequenceOther": "The {pages} pages read from this version go, with their pictures and extracted text. Answers that cited it show «source removed». This cannot be undone.",
+      "consequenceNoPages": "This version goes, with everything read from it. Answers that cited it show «source removed». This cannot be undone.",
+      "confirm": "Remove version"
+    },
+    "serving": {
+      "pagesOne": "The previous version (1 page) stays in use while the new one is not accepted.",
+      "pagesOther": "The previous version ({pages} pages) stays in use while the new one is not accepted.",
+      "noPages": "The previous version stays in use while the new one is not accepted."
+    },
     "notice": {
       "needsReview": "{name} needs review.",
-      "review": "Review"
+      "review": "Review",
+      "failed": "{name} failed.",
+      "open": "Open"
+    },
+    "place": {
+      "campaign": "Campaign {campaign}",
+      "system": "System {system}",
+      "thisSystem": "System",
+      "none": "No place"
+    },
+    "pageCount": {
+      "one": "1 page",
+      "other": "{count} pages"
+    },
+    "belonging": {
+      "label": "Where it belongs",
+      "campaign": "In the campaign {campaign}, of the system {system}.",
+      "system": "In every campaign of the system {system}.",
+      "systems": "In every campaign of the systems {systems}.",
+      "none": "Nowhere: no question uses this file.",
+      "change": "Change",
+      "formLabel": "Where this file belongs",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "It applies from the next question.",
+      "stale": "This file was changed elsewhere. The choice now shows where it belongs: make your change again and save."
     }
   },
   "upload": {
     "dialog": {
       "title": "Add files",
+      "replaceTitle": "Replace {name}",
       "step": "Step {step} of {total}",
       "close": "Close",
       "back": "Back",
@@ -271,7 +483,13 @@
           "empty": "{name} is empty, so it will not be sent.",
           "too_large": "{name} is larger than 2 GB, the most GMshield accepts, so it will not be sent.",
           "format": "{name} is in a format GMshield does not accept, so it will not be sent. Use PDF, TXT, Markdown, JPG, PNG, WebP, TIFF, BMP or HEIC."
-        }
+        },
+        "drop": "Drag your files here, or",
+        "dropNow": "Drop to add",
+        "chosen": "Chosen files",
+        "replaceQuestion": "What is the new version?",
+        "replaceLead": "Choose one file, or the photos that become the pages of the new version. It is read and reviewed like a new file, and the current version stays in use until you accept the new one.",
+        "replaceOne": "Choose a single file, or photos only."
       },
       "set": {
         "question": "What are the {count} photos?",
@@ -326,17 +544,26 @@
       "belonging": {
         "question": "Where does it belong?",
         "campaign": {
-          "label": "Only in {campaign}",
-          "description": "Answers in this campaign use it; other campaigns do not."
+          "label": "One campaign",
+          "description": "Only answers in this campaign use it; other campaigns, even of the same system, do not."
         },
         "system": {
-          "label": "In every campaign of {system}",
+          "label": "One system",
           "description": "Answers in any campaign of this system use it."
+        },
+        "systems": {
+          "label": "Several systems",
+          "description": "Answers in the campaigns of each system you tick use it."
         },
         "none": {
           "label": "Nowhere yet",
-          "description": "You have no campaign yet, so the file is kept without one."
-        }
+          "description": "You have no campaign and no system yet, so the file is kept without one."
+        },
+        "campaignField": "Campaign",
+        "systemField": "System",
+        "systemsField": "Systems",
+        "systemsRequired": "Tick at least one system.",
+        "pick": "Choose"
       },
       "language": {
         "question": "What language is it in?",
@@ -397,7 +624,6 @@
     "loadFailed": "This page could not be loaded."
   },
   "conversation": {
-    "heading": "Questions",
     "turns": "Questions and answers",
     "question": "Question",
     "answer": "Answer",
@@ -415,6 +641,9 @@
     },
     "link": "{text} ({address})",
     "silent": "The sources say nothing about this.",
+    "modelSource": "From model knowledge, no source.",
+    "offer": "Widen the sources or turn on model knowledge",
+    "openScope": "Open the scope",
     "references": "Sources",
     "citation": "source",
     "sourceRemoved": "source removed",
@@ -424,6 +653,11 @@
     "connectionLost": "Connection lost. Trying again…",
     "reconnectFailed": "Could not reconnect.",
     "retry": "Try again",
+    "bookmark": "Save answer",
+    "unbookmark": "Remove from saved items",
+    "dismiss": "Dismiss answer",
+    "dismissed": "Answer dismissed.",
+    "undo": "Undo",
     "refused": "The model declined this request. Rephrase the question and send it again.",
     "questionFlagged": "The AI provider's safety filter blocked this question because it seems to try to change the assistant's instructions. Rephrase the question and send it again.",
     "sourceFlagged": "The AI provider's safety filter blocked this question because a passage in the sources consulted looks like an instruction to the assistant. Review the files used as sources or rephrase the question.",
@@ -434,6 +668,185 @@
       "upload": "Upload a file",
       "review": "Review {name}"
     },
-    "close": "Close the source"
+    "close": "Close the source",
+    "noCampaign": "There is no campaign in use: create one to ask questions.",
+    "newCampaign": "New campaign",
+    "intro": {
+      "title": "What do you want to look up?",
+      "text": "Ask about the campaign's rules. Every answer cites the file and the page it came from.",
+      "rulesTitle": "What rule do you want to create?",
+      "rulesText": "First see what the sources already say. Every answer cites the file and the page it came from.",
+      "examples": "Example questions"
+    },
+    "examples": {
+      "questions": {
+        "one": "How does resting work for the characters?",
+        "two": "What are the rules for ranged combat?",
+        "three": "What does the campaign say about travel?"
+      },
+      "rules": {
+        "one": "What rules already exist for crafting items?",
+        "two": "How does the system set the difficulty of a check?",
+        "three": "What house rules does this campaign have?"
+      }
+    },
+    "rename": "Rename"
+  },
+  "feedback": {
+    "systemCreated": "System «{name}» created.",
+    "systemChanged": "Changes to «{name}» saved.",
+    "systemDeleted": "System deleted.",
+    "campaignCreated": "Campaign «{name}» created.",
+    "campaignRenamed": "Campaign renamed to «{name}».",
+    "campaignArchived": "Campaign «{name}» archived.",
+    "campaignRestored": "Campaign «{name}» restored.",
+    "campaignChosen": "«{name}» is the current campaign.",
+    "campaignDeleted": "Campaign deleted.",
+    "material": {
+      "accept": "«{name}» accepted. Answers use it as soon as it is prepared for search.",
+      "reprocess": "Reprocessing the failed pages of «{name}».",
+      "retry": "Processing of «{name}» started again.",
+      "discard": "«{name}» discarded."
+    },
+    "materialDeleted": "File «{name}» deleted.",
+    "versionRemoved": "Previous version removed.",
+    "uploadDone": "«{name}» uploaded. Reading its pages has started.",
+    "uploadFailed": "The upload of «{name}» failed.",
+    "viewSaved": "Display saved in this browser.",
+    "conversationRenamed": "Conversation renamed to «{name}».",
+    "conversationDeleted": "Conversation «{name}» deleted."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "openOne": "Notifications, 1 new",
+    "openOther": "Notifications, {count} new",
+    "toasts": "Messages",
+    "empty": "No notifications in this visit.",
+    "attention": "Waiting for you",
+    "more": "{count} more in My Files",
+    "recent": "In this visit",
+    "clear": "Clear",
+    "dismiss": "Dismiss message",
+    "status": {
+      "success": "Done.",
+      "warning": "Warning.",
+      "danger": "Error.",
+      "info": "Note."
+    }
+  },
+  "view": {
+    "menu": "View",
+    "layout": "Layout",
+    "list": "List",
+    "grid": "Grid",
+    "density": "Spacing",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "previews": "Thumbnails",
+    "showPreviews": "Show thumbnails",
+    "filter": "Filter by state",
+    "states": {
+      "all": "All",
+      "ready": "Ready",
+      "review": "To review",
+      "progress": "In progress",
+      "failed": "Failed"
+    },
+    "emptyFilter": "No file in this state.",
+    "clearFilter": "See all",
+    "perPage": "Per page"
+  },
+  "preview": {
+    "open": "Preview {name}",
+    "title": "Preview",
+    "openFile": "Open file",
+    "close": "Close preview",
+    "none": "This file has no pages to show yet.",
+    "heading": "First page",
+    "thumbnail": "First page of {name}"
+  },
+  "errorPage": {
+    "title": "This page could not be shown.",
+    "lead": "Something failed while building it. Try again; if it keeps failing, go back to the start.",
+    "retry": "Try again",
+    "home": "Go to the start"
+  },
+  "paging": {
+    "label": "Pagination",
+    "labelTop": "Pagination, above the list",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "current": "Page {page}, current page",
+    "position": "Page {page} of {pages}",
+    "range": "{from}–{to} of {total}",
+    "totalOne": "1 item",
+    "totalOther": "{total} items",
+    "go": "Go",
+    "goTo": "Go to page",
+    "outline": "Pages of the outline",
+    "unreadable": "Pages of the unreadable pages list"
+  },
+  "search": {
+    "title": "Search",
+    "subtitle": "By meaning or by the exact words, in the current campaign's sources only.",
+    "field": "What are you looking for?",
+    "submit": "Search",
+    "invalid": "Write 1 to 500 characters.",
+    "searching": "Searching the sources…",
+    "results": "Results",
+    "tiers": "Tier",
+    "allTiers": "All",
+    "material": "Material",
+    "allMaterials": "All materials",
+    "empty": "Nothing found for “{query}” in {scope}.",
+    "emptyFiltered": "{scope}, only {filter}",
+    "start": "Write what you are looking for and press Enter.",
+    "failed": "The search could not finish.",
+    "timeout": "The search took too long to answer.",
+    "retry": "Try again",
+    "notFound": "Not found.",
+    "noCampaign": "Choose or create a campaign to search its sources.",
+    "newCampaign": "New campaign"
+  },
+  "conversations": {
+    "new": "New conversation",
+    "listQuestions": "Question conversations",
+    "listRules": "Rule creation conversations",
+    "emptyQuestions": "No conversations yet. Start one to look up the campaign's rules.",
+    "emptyRules": "No conversations yet. Start one to prepare a rule for the campaign.",
+    "questionsOne": "1 question",
+    "questionsOther": "{count} questions",
+    "lastAsked": "last on {date}",
+    "detail": "{questions} · {last}",
+    "form": {
+      "renameTitle": "Rename conversation",
+      "name": "Name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This conversation was renamed elsewhere. The field now shows its current name: make your change again and save."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete this conversation?",
+      "consequenceOne": "Going with it: 1 question and its answer. This cannot be undone.",
+      "consequenceOther": "Going with it: {count} questions and their answers. This cannot be undone.",
+      "unknown": "Going with it: this conversation's questions and their answers. This cannot be undone.",
+      "confirm": "Delete conversation"
+    }
+  },
+  "saved": {
+    "title": "Saved items",
+    "open": "Saved items",
+    "close": "Close saved items",
+    "list": "Saved answers",
+    "empty": "No saved answers. Use the bookmark under an answer to keep it here.",
+    "go": "Go",
+    "goTo": "Go to the answer in «{name}»",
+    "switched": "Switched to the campaign «{name}».",
+    "loading": "Loading the saved items…",
+    "retry": "Try again",
+    "pages": "Pages of the saved items",
+    "separator": " › "
   }
 }

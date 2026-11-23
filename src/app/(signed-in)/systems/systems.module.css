@@ -1,0 +1,137 @@
+/*
+ * What the systems pages (Story 3.1) and the campaigns pages (Story 3.2) show under their header. The header, the tabs,
+ * the cards and the empty states are the shared page parts (components/Page.module.css); the main column sets the gap
+ * between a page's blocks, so nothing here carries a top margin.
+ */
+
+/* A description keeps the GM's line breaks. */
+.description {
+  max-width: 70ch;
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* A fact about the item beside its title, such as "this is the current campaign": a word and a mark, never a colour alone. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--space-6);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-full);
+  background-color: var(--color-success-soft);
+  color: var(--color-text);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+}
+
+/* A tab's content that is a group of facts: a surface with an edge, as a list is. */
+.panel,
+.details,
+.conversations {
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+/*
+ * A campaign's scope tab (Story 3.6): one muted line on what the switches do, then the scope controls, no wider than a
+ * form so a switch's state stays near its name.
+ */
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scope > .description {
+  color: var(--color-text-muted);
+}
+
+.scope > :last-child {
+  max-width: var(--width-form);
+}
+
+/* A campaign's overview (Story 3.2): each field's name beside its value, the names in one column. */
+.details {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-6);
+  align-items: center;
+}
+
+.detail {
+  display: contents;
+}
+
+.detail dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .detail dd {
+    margin-bottom: var(--space-3);
+  }
+}
+
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  color: var(--color-text);
+  font-weight: var(--font-label-weight);
+  text-decoration: underline;
+}
+
+/* A campaign's conversations (Story 3.2): one row each, its area, its question count and "Abrir". */
+.conversations {
+  padding-block: var(--space-2);
+  list-style: none;
+}
+
+.conversation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-height: calc(var(--space-touch-target) + var(--space-3));
+}
+
+.conversation + .conversation {
+  border-top: 1px solid var(--color-border);
+}
+
+.conversation > :last-child {
+  margin-left: auto;
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.conversationName {
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}

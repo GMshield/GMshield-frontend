@@ -1,23 +1,34 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import type { UrlStorage } from 'tus-js-client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+import { NO_PLACES } from '@/components/uploads/types';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/questions' }));
 
 type Ask = (campaignId: string, question: string) => Promise<unknown>;
 const postQuestion = vi.fn<Ask>();
 const stopTurn = vi.fn<(turnId: string) => Promise<boolean>>();
+type SetDismissal = typeof import('@/client/conversation').setDismissal;
+const setDismissal = vi.fn<SetDismissal>();
+type SetBookmark = typeof import('@/client/conversation').setBookmark;
+const setBookmark = vi.fn<SetBookmark>();
 vi.mock('@/client/conversation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/client/conversation')>()),
   postQuestion,
   stopTurn,
+  setDismissal,
+  setBookmark,
 }));
 
-const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS } = await import('@/components/conversation/Conversation');
+const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
 const { UploadsProvider, useUploads } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { errorText } = await import('@/messages');
+const { ScopePopover } = await import('@/components/ScopePopover');
+const { ScopePopoverProvider } = await import('@/components/ScopePopoverContext');
 
 const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
 const TURN = '0190a0b0-0000-7000-8000-000000000021';
@@ -90,7 +101,7 @@ function view(
   options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review?: { href: string; name: string } | null; loadPage?: LoadPage } = {},
 ) {
   return render(
-    <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={null} urlStorage={memoryStorage()}>
+    <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
       <Conversation
         language={options.language ?? 'pt-BR'}
         campaignId={CAMPAIGN}
@@ -171,7 +182,7 @@ describe('the conversation (Story 2.4)', () => {
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.keyboard('{Enter}');
 
-    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Uma\nduas\n\n\n\n\n\n');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Uma\nduas\n\n\n\n\n\n', { area: 'questions' });
     expect(composer().value).toBe('');
     expect(composer().rows).toBe(1);
     await waitFor(() => expect(streams).toHaveLength(1));
@@ -183,18 +194,18 @@ describe('the conversation (Story 2.4)', () => {
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy();
   });
 
-  it('keeps the draft per campaign in this browser and clears it on send', async () => {
-    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}`, 'Rascunho guardado');
+  it('keeps the draft per campaign and conversation in this browser and clears it on send', async () => {
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`, 'Rascunho guardado');
     view();
     await waitFor(() => expect(composer().value).toBe('Rascunho guardado'));
     const user = userEvent.setup();
     await user.type(composer(), '?');
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Rascunho guardado?');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Rascunho guardado?');
 
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.click(screen.getByRole('button', { name: 'Enviar' }));
 
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBeNull();
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBeNull();
   });
 
   it('works when the browser keeps nothing', async () => {
@@ -248,6 +259,43 @@ describe('the conversation (Story 2.4)', () => {
     expect(document.querySelector('img')).toBeNull();
   });
 
+  it('brings a question just asked to the top of the window, and never moves the page while its answer is written', async () => {
+    // jsdom has no scrolling: the call is what is checked. The usability pass (third round) added it, because a new
+    // question used to land under the docked composer once the conversation was longer than the window.
+    const scrolled: { text: string; options: unknown }[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element, options?: unknown) {
+      scrolled.push({ text: this.textContent ?? '', options });
+    };
+    const motion = vi.fn((query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    vi.stubGlobal('matchMedia', motion);
+    try {
+      view();
+      const stream = await ask('Quanto dano causa Fire Bolt?');
+      expect(scrolled).toHaveLength(1);
+      expect(scrolled[0]!.text).toContain('Quanto dano causa Fire Bolt?');
+      expect(scrolled[0]!.options).toEqual({ block: 'start', behavior: 'smooth' });
+      // The answer arrives in pieces: the page stays where the reader put it.
+      stream.emit('delta', { text: 'Fire Bolt causa ' });
+      stream.emit('delta', { text: '1d10 de dano.' });
+      stream.emit('done', doneWith(PASSAGE_A));
+      expect(scrolled).toHaveLength(1);
+
+      // The next question moves the page again, to itself; with reduced motion it does not glide.
+      motion.mockImplementation((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => undefined, removeEventListener: () => undefined }));
+      postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
+      const user = userEvent.setup();
+      await user.type(composer(), 'E Fireball?{Enter}');
+      await waitFor(() => expect(scrolled).toHaveLength(2));
+      expect(scrolled[1]!.text).toContain('E Fireball?');
+      expect(scrolled[1]!.text).not.toContain('Quanto dano causa Fire Bolt?');
+      expect(scrolled[1]!.options).toEqual({ block: 'start', behavior: 'auto' });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('renders the answer as sanitized Markdown: no image, a link as its text and address, no raw HTML', async () => {
     view();
     const stream = await ask('Quais links?');
@@ -259,7 +307,8 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('done', doneWith(PASSAGE_A));
 
     expect(document.querySelector('img')).toBeNull();
-    expect(document.querySelector('a')).toBeNull();
+    // Story 3.10: the only links are the slim line's (the way back and "Renomear"), never in an answer.
+    expect(screen.getAllByRole('list')[0]!.querySelector('a')).toBeNull();
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('b')).toBeNull();
     expect(turns().getByText('o SRD (https://srd.example/fire-bolt)')).toBeTruthy();
@@ -289,16 +338,19 @@ describe('the conversation (Story 2.4)', () => {
     stream.emit('citation', { passageId: PASSAGE_A, offset: 38 });
     stream.emit('done', doneWith(PASSAGE_A));
 
-    for (const tag of ['a', 'img', 'iframe', 'script']) {
+    for (const tag of ['img', 'iframe', 'script']) {
       expect(document.querySelector(tag), tag).toBeNull();
     }
+    // Story 3.10: the only links are the slim line's (the way back and "Renomear"), never in an answer.
+    expect(screen.getAllByRole('list')[0]!.querySelector('a')).toBeNull();
     expect(turns().getByText(/https:\/\/example\.invalid\/auto/)).toBeTruthy();
     expect(turns().getByText('clique para curar (javascript:alert(1))')).toBeTruthy();
     expect(turns().getByText('o grimório (https://example.invalid/grimorio)')).toBeTruthy();
     // A reference-style image is dropped whole, its address with it; nothing loads from example.invalid.
     expect(document.body.innerHTML).not.toContain('ninho.png');
     expect(document.body.innerHTML).not.toContain('example.invalid/frame');
-    expect(document.querySelectorAll('[src], [href]')).toHaveLength(0);
+    expect(document.querySelectorAll('[src]')).toHaveLength(0);
+    expect([...document.querySelectorAll('[href]')].map((link) => link.getAttribute('href'))).toEqual(['/questions', '/questions/c/edit']);
   });
 
   it('marks an answer in another language than the interface with its language and a visible label', async () => {
@@ -352,7 +404,7 @@ describe('the conversation (Story 2.4)', () => {
     await user.type(composer(), 'Quanto dano causa Fire Bolt?{Enter}');
 
     await waitFor(() => expect(composer().value).toBe('Quanto dano causa Fire Bolt?'));
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Quanto dano causa Fire Bolt?');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Quanto dano causa Fire Bolt?');
 
     let refuse: (value: unknown) => void = () => undefined;
     postQuestion.mockImplementationOnce(() => new Promise((resolve) => (refuse = resolve)));
@@ -362,7 +414,7 @@ describe('the conversation (Story 2.4)', () => {
     await act(async () => refuse({ ok: false, problem: { status: 400, category: 'request', code: 'request.invalid', params: {} } }));
 
     expect(composer().value).toBe('Outra pergunta');
-    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}`)).toBe('Outra pergunta');
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`)).toBe('Outra pergunta');
   });
 
   it('takes at most 4,000 characters in the composer, as the backend does', () => {
@@ -604,7 +656,8 @@ describe('sources under every answer (Story 2.5)', () => {
     expect(screen.queryByText('Resposta em inglês')).toBeNull();
     expect(screen.queryAllByRole('list', { name: 'Fontes' })).toHaveLength(0);
     expect(document.querySelector('sup')).toBeNull();
-    expect(polite()).toBe('The sources say nothing about this.');
+    // Story 3.8: with model knowledge off (absent), the offer under it is said too, in the same language.
+    expect(polite()).toBe('The sources say nothing about this. Widen the sources or turn on model knowledge.');
     expect(document.querySelector('hr')).not.toBeNull();
   });
 
@@ -775,7 +828,7 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     stream.emit('done', { stopped: false, silent: true, references: [] }, 1);
     postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: 'c', language: 'pt-BR' } });
     await user.keyboard('{Enter}');
-    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Outra pergunta');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Outra pergunta', { conversationId: 'c' });
   });
 
   it('sends a stop pressed before the turn id is known as soon as the id arrives', async () => {
@@ -891,7 +944,7 @@ describe('stop an answer, and answers that fail clearly (Story 2.6)', () => {
     fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
 
     await waitFor(() => expect(streams).toHaveLength(2));
-    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Quanto dano causa Fire Bolt?');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Quanto dano causa Fire Bolt?', { conversationId: 'c' });
     expect(turns().getAllByText('Quanto dano causa Fire Bolt?')).toHaveLength(1);
     expect(turns().queryByText('O serviço de IA está indisponível agora.')).toBeNull();
     streams[1]!.emit('delta', { text: 'Um d10.' }, 1);
@@ -1410,5 +1463,1325 @@ describe('open the cited page in the source view (Story 2.7)', () => {
     const dialog = screen.getByRole('dialog');
     expect((await within(dialog).findByRole('alert')).textContent).toBe('This page could not be loaded.');
     expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('the campaign\'s version leads (Story 3.7)', () => {
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  const HOUSE = 'Na mesa, 2d10.';
+  const BOOK = 'No livro, 1d10.';
+
+  /** The house rule under its campaign marker, then the book's rule under its system marker, each with its citation. */
+  function disagree(stream: FakeStream, first = 1): void {
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, first);
+    stream.emit('delta', { text: HOUSE }, first + 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, first + 2);
+    stream.emit('delta', { text: '\n\n' }, first + 3);
+    stream.emit('tier', { tier: 'system', offset: 16 }, first + 4);
+    stream.emit('delta', { text: BOOK }, first + 5);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 31 }, first + 6);
+  }
+
+  const DISAGREE_DONE = {
+    silent: false,
+    references: [
+      reference(1, [PASSAGE_A], { materialName: 'Notas da campanha.md', sectionPath: ['Magias'], page: 2, tier: 'campaign' }),
+      reference(2, [PASSAGE_B], { page: 13, tier: 'system' }),
+    ],
+  };
+
+  /** The paragraphs of the answer, each as its pills, texts and superscripts in order. */
+  function answerParts(): string[][] {
+    const answer = turns().getAllByRole('paragraph').filter((p) => p.closest('[class*="answer"]') !== null);
+    return answer.map((paragraph) =>
+      [...paragraph.childNodes].map((node) => {
+        if (node.nodeName === 'SUP') {
+          return `SUP:${shown(node)}`;
+        }
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.dataset.tier}:${node.textContent}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      }),
+    );
+  }
+
+  it('opens the house rule with a Campanha pill and the book\'s rule with a Sistema pill, each with its citation', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    // Nothing of a tier shows while the answer streams, as for the superscripts.
+    expect(document.querySelector('[data-tier]')).toBeNull();
+
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+    // References: the campaign's, then the system's, each line opened by its tier's pill.
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items.map((item) => item.querySelector('[data-tier]')?.textContent)).toEqual(['Campanha', 'Sistema']);
+    // A visually hidden ": " keeps the word apart from the line for a reader.
+    expect(items.map((item) => item.textContent)).toEqual(['Campanha: Notas da campanha.md, Magias, p. 2', 'Sistema: Livro do Jogador.pdf, Magias › Fire Bolt, p. 13']);
+    // The line's button is still named by its line alone.
+    expect(within(items[0]!).getByRole('button').textContent).toBe('Notas da campanha.md, Magias, p. 2');
+  });
+
+  it('draws a pill that takes no focus, has no role of its own and is read as its word', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    // Two in the answer and two on the references, plus the answer's two again in the polite region.
+    const pills = [...document.querySelectorAll<HTMLElement>('[data-tier]')];
+    expect(pills.length).toBe(6);
+    expect(pills.filter((pill) => pill.closest('[data-testid="conversation-polite"]') === null)).toHaveLength(4);
+    for (const pill of pills) {
+      expect(pill.tagName).toBe('SPAN');
+      expect(pill.getAttribute('tabindex')).toBeNull();
+      expect(pill.getAttribute('role')).toBeNull();
+      expect(pill.getAttribute('aria-hidden')).toBeNull();
+      expect(pill.className).toMatch(/pill/);
+    }
+    // Tabbing through the answer reaches the reference buttons only, never a pill.
+    const user = userEvent.setup();
+    const seen: Element[] = [];
+    for (let i = 0; i < 12; i++) {
+      await user.tab();
+      if (document.activeElement !== null) {
+        seen.push(document.activeElement);
+      }
+    }
+    expect(seen.some((element) => element.hasAttribute('data-tier'))).toBe(false);
+    expect(seen.some((element) => element.textContent === 'Notas da campanha.md, Magias, p. 2')).toBe(true);
+  });
+
+  it('shows no inline pill when only one tier speaks, and each reference still carries its tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Fire Bolt causa 1d10.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 21 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'system' })] });
+
+    expect(turns().getAllByRole('paragraph').some((p) => p.querySelector('[data-tier]') !== null && p.closest('ol') === null)).toBe(false);
+    const item = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem');
+    expect(item.querySelector('[data-tier]')?.textContent).toBe('Sistema');
+  });
+
+  it('shows Outros for an other-tier reference, and no pill for a reference stored before tiers, which still opens', async () => {
+    const loadPage = vi.fn<LoadPage>().mockResolvedValue({ page: 3, pageTotal: 3, picture: null, lines: [], text: 'Fire Bolt.', passages: [], outcome: 'read_directly' });
+    view({ loadPage });
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'other' }), reference(2, [PASSAGE_B])] });
+
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items[0]!.querySelector('[data-tier]')?.textContent).toBe('Outros');
+    expect(items[1]!.querySelector('[data-tier]')).toBeNull();
+    expect(items[1]!.textContent).toBe('Livro do Jogador.pdf, Magias › Fire Bolt, p. 3');
+    fireEvent.click(within(items[1]!).getByRole('button'));
+    await waitFor(() => expect(loadPage).toHaveBeenCalled());
+    expect(loadPage.mock.calls[0]!.slice(0, 2)).toEqual([TURN, 2]);
+  });
+
+  it('keeps a removed source\'s stored tier beside "fonte removida"', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'campaign', removed: true })] });
+
+    const item = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem');
+    expect(item.textContent).toBe('Campanha: Livro do Jogador.pdf, Magias › Fire Bolt, p. 3 — fonte removida');
+  });
+
+  it('ignores a tier event that is not one, and leaves out a reference with an unknown tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'xyz', offset: 0 });
+    stream.emit('tier', { tier: 'campaign', offset: -1 });
+    stream.emit('tier', { tier: 'campaign' });
+    stream.emit('delta', { text: 'Um. Dois.' });
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 3 });
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 9 });
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'model' }), reference(2, [PASSAGE_B], { tier: 'system' })] });
+
+    expect(document.querySelectorAll('p [data-tier]')).toHaveLength(0);
+    const items = within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(items[0]!.getAttribute('value')).toBe('2');
+  });
+
+  it('puts the pills at the same places after a reconnection mid-answer replays from the last event', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    stream.emit('delta', { text: HOUSE }, 2);
+    vi.useFakeTimers();
+    stream.drop();
+    act(() => vi.advanceTimersByTime(RECONNECT_GIVE_UP_MS));
+    fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
+    expect(streams[1]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=2`);
+    vi.useRealTimers();
+    streams[1]!.open();
+    // The backend replays from the last id; anything repeated is ignored, so the campaign pill is drawn once.
+    streams[1]!.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    streams[1]!.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 3);
+    streams[1]!.emit('delta', { text: '\n\n' }, 4);
+    streams[1]!.emit('tier', { tier: 'system', offset: 16 }, 5);
+    streams[1]!.emit('delta', { text: BOOK }, 6);
+    streams[1]!.emit('citation', { passageId: PASSAGE_B, offset: 31 }, 7);
+    streams[1]!.emit('done', DISAGREE_DONE, 8);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+  });
+
+  it('says the tiers in the polite region: each version after its word, each reference line after its tier', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    const region = screen.getByTestId('conversation-polite');
+    expect([...region.querySelectorAll('p')].map((p) => p.textContent)).toEqual([`Campanha: ${HOUSE}`, `Sistema: ${BOOK}`]);
+    expect([...region.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+      'Campanha: Notas da campanha.md, Magias, p. 2',
+      'Sistema: Livro do Jogador.pdf, Magias › Fire Bolt, p. 13',
+    ]);
+  });
+
+  it('draws no inline pill for a lone marker, and one pill for a tier marked twice in a row', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('tier', { tier: 'system', offset: 0 }, 1);
+    stream.emit('delta', { text: BOOK }, 2);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 15 }, 3);
+    stream.emit('done', { silent: false, references: [reference(1, [PASSAGE_B], { tier: 'system' })] }, 4);
+
+    expect(document.querySelectorAll('main p span[data-tier], [class*="answer"] span[data-tier]')).toHaveLength(0);
+    expect(answerParts()).toEqual([[`#text:${BOOK}`, 'SUP:1']]);
+    // Reference pills stay as they are.
+    expect(within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getByRole('listitem').querySelector('[data-tier]')?.textContent).toBe('Sistema');
+
+    cleanup();
+    streams = [];
+    view();
+    const repeated = await ask('Quanto dano causa Fire Bolt?');
+    repeated.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    repeated.emit('delta', { text: 'Um.\n\n' }, 2);
+    repeated.emit('tier', { tier: 'campaign', offset: 5 }, 3);
+    repeated.emit('delta', { text: 'Dois.\n\n' }, 4);
+    repeated.emit('tier', { tier: 'system', offset: 12 }, 5);
+    repeated.emit('delta', { text: 'Três.' }, 6);
+    repeated.emit('done', { silent: false, references: [reference(1, [PASSAGE_A], { tier: 'campaign' })] }, 7);
+
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', '#text:Um.'],
+      ['#text:Dois.'],
+      ['PILL:system:Sistema', 'SEP:: ', '#text:Três.'],
+    ]);
+  });
+
+  it('keeps both pills at their places in a stopped answer', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    disagree(stream);
+    stream.emit('done', { stopped: true, silent: false, references: DISAGREE_DONE.references }, 8);
+
+    expect(turns().getByText('Interrompida')).toBeTruthy();
+    expect(answerParts()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', `#text:${HOUSE}`, 'SUP:1'],
+      ['PILL:system:Sistema', 'SEP:: ', `#text:${BOOK}`, 'SUP:2'],
+    ]);
+  });
+
+  it('names the tiers in English with an English interface', async () => {
+    view({ language: 'en' });
+    const stream = await ask('How much damage?', 'en');
+    disagree(stream);
+    stream.emit('done', DISAGREE_DONE, 8);
+
+    const shownPills = [...document.querySelectorAll('[data-tier]')].filter((pill) => pill.closest('[data-testid="conversation-polite"]') === null);
+    expect(shownPills.map((pill) => pill.textContent)).toEqual(['Campaign', 'System', 'Campaign', 'System']);
+  });
+});
+
+describe('model knowledge only when I turn it on (Story 3.8)', () => {
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  const SCOPE = { version: 1, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [] };
+
+  /** The conversation inside the shell's scope popover provider, with the context bar's popover beside it. */
+  function viewWithPopover(language: 'pt-BR' | 'en' = 'pt-BR') {
+    return render(
+      <ScopePopoverProvider>
+        <ScopePopover
+          summary="Campanha + Sistema · conhecimento do modelo desligado"
+          label="Escopo"
+          panel="Escopo da campanha"
+          campaignId={CAMPAIGN}
+          scope={SCOPE}
+          language={language}
+          action={vi.fn(async () => ({ scope: null, error: null, saved: false }))}
+        />
+        <UploadsProvider texts={uploadTexts(language)} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+          <Conversation
+            language={language}
+            campaignId={CAMPAIGN}
+            hasSources
+            review={null}
+            openStream={(url) => {
+              const stream = new FakeStream(url);
+              streams.push(stream);
+              return stream as unknown as EventSource;
+            }}
+          />
+        </UploadsProvider>
+      </ScopePopoverProvider>,
+    );
+  }
+
+  /** The answer's blocks, each as its pills (with what a reader hears for them), texts and superscripts in order. */
+  function blocks(): string[][] {
+    const answer = turns().getAllByRole('paragraph').filter((p) => p.closest('[class*="answer"]') !== null);
+    return answer.map((paragraph) => {
+      if (/modelEnd/u.test(paragraph.className)) {
+        return [`END:${paragraph.textContent}`];
+      }
+      return [...paragraph.childNodes].map((node) => {
+        if (node.nodeName === 'SUP') {
+          return `SUP:${shown(node)}`;
+        }
+        if (node instanceof HTMLElement && node.dataset.tier !== undefined) {
+          return `PILL:${node.dataset.tier}:${node.textContent}${node.getAttribute('aria-hidden') === 'true' ? ':hidden' : ''}`;
+        }
+        if (node instanceof HTMLElement && /separator/u.test(node.className)) {
+          return `SEP:${node.textContent}`;
+        }
+        return `${node.nodeName}:${node.textContent}`;
+      });
+    });
+  }
+
+  it('matrix row "On, mixed": citations as before, and the model paragraph opens with its pill and closes with its line', async () => {
+    view();
+    const stream = await ask('Quanto dano causa Fire Bolt?');
+    stream.emit('delta', { text: 'Na mesa, 2d10.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 2);
+    stream.emit('delta', { text: '\n\n' }, 3);
+    stream.emit('tier', { tier: 'model', offset: 16 }, 4);
+    stream.emit('delta', { text: 'Em geral, 1d10.' }, 5);
+    // Nothing of it shows while the answer streams.
+    expect(document.querySelector('[data-tier]')).toBeNull();
+    stream.emit('done', { silent: false, modelKnowledge: true, references: [reference(1, [PASSAGE_A], { tier: 'campaign' })] }, 6);
+
+    // The model pill is drawn alone (the 3.7 rule of two tiers is for the scope's tiers only); it has no superscript.
+    expect(blocks()).toEqual([
+      ['#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Em geral, 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+    ]);
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+    // A reader hears the sentence for the pill, never the word shown.
+    const polite = screen.getByTestId('conversation-polite');
+    expect(polite.textContent).toContain('Do conhecimento do modelo, sem fonte. Em geral, 1d10.');
+    // Neither the pill nor the line takes focus or has a role.
+    for (const element of document.querySelectorAll<HTMLElement>('[data-tier="model"], [class*="modelEnd"]')) {
+      expect(element.getAttribute('tabindex')).toBeNull();
+      expect(element.getAttribute('role')).toBeNull();
+    }
+  });
+
+  it('closes the model part before the next tier\'s pill, and draws the scope\'s tiers only when two of them disagree', async () => {
+    view();
+    const stream = await ask('How much?');
+    stream.emit('tier', { tier: 'campaign', offset: 0 }, 1);
+    stream.emit('delta', { text: 'At the table, 2d10.' }, 2);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 19 }, 3);
+    stream.emit('delta', { text: '\n\n' }, 4);
+    stream.emit('tier', { tier: 'model', offset: 21 }, 5);
+    stream.emit('delta', { text: 'Usually 1d10.\n\n' }, 6);
+    stream.emit('tier', { tier: 'system', offset: 36 }, 7);
+    stream.emit('delta', { text: 'In the book, 1d10.' }, 8);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 54 }, 9);
+    stream.emit('done', {
+      silent: false,
+      modelKnowledge: true,
+      references: [reference(1, [PASSAGE_A], { tier: 'campaign' }), reference(2, [PASSAGE_B], { tier: 'system' })],
+    }, 10);
+
+    expect(blocks()).toEqual([
+      ['PILL:campaign:Campanha', 'SEP:: ', '#text:At the table, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Usually 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+      ['PILL:system:Sistema', 'SEP:: ', '#text:In the book, 1d10.', 'SUP:2'],
+    ]);
+  });
+
+  it('matrix row "On, nothing handed": only the model paragraph, with its pill, is not silent and has no reference', async () => {
+    view({ language: 'en' });
+    const stream = await ask('How much?', 'en');
+    stream.emit('tier', { tier: 'model', offset: 0 }, 1);
+    stream.emit('delta', { text: 'Usually 1d10.' }, 2);
+    stream.emit('done', { silent: false, modelKnowledge: true, references: [] }, 3);
+
+    expect(blocks()).toEqual([
+      ['PILL:model:Model knowledge:hidden', 'SEP:From model knowledge, no source. ', '#text:Usually 1d10.'],
+      ['END:From model knowledge, no source.'],
+    ]);
+    expect(turns().queryByText('The sources say nothing about this.')).toBeNull();
+    expect(screen.queryAllByRole('list', { name: 'Sources' })).toHaveLength(0);
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+  });
+
+  it('keeps a model part even when the done event carries no reference and does not say silent', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('tier', { tier: 'model', offset: 0 }, 1);
+    stream.emit('delta', { text: 'Em geral, 1d10.' }, 2);
+    // An old backend's done with no modelKnowledge: the marked part still stays.
+    stream.emit('done', { silent: false, references: [] }, 3);
+
+    expect(turns().getByText('Em geral, 1d10.')).toBeTruthy();
+    expect(turns().queryByText('As fontes não dizem nada sobre isso.')).toBeNull();
+  });
+
+  it('matrix row "On, silent": the silent sentence and no offer when the turn had model knowledge on', async () => {
+    viewWithPopover();
+    const stream = await ask('Quanto?');
+    stream.emit('done', { silent: true, modelKnowledge: true, references: [] }, 1);
+
+    expect(turns().getByText('As fontes não dizem nada sobre isso.')).toBeTruthy();
+    expect(screen.queryByTestId('silent-offer')).toBeNull();
+    expect(polite()).toBe('As fontes não dizem nada sobre isso.');
+  });
+
+  it('matrix row "Off, silent": the offer line under the silent sentence, said too, opens the scope popover', async () => {
+    viewWithPopover();
+    const stream = await ask('Quanto?');
+    stream.emit('delta', { text: 'Texto sem fonte.' }, 1);
+    stream.emit('done', { silent: true, modelKnowledge: false, references: [] }, 2);
+
+    const offer = screen.getByTestId('silent-offer');
+    expect(offer.textContent).toBe('Ampliar as fontes ou ligar o conhecimento do modeloAbrir o escopo');
+    expect(offer.closest('li')).not.toBeNull();
+    expect(polite()).toBe('As fontes não dizem nada sobre isso. Ampliar as fontes ou ligar o conhecimento do modelo.');
+    const trigger = screen.getByRole('button', { name: /^Escopo:/u });
+    const group = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    expect(group.hidden).toBe(true);
+
+    await userEvent.setup().click(within(offer).getByRole('button', { name: 'Abrir o escopo' }));
+
+    expect(group.hidden).toBe(false);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    await waitFor(() => expect(group.contains(document.activeElement)).toBe(true));
+  });
+
+  it('opens the popover from the keyboard with focus inside it (en)', async () => {
+    viewWithPopover('en');
+    const stream = await ask('How much?', 'en');
+    stream.emit('done', { silent: true, modelKnowledge: false, references: [] }, 1);
+
+    const button = within(screen.getByTestId('silent-offer')).getByRole('button', { name: 'Open the scope' });
+    expect(screen.getByTestId('silent-offer').textContent).toBe('Widen the sources or turn on model knowledgeOpen the scope');
+    button.focus();
+    await userEvent.setup().keyboard('{Enter}');
+
+    const group = screen.getByRole('group', { name: 'Escopo da campanha' });
+    await waitFor(() => expect(group.contains(document.activeElement)).toBe(true));
+    expect(document.activeElement?.getAttribute('role')).toBe('switch');
+    // Esc closes it and gives focus back to the offer's button (the summary is hidden under 768px).
+    await userEvent.setup().keyboard('{Escape}');
+    expect(group.hidden).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(button));
+  });
+
+  it('shows the offer without its button where no scope popover is there to open', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('done', { silent: true, references: [] }, 1);
+
+    const offer = screen.getByTestId('silent-offer');
+    expect(offer.textContent).toBe('Ampliar as fontes ou ligar o conhecimento do modelo');
+    expect(within(offer).queryByRole('button')).toBeNull();
+  });
+
+  it('matrix row "Replay": the model pill stays at its place after a reconnection replays from the last event', async () => {
+    view();
+    const stream = await ask('Quanto?');
+    stream.emit('delta', { text: 'Na mesa, 2d10.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 14 }, 2);
+    stream.emit('delta', { text: '\n\n' }, 3);
+    stream.emit('tier', { tier: 'model', offset: 16 }, 4);
+    vi.useFakeTimers();
+    stream.drop();
+    act(() => vi.advanceTimersByTime(RECONNECT_GIVE_UP_MS));
+    fireEvent.click(turns().getByRole('button', { name: 'Tentar de novo' }));
+    expect(streams[1]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=4`);
+    vi.useRealTimers();
+    streams[1]!.open();
+    // The backend replays from the last id; a repeated marker is ignored, so the model pill is drawn once.
+    streams[1]!.emit('tier', { tier: 'model', offset: 16 }, 4);
+    streams[1]!.emit('delta', { text: 'Em geral, 1d10.' }, 5);
+    streams[1]!.emit('done', { silent: false, modelKnowledge: true, references: [reference(1, [PASSAGE_A])] }, 6);
+
+    expect(blocks()).toEqual([
+      ['#text:Na mesa, 2d10.', 'SUP:1'],
+      ['PILL:model:Conhecimento do modelo:hidden', 'SEP:Do conhecimento do modelo, sem fonte. ', '#text:Em geral, 1d10.'],
+      ['END:Do conhecimento do modelo, sem fonte.'],
+    ]);
+  });
+});
+
+describe('conversations by area (Story 3.10)', () => {
+  const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
+  type Stored = import('@/client/conversation').StoredTurn;
+  const stored = (
+    id: string,
+    question: string,
+    events: [string, unknown][],
+    language: Stored['language'] = 'pt-BR',
+    bookmarked = false,
+  ): Stored => ({
+    id,
+    question,
+    language,
+    createdAt: '2026-11-22T12:00:00Z',
+    events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
+    bookmarked,
+  });
+
+  type DeleteAction = NonNullable<import('@/components/conversation/Conversation').ConversationProps['deleteAction']>;
+  function opened(
+    props: {
+      area?: 'questions' | 'rules';
+      conversationId?: string | null;
+      name?: string | null;
+      stored?: readonly Stored[];
+      questions?: number | null;
+      deleteAction?: DeleteAction;
+      focusTurn?: string | null;
+      language?: 'pt-BR' | 'en';
+      around?: (children: ReactNode) => ReactNode;
+    } = {},
+  ) {
+    const around = props.around ?? ((children: ReactNode) => children);
+    return render(
+      around(
+        <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+          <Conversation
+            language={props.language ?? 'pt-BR'}
+            campaignId={CAMPAIGN}
+            hasSources
+            review={null}
+            area={props.area}
+            conversationId={props.conversationId}
+            name={props.name}
+            stored={props.stored}
+            questions={props.questions}
+            deleteAction={props.deleteAction}
+            focusTurn={props.focusTurn}
+            openStream={(url) => {
+              const stream = new FakeStream(url);
+              streams.push(stream);
+              return stream as unknown as EventSource;
+            }}
+          />
+        </UploadsProvider>,
+      ),
+    );
+  }
+
+  beforeAll(() => {
+    // jsdom has no modal dialogs: the smallest stand-in for showModal() and close() (Story 3.10 part B's "Excluir").
+    if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+      HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      };
+      HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute('open');
+        this.dispatchEvent(new Event('close'));
+      };
+    }
+  });
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    setDismissal.mockReset();
+    setBookmark.mockReset();
+    localStorage.clear();
+    window.history.replaceState(null, '', '/questions/new');
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  it('matrix: a new conversation opens with the composer focused and three area examples, which fill it and never send', async () => {
+    opened({ area: 'rules' });
+    expect(document.activeElement).toBe(composer());
+    expect(screen.getByText('Que regra você quer criar?')).toBeTruthy();
+    const examples = within(screen.getByRole('list', { name: 'Exemplos de perguntas' })).getAllByRole('button');
+    expect(examples.map((button) => button.textContent)).toEqual([
+      'Que regras já existem sobre fabricar itens?',
+      'Como o sistema define a dificuldade de um teste?',
+      'Quais regras da casa esta campanha tem?',
+    ]);
+    // The way back only: a new conversation has no name and no "Renomear" yet.
+    const top = screen.getByTestId('conversation-top');
+    expect(within(top).getByRole('link', { name: 'Criação de Regras' }).getAttribute('href')).toBe('/rules');
+    expect(within(top).queryByRole('link', { name: 'Renomear' })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(examples[1]!);
+
+    expect(composer().value).toBe('Como o sistema define a dificuldade de um teste?');
+    expect(document.activeElement).toBe(composer());
+    expect(composer().selectionStart).toBe(composer().value.length);
+    expect(postQuestion).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:rules`)).toBe('Como o sistema define a dificuldade de um teste?');
+  });
+
+  it('matrix row "First question in a new conversation": asked in its area, then the address and the slim line name it', async () => {
+    opened({ area: 'rules' });
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'Que regras já existem sobre fabricar itens mágicos de alto nível em campanhas longas?{Enter}');
+
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Que regras já existem sobre fabricar itens mágicos de alto nível em campanhas longas?', { area: 'rules' });
+    await waitFor(() => expect(window.location.pathname).toBe(`/rules/${CONVERSATION}`));
+    const top = screen.getByTestId('conversation-top');
+    // The default name, as the backend gives it: the first 60 code points, cut at a word boundary.
+    expect(within(top).getByText('Que regras já existem sobre fabricar itens mágicos de alto')).toBeTruthy();
+    expect(within(top).getByRole('link', { name: 'Renomear' }).getAttribute('href')).toBe(`/rules/${CONVERSATION}/edit`);
+    expect(screen.queryByRole('list', { name: 'Exemplos de perguntas' })).toBeNull();
+
+    // Matrix row "Continue": the next question names the conversation.
+    streams[0]!.emit('done', { stopped: false, silent: true, modelKnowledge: false, references: [] }, 1);
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'E itens comuns?{Enter}');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'E itens comuns?', { conversationId: CONVERSATION });
+  });
+
+  it('matrix: a reopened conversation shows its turns with their references, and the next question continues it', async () => {
+    const done = { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] };
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano causa Fire Bolt?', [
+          ['delta', { text: 'Fire Bolt causa 1d10.' }],
+          ['citation', { passageId: PASSAGE_A, offset: 21 }],
+          ['done', done],
+        ]),
+        stored(PASSAGE_B, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...done, stopped: true, references: [] }]]),
+        stored(PASSAGE_C, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+      ],
+    });
+
+    expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(turns().getByText(/Livro do Jogador\.pdf/)).toBeTruthy();
+    expect(turns().getByText('Começo')).toBeTruthy();
+    expect(turns().getByText('Interrompida')).toBeTruthy();
+    // A failed turn shows its failure in place of what streamed, with "Tentar de novo".
+    expect(turns().queryByText('Metade')).toBeNull();
+    expect(turns().getByText('O serviço de IA está indisponível agora.')).toBeTruthy();
+    expect(screen.queryByTestId('conversation-intro')).toBeNull();
+    expect(within(screen.getByTestId('conversation-top')).getByText('Fire Bolt')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Fire Bolt');
+    // Nothing streams for turns that have ended, and the composer is not taken from the reader.
+    expect(streams).toHaveLength(0);
+    expect(document.activeElement).not.toBe(composer());
+
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'E Fireball?{Enter}');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'E Fireball?', { conversationId: CONVERSATION });
+    expect(window.location.pathname).toBe('/questions/new');
+  });
+
+  it('follows a stored turn still being written from its last event, keeping what it already has', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa ' }], ['citation', { passageId: PASSAGE_A, offset: 16 }]])],
+    });
+
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(streams[0]!.url).toBe(`/api/v1/turns/${TURN}/events?lastEventId=2`);
+    expect(turns().getByText('Fire Bolt causa')).toBeTruthy();
+    // While it runs, the send button is Stop.
+    expect(screen.getByRole('button', { name: 'Parar' })).toBeTruthy();
+    streams[0]!.emit('delta', { text: '1d10.' }, 3);
+    streams[0]!.emit('done', { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] }, 4);
+
+    expect(turns().getByText(/Fire Bolt causa\s*1d10\./)).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy();
+  });
+
+  it('keeps the draft of an opened conversation apart from a new one\'s', async () => {
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:new:questions`, 'Rascunho novo');
+    localStorage.setItem(`${DRAFT_PREFIX}${CAMPAIGN}:${CONVERSATION}`, 'Rascunho da conversa');
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [] });
+    await waitFor(() => expect(composer().value).toBe('Rascunho da conversa'));
+  });
+
+  // --- Story 3.10 part B: delete a conversation
+
+  it('"Excluir" follows "Renomear" in the slim line, outlined in danger; its dialog names the questions read with the page plus those asked since', async () => {
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: null }));
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [], questions: 2, deleteAction });
+    const top = screen.getByTestId('conversation-top');
+    const rename = within(top).getByRole('link', { name: 'Renomear' });
+    const pill = within(top).getByRole('button', { name: 'Excluir' });
+    expect(pill.dataset.variant).toBe('danger');
+    expect(rename.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const user = userEvent.setup();
+    await user.click(pill);
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    expect(dialog.textContent).toContain('Vão junto: 2 perguntas e suas respostas. Isso não pode ser desfeito.');
+    // Focus starts on Cancelar.
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+
+    // A question asked on the page goes too: the count follows.
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'E Fireball?{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]!.emit('done', { stopped: false, silent: true, modelKnowledge: false, references: [] }, 1);
+    await user.click(within(top).getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 3 perguntas e suas respostas.');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    await waitFor(() => expect(deleteAction).toHaveBeenCalledTimes(1));
+    expect((deleteAction.mock.calls[0]![1] as FormData).get('id')).toBe(CONVERSATION);
+  });
+
+  it('a conversation made on the page has "Excluir" once it has an id, its dialog in words; a new one has none', async () => {
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: 'Não encontrado.' }));
+    opened({ area: 'rules', deleteAction });
+    expect(within(screen.getByTestId('conversation-top')).queryByRole('button', { name: 'Excluir' })).toBeNull();
+
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    const user = userEvent.setup();
+    await user.type(composer(), 'Que regras existem?{Enter}');
+    const pill = await within(screen.getByTestId('conversation-top')).findByRole('button', { name: 'Excluir' });
+    await user.click(pill);
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.',
+    );
+    // A refusal shows under the pill, and focus is back on it.
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    expect((await within(screen.getByTestId('conversation-top')).findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(pill);
+  });
+
+  it('offers no "Excluir" without its Server Action', () => {
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: [], questions: 1 });
+    expect(within(screen.getByTestId('conversation-top')).queryByRole('button', { name: 'Excluir' })).toBeNull();
+  });
+
+  // --- Story 3.11: dismiss an answer
+
+  const DONE = { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])] };
+  const SECOND = '0190a0b0-0000-7000-8000-000000000022';
+  const THIRD = '0190a0b0-0000-7000-8000-000000000023';
+
+  /** A conversation of two done turns, the first cited, as the page reads it with its question count. */
+  function twoDone(deleteAction?: DeleteAction) {
+    return opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      questions: 2,
+      deleteAction,
+      stored: [
+        stored(TURN, 'Quanto dano causa Fire Bolt?', [
+          ['delta', { text: 'Fire Bolt causa 1d10.' }],
+          ['citation', { passageId: PASSAGE_A, offset: 21 }],
+          ['done', DONE],
+        ]),
+        stored(SECOND, 'E Fireball?', [['delta', { text: 'Fireball causa 8d6.' }], ['done', { ...DONE, references: [], silent: true }]]),
+      ],
+    });
+  }
+
+  /** Lets the dismissal's and the undo's promises settle. */
+  async function settle() {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  function dismissButtons() {
+    return turns().queryAllByRole('button', { name: 'Dispensar resposta' });
+  }
+
+  it('a done and a stopped answer have "Dispensar resposta" under their rule; a failed one and one being written have none', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...DONE, stopped: true, references: [] }]]),
+        stored(THIRD, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+        stored(PASSAGE_C, 'E depois?', [['delta', { text: 'Escrevendo' }]]),
+      ],
+    });
+    await waitFor(() => expect(streams).toHaveLength(1));
+
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(items).toHaveLength(4);
+    for (const item of items.slice(0, 2)) {
+      const button = within(item).getByRole('button', { name: 'Dispensar resposta' });
+      // Under the rule, as the last control of the turn, with the X drawn inside a circle.
+      const rule = item.querySelector('hr')!;
+      expect(rule.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(button.querySelector('span svg path')).not.toBeNull();
+    }
+    expect(within(items[2]!).queryByRole('button', { name: 'Dispensar resposta' })).toBeNull();
+    expect(within(items[3]!).queryByRole('button', { name: 'Dispensar resposta' })).toBeNull();
+
+    // Once the answer being written is done, it has one too.
+    streams[0]!.emit('done', DONE, 2);
+    expect(within(items[3]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    expect(dismissButtons()).toHaveLength(3);
+  });
+
+  it('dismiss: the line replaces the turn at once with focus on "Desfazer"; after 10 s it goes and focus moves to the composer', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    const deleteAction = vi.fn<DeleteAction>(async () => ({ error: null }));
+    twoDone(deleteAction);
+    vi.useFakeTimers();
+
+    fireEvent.click(dismissButtons()[0]!);
+
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(turns().queryByText(/Fire Bolt causa/)).toBeNull();
+    const line = screen.getByTestId('dismissed-line');
+    expect(line.textContent).toBe('Resposta dispensada.Desfazer');
+    const undo = within(line).getByRole('button', { name: 'Desfazer' });
+    expect(document.activeElement).toBe(undo);
+    expect(polite()).toContain('Resposta dispensada.');
+    expect(setDismissal).toHaveBeenCalledWith(TURN, 'dismiss');
+    // The other turn stays.
+    expect(turns().getByText('E Fireball?')).toBeTruthy();
+    await settle();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS - 1));
+    expect(screen.queryByTestId('dismissed-line')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(document.activeElement).toBe(composer());
+    expect(setDismissal).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+
+    // The delete dialog's count leaves out the turn dismissed here.
+    fireEvent.click(within(screen.getByTestId('conversation-top')).getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vai junto: 1 pergunta e sua resposta.');
+  });
+
+  it('after 10 s, focus elsewhere stays where it is', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[1]!);
+    await settle();
+    const other = dismissButtons()[0]!;
+    other.focus();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(document.activeElement).toBe(other);
+    vi.useRealTimers();
+  });
+
+  it('"Desfazer" within 10 s: the undo is sent, the turn is back where it was with its sources, and focus is on its dismiss button', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    act(() => vi.advanceTimersByTime(UNDO_MS - 1000));
+
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    expect(setDismissal).toHaveBeenLastCalledWith(TURN, 'restore');
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(superscripts()).toEqual(['1']);
+    expect(within(items[0]!).getByText(/Livro do Jogador\.pdf/)).toBeTruthy();
+    expect(document.activeElement).toBe(within(items[0]!).getByRole('button', { name: 'Dispensar resposta' }));
+    // The line's time no longer runs: the turn stays.
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('an undo selected before the dismissal was answered waits for it, then undoes it', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    twoDone();
+
+    fireEvent.click(dismissButtons()[0]!);
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+    expect(setDismissal).toHaveBeenCalledTimes(1);
+    // Meanwhile the pill says it is busy.
+    expect(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }).getAttribute('aria-busy')).toBe('true');
+
+    answer({ ok: true });
+    await waitFor(() => expect(setDismissal).toHaveBeenLastCalledWith(TURN, 'restore'));
+    await waitFor(() => expect(turns().getByText('Quanto dano causa Fire Bolt?')).toBeTruthy());
+  });
+
+  it('a refused dismissal brings the answer back with the refusal under its actions', async () => {
+    setDismissal.mockResolvedValueOnce({ ok: false, problem: { status: 409, category: 'conversation', code: 'conversation.turn_running' } });
+    twoDone();
+
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    const problem = within(items[0]!).getByTestId('dismiss-problem');
+    expect(problem.textContent).toBe('Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la.');
+    const dismiss = within(items[0]!).getByRole('button', { name: 'Dispensar resposta' });
+    expect(dismiss.compareDocumentPosition(problem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.activeElement).toBe(dismiss);
+
+    // Dismissed again, it goes; the refusal with it.
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(dismiss);
+    expect(screen.queryByTestId('dismiss-problem')).toBeNull();
+  });
+
+  it('a refused undo keeps the line, with the refusal in it, until its time ends', async () => {
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockResolvedValueOnce({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    const line = screen.getByTestId('dismissed-line');
+    expect(within(line).getByTestId('undo-problem').textContent).toBe(errorText({ category: 'server', code: 'server.unavailable' }, 'pt-BR'));
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('an undo still under way when the 10 s end keeps the line; its success then shows the turn again', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    // The line stays, focus on its pill, while the undo is answered.
+    const pill = within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' });
+    expect(document.activeElement).toBe(pill);
+    answer({ ok: true });
+    await settle();
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    const items = turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+    expect(within(items[0]!).getByText('Quanto dano causa Fire Bolt?')).toBeTruthy();
+    expect(document.activeElement).toBe(within(items[0]!).getByRole('button', { name: 'Dispensar resposta' }));
+  });
+
+  it('an undo refused after the 10 s ended ends the line then, focus moving to the composer', async () => {
+    let answer: (result: { ok: false; problem: unknown }) => void = () => undefined;
+    setDismissal.mockResolvedValueOnce({ ok: true });
+    setDismissal.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await settle();
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(screen.queryByTestId('dismissed-line')).not.toBeNull();
+
+    answer({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    await settle();
+
+    expect(screen.queryByTestId('dismissed-line')).toBeNull();
+    expect(turns().queryByText('Quanto dano causa Fire Bolt?')).toBeNull();
+    expect(document.activeElement).toBe(composer());
+    expect(polite()).toContain(errorText({ category: 'server', code: 'server.unavailable' }, 'pt-BR'));
+  });
+
+  it('a conversation whose every turn was dismissed shows its intro once the lines end, as a reload would', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    twoDone();
+    vi.useFakeTimers();
+    fireEvent.click(dismissButtons()[0]!);
+    fireEvent.click(dismissButtons()[0]!);
+    await settle();
+    expect(screen.queryByTestId('conversation-intro')).toBeNull();
+
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+
+    expect(screen.queryAllByTestId('dismissed-line')).toHaveLength(0);
+    expect(screen.getByTestId('conversation-intro')).toBeTruthy();
+  });
+
+  it('a stopped answer asked on the page is dismissed like a done one, in English too', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    view({ language: 'en' });
+    const stream = await ask('What does Fire Bolt do?', 'en');
+    stream.emit('delta', { text: 'It deals' }, 1);
+    expect(screen.queryByRole('button', { name: 'Dismiss answer' })).toBeNull();
+    stream.emit('done', { stopped: true, silent: false, references: [] }, 2);
+
+    fireEvent.click(turns().getByRole('button', { name: 'Dismiss answer' }));
+
+    expect(screen.getByTestId('dismissed-line').textContent).toBe('Answer dismissed.Undo');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
+    expect(setDismissal).toHaveBeenCalledWith(TURN, 'dismiss');
+  });
+
+  // --- Story 3.12: bookmark answers and find them again
+
+  function bookmarkOf(item: HTMLElement, name = 'Salvar resposta') {
+    return within(item).getByRole('button', { name });
+  }
+
+  function turnItems() {
+    return turns().getAllByRole('listitem').filter((item) => item.parentElement === screen.getAllByRole('list')[0]);
+  }
+
+  it('a done answer has "Salvar resposta" before dismiss; a stopped, a failed and a running one have none', async () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E se eu parar?', [['delta', { text: 'Começo' }], ['done', { ...DONE, stopped: true, references: [] }]]),
+        stored(THIRD, 'E agora?', [['delta', { text: 'Metade' }], ['error', { code: 'model.unavailable' }]]),
+        stored(PASSAGE_C, 'E depois?', [['delta', { text: 'Escrevendo' }]]),
+        // Silent: done with no reference and no model part (the sources said nothing): it cannot be saved.
+        stored(PASSAGE_B, 'E o tempo?', [['delta', { text: 'Nada.' }], ['done', { ...DONE, references: [], silent: true }]]),
+      ],
+    });
+    await waitFor(() => expect(streams).toHaveLength(1));
+    const items = turnItems();
+    expect(within(items[4]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[4]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    const save = bookmarkOf(items[0]!);
+    const dismiss = within(items[0]!).getByRole('button', { name: 'Dispensar resposta' });
+    // Before dismiss, unpressed, a filled circle with the outlined bookmark.
+    expect(save.compareDocumentPosition(dismiss) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.getAttribute('aria-pressed')).toBe('false');
+    expect(save.dataset.set).toBeUndefined();
+    expect(save.querySelector('span svg path')?.getAttribute('fill')).toBe('none');
+    // A stopped answer keeps its dismiss only; a failed one and one being written have neither.
+    expect(within(items[1]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[1]!).getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+    expect(within(items[2]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    expect(within(items[3]!).queryByRole('button', { name: 'Salvar resposta' })).toBeNull();
+    // Once the answer being written is done, it has one too; each turn's item is named by its id.
+    streams[0]!.emit('done', DONE, 2);
+    expect(bookmarkOf(items[3]!)).toBeTruthy();
+    expect(items.map((item) => item.id)).toEqual([`turn-${TURN}`, `turn-${SECOND}`, `turn-${THIRD}`, `turn-${PASSAGE_C}`, `turn-${PASSAGE_B}`]);
+  });
+
+  it('a press inverts the button at once, then saves; pressed again it removes, and a stored saved answer opens set', async () => {
+    let answer: (result: { ok: true }) => void = () => undefined;
+    setBookmark.mockReturnValueOnce(new Promise((resolve) => {
+      answer = resolve;
+    }));
+    setBookmark.mockResolvedValue({ ok: true });
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [
+        stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]]),
+        stored(SECOND, 'E Fireball?', [['delta', { text: 'Fireball causa 8d6.' }], ['done', DONE]], 'pt-BR', true),
+      ],
+    });
+    const [first, second] = turnItems();
+    // Saved already: an outlined circle with the filled bookmark, named for its removal and pressed.
+    const set = bookmarkOf(second!, 'Remover dos itens salvos');
+    expect(set.getAttribute('aria-pressed')).toBe('true');
+    expect(set.dataset.set).toBe('true');
+    expect(set.querySelector('span svg path')?.getAttribute('fill')).toBe('currentColor');
+
+    fireEvent.click(bookmarkOf(first!));
+
+    // At once, before the backend answers.
+    const now = bookmarkOf(first!, 'Remover dos itens salvos');
+    expect(now.getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect(setBookmark).toHaveBeenLastCalledWith(TURN, 'save'));
+    answer({ ok: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bookmarkOf(first!, 'Remover dos itens salvos')).toBeTruthy();
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+
+    fireEvent.click(set);
+    expect(bookmarkOf(second!).getAttribute('aria-pressed')).toBe('false');
+    await waitFor(() => expect(setBookmark).toHaveBeenLastCalledWith(SECOND, 'remove'));
+    // A bookmark never touches the dismissal.
+    expect(setDismissal).not.toHaveBeenCalled();
+  });
+
+  it('a refusal puts the button back and says why under the actions; the next press clears it', async () => {
+    const notDone = { status: 409, category: 'conversation', code: 'conversation.turn_not_done', params: {} };
+    setBookmark.mockResolvedValueOnce({ ok: false, problem: notDone }).mockResolvedValue({ ok: true });
+    twoDone();
+    const [first] = turnItems();
+
+    fireEvent.click(bookmarkOf(first!));
+    expect(bookmarkOf(first!, 'Remover dos itens salvos')).toBeTruthy();
+
+    await waitFor(() => expect(screen.getByTestId('bookmark-problem').textContent).toBe('Só uma resposta concluída pode ser salva.'));
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    expect(polite()).toContain('Só uma resposta concluída pode ser salva.');
+    // The refusal sits under the actions.
+    const actions = bookmarkOf(first!).parentElement!;
+    expect(actions.compareDocumentPosition(screen.getByTestId('bookmark-problem')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(bookmarkOf(first!));
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+    await waitFor(() => expect(setBookmark).toHaveBeenCalledTimes(2));
+  });
+
+  it('presses in a row are sent in order, and only the latest one\'s refusal puts the button back', async () => {
+    const answers: ((result: { ok: boolean; problem?: unknown }) => void)[] = [];
+    setBookmark.mockImplementation(() => new Promise((resolve) => answers.push(resolve as never)));
+    twoDone();
+    const [first] = turnItems();
+    fireEvent.click(bookmarkOf(first!));
+    fireEvent.click(bookmarkOf(first!, 'Remover dos itens salvos'));
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    // The second waits for the first.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(setBookmark).toHaveBeenCalledTimes(1);
+    answers[0]!({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable' } });
+    await waitFor(() => expect(setBookmark).toHaveBeenCalledTimes(2));
+    expect(setBookmark.mock.calls.map((call) => call[1])).toEqual(['save', 'remove']);
+    // The first's refusal is not the latest press: nothing moves.
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('bookmark-problem')).toBeNull();
+    answers[1]!({ ok: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bookmarkOf(first!).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a change tells the saved items panel to read its list again', async () => {
+    setBookmark.mockResolvedValue({ ok: true });
+    const { SavedItemsProvider, useSavedItems } = await import('@/components/saved/SavedItems');
+    function Version() {
+      return <output data-testid="saved-version">{useSavedItems()?.version}</output>;
+    }
+    twoDone();
+    cleanup();
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]])],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          {children}
+          <Version />
+        </SavedItemsProvider>
+      ),
+    });
+    expect(screen.getByTestId('saved-version').textContent).toBe('0');
+    fireEvent.click(bookmarkOf(turnItems()[0]!));
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('1'));
+  });
+
+  it('opened at a turn (a saved item\'s "Ir") shows that turn instead of the last, with focus on it', () => {
+    const scrolled: Element[] = [];
+    const before = Element.prototype.scrollIntoView;
+    // jsdom does not scroll: note what the page asks to bring into view.
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    const three = [
+      stored(TURN, 'Quanto dano?', [['delta', { text: 'Um.' }], ['done', DONE]]),
+      stored(SECOND, 'E Fireball?', [['delta', { text: 'Dois.' }], ['done', DONE]]),
+      stored(THIRD, 'E Shield?', [['delta', { text: 'Três.' }], ['done', DONE]]),
+    ];
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: three, focusTurn: SECOND });
+    const target = document.getElementById(`turn-${SECOND}`)!;
+    expect(scrolled).toEqual([target]);
+    expect(document.activeElement).toBe(target);
+    // Focusable by the page only, never a stop of the keyboard; the other turns are not focusable at all.
+    expect(target.getAttribute('tabindex')).toBe('-1');
+    expect(document.getElementById(`turn-${TURN}`)!.hasAttribute('tabindex')).toBe(false);
+    cleanup();
+    scrolled.length = 0;
+
+    // A turn not among those loaded (older than the newest 200, or gone): the last turn, as before, and focus stays.
+    opened({ conversationId: CONVERSATION, name: 'Fire Bolt', stored: three, focusTurn: PASSAGE_C });
+    expect(scrolled).toEqual([document.getElementById(`turn-${THIRD}`)]);
+    expect(document.activeElement).toBe(document.body);
+    Element.prototype.scrollIntoView = before;
+  });
+
+  it('a dismissal and its undo tell the saved items panel to read its list again', async () => {
+    setDismissal.mockResolvedValue({ ok: true });
+    const { SavedItemsProvider, useSavedItems } = await import('@/components/saved/SavedItems');
+    function Version() {
+      return <output data-testid="saved-version">{useSavedItems()?.version}</output>;
+    }
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['done', DONE]], 'pt-BR', true)],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          {children}
+          <Version />
+        </SavedItemsProvider>
+      ),
+    });
+    fireEvent.click(dismissButtons()[0]!);
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('1'));
+    fireEvent.click(within(screen.getByTestId('dismissed-line')).getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() => expect(screen.getByTestId('saved-version').textContent).toBe('2'));
+  });
+
+  it('Ctrl+Shift+S over an open source view closes it and opens the saved items panel in its place, with focus inside', async () => {
+    const { SavedItemsProvider } = await import('@/components/saved/SavedItems');
+    const { SavedItemsPanel } = await import('@/components/saved/SavedItemsPanel');
+    const { ShellFrame } = await import('@/components/ShellPanel');
+    const user = userEvent.setup();
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      stored: [stored(TURN, 'Quanto dano?', [['delta', { text: 'Fire Bolt causa 1d10.' }], ['citation', { passageId: PASSAGE_A, offset: 21 }], ['done', DONE]])],
+      around: (children) => (
+        <SavedItemsProvider currentCampaignId={CAMPAIGN}>
+          <ShellFrame>
+            {children}
+            <SavedItemsPanel language="pt-BR" action={async (previous) => previous} load={async () => ({ ok: true, items: [], total: 0 })} />
+          </ShellFrame>
+        </SavedItemsProvider>
+      ),
+    });
+    await user.click(within(screen.getAllByRole('list', { name: 'Fontes' })[0]!).getAllByRole('button')[0]!);
+    expect(screen.getByRole('button', { name: 'Fechar a fonte' })).toBeTruthy();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('button', { name: 'Fechar a fonte' })).toBeNull();
+    expect(screen.getAllByRole('complementary')).toHaveLength(1);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar itens salvos' }));
+  });
+
+  it('opened at a turn while the page behind a panel cannot take focus yet, the turn takes it once it can', async () => {
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {};
+    // As behind an open panel under 1280px: the first focus does nothing (the page is inert), later ones work.
+    const original = HTMLElement.prototype.focus;
+    let refused = 0;
+    const focus = vi.spyOn(HTMLLIElement.prototype, 'focus').mockImplementation(function focus(this: HTMLLIElement, options?: FocusOptions) {
+      if (refused < 2) {
+        refused += 1;
+        return;
+      }
+      original.call(this, options);
+    });
+    try {
+      opened({
+        conversationId: CONVERSATION,
+        name: 'Fire Bolt',
+        stored: [
+          stored(TURN, 'Quanto dano?', [['delta', { text: 'Um.' }], ['done', DONE]]),
+          stored(SECOND, 'E Fireball?', [['delta', { text: 'Dois.' }], ['done', DONE]]),
+        ],
+        focusTurn: TURN,
+      });
+      expect(document.activeElement).not.toBe(document.getElementById(`turn-${TURN}`));
+
+      await waitFor(() => expect(document.activeElement).toBe(document.getElementById(`turn-${TURN}`)));
+      expect(refused).toBe(2);
+    } finally {
+      focus.mockRestore();
+      Element.prototype.scrollIntoView = before;
+    }
+  });
+
+  it('names the bookmark in English too', () => {
+    opened({
+      conversationId: CONVERSATION,
+      name: 'Fire Bolt',
+      language: 'en',
+      stored: [
+        stored(TURN, 'How much?', [['delta', { text: 'One.' }], ['done', DONE]], 'en'),
+        stored(SECOND, 'And Fireball?', [['delta', { text: 'Two.' }], ['done', DONE]], 'en', true),
+      ],
+    });
+    const [first, second] = turnItems();
+    expect(bookmarkOf(first!, 'Save answer').getAttribute('aria-pressed')).toBe('false');
+    expect(bookmarkOf(second!, 'Remove from saved items').getAttribute('aria-pressed')).toBe('true');
   });
 });

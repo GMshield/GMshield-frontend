@@ -1,0 +1,103 @@
+/*
+ * A system's form (Story 3.1) and a campaign's (Story 3.2): labelled fields one under the other, then the actions.
+ * Usability pass (2026-11-21): a field is a bordered box in the field colour, never the control grey of a button, so a
+ * place to type and a thing to press read apart; the label sits close to its field and the groups sit further apart.
+ */
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: var(--width-form);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.label {
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--motion-fade) ease-out;
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--color-text);
+}
+
+.input[aria-invalid='true'],
+.select[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--color-danger);
+  border-width: 2px;
+}
+
+.input {
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+}
+
+/* A campaign's system (Story 3.2): a box like the name's field. */
+.select {
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+}
+
+.textarea {
+  min-height: calc(var(--space-touch-target) * 3);
+  padding: var(--space-3) var(--space-4);
+  resize: vertical;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+/* The system changed elsewhere: said above the fields, which now hold its current values. */
+.stale {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-warning-soft);
+}
+
+/* The main action first, then the way out; a rule above them closes the fields. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  width: 100%;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}

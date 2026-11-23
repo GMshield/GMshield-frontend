@@ -3,6 +3,10 @@
     "schemas" : {
       "Campaign" : {
         "properties" : {
+          "archived" : {
+            "description" : "Whether the GM archived it (contract 1.19.0)",
+            "type" : "boolean"
+          },
           "id" : {
             "description" : "The campaign's id",
             "example" : "0190a0b0-0000-7000-8000-000000000002",
@@ -17,9 +21,128 @@
           "system" : {
             "$ref" : "#/components/schemas/System",
             "description" : "The campaign's system"
+          },
+          "version" : {
+            "description" : "The campaign's version: a rename, an archive or a restore names it and raises it by one; choosing the campaign does not (contract 1.19.0)",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "id", "name", "system" ],
+        "required" : [ "archived", "id", "name", "system", "version" ],
+        "type" : "object"
+      },
+      "CampaignChange" : {
+        "properties" : {
+          "archived" : {
+            "description" : "True archives the campaign, false restores it; absent or null: unchanged",
+            "example" : true,
+            "type" : "boolean"
+          },
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming; absent or null: unchanged",
+            "example" : "Mesa de sexta",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the edit was made on, as the campaign was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
+      "CampaignConversation" : {
+        "description" : "A campaign's conversation (contract 1.19.0)",
+        "properties" : {
+          "id" : {
+            "description" : "The conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "questions" : {
+            "description" : "How many questions it shows (from contract 1.31.0 a dismissed one is not counted)",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "id", "questions" ],
+        "type" : "object"
+      },
+      "CampaignDeletion" : {
+        "properties" : {
+          "conversations" : {
+            "description" : "How many conversations of the campaign go with it",
+            "example" : 1,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "materials" : {
+            "description" : "How many materials attached to the campaign go with it (those with a version that is not discarded)",
+            "example" : 2,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "conversations", "materials" ],
+        "type" : "object"
+      },
+      "CampaignPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CampaignSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The cursor of the next page; absent on the last",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many items the list has in all, whatever the page",
+            "example" : 4,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "CampaignSummary" : {
+        "properties" : {
+          "archived" : {
+            "description" : "Whether the GM archived it (contract 1.19.0)",
+            "type" : "boolean"
+          },
+          "id" : {
+            "description" : "The campaign's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The campaign's name",
+            "example" : "Primeira campanha",
+            "type" : "string"
+          },
+          "system" : {
+            "$ref" : "#/components/schemas/SystemSummary",
+            "description" : "The campaign's system (contract 1.19.0)"
+          }
+        },
+        "required" : [ "archived", "id", "name", "system" ],
         "type" : "object"
       },
       "CompleteSignIn" : {
@@ -57,6 +180,164 @@
           }
         },
         "required" : [ "version" ],
+        "type" : "object"
+      },
+      "Conversation" : {
+        "description" : "One conversation (contract 1.29.0)",
+        "properties" : {
+          "area" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "Its version: a rename names it and raises it by one",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "area", "campaignId", "id", "name", "version" ],
+        "type" : "object"
+      },
+      "ConversationChange" : {
+        "description" : "A rename of a conversation (contract 1.29.0)",
+        "properties" : {
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming",
+            "example" : "Viagem ao norte",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the rename was made on, as the conversation was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "name", "version" ],
+        "type" : "object"
+      },
+      "ConversationDeletion" : {
+        "description" : "What goes with a conversation if it is deleted (contract 1.30.0)",
+        "properties" : {
+          "questions" : {
+            "description" : "How many questions it shows (from contract 1.31.0 a dismissed one is not counted, though it goes too): each goes with its answer, events and source references",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "questions" ],
+        "type" : "object"
+      },
+      "ConversationPage" : {
+        "description" : "One page of a campaign's conversations of one area (contract 1.29.0)",
+        "properties" : {
+          "items" : {
+            "description" : "The most recently asked first",
+            "items" : {
+              "$ref" : "#/components/schemas/ConversationSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The offset of the next page, as text; absent on the last",
+            "example" : "20",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many conversations the campaign has in this area",
+            "example" : 27,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "ConversationSummary" : {
+        "description" : "A conversation in a list (contract 1.29.0)",
+        "properties" : {
+          "area" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "createdAt" : {
+            "description" : "When its first question was asked",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastAskedAt" : {
+            "description" : "When its newest question was asked",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "questions" : {
+            "description" : "How many questions it shows: from contract 1.31.0 a dismissed one is not counted, so it may be 0",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Its version: a rename names it and raises it by one",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "area", "createdAt", "id", "lastAskedAt", "name", "questions", "version" ],
+        "type" : "object"
+      },
+      "ConversationTurns" : {
+        "description" : "A conversation's turns (contract 1.29.0)",
+        "properties" : {
+          "items" : {
+            "description" : "Its newest 200 turns, oldest first",
+            "items" : {
+              "$ref" : "#/components/schemas/StoredTurn"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "items" ],
+        "type" : "object"
+      },
+      "CurrentCampaignChoice" : {
+        "properties" : {
+          "campaignId" : {
+            "description" : "The account's campaign to make current; not an archived one",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "campaignId" ],
         "type" : "object"
       },
       "CurrentConversation" : {
@@ -226,15 +507,28 @@
             "enum" : [ "pt-BR", "en", "detect" ],
             "type" : "string"
           },
+          "material" : {
+            "description" : "One of the account's materials that this set replaces (contract 1.23.0): the set becomes its new version, and the material keeps its name, kind, language and place. Never with kind, language, campaign, system or systems",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "name" : {
             "description" : "The material's name",
             "example" : "Ficha do personagem",
             "type" : "string"
           },
           "system" : {
-            "description" : "One of the account's systems it belongs to (never with campaign)",
+            "description" : "One of the account's systems it belongs to (never with campaign or systems)",
             "format" : "uuid",
             "type" : "string"
+          },
+          "systems" : {
+            "description" : "One to 100 of the account's systems it belongs to (never with campaign or system; contract 1.21.0)",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "required" : [ "images", "name" ],
@@ -275,12 +569,16 @@
       "Material" : {
         "properties" : {
           "actions" : {
-            "description" : "The actions the newest version allows now, in this order: accept and discard while it needs review, reprocess too when a page is unreadable; retry (when it can start again) and discard while it is failed; none otherwise",
+            "description" : "The actions the current version allows now, in this order: accept and discard while it needs review, reprocess too when a page is unreadable; retry (when it can start again) and discard while it is failed; reprocess while it is ready (contract 1.23.0: a new version, read from its cleaned original); none otherwise",
             "items" : {
               "enum" : [ "accept", "reprocess", "retry", "discard" ],
               "type" : "string"
             },
             "type" : "array"
+          },
+          "belonging" : {
+            "$ref" : "#/components/schemas/MaterialBelonging",
+            "description" : "Where the material belongs (contract 1.21.0)"
           },
           "failure" : {
             "description" : "Why the version failed (category.reason), only when the state is failed",
@@ -312,18 +610,146 @@
             "$ref" : "#/components/schemas/MaterialPages",
             "description" : "Pages done of the total, once the total is known"
           },
+          "serving" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/MaterialServing"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "The ready version that keeps serving while the current version is another one (a replacement or a reprocess on its way); null otherwise (contract 1.23.0)"
+          },
+          "size" : {
+            "description" : "The current version's size in bytes, once known (contract 1.21.0)",
+            "example" : 134217728,
+            "format" : "int64",
+            "type" : "integer"
+          },
           "state" : {
-            "description" : "The state of the material's newest version",
+            "description" : "The state of the material's current version: its newest version that is not discarded, or its newest one when every version is discarded (contract 1.23.0)",
             "enum" : [ "uploading", "waiting", "processing", "needs_review", "ready", "superseded", "failed", "discarded" ],
             "example" : "waiting",
             "type" : "string"
           },
+          "superseded" : {
+            "description" : "The material's superseded versions, newest first; a version whose removal is recorded is left out; empty when there is none (contract 1.24.0)",
+            "items" : {
+              "$ref" : "#/components/schemas/MaterialSuperseded"
+            },
+            "type" : "array"
+          },
           "upload" : {
             "$ref" : "#/components/schemas/MaterialUpload",
             "description" : "The unfinished upload, only while the state is uploading"
+          },
+          "version" : {
+            "description" : "The material's version: a change of where it belongs names it and raises it by one (contract 1.21.0)",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "actions", "id", "name", "state" ],
+        "required" : [ "actions", "belonging", "id", "name", "serving", "state", "superseded", "version" ],
+        "type" : "object"
+      },
+      "MaterialBelonging" : {
+        "description" : "Where the material belongs (contract 1.21.0): one campaign, or one or more systems; both empty for a material uploaded with no place. Only places that are not being deleted are named",
+        "properties" : {
+          "campaign" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/MaterialCampaign"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "The campaign it belongs to; null when it belongs to systems or to nothing"
+          },
+          "systems" : {
+            "description" : "The systems it belongs to, oldest attachment first; empty when it belongs to a campaign or to nothing",
+            "items" : {
+              "$ref" : "#/components/schemas/MaterialPlace"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "campaign", "systems" ],
+        "type" : "object"
+      },
+      "MaterialBelongingChange" : {
+        "description" : "Exactly one of campaign and systems",
+        "properties" : {
+          "campaign" : {
+            "description" : "One of the account's campaigns (archived or not)",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "systems" : {
+            "description" : "One to 100 of the account's systems, at most 100 ids as sent; a repeated id is stored once",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 100,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MaterialCampaign" : {
+        "properties" : {
+          "id" : {
+            "description" : "The campaign's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The campaign's name",
+            "example" : "Primeira campanha",
+            "type" : "string"
+          },
+          "system" : {
+            "$ref" : "#/components/schemas/MaterialPlace",
+            "description" : "The campaign's system"
+          }
+        },
+        "required" : [ "id", "name", "system" ],
+        "type" : "object"
+      },
+      "MaterialChange" : {
+        "properties" : {
+          "belonging" : {
+            "$ref" : "#/components/schemas/MaterialBelongingChange",
+            "description" : "Where the material belongs from now on"
+          },
+          "version" : {
+            "description" : "The version the change was made on, as the material was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "belonging", "version" ],
+        "type" : "object"
+      },
+      "MaterialDeletion" : {
+        "description" : "What goes with a material if it is deleted (contract 1.24.0)",
+        "properties" : {
+          "pages" : {
+            "description" : "The sum of those versions' page totals (a total not known counts 0)",
+            "example" : 640,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "versions" : {
+            "description" : "Its versions that are not discarded",
+            "example" : 2,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "pages", "versions" ],
         "type" : "object"
       },
       "MaterialImageSet" : {
@@ -358,9 +784,15 @@
             "example" : "0190a0b0-0000-7000-8000-000000000003",
             "format" : "uuid",
             "type" : "string"
+          },
+          "total" : {
+            "description" : "How many materials the list has in all for the same states and system, whatever the page; it counts a material whose every place is being deleted until that deletion is done",
+            "example" : 61,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
-        "required" : [ "items" ],
+        "required" : [ "items", "total" ],
         "type" : "object"
       },
       "MaterialPageCount" : {
@@ -479,6 +911,23 @@
         "required" : [ "done", "image", "readByOcr", "readDirectly", "reading", "text", "total", "unreadable" ],
         "type" : "object"
       },
+      "MaterialPlace" : {
+        "properties" : {
+          "id" : {
+            "description" : "The system's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The system's name",
+            "example" : "D&D 5e",
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "name" ],
+        "type" : "object"
+      },
       "MaterialReport" : {
         "properties" : {
           "outline" : {
@@ -504,6 +953,25 @@
           }
         },
         "required" : [ "outline", "unreadable", "warnings" ],
+        "type" : "object"
+      },
+      "MaterialServing" : {
+        "description" : "The material's ready version, which keeps serving every scope while a newer version is processed (contract 1.23.0)",
+        "properties" : {
+          "pages" : {
+            "description" : "Its page total; null when not known",
+            "example" : 320,
+            "format" : "int32",
+            "type" : [ "integer", "null" ]
+          },
+          "size" : {
+            "description" : "Its size in bytes; null when not known",
+            "example" : 134217728,
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          }
+        },
+        "required" : [ "pages", "size" ],
         "type" : "object"
       },
       "MaterialSetImage" : {
@@ -559,6 +1027,37 @@
         "required" : [ "expiresAt", "length", "offset", "position", "state", "uploadId" ],
         "type" : "object"
       },
+      "MaterialSuperseded" : {
+        "description" : "A superseded version of the material, which the GM may remove (contract 1.24.0)",
+        "properties" : {
+          "createdAt" : {
+            "description" : "When the version was uploaded",
+            "example" : "2026-11-10T14:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The version's id: DELETE /api/v1/materials/{id}/versions/{versionId} removes it",
+            "example" : "0190a0b0-0000-7000-8000-00000000000a",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pages" : {
+            "description" : "Its page total; null when not known",
+            "example" : 320,
+            "format" : "int32",
+            "type" : [ "integer", "null" ]
+          },
+          "size" : {
+            "description" : "Its size in bytes; null when not known",
+            "example" : 134217728,
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          }
+        },
+        "required" : [ "createdAt", "id", "pages", "size" ],
+        "type" : "object"
+      },
       "MaterialUpload" : {
         "properties" : {
           "expiresAt" : {
@@ -600,8 +1099,85 @@
         "required" : [ "username" ],
         "type" : "object"
       },
+      "NewCampaign" : {
+        "properties" : {
+          "name" : {
+            "description" : "1 to 120 code points after trimming; unique within the system, whatever the case",
+            "example" : "Mesa de quinta",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "systemId" : {
+            "description" : "The account's system the campaign belongs to; it never changes",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "systemId" ],
+        "type" : "object"
+      },
+      "NewSearch" : {
+        "description" : "A search of the campaign's scope (contract 1.28.0). The filters only narrow the scope, never widen it",
+        "properties" : {
+          "materialId" : {
+            "description" : "Only this material's version; absent or null for every material on",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "query" : {
+            "description" : "What to find, by meaning or exact words: 1 to 500 code points, not blank",
+            "maxLength" : 500,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "tier" : {
+            "description" : "Only this tier's sources; absent or null for every tier on",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "query" ],
+        "type" : "object"
+      },
+      "NewSystem" : {
+        "properties" : {
+          "description" : {
+            "description" : "Optional, at most 2,000 code points after trimming; blank or absent is none",
+            "example" : "As regras básicas, sem suplementos.",
+            "maxLength" : 2000,
+            "type" : "string"
+          },
+          "edition" : {
+            "description" : "Optional, at most 60 code points after trimming; blank or absent is none",
+            "example" : "5.2.1",
+            "maxLength" : 60,
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "1 to 120 code points after trimming",
+            "example" : "D&D",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
       "NewTurn" : {
         "properties" : {
+          "area" : {
+            "description" : "The area of a new conversation (contract 1.29.0); with conversationId it must be that conversation's. Absent or null with no conversationId: the campaign's latest questions conversation is continued (made when it has none)",
+            "enum" : [ "questions", "rules" ],
+            "type" : [ "string", "null" ]
+          },
+          "conversationId" : {
+            "description" : "The conversation to continue (contract 1.29.0): one of this campaign's. Absent or null: a new conversation of area, or without area the campaign's latest questions conversation",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
           "question" : {
             "description" : "The GM's question: 1 to 4,000 code points, not blank",
             "maxLength" : 4000,
@@ -779,6 +1355,272 @@
         "required" : [ "code", "count" ],
         "type" : "object"
       },
+      "SavedAnswer" : {
+        "description" : "A saved answer (contract 1.32.0)",
+        "properties" : {
+          "area" : {
+            "description" : "Its conversation's area",
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          },
+          "campaignId" : {
+            "description" : "Its conversation's campaign's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "campaignName" : {
+            "description" : "The campaign's name",
+            "type" : "string"
+          },
+          "conversationId" : {
+            "description" : "Its conversation's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "conversationName" : {
+            "description" : "Its conversation's name: the GM's name for it, or else its first question's first 60 code points, cut at a word boundary",
+            "type" : "string"
+          },
+          "excerpt" : {
+            "description" : "The answer's text with its Markdown removed and its white space made single spaces, cut at a word boundary to at most 280 code points",
+            "maxLength" : 280,
+            "type" : "string"
+          },
+          "savedAt" : {
+            "description" : "When the GM saved it",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "turnId" : {
+            "description" : "The saved turn's id",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "area", "campaignId", "campaignName", "conversationId", "conversationName", "excerpt", "savedAt", "turnId" ],
+        "type" : "object"
+      },
+      "SavedAnswerPage" : {
+        "description" : "One page of the account's saved answers (contract 1.32.0)",
+        "properties" : {
+          "items" : {
+            "description" : "The newest saved first",
+            "items" : {
+              "$ref" : "#/components/schemas/SavedAnswer"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The offset of the next page, as text; absent on the last",
+            "example" : "20",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many saved answers are listed",
+            "example" : 27,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "Scope" : {
+        "properties" : {
+          "campaignTier" : {
+            "description" : "Whether the campaign's own materials are used",
+            "type" : "boolean"
+          },
+          "materials" : {
+            "description" : "The materials of every tier, whatever the tier's switch, each with a ready version: in tier order (campaign, system, other), then newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/ScopeMaterial"
+            },
+            "type" : "array"
+          },
+          "modelKnowledge" : {
+            "description" : "Whether the model may answer from its own knowledge, each such part under the model tier label and with no reference; a change applies from the next question",
+            "type" : "boolean"
+          },
+          "otherTier" : {
+            "description" : "Whether the account's other materials (of its other campaigns, archived ones included, and of its other systems) are used",
+            "type" : "boolean"
+          },
+          "systemTier" : {
+            "description" : "Whether the materials of the campaign's system are used",
+            "type" : "boolean"
+          },
+          "version" : {
+            "description" : "The settings' version: a change names it, and each change raises it by one; 0 for a campaign whose settings never changed",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "campaignTier", "materials", "modelKnowledge", "otherTier", "systemTier", "version" ],
+        "type" : "object"
+      },
+      "ScopeChange" : {
+        "properties" : {
+          "campaignTier" : {
+            "description" : "Whether the campaign's own materials are used",
+            "type" : "boolean"
+          },
+          "materialsOff" : {
+            "description" : "The materials switched off, 0 to 1000 ids of materials in one of the campaign's tiers; every other material is on",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 1000,
+            "type" : "array"
+          },
+          "modelKnowledge" : {
+            "description" : "Whether the model may answer from its own knowledge",
+            "type" : "boolean"
+          },
+          "otherTier" : {
+            "description" : "Whether the account's other materials are used",
+            "type" : "boolean"
+          },
+          "systemTier" : {
+            "description" : "Whether the materials of the campaign's system are used",
+            "type" : "boolean"
+          },
+          "version" : {
+            "description" : "The version the change was made on, as the settings were read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "campaignTier", "materialsOff", "modelKnowledge", "otherTier", "systemTier", "version" ],
+        "type" : "object"
+      },
+      "ScopeMaterial" : {
+        "properties" : {
+          "id" : {
+            "description" : "The material's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The material's name",
+            "type" : "string"
+          },
+          "on" : {
+            "description" : "Whether it is switched on (a material is on unless switched off)",
+            "type" : "boolean"
+          },
+          "tier" : {
+            "description" : "The tier it falls in",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "name", "on", "tier" ],
+        "type" : "object"
+      },
+      "Search" : {
+        "description" : "A search of the library (contract 1.28.0)",
+        "properties" : {
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "description" : "Why it failed (category.reason, for example scope.passage_refused); only when failed",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "materialId" : {
+            "description" : "The material filter, null for none",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "query" : {
+            "description" : "The query as the GM wrote it",
+            "type" : "string"
+          },
+          "results" : {
+            "description" : "Up to 20 results, best first; empty unless done. Each is re-checked against the campaign's current scope when read: one that left it since is not listed",
+            "items" : {
+              "$ref" : "#/components/schemas/SearchResult"
+            },
+            "maxItems" : 20,
+            "type" : "array"
+          },
+          "state" : {
+            "description" : "pending until its job ends: done with its results, or failed with a code",
+            "enum" : [ "pending", "done", "failed" ],
+            "type" : "string"
+          },
+          "tier" : {
+            "description" : "The tier filter, null for none",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "campaignId", "id", "materialId", "query", "results", "state", "tier" ],
+        "type" : "object"
+      },
+      "SearchCreated" : {
+        "properties" : {
+          "id" : {
+            "description" : "The search's id",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "id" ],
+        "type" : "object"
+      },
+      "SearchResult" : {
+        "description" : "A passage found, as it stands in the campaign's current scope",
+        "properties" : {
+          "firstWords" : {
+            "description" : "The passage's first 160 code points (its white space made single spaces), cut at a word boundary",
+            "type" : "string"
+          },
+          "materialName" : {
+            "description" : "The material's name",
+            "type" : "string"
+          },
+          "page" : {
+            "description" : "The page",
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "passageId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sectionPath" : {
+            "description" : "The section path, outermost first; may be empty",
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "tier" : {
+            "description" : "The tier of its source in the campaign's current scope",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
+          },
+          "versionId" : {
+            "description" : "Its material version: the source page opens on the ground of the current scope",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "firstWords", "materialName", "page", "passageId", "sectionPath", "tier", "versionId" ],
+        "type" : "object"
+      },
       "SessionGrant" : {
         "properties" : {
           "expiresInSeconds" : {
@@ -840,8 +1682,197 @@
         "required" : [ "attemptToken", "authorizationUrl", "expiresInSeconds" ],
         "type" : "object"
       },
+      "StoredTurn" : {
+        "description" : "A turn of a conversation with its stored events (contract 1.29.0). A turn whose answer is still being written has no done or error event yet: its stream continues after the last sequence",
+        "properties" : {
+          "bookmarked" : {
+            "description" : "Whether the GM saved its answer (contract 1.32.0)",
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "events" : {
+            "description" : "Its stored events, by sequence",
+            "items" : {
+              "$ref" : "#/components/schemas/StoredTurnEvent"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "language" : {
+            "description" : "The question's language, null when unsure",
+            "enum" : [ "pt-BR", "en" ],
+            "type" : [ "string", "null" ]
+          },
+          "question" : {
+            "description" : "The GM's question",
+            "type" : "string"
+          }
+        },
+        "required" : [ "bookmarked", "createdAt", "events", "id", "language", "question" ],
+        "type" : "object"
+      },
+      "StoredTurnEvent" : {
+        "description" : "A stored event of a turn, as its stream sends it (contract 1.29.0)",
+        "properties" : {
+          "data" : {
+            "additionalProperties" : { },
+            "description" : "The event's data, by its type, as the stream sends it; a done event's built when read",
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/TurnDeltaEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnCitationEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnTierEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnDoneEvent"
+            }, {
+              "$ref" : "#/components/schemas/TurnErrorEvent"
+            } ],
+            "type" : "object"
+          },
+          "sequence" : {
+            "description" : "Its sequence: the stream's event id",
+            "format" : "int64",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "type" : {
+            "description" : "The stream's event name",
+            "enum" : [ "delta", "citation", "tier", "done", "error" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "data", "sequence", "type" ],
+        "type" : "object"
+      },
       "System" : {
         "properties" : {
+          "description" : {
+            "description" : "The system's description, null when it has none",
+            "example" : "As regras básicas, sem suplementos.",
+            "type" : [ "string", "null" ]
+          },
+          "edition" : {
+            "description" : "The system's edition, null when it has none",
+            "example" : "5.2.1",
+            "type" : [ "string", "null" ]
+          },
+          "id" : {
+            "description" : "The system's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The system's name",
+            "example" : "Sistema sem nome",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The system's version: an edit names it, and each edit raises it by one",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "description", "edition", "id", "name", "version" ],
+        "type" : "object"
+      },
+      "SystemChange" : {
+        "properties" : {
+          "description" : {
+            "description" : "The new description, at most 2,000 code points after trimming; blank removes it; absent or null: unchanged",
+            "maxLength" : 2000,
+            "type" : "string"
+          },
+          "edition" : {
+            "description" : "The new edition, at most 60 code points after trimming; blank removes it; absent or null: unchanged",
+            "example" : "2024",
+            "maxLength" : 60,
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming; absent or null: unchanged",
+            "example" : "D&D",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the edit was made on, as the system was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
+      "SystemDeletion" : {
+        "properties" : {
+          "campaigns" : {
+            "description" : "How many campaigns of the system go with it",
+            "example" : 2,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "conversations" : {
+            "description" : "How many conversations of those campaigns go with it",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "materials" : {
+            "description" : "How many materials go with it: those of its campaigns, and those attached to it and to no other system",
+            "example" : 1,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "campaigns", "conversations", "materials" ],
+        "type" : "object"
+      },
+      "SystemPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/System"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The cursor of the next page; absent on the last",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many items the list has in all, whatever the page",
+            "example" : 3,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "SystemSummary" : {
+        "properties" : {
+          "edition" : {
+            "description" : "The system's edition, null when it has none",
+            "example" : "5.2.1",
+            "type" : [ "string", "null" ]
+          },
           "id" : {
             "description" : "The system's id",
             "example" : "0190a0b0-0000-7000-8000-000000000001",
@@ -854,7 +1885,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "id", "name" ],
+        "required" : [ "edition", "id", "name" ],
         "type" : "object"
       },
       "Turn" : {
@@ -909,6 +1940,10 @@
       "TurnDoneEvent" : {
         "description" : "The data of a done event: the answer is complete, or the GM stopped it, with its source references. Built when the event is sent, so a replay shows removed as of then",
         "properties" : {
+          "modelKnowledge" : {
+            "description" : "Whether the model could answer from its own knowledge on this turn: the switch as frozen when the question was asked (Story 3.8)",
+            "type" : "boolean"
+          },
           "references" : {
             "description" : "The source references, by number (1..n, each once)",
             "items" : {
@@ -917,7 +1952,7 @@
             "type" : "array"
           },
           "silent" : {
-            "description" : "True exactly when the answer was not stopped and references is empty: the sources say nothing about the question",
+            "description" : "True exactly when the answer was not stopped, references is empty and the turn has no model tier event: the sources say nothing about the question",
             "type" : "boolean"
           },
           "stopped" : {
@@ -925,7 +1960,7 @@
             "type" : "boolean"
           }
         },
-        "required" : [ "references", "silent", "stopped" ],
+        "required" : [ "modelKnowledge", "references", "silent", "stopped" ],
         "type" : "object"
       },
       "TurnErrorEvent" : {
@@ -977,9 +2012,31 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "tier" : {
+            "description" : "The tier its source had in the turn's scope when the answer was written (Story 3.7), kept when the source leaves the scope; absent for a reference stored before then",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
           }
         },
         "required" : [ "materialName", "number", "page", "passageIds", "removed", "sectionPath" ],
+        "type" : "object"
+      },
+      "TurnTierEvent" : {
+        "description" : "The data of a tier event (Story 3.7): the sources disagree, and the version of this tier of the scope starts at a place of the answer's text. The campaign's version comes first; each other tier's follows as an alternative. Only a tier with a source in the turn's scope. From contract 1.27.0 the tier model (Story 3.8) starts a part from the model's own knowledge, which has no reference; only on a turn whose model knowledge was on",
+        "properties" : {
+          "offset" : {
+            "description" : "Where the tier's version starts, in code points of the answer's text",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "tier" : {
+            "enum" : [ "campaign", "system", "other", "model" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "offset", "tier" ],
         "type" : "object"
       },
       "UploadCompletion" : {
@@ -1028,10 +2085,138 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.16.0"
+    "version" : "1.32.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/campaigns" : {
+      "get" : {
+        "operationId" : "listCampaigns",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Only this system's campaigns",
+          "in" : "query",
+          "name" : "system",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "true: only the archived campaigns; false (the default): only the others",
+          "in" : "query",
+          "name" : "archived",
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The account's campaigns, of one of its systems when system is given, newest first, each with its system; the archived ones only with archived=true, else the others. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); request.invalid (400) for an archived other than true or false, a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "operationId" : "createCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewCampaign"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A new campaign of one of the account's systems (201), with the starting scope; it becomes the current campaign. request.campaign_name_invalid (400) for a name outside its limits (params min and max), request.campaign_name_taken (409) when the system has a campaign with the same name (trimmed, whatever the case; an archived campaign keeps its name), request.not_found (404) for a system that is not the account's (unknown, another account's, malformed or being deleted), request.invalid (400) without a systemId or for a malformed body; nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
     "/api/v1/campaigns/current" : {
       "get" : {
         "operationId" : "getCurrentCampaign",
@@ -1065,8 +2250,363 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The current campaign with its system; session.required (401) without a session, request.not_found (404) when the account has no campaign",
+        "summary" : "The current campaign with its system: of the account's campaigns that are not archived, the one chosen last (PUT), else the oldest; session.required (401) without a session, request.not_found (404) when the account has no such campaign",
         "tags" : [ "library" ]
+      },
+      "put" : {
+        "operationId" : "chooseCurrentCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CurrentCampaignChoice"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Makes one of the account's campaigns the current one and answers it; its version does not change. request.not_found (404) for an archived campaign or any other id (unknown, another account's or malformed), request.invalid (400) without a campaignId or for a malformed body; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/conversation" : {
+      "get" : {
+        "operationId" : "getCampaignConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignConversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The campaign's latest questions conversation (from contract 1.29.0 a campaign has many: the one a question with no conversation continues) and how many questions it holds, for an archived campaign too; request.not_found (404) when the campaign has none or is not the account's (unknown, another account's or malformed)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/conversations" : {
+      "get" : {
+        "operationId" : "listConversations",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The area listed",
+          "in" : "query",
+          "name" : "area",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "questions", "rules" ],
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the most recently asked to skip, 0 to 100000",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The campaign's conversations of one area (contract 1.29.0), the most recently asked first, each with its name and question count (from contract 1.31.0 dismissed questions are not counted). A page starts at an offset and names the total of the list. A conversation is made by its first question, so none is empty, though all its questions may be dismissed. request.invalid (400) without an area or for one that is not one, a limit outside 1 to 50, or an offset outside 0 to 100000; request.not_found (404) for a campaign that is not the account's (unknown, another account's or malformed)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/searches" : {
+      "post" : {
+        "operationId" : "createSearch",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewSearch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SearchCreated"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Search the campaign's scope by meaning or exact words (202): the search and its job are recorded together, and the search is then read by id until it is done or failed. Only the campaign's current scope is searched (its tiers and materials switched on, each material's ready version, and passages still being prepared for search), narrowed by the filters; a passage that holds the exact query comes first. Only the account's newest 20 searches are kept. request.invalid (400) for a blank query, one past 500 code points, an unknown tier or a malformed material id; request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/sources/{versionId}/pages/{page}" : {
+      "get" : {
+        "operationId" : "getScopeSourcePage",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material version's id",
+          "in" : "path",
+          "name" : "versionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The page's number, from 1",
+          "in" : "path",
+          "name" : "page",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MaterialPageView"
+                }
+              }
+            },
+            "description" : "The page"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One page of a version in the campaign's current scope: the same shape as MaterialPageView, for a search result. The ground is the path: the campaign's current scope (Story 3.5), as its stored settings resolve it now; the version must be an allowed source of it (the ready version of a material switched on in a tier switched on). Any page from 1 to its page total. request.not_found (404) for a campaign that is not the account's, a malformed id or number, a version outside that scope (another account's, unknown, not ready, or switched off: none is told apart), a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/sources/{versionId}/pages/{page}/picture" : {
+      "get" : {
+        "operationId" : "getScopeSourcePagePicture",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material version's id",
+          "in" : "path",
+          "name" : "versionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The page's number, from 1",
+          "in" : "path",
+          "name" : "page",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "image/webp" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The page's picture"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The picture of one page of a version in the campaign's current scope, as WebP, streamed. request.not_found (404) also for a page with no picture. The ground is the path: the campaign's current scope (Story 3.5), as its stored settings resolve it now; the version must be an allowed source of it (the ready version of a material switched on in a tier switched on). Any page from 1 to its page total. request.not_found (404) for a campaign that is not the account's, a malformed id or number, a version outside that scope (another account's, unknown, not ready, or switched off: none is told apart), a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/campaigns/{campaignId}/turns" : {
@@ -1121,11 +2661,48 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Ask a question in the campaign's conversation: the turn and its answer job are recorded together (201); request.invalid (400) for a blank question or one past 4,000 code points, request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
+        "summary" : "Ask a question in one of the campaign's conversations: the turn and its answer job are recorded together (201). From contract 1.29.0: with conversationId, in that conversation; with area only, in a new conversation of that area (a conversation is made by its first question); with neither, in the campaign's latest questions conversation. The conversation's newest question becomes this one. request.invalid (400) for a blank question or one past 4,000 code points, an area that is not one, or an area other than the conversation's; request.not_found (404) for a campaign that is not the account's or a conversationId that is not one of its conversations; nothing is recorded then",
         "tags" : [ "conversations" ]
       }
     },
     "/api/v1/campaigns/{id}" : {
+      "delete" : {
+        "operationId" : "deleteCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's campaigns, archived, current or last (202, no body): from now on it is not found, the current campaign falls back to another (or there is none), its name is free in its system, and its conversation and the materials attached to it are removed in the background; nothing of its system or of the other campaigns changes. Cannot be undone. request.not_found (404) for any other id, a campaign already being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
       "get" : {
         "operationId" : "getCampaign",
         "parameters" : [ {
@@ -1167,8 +2744,208 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One of the account's campaigns, with its system; request.not_found (404) for any other id",
+        "summary" : "One of the account's campaigns, with its system, archived or not; request.not_found (404) for any other id",
         "tags" : [ "library" ]
+      },
+      "patch" : {
+        "operationId" : "changeCampaign",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CampaignChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames, archives or restores one of the account's campaigns on the version it names: the campaign as stored, its version raised by one. An archived campaign leaves the lists and the current position but keeps everything and still opens by id. request.stale_version (409) when the campaign has left that version, request.campaign_name_taken (409) when another campaign of its system has the new name (an archived campaign keeps its name), request.campaign_name_invalid (400) for a name outside its limits, request.invalid (400) without a version, with neither name nor archived, or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getCampaignDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's campaigns if it is deleted: how many conversations and materials (those attached to it). request.not_found (404) for any other id, a campaign being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/scope" : {
+      "get" : {
+        "operationId" : "getCampaignScope",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Scope"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One of the account's campaigns' scope settings: the three tier switches, model knowledge, their version (0 when never changed: campaign and system on, other and model knowledge off) and the materials of every tier, each with whether it is on. request.not_found (404) for any other id; session.required (401) without a session",
+        "tags" : [ "scope" ]
+      },
+      "put" : {
+        "operationId" : "changeCampaignScope",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ScopeChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Scope"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Changes one of the account's campaigns' scope settings on the version it names, from the next question on: the switches replaced, the materials off exactly those listed. Answers the settings as stored, their version raised by one. request.stale_version (409) when the settings have left that version, scope.material_unknown (400) for a material id that is not the account's or in none of the campaign's tiers, request.invalid (400) for a missing field, a null or malformed id, more than 1000 ids or a malformed body, request.not_found (404) for any other campaign id; nothing changes then; session.required (401) without a session",
+        "tags" : [ "scope" ]
       }
     },
     "/api/v1/conversations/current" : {
@@ -1205,6 +2982,235 @@
           }
         },
         "summary" : "The current campaign's conversation: its campaign, whether it has an accepted source, and how many of its passages are still being prepared for search (null when nothing is pending); request.not_found (404) when the account has no campaign",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}" : {
+      "delete" : {
+        "operationId" : "deleteConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's conversations (contract 1.30.0; 202, no body): from now on it is not found on every route (its campaign's list and counts, the conversation, its turns, a question naming it, the campaign's latest questions conversation, and its turns' events, stop and reference pages), its answers still being written are cancelled, and its turns, their events and source references are removed in the background. Nothing of its campaign, of the other conversations, of the searches or of the materials changes. Cannot be undone. request.not_found (404) for any other id, a conversation already being deleted included",
+        "tags" : [ "conversations" ]
+      },
+      "get" : {
+        "operationId" : "getConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One of the account's conversations (contract 1.29.0): its campaign, area, name and version; request.not_found (404) for any other id (unknown, another account's, malformed, of a campaign being deleted, or from contract 1.30.0 a conversation being deleted)",
+        "tags" : [ "conversations" ]
+      },
+      "patch" : {
+        "operationId" : "renameConversation",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConversationChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames one of the account's conversations on the version it names (contract 1.29.0): the conversation as stored, its version raised by one. request.conversation_name_invalid (400) for a name outside 1 to 120 code points after trimming (params min and max), request.stale_version (409) when the conversation has left that version, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}/deletion" : {
+      "get" : {
+        "operationId" : "getConversationDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's conversations if it is deleted (contract 1.30.0): how many questions it shows, each with its answer (from contract 1.31.0 a dismissed one is not counted, though it is deleted too). request.not_found (404) for any other id (unknown, another account's, malformed, or of a conversation or campaign being deleted)",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/conversations/{conversationId}/turns" : {
+      "get" : {
+        "operationId" : "listConversationTurns",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The conversation's id",
+          "in" : "path",
+          "name" : "conversationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConversationTurns"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A conversation's turns (contract 1.29.0): its newest 200, oldest first, each with its question, language and stored events as its stream sends them (a done event's data built when read, so removed is as of then). A turn still being answered has no done or error event yet; its stream continues after its last sequence. From contract 1.31.0 a dismissed turn is left out (the 200 are the newest shown ones). request.not_found (404) for a conversation that is not the account's",
         "tags" : [ "conversations" ]
       }
     },
@@ -1251,7 +3257,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "An ordered set of images that become the pages of one material, its order confirmed: the material, its version in uploading and one tus upload per image, each expiring after 6 hours. The first ingestion step starts by itself once every image is complete. upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name (the set's or an image's) or a kind, language, campaign or system that is not valid (it never says which); request.invalid (400) for a body without images or an image without a size of at least 1 byte; request.unsupported_media_type (415) for a body that is not JSON; session.required (401) without a session.",
+        "summary" : "An ordered set of images that become the pages of one material, its order confirmed: the material, its version in uploading and one tus upload per image, each expiring after 6 hours. The first ingestion step starts by itself once every image is complete. upload.set_too_large (413, params.maxImages and params.maxBytes) past 500 images or 2 GiB in all; upload.metadata_invalid (400) for a name (the set's or an image's) or a kind, language, campaign or system that is not valid, an empty list or more than 100 systems, or a campaign, system and systems given together (it never says which), or a material with a kind, language, campaign, system or systems; request.invalid (400) for a body without images or an image without a size of at least 1 byte; request.unsupported_media_type (415) for a body that is not JSON. With material (contract 1.23.0) the set is a new version of that material, which must be ready: material.version_in_progress (409) while another version of it is uploading, waiting, processing, needs review or failed; material.not_ready (409) when every version of it is discarded; request.not_found (404) for another account's material, an unknown or malformed one, or one whose every place is being deleted; session.required (401) without a session.",
         "tags" : [ "image-sets" ]
       }
     },
@@ -1388,10 +3394,9 @@
             "type" : "string"
           }
         }, {
-          "description" : "A state of the newest version; repeat it for several",
+          "description" : "A state of the current version; repeat it for several; absent: every state (contract 1.21.0)",
           "in" : "query",
           "name" : "state",
-          "required" : true,
           "schema" : {
             "items" : {
               "enum" : [ "uploading", "waiting", "processing", "needs_review", "ready", "superseded", "failed", "discarded" ],
@@ -1419,6 +3424,25 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "description" : "Only the materials of this system (Story 3.1): attached to it or to one of its campaigns",
+          "in" : "query",
+          "name" : "system",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -1442,11 +3466,48 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The account's materials whose newest version is in one of the given states, newest first, with the upload's progress on those still uploading. request.invalid (400) without a state, for an unknown state, a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "summary" : "The account's materials whose current version is in one of the given states (every material without a state), newest first, with the upload's progress on those still uploading; with system, only those attached to that system or to one of its campaigns. A material whose every place is being deleted is left out, so a page may hold fewer than the limit. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.invalid (400) for an unknown state, a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; request.not_found (404) for a system that is not the account's (unknown, another account's or malformed); session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
     "/api/v1/materials/{id}" : {
+      "delete" : {
+        "operationId" : "deleteMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion is recorded"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's materials with every version (contract 1.24.0; 202, no body): from now on it is gone from every list and count, and its passages from every scope; its pages, passages, files, index points and rows are removed in the background. A reference an answer stored reads as a removed source. A material already being deleted is answered the same, and nothing changes. Cannot be undone. request.not_found (404) for another owner's material, an unknown or malformed id, or one whose every place is being deleted; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      },
       "get" : {
         "operationId" : "getMaterial",
         "parameters" : [ {
@@ -1488,7 +3549,61 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One of the account's materials, with the state of its newest version. request.not_found (404) for any other id; session.required (401) without a session.",
+        "summary" : "One of the account's materials, with the state of its current version. request.not_found (404) for any other id; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      },
+      "patch" : {
+        "operationId" : "changeMaterial",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MaterialChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Material"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Changes where one of the account's materials belongs, on the version it names (contract 1.21.0): one campaign, or one to 100 systems. It applies from the next question; nothing is processed again. Answers the material as stored, its version raised by one. request.stale_version (409) when the material has left that version; material.belonging_invalid (400) for both campaign and systems, neither, an empty or over-long list, or a campaign or system that is not the account's (unknown, another account's, malformed or being deleted); request.invalid (400) without a version or for a malformed body; request.not_found (404) for any other material id, one whose every place is being deleted included; nothing changes then; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1534,7 +3649,53 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Accepts the newest version of one of the account's materials: needs_review becomes ready, and a ready version of it before becomes superseded. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "summary" : "Accepts the current version of one of the account's materials: needs_review becomes ready, and a ready version of it before becomes superseded. Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getMaterialDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MaterialDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's materials if it is deleted (contract 1.24.0): how many of its versions are not discarded, and their pages. request.not_found (404) for another owner's material, an unknown or malformed id, one whose every place is being deleted, or one whose deletion is recorded already; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1580,7 +3741,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Discards the newest version of one of the account's materials, which needs review or failed: it becomes discarded, and its pages, passages, outline and files are removed (a removal that resumes after a restart). Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "summary" : "Discards the current version of one of the account's materials, which needs review or failed: it becomes discarded, and its pages, passages, outline and files are removed (a removal that resumes after a restart); a ready version of it before stays the material's (contract 1.23.0). Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1757,7 +3918,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The quality report of one of the account's materials: its newest version's outline, unreadable pages and warnings, while that version needs review or is ready (the counts are the material's pages). request.not_found (404) for another owner's material, an unknown or malformed id, or a version in any other state; session.required (401) without a session.",
+        "summary" : "The quality report of one of the account's materials: its current version's outline, unreadable pages and warnings, while that version needs review or is ready (the counts are the material's pages). request.not_found (404) for another owner's material, an unknown or malformed id, or a version in any other state; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1803,7 +3964,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Reads again the unreadable pages of the newest version of one of the account's materials, which needs review: it becomes processing, and needs review again once they are read. ingestion.too_many_steps (409) when the new steps would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "summary" : "Reads again the unreadable pages of the current version of one of the account's materials, which needs review: it becomes processing, and needs review again once they are read. ingestion.too_many_steps (409) when the new steps would pass the version's step cap. From contract 1.23.0, on a ready material: a new version, waiting, read from a copy of the ready version's cleaned original, which keeps serving unchanged until the new one is accepted; material.version_in_progress (409) while another version is on its way; request.not_found (404) also for a material whose every place is being deleted. Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1849,7 +4010,55 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Starts again the failed newest version of one of the account's materials, from its cleaned original or its uploaded file: it becomes processing. ingestion.too_many_steps (409) when a new step would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the newest version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "summary" : "Starts again the failed current version of one of the account's materials, from its cleaned original or its uploaded file: it becomes processing. ingestion.too_many_steps (409) when a new step would pass the version's step cap. Takes no body and answers the material. material.action_unavailable (409) when the current version's state does not allow it now (see the material's actions); request.not_found (404) for another owner's material or an unknown or malformed id, and nothing changes; session.required (401) without a session.",
+        "tags" : [ "materials" ]
+      }
+    },
+    "/api/v1/materials/{id}/versions/{versionId}" : {
+      "delete" : {
+        "operationId" : "removeMaterialVersion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The version's id",
+          "in" : "path",
+          "name" : "versionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The removal is recorded"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Removes a superseded version of one of the account's materials (contract 1.24.0; 202, no body): from now on it is gone from the material's superseded versions, and its pages, passages, files, index points and row are removed in the background; the material and its other versions stay. A reference an answer stored to it reads as a removed source and its page is not found. A version whose removal is recorded already is answered the same. material.version_not_removable (409) for a version in any other state (ready, in progress or discarded); request.not_found (404) for another owner's material or version, a version of another material, an unknown or malformed id, or a material whose every place is being deleted or whose deletion is recorded already; nothing changes then; session.required (401) without a session.",
         "tags" : [ "materials" ]
       }
     },
@@ -1888,6 +4097,111 @@
         },
         "summary" : "The signed-in account; session.required (401) without a session, session.renewal_required (401) when the token must be renewed first",
         "tags" : [ "session" ]
+      }
+    },
+    "/api/v1/saved-answers" : {
+      "get" : {
+        "operationId" : "listSavedAnswers",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the newest saved to skip, 0 to 100000",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavedAnswerPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The account's saved answers across all its campaigns (contract 1.32.0), the newest saved first, each with its campaign's name, its conversation's area and name, when it was saved and an excerpt. A page starts at an offset and names the total of the list. Left out (and not counted): a dismissed answer (its bookmark is kept, so undoing the dismissal lists it again), an answer of a conversation being deleted, and the answers of an archived campaign (listed again once it is restored) or of a campaign being deleted. request.invalid (400) for a limit outside 1 to 50, or an offset outside 0 to 100000",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/searches/{searchId}" : {
+      "get" : {
+        "operationId" : "getSearch",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The search's id",
+          "in" : "path",
+          "name" : "searchId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Search"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A search of the account: its query, filters and state, and once done its results, each re-checked against its campaign's current scope narrowed by the filters (one that left the scope since is not listed). request.not_found (404) for a search that is not the account's (another account's, unknown, malformed, pruned, or of a campaign deleted since)",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/session" : {
@@ -2064,7 +4378,156 @@
         "tags" : [ "sign-in" ]
       }
     },
+    "/api/v1/systems" : {
+      "get" : {
+        "operationId" : "listSystems",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SystemPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The account's game systems, newest first. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.invalid (400) for a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "operationId" : "createSystem",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewSystem"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/System"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A new game system of the account (201). request.system_name_invalid, request.system_edition_invalid or request.system_description_invalid (400) for a field outside its limits (params min and max, or max), request.system_name_taken (409) when the account has a system with the same name and edition (trimmed, whatever the case), request.invalid (400) for a malformed body; nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
     "/api/v1/systems/{id}" : {
+      "delete" : {
+        "operationId" : "deleteSystem",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion started"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's game systems (202, no body): from now on it and its campaigns are not found, and its campaigns, their conversations and the materials attached only to it are removed in the background; a material also attached to another system stays and only loses this attachment. Cannot be undone. request.not_found (404) for any other id, a system already being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
       "get" : {
         "operationId" : "getSystem",
         "parameters" : [ {
@@ -2108,6 +4571,258 @@
         },
         "summary" : "One of the account's game systems; request.not_found (404) for any other id",
         "tags" : [ "library" ]
+      },
+      "patch" : {
+        "operationId" : "changeSystem",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SystemChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/System"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Changes one of the account's game systems on the version it names: the system as stored, its version raised by one. request.stale_version (409) when the system has left that version, request.system_name_taken (409) when the account has another system with the new name and edition, the field problems (400) of a creation, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/systems/{id}/deletion" : {
+      "get" : {
+        "operationId" : "getSystemDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SystemDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one of the account's game systems if it is deleted: how many campaigns, conversations and materials (those of its campaigns, and those attached to it and to no other system). request.not_found (404) for any other id, a system being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/turns/{turnId}/bookmark" : {
+      "delete" : {
+        "operationId" : "unbookmarkTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The answer is not saved"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Remove the turn's answer from the saved answers (contract 1.32.0; 204), whatever the turn's state. A turn that is not saved stays as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves. A bookmark gives the answer no standing as a source: the scope, retrieval and the history sent with a later question never read it",
+        "tags" : [ "conversations" ]
+      },
+      "put" : {
+        "operationId" : "bookmarkTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The answer is saved"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Save the turn's answer (contract 1.32.0; 204): from now on its conversation's turns say it is bookmarked, and it heads the saved answers. Only a done turn (its last event a done event, neither stopped nor silent) is saved: conversation.turn_not_done (409) for a turn still running, stopped, failed or silent, and nothing changes. A turn saved already keeps the time it was saved (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves. A bookmark gives the answer no standing as a source: the scope, retrieval and the history sent with a later question never read it",
+        "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/turns/{turnId}/dismissal" : {
+      "delete" : {
+        "operationId" : "restoreTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The turn is shown"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Undo the dismissal of the turn's answer (contract 1.31.0; 204): the turn is shown again where it was, listed with its conversation's turns, counted, and sent as history again. A turn that is shown already stays as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves",
+        "tags" : [ "conversations" ]
+      },
+      "put" : {
+        "operationId" : "dismissTurn",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The turn's id",
+          "in" : "path",
+          "name" : "turnId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The turn is dismissed"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Dismiss the turn's answer (contract 1.31.0; 204): from now on the turn, with its question and answer, is left out of its conversation's turns and question counts and is never sent as history to a later question; its own events, references and reference pages still answer, and the conversation's default name stays its first question's. Only an ended turn (stopped, or with a done or error event) is dismissed: conversation.turn_running (409) otherwise, and nothing changes. A turn dismissed already stays as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's (unknown, another account's or malformed) or of a conversation being deleted; nothing changes then. Neither the conversation's version nor its newest question's time moves",
+        "tags" : [ "conversations" ]
       }
     },
     "/api/v1/turns/{turnId}/events" : {
@@ -2149,6 +4864,8 @@
                   }, {
                     "$ref" : "#/components/schemas/TurnCitationEvent"
                   }, {
+                    "$ref" : "#/components/schemas/TurnTierEvent"
+                  }, {
                     "$ref" : "#/components/schemas/TurnDoneEvent"
                   }, {
                     "$ref" : "#/components/schemas/TurnErrorEvent"
@@ -2169,7 +4886,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's",
+        "summary" : "The turn's answer as server-sent events: the stored events after Last-Event-ID (0 when absent), then new ones as they are written. Events: delta (TurnDeltaEvent), citation (TurnCitationEvent), done (TurnDoneEvent) and error (TurnErrorEvent), each with id: its sequence (1, 2, ... per turn). From contract 1.26.0 also tier (TurnTierEvent), stored and replayed like citation. A comment line ': keep-alive' every 15 s; the stream closes after done or error, and after 30 minutes without either: the client then reopens it with Last-Event-ID, the id of the last event it received. Leaving never touches the answer. request.not_found (404) for a turn that is not the account's, or (contract 1.30.0) of a conversation being deleted",
         "tags" : [ "conversations" ]
       }
     },
@@ -2235,7 +4952,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One page of the version a turn's source reference names: its picture size and text lines (a PDF page) or its text (a text page), and its passages' places, the same shape as MaterialPageView; an unreadable page with no view has picture null and outcome unreadable. The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's, a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "summary" : "One page of the version a turn's source reference names: its picture size and text lines (a PDF page) or its text (a text page), and its passages' places, the same shape as MaterialPageView; an unreadable page with no view has picture null and outcome unreadable. The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's (from contract 1.30.0, one of a conversation being deleted too), a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
         "tags" : [ "conversations" ]
       }
     },
@@ -2302,7 +5019,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The picture of one page of the version a turn's source reference names, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page, or an unreadable page with no view). The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's, a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
+        "summary" : "The picture of one page of the version a turn's source reference names, as WebP, streamed. request.not_found (404) also for a page with no picture (a text page, or an unreadable page with no view). The ground is the path: a source reference stored with a turn of the account's campaign (AD-9). The page is read from the version the reference names, even when a newer one was accepted since; any page from 1 to its page total. request.not_found (404) for a turn that is not the account's (from contract 1.30.0, one of a conversation being deleted too), a malformed or unknown id or number, no such reference, a version removed since, a page outside 1 to the page total, or a page with no view (unless it is unreadable)",
         "tags" : [ "conversations" ]
       }
     },
@@ -2341,7 +5058,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Stop the turn's answer (204): its stream ends at once with a done event marked stopped, after the text and citations stored so far, and the worker is told to stop at its next batch. A turn whose answer has ended already is left as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's",
+        "summary" : "Stop the turn's answer (204): its stream ends at once with a done event marked stopped, after the text and citations stored so far, and the worker is told to stop at its next batch. A turn whose answer has ended already is left as it is (204 too), so repeating it is safe. request.not_found (404) for a turn that is not the account's, or (contract 1.30.0) of a conversation being deleted",
         "tags" : [ "conversations" ]
       }
     },
@@ -2376,7 +5093,7 @@
             "type" : "integer"
           }
         }, {
-          "description" : "tus metadata: comma-separated keys, each with its value in Base64. filename is required. Optional: kind (rulebook, supplement, homebrew, campaign_notes, other), language (pt-BR, en, detect), and campaign or system (the id of one of the account's, never both)",
+          "description" : "tus metadata: comma-separated keys, each with its value in Base64. filename is required. Optional: kind (rulebook, supplement, homebrew, campaign_notes, other), language (pt-BR, en, detect), and campaign (the id of one of the account's campaigns) or systems (one to 100 ids of the account's systems, comma-separated; contract 1.21.0), never both. The single key system still names one system. Or, instead of all of these, material (contract 1.23.0): the id of one of the account's materials this file replaces; it keeps its name, kind, language and place",
           "in" : "header",
           "name" : "Upload-Metadata",
           "required" : true,
@@ -2428,7 +5145,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "tus 1.0.0 creation: a material, its version in uploading and an upload that expires after 6 hours. upload.too_large (413) outside 1 byte to 2 GiB; upload.metadata_invalid (400) without a valid filename, for a kind, language, campaign or system that is not valid, for a campaign or system that is not the account's, or for both at once (it never says which); request.invalid (400) for a missing or malformed Upload-Length; upload.tus_version (412) without Tus-Resumable: 1.0.0; session.required (401) without a session.",
+        "summary" : "tus 1.0.0 creation: a material, its version in uploading and an upload that expires after 6 hours; with material (contract 1.23.0), only a new version in uploading of that material and its upload. upload.too_large (413) outside 1 byte to 2 GiB; upload.metadata_invalid (400) without a valid filename, for a kind, language, campaign or system that is not valid, for a campaign or system that is not the account's, for more than 100 systems, or for a campaign with systems, or system with systems, or a material with any of kind, language, campaign, system or systems (it never says which); request.invalid (400) for a missing or malformed Upload-Length; upload.tus_version (412) without Tus-Resumable: 1.0.0. With material (contract 1.23.0) the upload is a new version of that material, which must be ready: material.version_in_progress (409) while another version of it is uploading, waiting, processing, needs review or failed; material.not_ready (409) when every version of it is discarded; request.not_found (404) for another account's material, an unknown or malformed one, or one whose every place is being deleted; session.required (401) without a session.",
         "tags" : [ "uploads" ]
       }
     },

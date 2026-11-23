@@ -5,7 +5,18 @@ export type Contract = { info: { version: string }; paths?: Record<string, Recor
 export type Answer = { status: number; type: string | null; body: unknown; headers?: Record<string, string> };
 
 export const EXAMPLES: Readonly<Record<string, unknown>>;
+/** Story 3.1: the starter system, as the systems list and the current campaign answer it. */
+export const STARTER_SYSTEM: { id: string; name: string; edition: null; description: null; version: number };
 export const PICTURE: Buffer;
+/** Story 3.6: a campaign's starting scope, with a few materials in each tier. */
+export const STARTING_SCOPE: {
+  version: number;
+  campaignTier: boolean;
+  systemTier: boolean;
+  otherTier: boolean;
+  modelKnowledge: boolean;
+  materials: { id: string; name: string; tier: 'campaign' | 'system' | 'other'; on: boolean }[];
+};
 export type StandInReference = {
   number: number;
   materialName: string;
@@ -13,9 +24,11 @@ export type StandInReference = {
   page: number;
   passageIds: string[];
   removed: boolean;
+  /** Story 3.7: the tier its source had when the answer was written. */
+  tier?: 'campaign' | 'system' | 'other';
 };
 export const ANSWER_DONE: { stopped: boolean; silent: boolean; references: StandInReference[] };
-/** Story 2.7: the pages of the stand-in answer's references 1 (a picture page) and 2 (a text page). */
+/** Story 2.7: the pages of the stand-in answer's references 2 (a picture page) and 1 (a text page). */
 export const REFERENCE_PAGE: unknown;
 export const REFERENCE_TEXT_PAGE: {
   page: number;
@@ -27,7 +40,42 @@ export const REFERENCE_TEXT_PAGE: {
   outcome: string;
 };
 export const ANSWER_EVENTS: string;
+/** Story 3.9: the versions of the two materials the stand-in search finds, the search's id, and the search done. */
+export const NOTES_VERSION: string;
+export const BOOK_VERSION: string;
+export const SEARCH_ID: string;
+export type StandInSearchResult = {
+  passageId: string;
+  versionId: string;
+  materialName: string;
+  sectionPath: string[];
+  page: number;
+  firstWords: string;
+  tier: 'campaign' | 'system' | 'other';
+};
+export const SEARCH_DONE: {
+  id: string;
+  campaignId: string;
+  query: string;
+  tier: null;
+  materialId: null;
+  state: 'done';
+  results: StandInSearchResult[];
+};
+/** Story 3.7: the stand-in answer's two versions, the campaign's house rule, then the book's rule. */
+export const HOUSE_RULE: string;
+export const BOOK_RULE: string;
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
 export function answer(contract: unknown, method: string, pathname: string, traceId: string): Answer;
 export function createStandInServer(contract: Contract, options?: { quiet?: boolean }): Server;
+/** Story 3.10: the starter campaign's questions conversation, its id, and its one stored turn with its events. */
+export const CONVERSATION_ID: string;
+export const CONVERSATION: { id: string; campaignId: string; area: 'questions' | 'rules'; name: string; version: number };
+export const STORED_TURN: {
+  id: string;
+  question: string;
+  language: string | null;
+  createdAt: string;
+  events: { sequence: number; type: string; data: unknown }[];
+};

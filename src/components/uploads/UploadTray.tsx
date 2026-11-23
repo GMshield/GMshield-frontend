@@ -307,7 +307,8 @@ function TrayItem({ row, texts, inBrowser }: { readonly row: TrayRow; readonly t
   const state: MaterialState = row.kind === 'interrupted' ? 'uploading' : row.kind === 'gone' ? 'failed' : row.state;
   const sent = row.kind === 'gone' ? 0 : row.sent;
   const total = row.kind === 'gone' ? 1 : Math.max(row.total, 1);
-  const percent = Math.floor((sent / total) * 100);
+  // Never under 0 or over 100, whatever the server and the browser each count.
+  const percent = Math.min(Math.max(Math.floor((sent / total) * 100), 0), 100);
   const pill = pillOf(row, state, percent, texts);
 
   function onFile(event: ChangeEvent<HTMLInputElement>) {

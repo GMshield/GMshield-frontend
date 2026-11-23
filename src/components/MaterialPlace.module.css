@@ -1,0 +1,89 @@
+/* "Onde pertence" (Story 3.3): a card with the sentence that says where the material belongs and the way to change it. */
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+/*
+ * Third round: while the form is closed the card is one row, the sentence at the left and "Alterar" at the right, so a
+ * fact of one line does not take the height of three.
+ */
+@media (min-width: 600px) {
+  .section:not(:has(form)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-1) var(--space-4);
+  }
+
+  .section:not(:has(form)) > .label,
+  .section:not(:has(form)) > .summary {
+    grid-column: 1;
+  }
+
+  .section:not(:has(form)) > button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .section:not(:has(form)) > .error,
+  .section:not(:has(form)) > .status {
+    grid-column: 1 / -1;
+  }
+}
+
+.label {
+  margin: 0;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+.summary {
+  max-width: 60ch;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--width-form);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+}
+
+.status {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.status:empty {
+  display: none;
+}

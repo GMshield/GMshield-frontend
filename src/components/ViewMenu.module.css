@@ -1,0 +1,138 @@
+/* "Exibição" (usability pass, 2026-11-21): a list's display options, one menu of labelled groups. */
+.menu {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-control);
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  cursor: pointer;
+  transition: border-color var(--motion-fade) ease-out;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(18rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Two choices side by side, as one control: the chosen one is filled with the text colour. */
+.segments {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+}
+
+.segment {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+
+/* The radio itself is not drawn; it keeps its place under its label, so focus and the pointer still reach it. */
+.radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmentLabel {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: calc(var(--space-touch-target) - 2 * var(--space-1));
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.radio:hover + .segmentLabel {
+  background-color: var(--color-hover);
+}
+
+.radio:checked + .segmentLabel {
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+}
+
+.radio:focus-visible + .segmentLabel {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch-target);
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-text);
+}

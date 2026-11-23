@@ -3,14 +3,15 @@ import { join } from 'node:path';
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/questions';
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
-  useRouter: () => ({ refresh }),
+  useRouter: () => ({ refresh, push }),
   redirect: (url: string) => {
     throw new Error(`redirect ${url}`);
   },
@@ -28,6 +29,7 @@ vi.mock('@/client/upload', async (importOriginal) => ({ ...(await importOriginal
 const { Shell } = await import('@/components/Shell');
 const { SIDEBAR_ENTRIES } = await import('@/components/shell-entries');
 const { ShellPanel } = await import('@/components/ShellPanel');
+const { useOptionalScopePopover } = await import('@/components/ScopePopoverContext');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
@@ -113,29 +115,49 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(add.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(nav.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The logo and name come first, then the current campaign.
-    const logo = within(sidebar).getByRole('button', { name: 'GMshield' });
+    // Usability pass: the logo is a link to the conversation, the home screen; it opens no menu.
+    const logo = within(sidebar).getByRole('link', { name: ptBR.shell.home });
+    expect(logo.getAttribute('href')).toBe('/questions');
+    expect(logo.textContent).toBe('GMshield');
     expect(logo.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(sidebar).getByText('First campaign')).toBeTruthy();
     expect(within(sidebar).getByText(ptBR.shell.currentCampaign)).toBeTruthy();
     expect(container.querySelectorAll('[style]')).toHaveLength(0);
   });
 
-  it('marks the current entry, and only it', () => {
-    pathname = '/systems';
+  it('marks the current entry, and only it, on its page and every page below it (Story 3.1)', () => {
+    for (const path of ['/systems', '/systems/new', '/systems/0190a0b0-0000-7000-8000-000000000001', '/systems/0190a0b0-0000-7000-8000-000000000001/edit']) {
+      pathname = path;
+      const { unmount } = render(shell());
+      const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page');
+      expect(current.map((link) => link.textContent), path).toEqual(['Sistemas']);
+      unmount();
+    }
+    // A path that only starts with the same letters is another page.
+    pathname = '/systemsx';
     render(shell());
-    const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page');
-    expect(current.map((link) => link.textContent)).toEqual(['Sistemas']);
+    expect(screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page')).toEqual([]);
   });
 
   it('puts the sidebar, the context bar and the main column in that order, in the page and in Tab order', async () => {
     const user = userEvent.setup();
-    render(shell({ children: <a href="/questions#start">início</a> }));
+    render(shell({ children: <a href="#start">início</a> }));
     const sidebar = screen.getByTestId('sidebar');
     const context = screen.getByRole('navigation', { name: ptBR.shell.context });
     const main = screen.getByRole('main');
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(bell.getAttribute('aria-expanded')).toBe('false');
+    const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
+    // Story 3.12: the saved items button comes first at the bar's end, before the bell.
+    const saved = screen.getByRole('button', { name: ptBR.saved.open });
+    const skip = screen.getByRole('link', { name: ptBR.shell.skip });
+    const search = screen.getByRole('search', { name: ptBR.shell.search.label });
+    const searchButton = screen.getByRole('link', { name: ptBR.shell.search.open });
     expect(sidebar.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(context.textContent).toBe('Untitled system›First campaign');
+    // Story 3.2: the campaign's name is the switcher's button; its list is closed (hidden).
+    expect(within(context).getByRole('link', { name: 'Untitled system' })).toBeTruthy();
+    expect(within(context).getByRole('button', { name: 'First campaign' }).getAttribute('aria-expanded')).toBe('false');
 
     // Tab from the top of the page until focus leaves the last control: every stop, by region.
     const visited: string[] = [];
@@ -145,10 +167,29 @@ describe('the signed-in shell (Story 1.11)', () => {
       if (focused === null || focused === document.body) {
         break;
       }
-      visited.push(area().contains(focused) ? 'sidebar' : context.contains(focused) ? 'context' : main.contains(focused) ? 'main' : 'other');
+      let place = 'other';
+      if (area().contains(focused)) {
+        place = 'sidebar';
+      } else if (context.contains(focused)) {
+        place = 'context';
+      } else if (main.contains(focused)) {
+        place = 'main';
+      } else if (search.contains(focused) || focused === searchButton) {
+        place = 'search';
+      } else if (focused === saved || focused === bell || focused === account) {
+        place = 'bar end';
+      } else if (focused === skip) {
+        place = 'skip';
+      }
+      visited.push(place);
     }
     const regions = visited.filter((place, index) => index === 0 || visited[index - 1] !== place);
-    expect(regions).toEqual(['sidebar', 'context', 'main']);
+    // Usability pass: "Pular para o conteúdo" is the first stop; the bell and the account menu close the bar above the
+    // page, after the context bar and before the main column. Story 3.9: the search field (and the phone's search
+    // button, which CSS shows in its place under 768px) comes between the context bar and the bell.
+    expect(regions).toEqual(['skip', 'sidebar', 'context', 'search', 'bar end', 'main']);
+    expect(skip.getAttribute('href')).toBe('#content');
+    expect(main.id).toBe('content');
     expect(visited.filter((place) => place === 'sidebar').length).toBeGreaterThanOrEqual(9);
   });
 
@@ -217,11 +258,11 @@ describe('the signed-in shell (Story 1.11)', () => {
     atWidth(1000);
     render(
       <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="u" current={CURRENT} sidebar="open" panel={<a href="/x">painel</a>}>
-        <a href="/questions#start">início</a>
+        <a href="#start">início</a>
       </Shell>,
     );
-    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
-    const column = context.parentElement!;
+    // Usability pass: the context bar and the bell share the bar above the page; the column holds the bar and the main.
+    const column = screen.getByRole('main').parentElement!;
     const panel = screen.getByRole('complementary');
     expect(column.hasAttribute('inert')).toBe(false);
     expect(panel.hasAttribute('inert')).toBe(false);
@@ -246,7 +287,7 @@ describe('the signed-in shell (Story 1.11)', () => {
   it('at 1280px and more the page beside the sidebar is never inert', async () => {
     const user = userEvent.setup();
     render(shell());
-    const column = screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+    const column = screen.getByRole('main').parentElement!;
     await user.keyboard('{Control>}b{/Control}');
     await user.keyboard('{Control>}b{/Control}');
     expect(column.hasAttribute('inert')).toBe(false);
@@ -288,45 +329,58 @@ describe('the signed-in shell (Story 1.11)', () => {
     expect(ptBR.shell.openMenu).toBe('Abrir menu');
   });
 
-  it('the logo menu holds the preferences and "Sair"; Esc closes it and gives focus back to the logo', async () => {
+  // Usability pass (2026-11-21): the account, the theme, the language and "Sair" are in the bar above the page.
+  it('the account menu, in the bar, holds the account, the preferences and "Sair"; Esc closes it and gives focus back', async () => {
     const user = userEvent.setup();
     render(shell());
-    const logo = screen.getByRole('button', { name: 'GMshield' });
-    expect(logo.getAttribute('aria-expanded')).toBe('false');
-    const menu = document.getElementById(logo.getAttribute('aria-controls')!)!;
+    const account = screen.getByRole('button', { name: 'Conta de Mestre_Ana' });
+    // In the bar above the page, after the bell, never in the sidebar; its mark is the username's initial.
+    expect(screen.getByTestId('sidebar').contains(account)).toBe(false);
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(bell.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(account.textContent).toBe('M');
+    expect(account.getAttribute('aria-expanded')).toBe('false');
+    const menu = document.getElementById(account.getAttribute('aria-controls')!)!;
     expect(menu.hidden).toBe(true);
 
-    await user.click(logo);
-    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    await user.click(account);
+    expect(account.getAttribute('aria-expanded')).toBe('true');
     expect(menu.hidden).toBe(false);
-    const group = screen.getByRole('group', { name: ptBR.shell.menu });
-    expect(within(group).getByRole('button', { name: 'Sair' })).toBeTruthy();
-    expect(within(group).getByRole('radio', { name: ptBR.preferences.themes.dark })).toBeTruthy();
-    expect(within(group).getByText('Conectado como Mestre_Ana')).toBeTruthy();
+    const group = screen.getByRole('group', { name: ptBR.shell.accountMenu });
+    expect(within(group).getByRole('button', { name: 'Sair' })).toHaveProperty('type', 'submit');
+    expect(within(group).getByRole('button', { name: ptBR.preferences.themes.dark }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(group).getByRole('button', { name: 'English' }).getAttribute('aria-pressed')).toBe('false');
+    expect(group.textContent).toContain('Conectado comoMestre_Ana');
     // No Account or Administration entry yet.
     expect(within(group).queryByRole('link')).toBeNull();
 
-    await user.click(within(group).getByRole('radio', { name: ptBR.preferences.themes.light }));
     await user.keyboard('{Escape}');
     expect(menu.hidden).toBe(true);
-    expect(document.activeElement).toBe(logo);
+    expect(document.activeElement).toBe(account);
     // Esc in the menu is the menu's: the sidebar stays as it was.
     expect(area().dataset.wide).toBe('open');
+
+    // A press outside closes it too.
+    await user.click(account);
+    expect(menu.hidden).toBe(false);
+    await user.click(screen.getByRole('heading', { name: 'Página' }));
+    expect(menu.hidden).toBe(true);
   });
 
-  it('under 1280px, Esc in the open logo menu closes the menu only; the next Esc closes the sidebar', async () => {
+  it('under 1280px, Esc in a menu open inside the sidebar closes that menu only; the next Esc closes the sidebar', async () => {
     const user = userEvent.setup();
     atWidth(1000);
     render(shell());
     await user.click(screen.getByRole('button', { name: 'Abrir menu' }));
     expect(area().dataset.narrow).toBe('open');
-    const logo = screen.getByRole('button', { name: 'GMshield' });
-    await user.click(logo);
-    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    // The campaign switcher under the logo (the logo itself is a link since the usability pass).
+    const switcher = within(screen.getByTestId('sidebar')).getByRole('button', { name: 'First campaign' });
+    await user.click(switcher);
+    expect(switcher.getAttribute('aria-expanded')).toBe('true');
 
     await user.keyboard('{Escape}');
-    expect(logo.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(logo);
+    expect(switcher.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(switcher);
     expect(area().dataset.narrow).toBe('open');
 
     await user.keyboard('{Escape}');
@@ -337,11 +391,177 @@ describe('the signed-in shell (Story 1.11)', () => {
     render(shell({ language: 'en' }));
     const context = screen.getByRole('navigation', { name: en.shell.context });
     expect(within(context).getByRole('link', { name: 'Untitled system' }).getAttribute('href')).toBe('/systems');
-    expect(within(context).getByRole('link', { name: 'First campaign' }).getAttribute('href')).toBe('/campaigns');
+    // Story 3.2: the campaign's name opens the campaign switcher.
+    expect(within(context).getByRole('button', { name: 'First campaign' }).getAttribute('aria-expanded')).toBe('false');
     cleanup();
     render(shell({ current: null }));
-    expect(screen.getByRole('navigation', { name: ptBR.shell.context }).textContent).toBe(ptBR.shell.noCampaign);
-    expect(screen.getByTestId('sidebar').textContent).toContain(ptBR.shell.noCampaign);
+    const none = screen.getByRole('navigation', { name: ptBR.shell.context });
+    expect(within(none).getByRole('button', { name: ptBR.shell.noCampaign })).toBeTruthy();
+    expect(within(none).queryByRole('link', { name: 'Untitled system' })).toBeNull();
+    expect(within(screen.getByTestId('sidebar')).getByRole('button', { name: ptBR.shell.noCampaign })).toBeTruthy();
+  });
+
+  it('Story 3.6: after the campaign, the scope summary opens the scope popover; none without a campaign or a scope', async () => {
+    const user = userEvent.setup();
+    const scope = {
+      version: 0,
+      campaignTier: true,
+      systemTier: false,
+      otherTier: false,
+      modelKnowledge: false,
+      materials: [{ id: '0190a0b0-0000-7000-8000-000000000003', name: 'Livro do Jogador.pdf', tier: 'campaign' as const, on: true }],
+    };
+    const withScope = (language: Language, current: typeof CURRENT & { id?: string } | null, value: typeof scope | null) => (
+      <Shell preferences={{ theme: 'dark', language }} username="Mestre_Ana" current={current} scope={value} sidebar="open">
+        <h1>Página</h1>
+      </Shell>
+    );
+    const { rerender } = render(withScope('pt-BR', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, scope));
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    // Matrix row "Tier off": the system tier off leaves "Campanha" alone.
+    const summary = within(context).getByRole('button', { name: 'Escopo: Campanha · conhecimento do modelo desligado' });
+    expect(summary.textContent).toBe('Campanha · conhecimento do modelo desligado');
+    // After the campaign switcher, in the bar.
+    const switcher = within(context).getByRole('button', { name: 'First campaign' });
+    expect(switcher.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(summary);
+    const group = within(context).getByRole('group', { name: ptBR.shell.scope.panel });
+    expect(within(group).getByRole('switch', { name: 'Livro do Jogador.pdf' }).getAttribute('aria-checked')).toBe('true');
+    expect(within(group).getByRole('switch', { name: ptBR.campaigns.scope.system }).getAttribute('aria-checked')).toBe('false');
+    // The popover floats in the bar, before the page: it never pushes the main column.
+    expect(screen.getByRole('main').contains(group)).toBe(false);
+    rerender(withScope('en', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, { ...scope, campaignTier: false }));
+    expect(within(context).getByRole('button', { name: 'Scope: No sources · model knowledge off' })).toBeTruthy();
+    // Matrix rows "Scope unreadable" and "No campaign": no summary.
+    rerender(withScope('pt-BR', { ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }, null));
+    expect(within(context).queryByRole('button', { name: /conhecimento do modelo/ })).toBeNull();
+    expect(within(context).getByRole('link', { name: 'Untitled system' })).toBeTruthy();
+    rerender(withScope('pt-BR', null, scope));
+    expect(within(screen.getByRole('navigation', { name: ptBR.shell.context })).queryByRole('button', { name: /conhecimento do modelo/ })).toBeNull();
+  });
+
+  it('Story 3.8: the shell gives the page the scope popover\'s opener, which opens it with focus inside; none without a scope', async () => {
+    const scope = { version: 0, campaignTier: true, systemTier: true, otherTier: false, modelKnowledge: false, materials: [] };
+    function Opener() {
+      const opener = useOptionalScopePopover();
+      return opener?.available === true ? (
+        <button type="button" onClick={opener.open}>
+          abrir
+        </button>
+      ) : null;
+    }
+    const withScope = (value: typeof scope | null) => (
+      <Shell preferences={{ theme: 'dark', language: 'pt-BR' }} username="Mestre_Ana" current={{ ...CURRENT, id: '0190a0b0-0000-7000-8000-000000000002' }} scope={value} sidebar="open">
+        <Opener />
+      </Shell>
+    );
+    const { rerender } = render(withScope(scope));
+    await userEvent.setup().click(within(screen.getByRole('main')).getByRole('button', { name: 'abrir' }));
+    const context = screen.getByRole('navigation', { name: ptBR.shell.context });
+    const group = within(context).getByRole('group', { name: ptBR.shell.scope.panel });
+    expect(group.hidden).toBe(false);
+    expect(group.contains(document.activeElement)).toBe(true);
+    rerender(withScope(null));
+    expect(screen.queryByRole('button', { name: 'abrir' })).toBeNull();
+  });
+
+  it('Story 3.6: under 768px the summary is not shown (the campaign name only), and its popover floats under the bar', () => {
+    const css = (name: string) => readFileSync(join(process.cwd(), 'src/components', name), 'utf8');
+    // Story 3.8: only the summary's button goes; the popover stays, so the offer under a silent answer opens it.
+    const narrow = /@media \(max-width: 767px\) \{([\s\S]*?)\n\}/.exec(css('ScopePopover.module.css'))?.[1] ?? '';
+    expect(narrow).toMatch(/\.trigger \{\s*display: none;/);
+    expect(narrow).not.toMatch(/\.popover \{[^}]*display: none;/);
+    expect(css('ContextBar.module.css')).toMatch(/@media \(max-width: 767px\) \{\s*\.system,\s*\.separator \{\s*display: none;/);
+    expect(css('ContextBar.module.css')).toMatch(/^\.bar \{[^}]*position: relative;/m);
+    const panel = /^\.panel \{([^}]*)\}/m.exec(css('ScopePopover.module.css'))?.[1] ?? '';
+    expect(panel).toMatch(/position: absolute;/);
+    expect(panel).toMatch(/z-index: 12;/);
+    expect(panel).toMatch(/background-color: var\(--color-popover\);/);
+    expect(panel).toMatch(/border: 1px solid var\(--color-border\);/);
+    expect(panel).toMatch(/width: min\(32rem, 100%\);/);
+  });
+
+  it('Story 3.9: "/" focuses the search field when no field, editable text or dialog has focus', async () => {
+    const user = userEvent.setup();
+    render(
+      shell({
+        children: (
+          <>
+            <button type="button">algo</button>
+            <input aria-label="outro campo" />
+            <div contentEditable suppressContentEditableWarning aria-label="texto editável" />
+            <dialog open aria-label="diálogo">
+              <button type="button">no diálogo</button>
+            </dialog>
+          </>
+        ),
+      }),
+    );
+    const field = screen.getByRole('searchbox', { name: ptBR.shell.search.label });
+    expect(field.getAttribute('aria-keyshortcuts')).toBe('/');
+
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(field);
+    expect((field as HTMLInputElement).value).toBe('');
+
+    screen.getByRole('button', { name: 'algo' }).focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(field);
+
+    // In another field, an editable text or a dialog, "/" is typed or left alone.
+    const other = screen.getByRole('textbox', { name: 'outro campo' });
+    other.focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(other);
+    expect((other as HTMLInputElement).value).toBe('/');
+    const editable = screen.getByLabelText('texto editável');
+    editable.focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(editable);
+    screen.getByRole('button', { name: 'no diálogo' }).focus();
+    await user.keyboard('/');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'no diálogo' }));
+    // With Ctrl or Meta, it is the browser's.
+    screen.getByRole('button', { name: 'algo' }).focus();
+    await user.keyboard('{Control>}/{/Control}');
+    expect(document.activeElement).not.toBe(field);
+  });
+
+  it('Story 3.9: Enter opens the search page with the query, Esc clears the field, and a blank query goes nowhere', async () => {
+    const user = userEvent.setup();
+    push.mockClear();
+    render(shell());
+    const field = screen.getByRole('searchbox', { name: ptBR.shell.search.label }) as HTMLInputElement;
+    const form = screen.getByRole('search', { name: ptBR.shell.search.label });
+    expect(form.getAttribute('action')).toBe('/search');
+    expect(field.name).toBe('q');
+
+    await user.click(field);
+    await user.keyboard('Espada Vorpal');
+    // Typing searches nothing.
+    expect(push).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(field.value).toBe('');
+    await user.keyboard('   {Enter}');
+    expect(push).not.toHaveBeenCalled();
+
+    await user.clear(field);
+    await user.keyboard('  Espada & Vorpal {Enter}');
+    expect(push).toHaveBeenCalledExactlyOnceWith('/search?q=Espada+%26+Vorpal');
+    expect(field.value).toBe('');
+    // Under 768px a search button opens the search page instead (CSS swaps them).
+    expect(screen.getByRole('link', { name: ptBR.shell.search.open }).getAttribute('href')).toBe('/search');
+    const css = readFileSync(join(process.cwd(), 'src/components/search/SearchField.module.css'), 'utf8');
+    const narrow = /@media \(max-width: 767px\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    expect(narrow).toMatch(/\.form \{\s*display: none;/);
+    expect(narrow).toMatch(/\.open \{\s*display: inline-flex;/);
+    expect(css).toMatch(/^\.open \{[^}]*display: none;/m);
+  });
+
+  it('Story 3.9: names the search field and the search button in English too', () => {
+    render(shell({ language: 'en' }));
+    expect(screen.getByRole('searchbox', { name: en.shell.search.label })).toBeTruthy();
+    expect(screen.getByRole('link', { name: en.shell.search.open })).toBeTruthy();
   });
 
   it('renders the page in the main column, and a right panel only when there is one', () => {
@@ -379,7 +599,7 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
     });
   }
   const frame = () => area().parentElement!;
-  const column = () => screen.getByRole('navigation', { name: ptBR.shell.context }).parentElement!;
+  const column = () => screen.getByRole('main', { hidden: true }).parentElement!;
 
   it('at 1280px and more takes the 560px column beside the main one, and nothing is inert', () => {
     const view = render(page(false));
@@ -476,9 +696,76 @@ describe('the source view in the shell\'s panel slot (Story 2.7)', () => {
   it('sizes the slot in CSS: 560px, over the main column under 1280px, a full-screen sheet under 768px', () => {
     const css = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
     expect(css).toMatch(/\.shell\[data-panel='source'\] \.panel \{\s*width: var\(--width-source-view\);/);
-    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*position: fixed;/);
+    // Usability pass: the panel is fixed to the window at every width (it spans its whole height whatever the page's
+    // length); from 1280px the grid keeps its room beside the main column, under it the panel lies over the column.
+    expect(css).toMatch(/\n\.panel \{\s*position: fixed;\s*top: 0;\s*right: 0;\s*bottom: 0;/);
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{[^@]*\.shell\[data-panel='source'\] \{\s*--panel-track: var\(--width-source-view\);/);
+    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*max-width: 100%;/);
+    // The sidebar too: fixed top to bottom, its room kept by the grid while it is open on a wide screen.
+    const sidebarCss = readFileSync(join(process.cwd(), 'src/components/Sidebar.module.css'), 'utf8');
+    expect(sidebarCss).toMatch(/\n\.panel \{\s*position: fixed;\s*top: 0;\s*bottom: 0;\s*left: 0;/);
+    expect(css).toMatch(/\.shell:has\(> \[data-wide='open'\]\) \{\s*--sidebar-track: var\(--width-sidebar\);/);
     expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\/\*[^*]*\*\/\s*\.shell\[data-panel='source'\] \.panel \{\s*left: 0;\s*width: 100%;/);
   });
+  it('Story 3.12: sizes the saved items panel in CSS: 340px, over the main column under 1280px, a full-screen sheet under 768px', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
+    expect(css).toMatch(/@media \(min-width: 1280px\) \{\s*\.shell\[data-panel='saved'\] \{\s*--panel-track: var\(--width-panel\);/);
+    expect(css).toMatch(/@media \(max-width: 1279px\) \{\s*\.shell\[data-panel='saved'\] \.panel \{\s*max-width: 100%;/);
+    expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\.shell\[data-panel='saved'\] \.panel \{\s*left: 0;\s*width: 100%;/);
+    // The panel itself is the default slot's 340px (--width-panel); nothing inside it scrolls on its own.
+    expect(css).toMatch(/\n\.panel \{[^}]*width: var\(--width-panel\);/);
+    const savedCss = readFileSync(join(process.cwd(), 'src/components/saved/SavedItems.module.css'), 'utf8');
+    expect(savedCss).not.toMatch(/overflow-y: (auto|scroll)/);
+  });
+
+  it('Story 3.12: the saved items button sits before the bell; Ctrl+Shift+S over the source view opens the panel in its place', async () => {
+    const user = userEvent.setup();
+    const here = '0190a0b0-0000-7000-8000-000000000002';
+    const entry = (n: number, campaignId: string, campaignName: string) => ({
+      turnId: `0190a0b0-0000-7000-8000-00000000010${n}`,
+      conversationId: `0190a0b0-0000-7000-8000-00000000020${n}`,
+      campaignId,
+      campaignName,
+      area: 'questions',
+      conversationName: `Magias ${n}`,
+      savedAt: '2026-11-22T12:00:00Z',
+      excerpt: `Resposta ${n}.`,
+    });
+    const items = [entry(1, here, 'First campaign'), entry(2, '0190a0b0-0000-7000-8000-000000000040', 'A Coroa Partida')];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items, total: 2 }), { status: 200 })));
+    function Opener() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <ShellPanel onReplaced={() => setOpen(false)}>
+          <section role="dialog" aria-label="fonte">
+            <button type="button">Fechar a fonte</button>
+          </section>
+        </ShellPanel>
+      ) : null;
+    }
+    render(shell({ current: { ...CURRENT, id: here } as typeof CURRENT, children: <Opener /> }));
+    const saved = screen.getByRole('button', { name: ptBR.saved.open });
+    const bell = screen.getByRole('button', { name: ptBR.notifications.title });
+    expect(saved.parentElement).toBe(bell.closest('div')!.parentElement);
+    expect(saved.compareDocumentPosition(bell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(frame().dataset.panel).toBe('source');
+    screen.getByRole('button', { name: 'Fechar a fonte' }).focus();
+
+    await user.keyboard('{Control>}{Shift>}s{/Shift}{/Control}');
+
+    expect(screen.queryByRole('dialog', { name: 'fonte' })).toBeNull();
+    expect(frame().dataset.panel).toBe('saved');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: ptBR.saved.close }));
+    // The shell hands the panel its current campaign: its entry is a link, named without the campaign; the other
+    // campaign's is a form that switches first, its meta-line led by the campaign.
+    const list = await screen.findByRole('list', { name: ptBR.saved.list });
+    const [mine, theirs] = within(list).getAllByRole('listitem');
+    expect(mine!.querySelector('p')!.textContent).toBe('Consultas › Magias 1');
+    expect(within(mine!).getByRole('link', { name: /Magias 1/ }).getAttribute('href')).toContain('?turn=');
+    expect(theirs!.querySelector('p')!.textContent).toBe('A Coroa Partida › Consultas › Magias 2');
+    expect(within(theirs!).getByRole('button', { name: /Magias 2/ }).getAttribute('type')).toBe('submit');
+  });
+
   it('keeps the source view header and footer in view while the panel itself scrolls (keys scroll from any control)', () => {
     const shellCss = readFileSync(join(process.cwd(), 'src/components/Shell.module.css'), 'utf8');
     expect(shellCss).not.toMatch(/data-panel='source'\] \.panel \{[^}]*overflow: hidden/);
@@ -509,16 +796,25 @@ describe('the shell hands the guided upload its campaign and system (Story 1.14)
       };
     }
   });
+  const CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000002';
+  const SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000001';
+  const OTHER_SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000030';
+  // Story 3.3: every campaign in use and every system; the current campaign is chosen first.
   const BELONGING = {
-    campaign: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign' },
-    system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system' },
+    campaigns: [{ id: CAMPAIGN_ID, name: 'First campaign', system: { id: SYSTEM_ID, name: 'Untitled system' } }],
+    systems: [
+      { id: OTHER_SYSTEM_ID, name: 'Pathfinder' },
+      { id: SYSTEM_ID, name: 'Untitled system' },
+    ],
+    current: CAMPAIGN_ID,
   };
 
-  for (const [choice, expected] of [
-    [/Só em First campaign/, { campaign: BELONGING.campaign.id }],
-    [/Em todas as campanhas de Untitled system/, { system: BELONGING.system.id }],
+  for (const [choice, ticked, expected] of [
+    [/Uma campanha/, [], { campaign: CAMPAIGN_ID }],
+    [/Um sistema/, [], { systems: OTHER_SYSTEM_ID }],
+    [/Vários sistemas/, ['Pathfinder', 'Untitled system'], { systems: `${OTHER_SYSTEM_ID},${SYSTEM_ID}` }],
   ] as const) {
-    it(`sends ${Object.keys(expected)[0]}'s id for that choice`, async () => {
+    it(`sends the place for ${String(choice)}`, async () => {
       startUpload.mockClear();
       const user = userEvent.setup();
       render(
@@ -535,6 +831,9 @@ describe('the shell hands the guided upload its campaign and system (Story 1.14)
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('radio', { name: choice }));
+      for (const name of ticked) {
+        await user.click(within(modal).getByRole('checkbox', { name }));
+      }
       await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
       await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
       expect(startUpload).toHaveBeenCalledOnce();

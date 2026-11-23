@@ -1,18 +1,7 @@
-.heading {
-  margin: var(--space-8) 0 var(--space-3);
-  font-size: var(--font-title-size);
-  font-weight: var(--font-title-weight);
-  line-height: var(--font-title-line-height);
-  overflow-wrap: anywhere;
-}
-
-.state {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-}
-
+/*
+ * A material's page. Usability pass (2026-11-21): the shared header, the actions, then the facts in cards beside a
+ * preview of the first page; the main column sets the gap between the blocks.
+ */
 .label {
   color: var(--color-text-muted);
   font-size: var(--font-label-size);
@@ -20,28 +9,104 @@
   line-height: var(--font-label-line-height);
 }
 
-/* Why a material failed (Story 1.15): plain text under the pill, never a code. */
-.failure {
+/* The facts, and the first page beside them from 900px. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .columns[data-preview='shown'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  }
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* A card: where it belongs, the page counts, the preview. */
+.counts,
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+/* The ready version that keeps serving while a new one is on its way (Story 3.4): plain text under the header. */
+.serving {
   max-width: 60ch;
   margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
 }
 
-/* The pages read directly, read by OCR, still waiting and unreadable (Story 1.17): a plain list of word and number. */
-.counts {
-  margin: var(--space-4) 0 0;
+/* Why a report could not be read: plain text, never a code. */
+.failure {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--color-danger);
 }
 
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* How far the reading is: a bar across the card, in the text colour over the active tone. */
+.progress {
+  display: block;
+  width: 100%;
+  height: var(--space-2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-active);
+  color: var(--color-text);
+  appearance: none;
+}
+
+.progress::-webkit-progress-bar {
+  background-color: var(--color-surface-active);
+}
+
+.progress::-webkit-progress-value {
+  background-color: var(--color-text);
+}
+
+.progress::-moz-progress-bar {
+  background-color: var(--color-text);
+}
+
+/* The pages read directly, read by OCR, still waiting and unreadable (Story 1.17): each number large, its word under it. */
 .countList {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-6);
-  margin: var(--space-2) 0 0;
+  gap: var(--space-4) var(--space-12);
+  margin: 0;
 }
 
 .count {
   display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
+  flex-direction: column-reverse;
+  gap: var(--space-1);
 }
 
 .count dt {
@@ -53,23 +118,32 @@
 
 .count dd {
   margin: 0;
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
   font-variant-numeric: tabular-nums;
 }
 
-.counts > h2 {
-  margin: 0;
+/*
+ * The first page, cut at the height the window leaves under the header and the actions (third round), so the card
+ * ends within the window instead of adding a short scroll of its own.
+ */
+.previewPage {
+  max-height: clamp(12rem, calc(100dvh - 27rem), 28rem);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
 }
 
-/* The link to the material's first page (Story 1.19), once it needs review or is ready: a pill, never the solid one. */
+/* The link to the material's pages (Story 1.19), once it needs review or is ready: a pill, never the solid one. */
 .pages {
-  margin: var(--space-4) 0 0;
+  margin: 0;
 }
 
 .pagesLink {
   display: inline-flex;
   align-items: center;
   min-height: var(--space-touch-target);
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-5);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-full);
   background-color: var(--color-control);
@@ -78,4 +152,9 @@
   font-weight: var(--font-label-weight);
   line-height: var(--font-label-line-height);
   text-decoration: none;
+}
+
+.pagesLink:hover {
+  border-color: var(--color-text);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
 }

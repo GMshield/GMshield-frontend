@@ -51,7 +51,15 @@ at least two weeks old that day (hash-wasm 4.13.0 was nine days old, so 4.12.0).
 | `src/components/PageView.tsx` | one page of a material (Story 1.19): a picture with its text layer as SVG, or a text page |
 | `src/components/QualityReport.tsx`, `MaterialActions.tsx` | a material's quality report and the GM's actions on it (Story 1.20); the Server Action is `src/app/(signed-in)/files/[id]/actions.ts` |
 | `src/app/terms`, `src/app/privacy` | the draft terms of use and privacy notice, marked "Rascunho / Draft" |
-| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm` |
+| `src/components` | the base components, each with its CSS Module: `PillButton` (and `SolidPillButton`), `ConfirmationDialog`, `Notice`, `PreferencesForm`, `UsernameForm`; the page parts every page is built from (`PageHeader.tsx`: `PageHeader`, `PageSubtitle`, `Tabs`, `Card`, `EmptyState`, with `Page.module.css`) |
+| `src/components/notifications` | the notifications (usability pass): `NotificationsProvider` (toasts, the flash cookie's reader) and `NotificationCenter` (the bell and its list) |
+| `src/components/AccountMenu.tsx`, `useDisclosure.ts` | the account menu in the bar above the page (the account, theme, language, "Sair"), and the open, Esc and press-outside behaviour it shares with the bell and "Exibição" |
+| `src/components/Spinner.tsx`, `LinkPending.tsx`, `ErrorScreen.tsx` | a busy button's or link's spinner, and what a page shows when it could not be built (`error.tsx`) |
+| `src/components/ItemList.tsx`, `ViewMenu.tsx`, `Thumbnail.tsx`, `MaterialPreview.tsx` | a list's rows as a list or a grid, its "Exibição" menu, a material's first-page thumbnail, and the preview panel |
+| `src/flash-cookie.ts`, `src/server/flash.ts` | what a Server Action says once it has succeeded, carried to the next render in `__Host-gmshield-flash` |
+| `src/view-cookie.ts` | how each list is shown, remembered in `__Host-gmshield-view` |
+| `src/paging.ts`, `src/server/list-page.ts`, `src/components/Pager.tsx` | a list a page at a time: the page arithmetic, the one call that asks the backend for a page and its total, and the pager |
+| `src/server/every-page.ts` | a whole list read through the backend's cursor, for what needs every campaign or system |
 | `src/preferences.ts` | the preference cookies: names, allowlists, reading them for a request |
 | `src/server` | server-only code: settings, logs, trace context, the backend client, the contract check. Every module starts with `import 'server-only'`, so `next build` fails when a client component imports one |
 | `src/server/backend` | the typed backend client; `generated/` holds the generated types (not committed) |
@@ -98,8 +106,9 @@ they sit in `src/`.
   them on every request and renders `<html lang data-theme>`, so no client script runs and the
   wrong theme never flashes. A value off the allowlist is ignored: the theme falls back to
   `illustrated` and the language to the browser's `Accept-Language` (Portuguese by default).
-  `PreferencesForm` (two radio groups and "Aplicar") posts to the Server Action
-  `savePreferences`, which sets both cookies. Nothing is stored in the backend yet (Epic 8).
+  `PreferencesForm` (two segmented controls of submit buttons; a press applies that one choice at
+  once, since the second usability pass) posts to the Server Action `savePreferences`, which sets the
+  cookie of the choice posted. Nothing is stored in the backend yet (Epic 8).
   Browsers keep `__Host-` (`Secure`) cookies only over HTTPS or on localhost: over plain HTTP on
   another host the choice is silently dropped. Production is reached only through the HTTPS tunnel.
 - **Sign-in with Google (Story 1.9).** The backend alone talks to Google; the frontend relays.
@@ -169,11 +178,13 @@ they sit in `src/`.
   order, the sidebar, the context bar ("system › campaign"; the campaign only under 768px) and the
   main column (centred, at most `--width-reading`), with a slot for one right panel.
   - The sidebar (`Sidebar.tsx`, a client component; its texts come translated from the server): the
-    logo and name opening a disclosure menu with the preferences form and "Sair", the current
+    logo and name (a link to `/questions`; until the usability pass of 2026-11-21 it opened a menu with
+    the preferences and "Sair", now the account menu in the bar above the page), the current
     campaign, the entries Consultas `/questions`, Criação de Regras `/rules`, Minhas Mesas
     `/campaigns`, Sistemas `/systems`, Personagens `/characters`, Meus Arquivos `/files`, and
-    "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page says
-    what will be there.
+    "Adicionar Arquivo" at the bottom, which opens the guided upload (Story 1.14). Each entry's page still to
+    be built says what will be there. An entry is marked current (`aria-current="page"`) on its page and on
+    every page below it (Story 3.1: Sistemas on `/systems/new` and `/systems/<id>`).
   - From 1280px its collapse control or Ctrl+B / ⌘B closes it to the handle "Abrir menu" and the
     logo mark; the state is kept in `__Host-gmshield-sidebar` (`open` | `closed`, a year, not
     `HttpOnly`: the sidebar writes it, the server reads it so nothing flashes). Under 1280px it always
@@ -275,8 +286,9 @@ they sit in `src/`.
   - The page route shows a picture page beside a "Texto extraído" column holding its lines' text, or "Nenhum texto
     foi extraído desta página."; an unreadable page whose reading crashed (no picture and no text) says it could not
     be opened, with its number and the page links.
-  - The signed-in layout shows a dismissible warning notice "{name} precisa de revisão." linking to the newest
-    material that needs review, from the tray's list, unless the campaign notice is already shown.
+  - The signed-in layout showed a dismissible warning notice "{name} precisa de revisão." linking to the newest
+    material that needs review. Since the usability pass of 2026-11-21 that is the bell's: every material that needs
+    review or failed is listed under it, and a toast says so when one appears during the visit.
 - **Photos as the pages of one material (Story 1.21).** Public contract 1.10.0.
   - The dialog's step count follows its questions. With two or more images chosen (JPG, PNG, WebP, TIFF, BMP or HEIC,
     as the browser's check found them), a step asks "Páginas de um material" (the default) or "Cada imagem é um
@@ -444,8 +456,8 @@ they sit in `src/`.
   - The number is formatted for the language ("2.000" / "2,000"), and one passage left has its own sentence
     (`notice.indexingOne`: "falta 1 trecho" / "1 passage left").
   - The Shell's notice slot is a list (`notices`), one line each, in this order: a campaign that cannot be loaded
-    (danger), the newest material that needs review (warning, dismissible), then the indexing notice. A campaign error no
-    longer hides the needs-review notice.
+    (danger), then the indexing notice. (A material that needs review was a line here until the usability pass of
+    2026-11-21; it is now under the bell.)
   - **Passages that could not be prepared (public contract 1.16.0).** The current conversation also carries
     `indexingFailed`, `{passages, retrying}` or null: the in-scope passages whose index change failed, and whether the
     backend will try one of them again (every 10 minutes, at most 3 times). The layout renders `IndexingNotice` when
@@ -463,9 +475,472 @@ they sit in `src/`.
     (at most about 40 minutes over 3 retries).
   - The stand-in backend answers `indexing: null` and `indexingFailed: null` (its sources are indexed), so a test-mode
     shell shows no indexing notice and reads no count.
+- **Systems (Story 3.1, part A).** Public contract 1.17.0. "Sistemas" lists, creates and edits the GM's systems;
+  deleting one is part B (below).
+  - `src/server/library.ts` gains `listSystems`, `getSystem`, `createSystem`, `changeSystem` (`PATCH` with the version
+    the form was read at) and `listCampaigns` (a system's campaigns); `listMaterials` takes `system` to list a system's
+    materials (attached to it or to one of its campaigns).
+  - `/systems`: the title "Sistemas", one solid pill "Novo sistema", and the systems newest first, each row its name
+    and edition, opening `/systems/<id>`. Empty, one sentence says what a system holds ("Um sistema reúne as campanhas e
+    os materiais de um jogo.") and "Novo sistema" is the only action.
+  - Lists (`src/components/ItemList.tsx`, a client component): the server gives the rows of one page, and `Pager`
+    under them (and a small one in the toolbar) links to the others (`?page=`). Until the third round of the usability
+    pass (2026-11-21) a "Carregar mais" pill added the backend's next page under the rows; see "Third pass" below.
+  - `/systems/new` and `/systems/<id>/edit` are pages of the main column with `SystemForm`: Nome (`aria-required`),
+    Edição (opcional) and Descrição (opcional), with no `maxLength` (the backend counts code points after trimming:
+    120, 60 and 2000; CRLF line breaks are sent as LF), "Criar sistema" or "Salvar" (the screen's one
+    solid pill) and "Cancelar". The backend checks every field; each of its field codes (`request.system_name_invalid`,
+    `request.system_edition_invalid`, `request.system_description_invalid`, `request.system_name_taken`) comes back as
+    text under that field (`role="alert"`, `aria-describedby`), with what was typed kept; any other problem under the
+    form. A saved system opens its page. The edit sends every field with the version, so a cleared edition or
+    description is removed. A stale version (`request.stale_version`) brings the system's current values and version
+    into the form, which says above its fields that the system was changed elsewhere.
+  - `/systems/<id>`: the name, the edition ("Edição 5.2.1"), the description with its line breaks, "Editar" (the one
+    solid pill) and two tabs as links, campaigns (the default) and materials, chosen by `?tab=` and marked with
+    `aria-current="page"`. The campaigns tab lists the system's campaigns in use, each opening its page (Story 3.2); the
+    materials tab lists its materials in every state but `superseded` and `discarded`, each with its state pill and
+    opening `/files/<id>`. An empty tab says so in one sentence. Another owner's id, an unknown one or a malformed one
+    is the single "Não encontrado." page. A new name shows in the list and in the context bar on their next load.
+  - The stand-in backend lists the starter system (no edition, no description, version 0) with its one campaign,
+    creates "D&D" 5.2.1, and answers an edit with the starter system at version 1.
+- **Delete a system (Story 3.1, part B).** Public contract 1.18.0. `src/server/library.ts` gains `systemDeletion`
+  (`GET /api/v1/systems/{id}/deletion`: `{campaigns, conversations, materials}`) and `deleteSystem` (`DELETE`, 202 with
+  no body, which `call` reads as ok).
+  - `/systems/<id>` reads the counts with the tab's list and shows "Excluir", a danger pill next to "Editar"
+    (`src/components/SystemActions.tsx`, a client component). It opens the `ConfirmationDialog`: "Excluir este
+    sistema?", "Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito." (each
+    count with its singular for one and its plural otherwise, zero included; `systems.delete.*` in both catalogues;
+    without the counts, it names what goes in words), "Cancelar" and the danger pill "Excluir sistema". Cancelar or Esc
+    closes it and focus goes back to "Excluir".
+  - "Excluir sistema" posts the id to the Server Action `deleteSystemAction` (`src/app/(signed-in)/systems/actions.ts`),
+    which deletes the system and opens `/systems` without it; the backend removes its campaigns, their conversations and
+    the materials attached only to it in the background (they leave every list at once, Meus Arquivos included). A
+    refusal (`request.not_found` for a system already deleted or another owner's) shows its `errorText` as an alert
+    under the pill; a malformed id never reaches the backend. Deleting the system of the only campaign leaves the shell
+    with no campaign: the conversation pages show their "no campaign" state, the composer disabled.
+  - The stand-in backend counts one campaign, one conversation and no material for the starter system, and answers a
+    delete with 202.
+- **Campaigns and the campaign switcher (Story 3.2, part A).** Public contract 1.19.0. "Minhas Mesas" lists, creates,
+  renames, archives and restores the GM's campaigns, and the switcher makes one current; deleting a campaign is part B
+  (below).
+  - `src/server/library.ts`: `listCampaigns(token, {system?, archived?, cursor?, limit?})` (every campaign of the
+    account, or a system's; the archived ones with `archived: true`), `getCampaign`, `createCampaign` (it becomes the
+    current campaign), `changeCampaign` (`{version, name?, archived?}`) and `chooseCampaign` (`PUT
+    /api/v1/campaigns/current`). `src/server/conversations.ts`: `campaignConversation` (`{id, questions}`). The current
+    campaign is the backend's: nothing about it is kept in the browser.
+  - `/campaigns`: the title "Minhas Mesas", one solid pill "Nova campanha", a filter of two links ("Em uso", the default,
+    and "Arquivadas", `?archived=true`, marked with `aria-current="page"`), and the campaigns newest first, each row its
+    name and its system ("D&D 5.2.1"), opening `/campaigns/<id>`. Empty, one sentence ("Uma campanha reúne as conversas
+    e os materiais de uma mesa de jogo." or "Nenhuma campanha arquivada."). The list is paged within its filter
+    (`?archived=true&page=2`).
+  - `/campaigns/new` (`?system=` chooses the system, as a system's page can link it; otherwise the newest): `CampaignForm`
+    with Nome and a `<select>` of the account's systems (the first 50). Saved, the campaign is current and its page
+    opens. `request.campaign_name_invalid` and `request.campaign_name_taken` come back under the name, a system gone
+    meanwhile (`request.not_found`) under the system. With no system, one sentence ("Uma campanha pertence a um
+    sistema, e você ainda não tem nenhum.") and a link to `/systems/new`.
+  - `/campaigns/<id>`: the name; "Usar esta campanha" (the one solid pill, only when the campaign is in use and not the
+    current one; the current one says "Esta é a campanha atual."), "Renomear" (`/campaigns/<id>/edit`), and "Arquivar"
+    or "Restaurar" (reversible, so no confirmation; each posts the version the page was read at, and the page is
+    refreshed; a stale version says it changed elsewhere and the refresh shows the current values). Three tabs by
+    `?tab=`: overview (the default: name, the system linking to its page, "Arquivada" when archived), scope (the four
+    settings in words, read-only until Story 3.6), conversations (the campaign's conversation with its question count
+    and "Abrir", which makes the campaign current and opens Consultas; none for an archived campaign, which cannot be
+    current; one sentence when there is no conversation). An archived campaign still opens. Another owner's id is the
+    single "Não encontrado." page. `/campaigns/<id>/edit` renames on the version; a stale one brings the current name.
+  - The switcher (`src/components/CampaignSwitcher.tsx`, a client component, the disclosure pattern `useDisclosure` now shares)
+    replaces the static name under the logo and the context bar's campaign link (under 768px the bar still shows the
+    campaign name only). Its button is the current campaign's name ("Nenhuma campanha" with none); open, it lists the
+    campaigns in use (the first 50, read by the signed-in layout) with their system, the current one marked "atual"
+    in words (`aria-current`), then "Ver todas as mesas" and "Nova campanha". Picking one posts it to
+    `chooseCampaignAction`, which makes it current and refreshes the page (the conversation, the context bar and the
+    switcher act on it); the list closes on success and shows a refusal as an alert otherwise. Esc closes it, gives
+    focus back to the button and is marked handled, so the sidebar sheet stays open.
+  - Consultas with no campaign (every one archived or gone: `GET /api/v1/conversations/current` is 404) shows the
+    composer disabled (`NoCampaignConversation`), the reason above it ("Não há campanha em uso: crie uma para fazer
+    perguntas.", which the field names with `aria-describedby`) and a link "Nova campanha" to `/campaigns/new`.
+  - "Minhas Mesas" is marked current on `/campaigns` and every page below it. New codes: `request.campaign_name_invalid`
+    (`{min}`, `{max}`) and `request.campaign_name_taken`, in both catalogues.
+  - The stand-in backend lists the starter campaign with its system, creates "Mesa de quinta", answers a change with the
+    starter campaign at version 1 and a choice with the starter campaign, and its conversation holds one question.
+- **Delete a campaign (Story 3.2, part B).** Public contract 1.20.0. `src/server/library.ts` gains `campaignDeletion`
+  (`GET /api/v1/campaigns/{id}/deletion`: `{conversations, materials}`) and `deleteCampaign` (`DELETE`, 202 with no
+  body).
+  - `/campaigns/<id>` reads the counts with the campaign and shows "Excluir", a danger pill last in the header, for any
+    campaign (in use, current, archived or the last one) (`src/components/CampaignDeleteAction.tsx`, a client
+    component). It opens the `ConfirmationDialog`: "Excluir esta campanha?", "Vão junto: 1 conversa e 2 materiais desta
+    campanha. Isso não pode ser desfeito." (each count with its singular for one and its plural otherwise, zero
+    included; `campaigns.delete.*` in both catalogues; without the counts, it names what goes in words), "Cancelar" and
+    the danger pill "Excluir campanha". Cancelar or Esc closes it and focus goes back to "Excluir".
+  - "Excluir campanha" posts the id to the Server Action `deleteCampaignAction`
+    (`src/app/(signed-in)/campaigns/actions.ts`), which deletes the campaign, revalidates the shared layout (the switcher
+    and the context bar no longer show it; the current campaign has fallen back, or there is none and Consultas shows the
+    composer disabled) and opens `/campaigns` without it; the backend removes its conversation and its materials in the
+    background. A refusal (`request.not_found` for a campaign already deleted or another owner's) shows its `errorText`
+    as an alert under the pill; a malformed id never reaches the backend.
+  - The stand-in backend counts one conversation and no material for the starter campaign, and answers a delete with
+    202.
+- **Where a material belongs (Story 3.3).** Public contract 1.21.0. A material belongs to one campaign or to one or
+  more systems; the GM can change it, and it applies from the next question. `src/server/materials.ts` gains
+  `changeMaterial` (`PATCH /api/v1/materials/{id}` `{version, belonging: {campaign} | {systems}}`) and `FILE_STATES`
+  (every state but `discarded`); a material now carries `version`, `size` (absent until known) and `belonging`
+  (`{campaign: {id, name, system} | null, systems: [{id, name}]}`). `src/server/library.ts` gains `listAllSystems` and
+  `listAllCampaigns` (50 a page, every page, at most 20).
+  - The pickers (`src/components/PlacePicker.tsx`, a client component) are three full-width choice rows, each with its
+    explanation and its picker: "Uma campanha" (a select of the campaigns in use, in `optgroup`s by system), "Um
+    sistema" (a select) and "Vários sistemas" (checkboxes, posted in the systems' order). A row shows only when it has
+    something to pick; with no campaign and no system, the one row is "Em nenhum lugar por enquanto". Picking in a row's
+    picker chooses that row, and each row keeps its value while another is chosen. An archived campaign is never
+    offered (the API still takes one). Texts: `upload.dialog.belonging.*`.
+  - The guided upload's "where it belongs" step uses them, fed by the signed-in layout with every campaign in use and
+    every system (`Belonging = {campaigns, systems, current}`), the current campaign chosen first. Several systems with
+    none ticked cannot go on ("Marque pelo menos um sistema."). A file sends `campaign` or `systems` (comma-separated
+    ids) as tus metadata; an image set sends `campaign` or `systems` (an array), which `createImageSetAction` checks (1
+    to 100 ids, never with a campaign).
+  - `/files` ("Meus Arquivos") is a list page in the shared shape: "Adicionar Arquivo" (`AddFileButton`, the one solid
+    pill) opens the guided upload; each row has the material's name, its state pill, then its size, pages and place
+    ("1,2 MB · 320 páginas · Campanha X", `files/rows.ts`), and opens `/files/{id}`; the list is paged (`?page=`); an
+    empty list says so in one sentence.
+  - A material's page shows "Onde pertence" (`src/components/MaterialPlace.tsx`): the place in a sentence and
+    "Alterar", which opens the pickers on the current place; a place they cannot show (an archived campaign, a system
+    not offered) or no place opens with nothing picked, "Em nenhum lugar" is never offered, and "Salvar" waits for a
+    pick. When the campaigns and systems could not be loaded, the reason shows instead of "Alterar". "Salvar" posts to `changePlaceAction`
+    (`files/[id]/actions.ts`) on the version the page read, which refreshes the page; the form closes, focus goes back to
+    "Alterar" and a polite status says "Vale a partir da próxima pergunta.". A stale save (`request.stale_version`)
+    brings the current place and version with the stale line, the form open; any other refusal shows its text with the
+    choice kept. The form is posted from `onSubmit` in a transition, not through `action`, so React's reset after an
+    action never puts the selects back to their first option while the form stays open.
+  - The system page's materials tab names each row's place: "Sistema" (this system alone), "Campanha X", or the names
+    of its systems.
+  - New code `material.belonging_invalid`, in both catalogues. The stand-in backend's material belongs to the starter
+    campaign at version 0, and a change answers it in the starter system at version 1.
+- **The usability pass (2026-11-21).** No contract change. Dalton asked for a review of every screen against UI and UX
+  practice (hierarchy and contrast, spacing, feedback after actions, one notification system, file previews, view
+  options), with the prototype as a starting point and not a limit. DESIGN.md and EXPERIENCE.md were revised with it.
+  - **Page structure.** Every signed-in page starts with `PageHeader`: the way back to the list or the item it belongs
+    to (a link above the title), the title (the page's one `<h1>`, in the page-title size), muted lines under it, and
+    its actions on the right. Under it come `Tabs` (a page's sections on a rule, or a list's filters as chips), cards
+    (`Card`, and the cards of the material page) and `EmptyState` (an icon, one sentence, at most one action). The main
+    column sets one gutter (32px, 16px on a phone) and one gap between a page's blocks (24px), so no page part carries a
+    margin of its own. A bar of a fixed height above the page holds the context bar on the left and the bell on the
+    right.
+  - **The sidebar.** 296px wide. Entries read from the left, each with an icon; the current one has the active
+    background, a heavier weight and a bar on its left edge. The campaign switcher is a bordered box with a chevron
+    under its label. Under 768px the handle is a round menu button at the top left, in the bar, and the page keeps its
+    whole width; from 768px to 1279px it was still a tab at mid-height on the left edge until the fourth pass (below).
+  - **Buttons and fields.** A pill is outlined (`default`), filled with the text colour (`solid`, the one main action),
+    outlined in the danger colour (`danger`, a destructive action; the confirmation dialog fills its own) or without an
+    outline (`quiet`). Every one has hover, pressed and disabled states. A field is a bordered box in the field colour
+    with a 12px radius, never the control colour of a button; an invalid one has a 2px danger edge and its text under it.
+  - **Feedback after actions.** A Server Action that succeeds calls `flash(status, text)` (`src/server/flash.ts`) before
+    its `redirect` or `refresh`: creating, changing and deleting a system; creating, renaming, archiving, restoring,
+    choosing and deleting a campaign; accepting, reprocessing, retrying and discarding a material. The text, already
+    translated, goes in `__Host-gmshield-flash` (`Secure`, `SameSite=Lax`, `Path=/`, 30 seconds, not `HttpOnly`: the
+    page reads it). It holds a status and at most 300 characters, never an identifier or a secret. A refusal sets
+    nothing: the form or the control says it, as before.
+  - **Notifications.** `NotificationsProvider` wraps the shell. `useNotifications().notify({ status, message, link })`
+    shows a toast at the top of the window, in the middle, and keeps a line in the bell's list for the visit (in
+    memory only, 30 at most). A toast goes after 6 seconds (10 for a warning), waits while the pointer or the focus is
+    on it, and an error stays until dismissed; three show at most. Each is a live region (`status`, or `alert` for an
+    error) with its status as a word beside its icon. After every render and on every change of page the provider reads
+    the flash cookie once, tells it and clears it. The uploads tell the end and the failure of an upload the same way
+    (`quiet`: their own live region already announces it). The bell (`NotificationCenter`) counts what waits and what is
+    new, and its list shows first what waits for the GM (every material that needs review or failed, from the layout),
+    then the visit's notifications with their time; opening it marks them seen and takes the toasts away, "Limpar"
+    empties the visit's list.
+  - **View options.** A list's toolbar holds its filters on the left and "Exibição" (`ViewMenu`) on the right: list or
+    grid, comfortable or compact, and for lists with thumbnails, whether they show. A choice applies at once and is
+    written to `__Host-gmshield-view` (`files:grid:compact:1|campaigns:…|systems:…`, a year, not `HttpOnly`), which the
+    server reads (`currentViews`), so the next render already has it. "Meus Arquivos" filters by state through
+    `?state=` (`all`, `ready`, `review`, `progress`, `failed`; `files/filters.ts`): the backend filters, and the page
+    links keep the filter. There is no sorting: the backend lists newest first only.
+  - **File previews.** A material that needs review or is ready and has pages carries its first page's picture address
+    in its row (`previewOf`, `files/rows.ts`): `Thumbnail` shows it (a plain lazy `<img>` from the picture relay, which
+    needs the session cookie; the list's icon when there is no picture). "Pré-visualizar" beside the row opens
+    `MaterialPreview` in the shell's right panel slot: the material's pages from the first, read one at a time through
+    the Server Action `previewPageAction` and shown with `PageView`, with previous and next (← and →), "Abrir arquivo"
+    and Esc to close; focus goes back to the control that opened it. The material's own page shows its first page beside
+    its facts, with "Ver páginas" under it.
+  - **The conversation.** The column is 800px wide at most. With nothing asked yet, the middle of the screen says what
+    it is for; the composer stays at the bottom of the window. A question heads its turn in a heavier weight behind a
+    bar, and Send is the solid main action.
+  - **Second pass, same day**, after Dalton's review of the first: the sidebar did not reach the bottom of a long
+    page, the theme and language controls were badly placed, and the upload still had problems.
+    - **Sidebar and panel height.** Both were `position: sticky` inside the shell's grid, so they stopped short of the
+      window's bottom whenever the document was taller than the grid (in development, Next.js's own indicator adds
+      46px under it). They are now `position: fixed`, top to bottom, and the grid keeps their room through two custom
+      properties (`--sidebar-track`, set by `.shell:has(> [data-wide='open'])` from 1280px; `--panel-track`, set by
+      `data-panel`). The page itself still scrolls.
+    - **Account menu.** `AccountMenu` (a round button with the username's initial, at the right end of the bar) holds
+      who is signed in, `PreferencesForm` and "Sair". The logo in the sidebar is a link to `/questions`; `LogoMenu` is
+      gone. `PreferencesForm` is two segmented controls of submit buttons (`name="theme"` or `name="language"`,
+      `aria-pressed` on the current one): a press posts that one choice, which applies at once and leaves the menu
+      open; it still works without JavaScript, and there is no "Aplicar". The sign-in screen shows it at its top right
+      (`layout="inline"`), outside the card. `useDisclosure` (`src/components/useDisclosure.ts`) is the shared
+      open, Esc and press-outside behaviour of the account menu, the bell and "Exibição".
+    - **Guided upload.** The files step has a drop area (`data-testid="upload-drop"`: files dragged from the computer
+      are added as the button adds them, it lights up while files are over it, and anything else dragged is ignored);
+      the chosen files are rows with an icon, what the check said and an icon button "Remover {name}"; the step count
+      is also drawn as marks; the actions sit at the dialog's bottom with "Voltar" on the left; a file being sent shows
+      its percentage, never under 0 or over 100.
+    - **Upload tray.** The layout gives it only the materials in motion (uploading, waiting, processing). One that
+      needs review or failed is listed under the bell, not also as "in progress".
+    - **Busy states.** `PillButton` takes `pending` (a `Spinner` before its text and `aria-busy`); forms and actions
+      pass it while their Server Action runs. `LinkPending` (Next.js's `useLinkStatus`) shows a spinner at the end of
+      a sidebar entry and in place of a list row's arrow while the page it leads to is on its way.
+    - **Titles, skip link, errors.** The root metadata has a title template ("%s · GMshield"); each section's pages
+      are titled after its sidebar entry (`(signed-in)/section-metadata.ts`, a `layout.tsx` in `files`, `systems` and
+      `campaigns`, and `generateMetadata` in the single pages). "Pular para o conteúdo" is the shell's first Tab stop
+      and leads to `#content`, the main column. `error.tsx` at the root and inside `(signed-in)` renders `ErrorScreen`:
+      the page could not be shown, in the interface's language, with "Tentar de novo" (`retry`) and the way home; the
+      not-found page is a card with its title and the way home, and still says nothing more.
+    - **Material pages.** A page of a material has "Página anterior" and "Próxima página" in its header as well as
+      under the page; a material being read shows a progress bar over its page counts.
+  - **Third pass, same day**, after Dalton asked to remove unnecessary scrolling and to page what needs it.
+    - **The scroll that was not the app's.** In `next dev` every signed-in screen scrolled by 46px: Next.js puts its
+      development indicator under the page. `next.config.ts` sets `devIndicators: false` (compile and runtime errors
+      still show), so what scrolls in development is what scrolls in production.
+    - **Paged lists.** "Meus Arquivos", "Sistemas", "Minhas Mesas" and the two tabs of a system's page show one page
+      of rows, 10 unless "Exibição" says 20 or 50 ("Por página"; the size is the fifth field of the view cookie:
+      `files:list:comfortable:1:20`). The page is in the address (`?page=3`, with the filter or the tab kept), so it
+      can be linked and reloaded, and the pager is links: it works without JavaScript. `Pager`
+      (`src/components/Pager.tsx`) under the rows says which rows show ("21–30 de 61"), then "Anterior", the page
+      numbers (the first, the last, the current one and its neighbours; `aria-current` on the current one) and
+      "Próxima"; at an end the arrow that leads nowhere stays in place, dimmed and not a link. On a phone the numbers
+      give way to "Página 3 de 7". A compact pager in the toolbar (the range and the two arrows) turns the page
+      without scrolling to the end of the rows. A list of one page shows only its count ("7 itens"). A page past the
+      end is the last one; anything that is not a page number is the first (`src/paging.ts`: `pageParam`, `pageOf`,
+      `pageWindow`, `pageHref`). "Carregar mais" and its Server Actions (`moreFiles`, `moreSystems`, `moreCampaigns`,
+      `moreMaterials`, `moreCampaignsAction`) are gone.
+    - **Where the pages come from.** One call a page since public contract 1.22.0: `listPage`
+      (`src/server/list-page.ts`) asks the list for `limit` (the page's size) and `offset` (its start; none on the
+      first page) and takes the list's `total` from the answer, so the pager numbers the pages without reading the
+      list. A page past the end is asked again as the last page; the furthest start is 100,000, the backend's limit.
+      Until that contract the screens read a whole list through its cursor to cut a page out of it; `everyPage`
+      (`src/server/every-page.ts`) remains for what needs a whole list: the campaigns and systems a material can be
+      given, and the campaign switcher.
+    - **The quality report.** A book's outline has hundreds of sections and a poor scan dozens of unreadable runs, and
+      the material's page listed them all. The outline shows 10 at a time and the unreadable pages 12 runs, each with a
+      compact pager beside its heading (`?outline=`, `?unreadable=`; each keeps the other, and turning one does not
+      move the page: `scroll={false}`). Indents come from the whole outline. "Onde pertence" is one row while its form
+      is closed.
+    - **The page view.** The header has "Ir para a página": a number field and "Ir" between the two page links, a
+      plain GET form to `/files/{id}/pages?page=N`, which answers with the page's own address (past the last page: the
+      last page), so it works without JavaScript. From 901px the picture is as tall as the window leaves and the
+      extracted text scrolls within the same height, so the page is seen whole and nothing is turned by scrolling; the
+      links under the page remain for one column.
+    - **Pages that fit their room.** `PageView` takes `fit`: the SVG then carries a size of its own in the picture's
+      shape (attributes, larger than any screen), and two CSS limits (the column's width, `--page-height` set by the
+      screen that holds it) bring it down, as for a picture. The page view, the source view and the preview panel use
+      it, so a cited passage is in view when the source view opens, with no scroll inside the panel.
+    - **The conversation.** A question just asked comes to the top of the window (`scrollIntoView`, without gliding
+      under reduced motion), and the newest turn is as tall as the window above the composer, so its answer is written
+      in view; only a new turn moves the page, never a piece of the answer. Before, a new question landed under the
+      docked composer once the conversation was longer than the window.
+    - **One thing scrolls at a time.** The guided upload scrolls its step, not the whole dialog: the title, the step
+      count and the actions stay in view with twenty files chosen, and the drop area becomes one row once files are
+      chosen. "Vários sistemas" lays its checkboxes in columns (a library of 23 systems made the place form 2,700px
+      tall). The bell shows the first five things that wait and one link to the rest ("Mais 7 em Meus Arquivos",
+      to the list filtered by state), and still counts them all.
+  - **Fourth pass, same day**: a walk through every completed story's screens and states (with the demo backend's
+    conversation states, an empty first-day account and long lists), which found two more menus in the wrong place.
+    - **The closed sidebar's handle.** From 768px it was a tab at mid-height on the left edge, far from the control
+      that closes the sidebar, with the logo mark alone at the top left and a 76px gutter kept for both. At every width
+      it is now the round menu button at the top left, in the bar, where the phone already had it; the bar keeps its
+      room under 1280px, the page keeps the ordinary gutter, and the mark is not shown while the sidebar is closed.
+    - **The campaign switcher in the sidebar.** Its list opened in place and pushed the navigation down, with a
+      scroll area inside the sidebar's own. It floats under its button now, as the one in the bar does.
+- **Numbered pages from the backend.** Public contract 1.22.0 (the minimum this frontend worked with until 1.23.0): the three
+  lists answer `total` and take `offset`. "Meus Arquivos", "Sistemas", "Minhas Mesas" and a system's two tabs ask for
+  one page each (`listPage`); nothing a user sees changes, except that a library of any size costs one call a page.
+  The stand-in backend's lists carry a `total`. Deploy order: the backend first (its health check fails this frontend
+  against a 1.21.0 backend).
+- **Replace a material (Story 3.4, part A).** Public contract 1.23.0. A material shows its current version (the newest
+  one not discarded); `Material.serving` (`{pages, size}`) is its ready version while a new one is on its way, else
+  null. Read a missing `serving` (a backend before 1.23.0) as null.
+  - A ready material's page offers two plain pills in `MaterialActions` (`ready`): "Substituir" opens the guided upload
+    in replace mode (`openUpload({replace: {materialId, name}})`, through `useOptionalUploads`) and "Reprocessar" posts
+    `reprocess` at once, with no confirmation (nothing is removed: the backend reads a new version from the stored
+    original while the accepted one keeps serving). "Reprocessar páginas com falha" stays the label while it needs
+    review. While `serving` is set, a line under the state says "A versão anterior (N páginas) continua em uso enquanto a
+    nova não for aceita." (`material.serving.*`).
+  - Replace mode (`UploadsProvider.replace`, `replaceMaterial`): the dialog's title is "Substituir {name}"; it asks for
+    one file or one photo set ("Escolha um só arquivo, ou só fotos." otherwise, and "Enviar" waits), several photos go
+    through the order step with no name to give, then it sends: a file through tus with the metadata `material` alone,
+    a photo set through `createImageSetAction` with `{name, material, images}` (which refuses a kind, language or place
+    beside it). There is no kind, place or language step; the material keeps its own. The tray pairs the new version's
+    row with the material as for any upload. Closing it gives focus back to "Substituir".
+  - New codes `material.version_in_progress` and `material.not_ready`, in both catalogues. The stand-in backend's
+    materials carry `serving: null`; an accepted (or moved) one is ready with `actions: ['reprocess']`, and a reprocess
+    answers a new version `waiting` with the 444 pages of the accepted one serving.
+- **Delete a material, remove a previous version (Story 3.4, part B).** Public contract 1.24.0. `Material.superseded`
+  (`[{id, createdAt, pages, size}]`, newest first) names the material's superseded versions; read a missing one (a
+  backend before 1.24.0) as none. `src/server/materials.ts` adds `materialDeletion` (`{versions, pages}`),
+  `deleteMaterial` and `removeVersion` (both 202, no body).
+  - "Excluir" is a danger pill in the material page's `PageHeader` (`MaterialDeleteAction`, after `CampaignDeleteAction`):
+    its `ConfirmationDialog` is titled "Excluir «{name}»?", says "Vão junto: {versions} e {pages}, com as imagens e o
+    texto extraído. As respostas que citaram este arquivo mostram «fonte removida». Isso não pode ser desfeito." (one and
+    other forms, "1 página lida" / "{count} páginas lidas"; the versions alone, with the uploaded file, when no page was
+    read; in words when the count cannot be read) and confirms with "Excluir arquivo". `deleteMaterialAction`
+    reads the material for its name, deletes it, flashes "Arquivo «{name}» excluído.", revalidates the layout and
+    redirects to `/files`.
+  - "Versões anteriores" (`SupersededVersions`) is a card in the facts column, after "Onde pertence", shown only when
+    `superseded` is not empty: one row per version ("Enviada em {date} · {pages} páginas · {size}", the day in UTC so
+    the server and the browser agree), each with a danger pill "Remover" (its spoken name adds the day). One
+    `ConfirmationDialog` for every row ("Remover esta versão?", the pages that go, "Remover versão").
+    `removeVersionAction` removes it, flashes "Versão anterior removida." and refreshes the page;
+    `material.version_not_removable` comes back in words.
+  - The stand-in backend answers `superseded: []`, the material's deletion count (`{versions: 1, pages: 444}`) and both
+    deletes (202).
+- **The campaign's version leads (Story 3.7).** Public contract 1.26.0 (the minimum backend contract too).
+  - When the sources disagree, the backend relays a `tier` event (`TurnTierEvent` `{tier, offset}`, tier `campaign`,
+    `system` or `other`) where each tier's version of the answer starts: the campaign's first, then each other tier's as
+    an alternative. `parseTier` (`src/client/conversation.ts`) keeps only a tier the backend writes at an offset from 0;
+    the screen keeps the events like citations (a replayed one is ignored by its sequence) and shows nothing of them
+    while the answer streams.
+  - At `done`, by the same rule as the superscripts, each one becomes a `TierLabel` pill ("Campanha" / "Sistema" /
+    "Outros", "Campaign" / "System" / "Other": the `shell.scope.*` words, in the interface's language) at its offset in
+    the Markdown text (`AnswerMarkdown`'s tier marks): moved forward over whitespace so it opens the version's first
+    paragraph, before an emphasis or link that starts it, before a code block it opens, after the superscripts of the
+    version before it. A pill at or past the end of the text is left out. Since a pill says the sources disagree, a
+    marker repeating the tier before it is dropped, and no inline pill is drawn unless two tiers are left. The polite
+    region says the same pills, and each reference line after its tier's word.
+  - `TurnSourceReference.tier` is optional (none on a reference stored before 1.26.0): `References` draws the pill
+    before the line, and none without a tier; `isReference` leaves out a reference with any other tier. A removed source
+    keeps its tier.
+  - `TierLabel` (`src/components/TierLabel.tsx`): an outlined span, no fill, the meta type, edge and word in
+    `--color-text-muted`, `--radius-full`, followed by a visually hidden ": " so a reader never runs the word into the
+    text. It is not focusable and has no role of its own, so it is read as its word.
+  - The stand-in backend's answer is the campaign's house rule ("Notas da campanha.md", reference 1, the text page)
+    under a campaign `tier` event, then the book's rule ("Livro do Jogador.pdf", reference 2, the picture page) under a
+    system one; each reference carries its tier.
+- **Model knowledge only when I turn it on (Story 3.8).** Public contract 1.27.0 (the minimum backend contract too).
+  - The scope controls' model-knowledge switch is enabled (the "Chega em breve" note is gone): a press saves the whole
+    settings with it turned, like any switch, and "Vale a partir da próxima pergunta." confirms it.
+  - `TurnTierEvent.tier` may be `model` (`TurnTier`, `MODEL_TIER`, `TURN_TIERS` in `src/client/conversation.ts`):
+    the model's own knowledge starts there. A reference never carries it (`TIERS` keeps three words).
+    `TurnDoneEvent.modelKnowledge` is the turn's frozen switch; `parseDone(data, modelPart)` reads it (true only when
+    it is `true`) and does not force a silent answer when the turn had a `model` tier event.
+  - The `model` pill reads "Conhecimento do modelo" / "Model knowledge" (`campaigns.scope.modelKnowledge`) and is drawn
+    even when it is the only marker (the rule of two tiers is for campaign, system and other only). A reader hears
+    "Do conhecimento do modelo, sem fonte." / "From model knowledge, no source." (`conversation.modelSource`, the pill
+    itself `aria-hidden`), and the same sentence closes that part as a muted `p` (`AnswerMarkdown`'s `modelEnd`) after
+    the top-level block holding its end: before the next tier's pill, or at the answer's end. Neither takes focus.
+  - Under a silent answer whose `done.modelKnowledge` is false, a muted line "Ampliar as fontes ou ligar o conhecimento
+    do modelo" with a link-style button "Abrir o escopo" ("Widen the sources or turn on model knowledge" / "Open the
+    scope"); the polite region says the line after the silent sentence, both in the turn's language. The button opens the context bar's scope
+    popover with focus on its first switch through `ScopePopoverProvider` (`src/components/ScopePopoverContext.tsx`,
+    provided by `Shell`; `ScopePopover` registers its opener). Without a popover to open, the line shows without the
+    button. Under 768px the summary's button is hidden but the popover stays, so it still opens under the bar.
+  - The stand-in backend's `done` carries `modelKnowledge: false`.
+  - Deploy order: backend → worker → frontend. The worker before this frontend (the old frontend cannot turn the
+    switch on, so nothing it can set is ignored), and this frontend last so the switch only turns on once the worker
+    honours it.
+- **Search the library (Story 3.9).** Public contract 1.28.0 (the minimum backend contract too).
+  - **The field.** The context bar holds a search field (`src/components/search/SearchField.tsx`), after where the GM
+    is and before the bell. A search runs on Enter only, never while typing: it opens `/search?q=…` (a plain form to
+    `/search` without JavaScript). Esc in the field clears it. `/` focuses it when no field, editable text or dialog has
+    focus (`focusSearchField` in `search-address.ts`: the first search field that can be seen, so on a phone the
+    search page's own). Under 768px the field gives way to a search button that opens `/search`.
+  - **The page.** `/search` (`src/app/(signed-in)/search/page.tsx`, `src/components/search/SearchPage.tsx`) has its own
+    field at its top at every width, prefilled with the query. With a query and no stored search, it starts one through
+    `POST /api/v1/campaigns/{id}/searches` (the relay, `createSearch` in `src/server/conversations.ts`) and replaces the
+    address with `&s=<id>`, so a reload and a page turned read the stored search; it then reads
+    `GET /api/v1/searches/{id}` (`getSearch`) every 500 ms for up to 30 s, a muted "Procurando nas fontes…" meanwhile.
+    A failed search, or one not done in time, says so with "Tentar de novo"; a query the backend refuses is said beside
+    the field; another account's search is "Não encontrado.". A stored search of another campaign (the GM switched
+    since) is started again for the current one.
+  - **The results.** Up to 20, ten a page (`?page=`, the shared `Pager`): the passage's first words, its tier
+    (`TierLabel`) and its place as a reference line ("Material, Seção › Sub, p. N"). Selecting one opens `SourceView` in
+    the right panel at that page, its passage marked, on the ground of the current scope: `SourceView` takes
+    `ground={{kind: 'scope', campaignId, versionId}}` beside its turn ground (`turnId`, unchanged), and reads the page
+    from `GET /api/v1/campaigns/{id}/sources/{versionId}/pages/{page}` and its picture from `.../picture` (the relays,
+    `scopeSourcePage` and `relayScopePicture`). Closing it (Esc too) gives focus back to the result.
+  - **The filters.** Chips for the tiers switched on only (and "Todas"), and a select of the materials switched on in
+    them; a change starts a new, narrowed search from page 1 (the backend narrows the scope; the page never hides
+    rows). A search that found nothing says so in one sentence naming the scope searched (`scopeTiers`, the tiers part
+    of `scopeSummary`, and the filters).
+  - Every string is in `search.*` and `shell.search.*`, in pt-BR and en. The stand-in backend records a search (202) and
+    reads it done with two results, the campaign's notes (a text page) and the book (a picture page), each page
+    answering on the current-scope path.
+  - Deploy order: backend → worker → frontend.
+- **Delete a conversation (Story 3.10 part B).** Public contract 1.30.0 (the minimum backend contract too).
+  - **Where.** An opened conversation's slim top line holds "Excluir" after "Renomear", a danger pill
+    (`src/components/conversation/ConversationDeleteAction.tsx`) that opens the shared `ConfirmationDialog`: "Excluir
+    esta conversa?", "Vão junto: {n} perguntas e suas respostas. Isso não pode ser desfeito." (one question: "Vai
+    junto: 1 pergunta e sua resposta."), and the confirm pill "Excluir conversa"; focus starts on "Cancelar".
+  - **The count.** `openedConversationPage` reads `GET /api/v1/conversations/{id}/deletion` (`conversationDeletion` in
+    `src/server/conversations.ts`) with the conversation; the dialog adds the questions the backend recorded on the
+    page since. A conversation made on the page (its id from its first question), or one whose count could not be read,
+    gets the words-only consequence ("Vão junto: as perguntas desta conversa e suas respostas.").
+  - **The action.** `deleteConversationAction` (`conversation-actions.ts`) reads the conversation for its name and
+    area, calls `DELETE /api/v1/conversations/{id}` (`deleteConversation`, 202), flashes "Conversa «{name}» excluída.",
+    revalidates the layout and opens `/{area}`; a refusal is its text under the pill. A malformed id never reaches the
+    backend. A deleted conversation's address then shows "Não encontrado.".
+  - Every string is in `conversations.delete.*` and `feedback.conversationDeleted`, in pt-BR and en. The stand-in
+    backend answers the preview (`{questions: 1}`) and the delete (202, no body).
+  - Deploy order: backend → frontend.
+- **Dismiss an answer (Story 3.11).** Public contract 1.31.0 (the minimum backend contract too).
+  - **Where.** Under the rule of each finished (`done`) or stopped answer, right-aligned, a 28px circle filled with the
+    text colour, with an X (`dismiss` in `Icons.tsx`) and a 44px hit area, spoken "Dispensar resposta". None while an
+    answer is written, nor on a failed turn; the row leaves room before it for 3.12's bookmark.
+  - **The relay.** `src/app/api/v1/turns/[id]/dismissal/route.ts`: `PUT` dismisses, `DELETE` undoes (`dismissTurn` and
+    `restoreTurn` in `src/server/conversations.ts`), same-origin only, a malformed id "not found" without reaching the
+    backend, no session `session.required`; the backend's 204 or problem goes back as it is. The browser calls it with
+    `setDismissal(turnId, 'dismiss' | 'restore')` (`src/client/conversation.ts`).
+  - **Dismiss.** The question and answer are replaced at once by "Resposta dispensada." and a "Desfazer" pill, which
+    takes focus while the polite region says the line; the PUT is sent. A refused PUT brings the answer back with the
+    refusal under its actions (focus on its dismiss button when it was on the pill).
+  - **Undo.** "Desfazer" within `UNDO_MS` (10 s) sends the DELETE once the PUT has answered (it never overtakes it), its
+    pill pending meanwhile; on 204 the turn shows again where it was, with focus on its dismiss button. A refused DELETE
+    keeps the line with the refusal in it until the time ends. The time does not end a line whose undo is under way:
+    that undo's answer does (refused after the time, the line goes then).
+  - **After `UNDO_MS`** the line goes; focus on its pill moves to the composer. Dismissed turns stay in the component's
+    state behind a flag, so the count of questions asked here still works; the delete dialog's count leaves them out,
+    and a conversation whose every turn is gone shows its intro again, as a reload would.
+  - Strings `conversation.dismiss`, `conversation.dismissed` and `conversation.undo`, and the errors category
+    `conversation` with `conversation.turn_running` ("Esta resposta ainda está sendo escrita. Espere ela terminar para
+    dispensá-la."), in pt-BR and en.
+  - Deploy order: backend → frontend.
+- **Bookmark answers and find them again (Story 3.12).** Public contract 1.32.0 (the minimum backend contract too).
+  - **The bookmark.** Before dismiss, under each `done` answer that is not silent (none on a silent, stopped, failed or
+    running one; a silent answer cannot be saved, and the backend refuses it too): unset, a
+    filled 28px circle with an outlined bookmark (`bookmark` in `Icons.tsx`), spoken "Salvar resposta"; set, an
+    outlined circle with a filled bookmark (`bookmarkFilled`, drawn filled), spoken "Remover dos itens salvos", with
+    `aria-pressed`. A press changes it at once, then sends `setBookmark(turnId, 'save' | 'remove')`
+    (`src/client/conversation.ts`) after any change still under way for that turn; a refusal of the latest press puts
+    it back and shows its text under the actions (`conversation.turn_not_done`: "Só uma resposta concluída pode ser
+    salva."). Each stored turn's `bookmarked` sets it when the conversation opens.
+  - **The relays.** `src/app/api/v1/turns/[id]/bookmark/route.ts` (`PUT` saves, `DELETE` removes: `bookmarkTurn`,
+    `unbookmarkTurn`) and `src/app/api/v1/saved-answers/route.ts` (`GET`, `savedAnswers` calling the backend's `listSavedAnswers`; `limit` 1–50 and `offset`
+    0–100000 checked before the backend, else `request.invalid`), same-origin only, no session `session.required`.
+    The browser reads a page with `loadSavedAnswers(offset, limit)`.
+  - **The panel.** `src/components/saved/`: `SavedItemsProvider` (beside `ShellFrame`) holds whether it is open, the
+    current campaign and a count `savedChanged()` raises after each bookmark change, so the open panel reads its list
+    again. `SavedItemsButton` sits in the bar before the bell ("Itens salvos"); Ctrl+Shift+S or ⌘⇧S opens or closes it
+    from any signed-in screen, even while a field has focus. `SavedItemsPanel` fills the right slot (`ShellPanel
+    kind="saved"`, `data-panel="saved"`): 340px beside the page at 1280px and more, over it (inert behind) under
+    1280px, a full-screen sheet under 768px. Focus starts on its close control; Esc or the close control closes it and
+    gives focus back to what opened it. Entries newest first, ten a page with a `<Pager compact>` at its foot (the page
+    is the panel's own state, not the address): a meta-line (`area › conversation`, led by the campaign when it is not
+    the current one), the excerpt clamped to three lines, and "Ir". With none saved, one sentence.
+  - **One right panel at a time.** `ShellFrame`'s claim takes the panel's kind and an `onReplaced`: a new claim calls
+    the previous holder's, which closes it without giving focus back (the source view, the search page's source view,
+    a material preview, or the saved items).
+  - **"Ir".** In the current campaign, a link to `/questions/{id}?turn={turnId}` or `/rules/{id}?turn={turnId}`; in
+    another, a form whose Server Action `openSavedAnswerAction` (`campaigns/actions.ts`) chooses that campaign, flashes
+    "Campanha trocada para «…».", revalidates the layout and redirects there (a refusal shows under the pill). Under
+    1280px the panel closes: at once for a link, when the new page arrives for the form. The conversation page passes
+    `?turn=` as `focusTurn`: each turn's `<li>` is `turn-<id>`, and that one is scrolled into view instead of the last
+    and takes focus (`tabIndex={-1}`, never a keyboard stop); a turn not among those loaded leaves it at the last turn.
+  - Strings `conversation.bookmark`, `conversation.unbookmark`, `saved.*` and `errors.codes.conversation.turn_not_done`,
+    in pt-BR and en; the new colour pairs (the set bookmark's outline and icon, the meta-line) are in
+    `test/contrast.test.ts`. The stand-in backend answers `bookmarked: false` on its stored turn, 204 for a bookmark,
+    and two saved answers (one of another campaign).
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
-  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`), else the generic `server` text; a code is never
+  category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,
+  `scope`, `conversation`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
@@ -480,6 +955,17 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
 `-weight` and `-line-height`, `--space-*` (with `--space-touch-target: 44px`), `--radius-*`,
 `--width-*` and `--motion-slide` (0ms under `prefers-reduced-motion`).
 
+The usability pass (2026-11-21) added roles and changed a few values, in every theme:
+`--color-border` (a quiet separator; the full-contrast `--color-rule` no longer divides lists),
+`--color-field-border` and `--color-control-border` (the edge of a field and of a pill, an opaque
+colour in every theme), `--color-popover` (the opaque surface of a menu, a toast and a dialog),
+`--color-hover` and `--color-pressed` (overlays), and `--color-danger-soft`, `-warning-soft` and
+`-success-soft` (the tint behind a state pill and a notice). `--color-surface-active` is now
+clearly lighter or darker than the surface it sits on. New sizes: `--font-page-title-*` (28px),
+`--font-section-*` (18px), `--radius-field` (12px), `--width-prose`, `--width-form`,
+`--width-toast`, `--height-bar` and `--motion-fade`; `--width-sidebar` is 296px and
+`--font-nav-size` 16px.
+
 - Components use roles only, from CSS files (global CSS and CSS Modules): the CSP blocks `style`
   attributes. No hex value or primitive appears outside `tokens.css`.
 - No shadows, and the accent is never a fill: it draws the focus ring
@@ -492,7 +978,11 @@ status colours, the pill roles (`--color-control`, `--color-control-border`, `--
 - `test/contrast.test.ts` parses `tokens.css` and checks every text pair, the status colours on
   the surface and the pill pairs at 4.5:1 or better in each theme, and, with sharp, the brightest
   backdrop pixel under the scrim and under the glass. It also checks that the stylesheets keep
-  the rules above.
+  the rules above. From the usability pass it also checks text on the popover, on the hover and
+  pressed overlays and on the status tints, each status colour on the canvas and the popover, and
+  the edge of a field and of a pill at 3:1 (WCAG 1.4.11) against the canvas, a panel, the popover
+  and the field's own fill. That check raised `--illustrated-danger` from `#FF8A80` to `#FF9087`:
+  danger text on the bare canvas was 4.41:1 over the backdrop's brightest pixel.
 - The backdrop, `src/app/assets/backdrop.webp` (1280x720 pixel art, drawn without smoothing), was
   supplied by Dalton on 2026-11-16: a generated image with no third-party licence. Its brightest
   pixel is near white (`#FFFEE0`), so the scrim is `--illustrated-scrim` at 78% (Story 2.5, up
@@ -548,7 +1038,47 @@ Deploy order for public contract 1.5.0 (Story 1.14): the backend first (its migr
 adds the material details and `material_system`, and it answers the materials routes), then the frontend (its
 health check fails against a 1.4.0 backend).
 
-From public contract 1.16.0 back to 1.7.0, the entries below go newest first.
+From public contract 1.22.0 back to 1.7.0, the entries below go newest first.
+
+Deploy order for public contract 1.22.0 (numbered pages): the backend first (no migration; its three lists answer
+`total` and take `offset`), then the frontend (its health check fails against a 1.21.0 backend, and its paged lists ask
+for one page each). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.24.0 (Story 3.4, part B): the backend first (its migration
+`V26__material_deletion.sql`, `Material.superseded`, `GET /api/v1/materials/{id}/deletion` and the two deletes), then the
+frontend (its health check fails against a 1.23.0 backend, and the material page offers "Excluir" and "Versões
+anteriores"). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.23.0 (Story 3.4, part A): the backend first (a material's replacement through tus
+`material` or `ImageSetRequest.material`, the reprocess of a `ready` material, the current version and `serving`; no
+migration), then the frontend (its health check fails against a 1.22.0 backend, and the material page offers
+"Substituir" and "Reprocessar" and reads `serving`). The worker does not change. A rollback goes the other way, but a
+backend rollback below 1.23.0 is not safe once a replacement exists: a 1.22 backend reads a discarded newest
+replacement as the material's state, and its refused-format path deletes the whole material, the serving version
+included. Nothing guards against it in code (see the backend README).
+
+Deploy order for public contract 1.21.0 (Story 3.3): the backend first (its migration `V25__material_belonging.sql`,
+the material's `version`, `size` and `belonging`, and `PATCH /api/v1/materials/{id}`), then the frontend (its health
+check fails against a 1.20.0 backend, and "Meus Arquivos", the material page and the guided upload read the new
+fields). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.20.0 (Story 3.2, part B): the backend first (its migration
+`V24__campaign_deletion.sql` and the campaign deletion routes), then the frontend (its health check fails against a
+1.19.0 backend, and a campaign's page reads the deletion counts). The worker does not change. A rollback goes the other
+way.
+
+Deploy order for public contract 1.19.0 (Story 3.2, part A): the backend first (its migration
+`V23__campaign_management.sql` and the campaign routes), then the frontend (its health check fails against a 1.18.0
+backend, and Minhas Mesas, the campaign pages and the switcher read the new routes). The worker does not change. A
+rollback goes the other way.
+
+Deploy order for public contract 1.18.0 (Story 3.1, part B): the backend first (its migration
+`V22__system_deletion.sql` and the deletion routes), then the frontend (its health check fails against a 1.17.0
+backend, and a system's page reads the deletion counts). The worker does not change. A rollback goes the other way.
+
+Deploy order for public contract 1.17.0 (Story 3.1, part A): the backend first (its migration
+`V21__system_details.sql` and the systems routes), then the frontend (its health check fails against a 1.16.0 backend,
+and `/systems` reads the new routes). The worker does not change. A rollback goes the other way.
 
 Deploy order for public contract 1.16.0 (indexing at worker start): the backend first (`indexingFailed` on the
 current conversation, the recipe route of internal contract 1.12.0, migration `V20__index_change_retries.sql`), then
