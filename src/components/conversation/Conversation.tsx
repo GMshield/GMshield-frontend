@@ -32,6 +32,7 @@ import { useUploads } from '../uploads/UploadsProvider';
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
 import { ConversationTimeline } from './ConversationTimeline';
+import { showTurn } from './show-turn';
 import { NamedIcon } from '../Icons';
 import { PillButton } from '../PillButton';
 import { PillLink } from '../PillLink';
@@ -1056,18 +1057,7 @@ export function Conversation({
       if (target === null) {
         lastTurn.current?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
       } else {
-        target.scrollIntoView?.({ block: 'start', behavior: 'auto' });
-        // Under 1280px a saved items panel may still lie over the page for a moment (it closes once the page has
-        // arrived), and nothing behind it takes focus until then: try again on the next frames, for half a second.
-        let tries = 0;
-        const focusIt = () => {
-          target.focus({ preventScroll: true });
-          if (document.activeElement !== target && target.isConnected && tries < 30) {
-            tries += 1;
-            requestAnimationFrame(focusIt);
-          }
-        };
-        focusIt();
+        showTurn(target);
       }
     }
     shownTurns.current = turns.length;
