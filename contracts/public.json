@@ -1139,6 +1139,11 @@
             "minLength" : 1,
             "type" : "string"
           },
+          "recordType" : {
+            "description" : "Only records of this core record type, and no passage (contract 1.36.0); absent or null for passages and records of every type",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "type" : [ "string", "null" ]
+          },
           "tier" : {
             "description" : "Only this tier's sources; absent or null for every tier on",
             "enum" : [ "campaign", "system", "other" ],
@@ -1810,8 +1815,13 @@
             "description" : "The query as the GM wrote it",
             "type" : "string"
           },
+          "recordType" : {
+            "description" : "The record-type filter, a core record type, null for none (contract 1.36.0)",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "type" : [ "string", "null" ]
+          },
           "results" : {
-            "description" : "Up to 20 results, best first; empty unless done. Each is re-checked against the campaign's current scope when read: one that left it since is not listed",
+            "description" : "Up to 20 results, best first; empty unless done. Each is re-checked against the campaign's current scope when read: one that left it since is not listed. From contract 1.36.0 passages and records are mixed by rank, and records whose name equals the query (case, accents' composition and surrounding space aside) come first",
             "items" : {
               "$ref" : "#/components/schemas/SearchResult"
             },
@@ -1829,7 +1839,7 @@
             "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "campaignId", "id", "materialId", "query", "results", "state", "tier" ],
+        "required" : [ "campaignId", "id", "materialId", "query", "recordType", "results", "state", "tier" ],
         "type" : "object"
       },
       "SearchCreated" : {
@@ -1844,28 +1854,56 @@
         "type" : "object"
       },
       "SearchResult" : {
-        "description" : "A passage found, as it stands in the campaign's current scope",
+        "description" : "A passage or (contract 1.36.0) a record found, as it stands in the campaign's current scope. A passage has passageId and firstWords; a record has recordId, name, recordType and passageIds",
         "properties" : {
           "firstWords" : {
-            "description" : "The passage's first 160 code points (its white space made single spaces), cut at a word boundary",
+            "description" : "The passage's first 160 code points (its white space made single spaces), cut at a word boundary; only for a passage",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "passage or record (contract 1.36.0)",
+            "enum" : [ "passage", "record" ],
             "type" : "string"
           },
           "materialName" : {
             "description" : "The material's name",
             "type" : "string"
           },
+          "name" : {
+            "description" : "The record's name, as it was extracted; only for a record (contract 1.36.0)",
+            "type" : "string"
+          },
           "page" : {
-            "description" : "The page",
+            "description" : "The page; for a record, its first page",
             "format" : "int32",
             "minimum" : 1,
             "type" : "integer"
           },
           "passageId" : {
+            "description" : "The passage's id; only for a passage",
             "format" : "uuid",
             "type" : "string"
           },
+          "passageIds" : {
+            "description" : "The ids of the record's passages on its first page, so the source view marks them; only for a record (contract 1.36.0)",
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "recordId" : {
+            "description" : "The record's id; only for a record (contract 1.36.0)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.36.0)",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "type" : "string"
+          },
           "sectionPath" : {
-            "description" : "The section path, outermost first; may be empty",
+            "description" : "The section path, outermost first; may be empty. For a record, its first passage's on its first page",
             "items" : {
               "type" : "string"
             },
@@ -1882,7 +1920,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "firstWords", "materialName", "page", "passageId", "sectionPath", "tier", "versionId" ],
+        "required" : [ "kind", "materialName", "page", "sectionPath", "tier", "versionId" ],
         "type" : "object"
       },
       "SessionGrant" : {
@@ -2349,7 +2387,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.35.0"
+    "version" : "1.36.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2686,6 +2724,61 @@
         "tags" : [ "conversations" ]
       }
     },
+    "/api/v1/campaigns/{campaignId}/records/{recordId}" : {
+      "get" : {
+        "operationId" : "getCampaignRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Record"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One record as one of the account's campaigns shows it (contract 1.36.0, a search's record result): the same answer as getRecord, its record type the campaign's system's type of its core key. Only a record of an accepted version in the campaign's current scope is read (its tiers and materials switched on, any tier); its references open the source view on the ground of that scope (getScopeSourcePage). request.not_found (404) for a campaign that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of a material switched off or outside the scope): none is told apart, and no name or field is answered then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
     "/api/v1/campaigns/{campaignId}/searches" : {
       "post" : {
         "operationId" : "createSearch",
@@ -2738,7 +2831,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Search the campaign's scope by meaning or exact words (202): the search and its job are recorded together, and the search is then read by id until it is done or failed. Only the campaign's current scope is searched (its tiers and materials switched on, each material's ready version, and passages still being prepared for search), narrowed by the filters; a passage that holds the exact query comes first. Only the account's newest 20 searches are kept. request.invalid (400) for a blank query, one past 500 code points, an unknown tier or a malformed material id; request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
+        "summary" : "Search the campaign's scope by meaning or exact words (202): the search and its job are recorded together, and the search is then read by id until it is done or failed. Only the campaign's current scope is searched (its tiers and materials switched on, each material's ready version, and passages still being prepared for search), narrowed by the filters; a passage that holds the exact query comes first. From contract 1.36.0 it also finds the records of the scope's accepted versions once they are indexed, mixed with passages by rank; a record whose name equals the query comes first; a record type filter leaves only records of that type. Only the account's newest 20 searches are kept. request.invalid (400) for a blank query, one past 500 code points, an unknown tier, a malformed material id or a record type that is not a core key; request.not_found (404) for a campaign that is not the account's; nothing is recorded then",
         "tags" : [ "conversations" ]
       }
     },

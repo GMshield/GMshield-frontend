@@ -1,25 +1,13 @@
 import { notFoundFor } from '@/app/not-found';
 import { Notice } from '@/components/Notice';
 import { PageHeader } from '@/components/PageHeader';
+import { RecordFields } from '@/components/RecordFields';
 import { RecordReferences } from '@/components/RecordReferences';
 import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { getRecord, type RecordField } from '@/server/library';
+import { recordTypeName } from '@/record-types';
+import { getRecord } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
-
-import { recordTypeName } from '../../../rows';
-import styles from '../../../systems.module.css';
-
-/** Each field with a key of its own: fields are as extracted, so two may share a name and a value. */
-function keyed(fields: readonly RecordField[]): { readonly key: string; readonly field: RecordField }[] {
-  const seen = new Map<string, number>();
-  return fields.map((field) => {
-    const base = `${field.name}\u0000${field.value}`;
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-    return { key: `${base}\u0000${count}`, field };
-  });
-}
 
 /**
  * A record's page (Story 4.3), as its system shows it: its name as the title, under its record type, which is the way
@@ -44,20 +32,8 @@ export default async function RecordPage({ params }: { readonly params: Promise<
   return (
     <>
       <PageHeader title={name} back={{ href: `/systems/${systemId}/record-types/${encodeURIComponent(recordType.id)}`, label: recordTypeName(recordType, t) }} />
-      {fields.length === 0 ? null : (
-        <>
-          <dl className={styles.details} aria-label={t('systems.records.fields')}>
-            {keyed(fields).map(({ key, field }) => (
-              <div key={key} className={styles.detail}>
-                <dt>{field.name}</dt>
-                <dd>{field.value}</dd>
-              </div>
-            ))}
-          </dl>
-          <hr className={styles.rule} />
-        </>
-      )}
-      <RecordReferences systemId={id} recordId={record.data.id} references={references} language={language} />
+      <RecordFields fields={fields} t={t} />
+      <RecordReferences ground={{ kind: 'record', systemId: id, recordId: record.data.id }} references={references} language={language} />
     </>
   );
 }

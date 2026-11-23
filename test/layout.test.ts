@@ -25,6 +25,7 @@ const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/pag
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
 const { default: RecordTypePage } = await import('@/app/(signed-in)/systems/[id]/record-types/[typeId]/page');
 const { default: RecordPage } = await import('@/app/(signed-in)/systems/[id]/records/[recordId]/page');
+const { default: SearchRecordPage } = await import('@/app/(signed-in)/search/records/[recordId]/page');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 type GameRecord = import('@/server/library').GameRecord;
@@ -1428,5 +1429,93 @@ describe("a record type's records and a record's page (Story 4.3)", () => {
     expect(html).toContain('role="status"');
     expect(html).not.toContain('server.unavailable');
     expect(html).not.toContain('Bola de Fogo');
+  });
+});
+
+describe("a search's record result, opened in the campaign's context (Story 4.3 part B)", () => {
+  const CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000002';
+  const TYPE_ID = '0190a0b0-0000-7000-8000-000000000603';
+  const RECORD_ID = '0190a0b0-0000-7000-8000-000000000710';
+  const VERSION_ID = '0190a0b0-0000-7000-8000-000000000071';
+  const SEARCH_ID = '0190a0b0-0000-7000-8000-000000000072';
+  const MATERIAL_ID = '0190a0b0-0000-7000-8000-000000000061';
+  const CURRENT = 'GET /api/v1/campaigns/current';
+  const RECORD = `GET /api/v1/campaigns/${CAMPAIGN_ID}/records/${RECORD_ID}`;
+  const record: GameRecord = {
+    id: RECORD_ID,
+    name: 'Vorpal Sword',
+    recordType: { id: TYPE_ID, core: 'item', name: 'item' },
+    fields: [
+      { name: 'Raridade', value: 'Lendária' },
+      { name: 'Sintonização', value: 'Sim' },
+    ],
+    references: [
+      {
+        versionId: VERSION_ID,
+        materialName: 'Guia do Mestre.pdf',
+        sectionPath: ['Itens mágicos'],
+        page: 209,
+        passageIds: ['0190a0b0-0000-7000-8000-000000000811'],
+      },
+    ],
+  };
+  const query = { q: 'vorpal sword', s: SEARCH_ID, tier: 'system', material: MATERIAL_ID, type: 'item', page: '2' };
+  const page = async (search: Record<string, string> = query, chosen?: 'en') => {
+    if (chosen === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = chosen;
+    }
+    return renderToStaticMarkup(await SearchRecordPage({ params: Promise.resolve({ recordId: RECORD_ID }), searchParams: Promise.resolve(search) }));
+  };
+  const notFoundOf = (run: () => Promise<unknown>) =>
+    run().then(
+      () => null,
+      (error: unknown) => String((error as { digest?: unknown }).digest ?? ''),
+    );
+
+  it("reads the record from the current campaign and shows its name, its type, its fields closed by a rule and its references, with the way back to the same search", async () => {
+    const server = await useBackend({ [CURRENT]: CAMPAIGN, [RECORD]: { status: 200, body: record } });
+    let html = await page();
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === RECORD)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toMatch(/<h1[^>]*>Vorpal Sword<\/h1>/);
+    // Its record type under the name, by this interface's own word for the core key.
+    expect(html).toMatch(/<p[^>]*>Item<\/p>/);
+    // The way back is the search it came from: its query, stored search, filters and page, labelled with its title.
+    const back = `/search?q=vorpal+sword&amp;s=${SEARCH_ID}&amp;tier=system&amp;material=${MATERIAL_ID}&amp;type=item&amp;page=2`;
+    expect(html).toMatch(new RegExp(`<a[^>]*href="${back.replace(/[?+]/g, '\\$&')}"[^>]*>(<svg.*?</svg>)?Busca</a>`));
+    expect([...html.matchAll(/<dt>([^<]*)<\/dt><dd>([^<]*)<\/dd>/g)].map((match) => `${match[1]}=${match[2]}`)).toEqual([
+      'Raridade=Lendária',
+      'Sintonização=Sim',
+    ]);
+    expect(html).toMatch(/<\/dl><hr class="[^"]*rule[^"]*"\/>/);
+    expect(html).toContain('Guia do Mestre.pdf, Itens mágicos, p. 209</button>');
+    expect(html).toContain('aria-haspopup="dialog"');
+    // In English.
+    html = await page(query, 'en');
+    expect(html).toMatch(/<p[^>]*>Item<\/p>/);
+    expect(html).toMatch(/>(<svg.*?<\/svg>)?Search<\/a>/);
+    expect(html).toContain('aria-label="Fields"');
+    expect(html).toContain('Sources');
+    // With no search in the address, the way back is the search page itself; an address that cannot be one is left out.
+    html = await page({ q: '', s: 'nope', type: 'dragon' });
+    expect(html).toMatch(/<a[^>]*href="\/search"[^>]*>(<svg.*?<\/svg>)?Busca<\/a>/);
+  });
+
+  it('a record outside the campaign\'s scope, or no current campaign, is the single not-found page; another failure is a notice', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [CURRENT]: CAMPAIGN, [RECORD]: problem(404, 'request.not_found') };
+    await useBackend(routes);
+    const run = () => SearchRecordPage({ params: Promise.resolve({ recordId: RECORD_ID }), searchParams: Promise.resolve(query) });
+    expect(await notFoundOf(run)).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    routes[CURRENT] = problem(404, 'request.not_found');
+    expect(await notFoundOf(run)).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    routes[CURRENT] = CAMPAIGN;
+    routes[RECORD] = problem(503, 'server.unavailable');
+    const html = await page();
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('server.unavailable');
+    expect(html).not.toContain('Vorpal Sword');
+    // The way back to the search stays.
+    expect(html).toMatch(/>(<svg.*?<\/svg>)?Busca<\/a>/);
   });
 });

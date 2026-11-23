@@ -1,12 +1,24 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import type { Tier } from '@/client/conversation';
-import { readSearch, startSearch, type Search, type SearchResult } from '@/client/search';
+import {
+  isRecordResult,
+  readSearch,
+  resultId,
+  startSearch,
+  type PassageResult,
+  type RecordResult,
+  type RecordTypeKey,
+  type Search,
+  type SearchResult,
+} from '@/client/search';
 import { errorText, translator, type Language } from '@/messages';
 import { pageOf } from '@/paging';
+import { CORE_KEYS, coreTypeName } from '@/record-types';
 
 import { referenceLine } from '../conversation/References';
 import { NamedIcon } from '../Icons';
@@ -17,7 +29,7 @@ import { SCOPE_TIERS, scopeTiers, type Scope } from '../scope';
 import { ShellPanel } from '../ShellPanel';
 import { SourceView, type LoadScopePage } from '../SourceView';
 import { TierLabel, tierWord } from '../TierLabel';
-import { searchHref, searchQuery } from './search-address';
+import { searchHref, searchQuery, searchRecordHref } from './search-address';
 import styles from './SearchPage.module.css';
 
 /** How often a pending search is read again, and for how long at most (Story 3.9). */
@@ -48,6 +60,8 @@ export type SearchPageProps = {
   readonly searchId: string | null;
   readonly tier: Tier | null;
   readonly materialId: string | null;
+  /** Story 4.3 part B: the record-type filter in the address (`type`), a core key, or null. */
+  readonly recordType?: RecordTypeKey | null;
   /** The page of the results in the address, from 1. */
   readonly page: number;
   /** The campaign's scope settings, for the filters and the sentence of an empty search; null when unread. */
@@ -105,6 +119,10 @@ function placeLine(result: SearchResult, t: ReturnType<typeof translator>): stri
  * - The results (up to 20) are paged ten at a time, the page in the address, with the shared pager. A row shows the
  *   passage's first words, its material › section and page, and its tier. Selecting it opens the source view at that
  *   page on the ground of the current scope, its passage marked; closing it gives focus back to the row.
+ * - Story 4.3 part B: a record result's row shows the record's name, its record type, its place (its first page) and
+ *   its tier; it is a link to the record's page in the campaign's context (`/search/records/{id}`), which keeps the
+ *   search's address for its way back. A type select beside the material select lists the eight core types: one
+ *   leaves only records of that type (the backend narrows; the page hides nothing), and combines with the others.
  * - The tier chips cover only the tiers switched on; the material select only the materials switched on in them. A
  *   filter change starts a new, narrowed search from page 1: the backend narrows the scope, the page never hides rows.
  * - A search that found nothing says so in one sentence naming the scope searched.
@@ -113,14 +131,25 @@ function placeLine(result: SearchResult, t: ReturnType<typeof translator>): stri
  * - A scope changed while a stored search is shown (a switch in the scope popover) reads it again, so a result now out
  *   of scope goes; the results shown stay until the new answer comes.
  */
-export function SearchPage({ language, campaignId, query, searchId, tier, materialId, page, scope, calls = DEFAULT_CALLS }: SearchPageProps) {
+export function SearchPage({
+  language,
+  campaignId,
+  query,
+  searchId,
+  tier,
+  materialId,
+  recordType = null,
+  page,
+  scope,
+  calls = DEFAULT_CALLS,
+}: SearchPageProps) {
   const t = useMemo(() => translator(language), [language]);
   const router = useRouter();
   const fieldId = useId();
   const errorId = useId();
   const [draft, setDraft] = useState(query);
   const [view, setView] = useState<View>(searchable(query) ? { kind: 'waiting' } : { kind: 'idle' });
-  const [open, setOpen] = useState<{ readonly result: SearchResult; readonly opened: number } | null>(null);
+  const [open, setOpen] = useState<{ readonly result: PassageResult; readonly opened: number } | null>(null);
   /** The search started for the address's query, filters and campaign: React may run an effect twice. */
   const started = useRef<string | null>(null);
   /**
@@ -150,28 +179,28 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
     setView({ kind: 'waiting' });
     setOpen(null);
     loaded.current = null;
-    const answer = await start(campaignId, asked, { tier, materialId });
+    const answer = await start(campaignId, asked, { tier, materialId, recordType });
     if (answer.ok) {
-      router.replace(searchHref({ query: asked, searchId: answer.id, tier, materialId }), { scroll: false });
+      router.replace(searchHref({ query: asked, searchId: answer.id, tier, materialId, recordType }), { scroll: false });
     } else if (answer.status === 400) {
       setView({ kind: 'invalid', text: t('search.invalid') });
     } else {
       setView({ kind: 'error', text: errorText(answer.problem, language) });
     }
-  }, [campaignId, language, materialId, query, router, start, t, tier]);
+  }, [campaignId, language, materialId, query, recordType, router, start, t, tier]);
 
   // A query with no stored search: start one, once per query, filters and campaign.
   useEffect(() => {
     if (searchId !== null) {
       return;
     }
-    const key = `${campaignId}\n${tier ?? ''}\n${materialId ?? ''}\n${query}`;
+    const key = `${campaignId}\n${tier ?? ''}\n${materialId ?? ''}\n${recordType ?? ''}\n${query}`;
     if (started.current === key) {
       return;
     }
     started.current = key;
     void begin();
-  }, [begin, campaignId, materialId, query, searchId, tier]);
+  }, [begin, campaignId, materialId, query, recordType, searchId, tier]);
 
   // A stored search: read it until it is done or failed, every 500 ms for up to 30 s; again when the scope changes,
   // the results shown staying until the new answer comes.
@@ -194,7 +223,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
           if (answer.status === 404 && searchable(query)) {
             // Gone (pruned after 20 newer searches, or reached by Back or a bookmark): search the query again.
             started.current = null;
-            router.replace(searchHref({ query: query.trim(), tier, materialId }), { scroll: false });
+            router.replace(searchHref({ query: query.trim(), tier, materialId, recordType }), { scroll: false });
             return;
           }
           setView(answer.status === 404 ? { kind: 'missing' } : { kind: 'error', text: errorText(answer.problem, language) });
@@ -204,7 +233,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
         if (search.campaignId !== campaignId) {
           // The GM switched campaign since: search the current one instead.
           started.current = null;
-          router.replace(searchHref({ query, tier, materialId }), { scroll: false });
+          router.replace(searchHref({ query, tier, materialId, recordType }), { scroll: false });
           return;
         }
         if (search.state === 'done') {
@@ -228,7 +257,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
       }
     })();
     return () => controller.abort();
-  }, [campaignId, language, materialId, now, query, read, router, scopeVersion, searchId, tier, wait]);
+  }, [campaignId, language, materialId, now, query, read, recordType, router, scopeVersion, searchId, tier, wait]);
 
   // The source view closed: focus goes back to the row that opened it.
   useEffect(() => {
@@ -251,7 +280,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
       return;
     }
     started.current = null;
-    router.push(searchHref({ query: asked, tier, materialId }));
+    router.push(searchHref({ query: asked, tier, materialId, recordType }));
   }
 
   function onFieldKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -269,8 +298,8 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
   const onTiers = scope === null ? [] : SCOPE_TIERS.filter(({ key }) => scope[key]).map(({ tier: word }) => word);
   const materials =
     scope === null ? [] : scope.materials.filter((material) => material.on && onTiers.includes(material.tier) && (tier === null || material.tier === tier));
-  const filtered = (next: { readonly tier: Tier | null; readonly materialId: string | null }) =>
-    searchHref({ query: query.trim(), tier: next.tier, materialId: next.materialId });
+  const filtered = (next: { readonly tier: Tier | null; readonly materialId: string | null; readonly recordType?: RecordTypeKey | null }) =>
+    searchHref({ query: query.trim(), tier: next.tier, materialId: next.materialId, recordType: next.recordType === undefined ? recordType : next.recordType });
 
   let body;
   switch (view.kind) {
@@ -313,42 +342,76 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
       return <p className={styles.muted}>{t('search.empty', { query: search.query, scope: searchedScope() })}</p>;
     }
     const { rows, paging } = pageOf(search.results, page, RESULTS_PAGE);
+    const address = { query: search.query, searchId: search.id, tier, materialId, recordType, page: paging.page };
     return (
       <>
         <ol className={styles.results} aria-label={t('search.results')} start={paging.from}>
           {rows.map((result) => (
-            <li key={result.passageId} className={styles.result}>
-              <button
-                type="button"
-                className={styles.row}
-                aria-haspopup="dialog"
-                data-open={open?.result.passageId === result.passageId ? 'true' : undefined}
-                onClick={(event) => {
-                  opener.current = event.currentTarget;
-                  openings.current += 1;
-                  setOpen({ result, opened: openings.current });
-                }}
-              >
-                <span className={styles.words}>{result.firstWords}</span>
-                <span className={styles.place}>
-                  <TierLabel tier={result.tier} t={t} />
-                  <span className={styles.placeLine}>{placeLine(result, t)}</span>
-                </span>
-              </button>
+            <li key={`${result.kind}:${resultId(result)}`} className={styles.result}>
+              {isRecordResult(result) ? recordRow(result, searchRecordHref(result.recordId, address)) : passageRow(result as PassageResult)}
             </li>
           ))}
         </ol>
-        <Pager paging={paging} path="/search" query={searchQuery({ query: search.query, searchId: search.id, tier, materialId })} language={language} />
+        <Pager
+          paging={paging}
+          path="/search"
+          query={searchQuery({ query: search.query, searchId: search.id, tier, materialId, recordType })}
+          language={language}
+        />
       </>
+    );
+  }
+
+  /** A passage's row: its first words over its tier and place; it opens the source view at its page. */
+  function passageRow(result: PassageResult) {
+    return (
+      <button
+        type="button"
+        className={styles.row}
+        aria-haspopup="dialog"
+        data-open={open?.result.passageId === result.passageId ? 'true' : undefined}
+        onClick={(event) => {
+          opener.current = event.currentTarget;
+          openings.current += 1;
+          setOpen({ result, opened: openings.current });
+        }}
+      >
+        <span className={styles.words}>{result.firstWords}</span>
+        <span className={styles.place}>
+          <TierLabel tier={result.tier} t={t} />
+          <span className={styles.placeLine}>{placeLine(result, t)}</span>
+        </span>
+      </button>
+    );
+  }
+
+  /**
+   * A record's row (Story 4.3 part B): its name over its record type, its tier and its place; a link to the record's
+   * page in the campaign's context, which keeps the search's address for its way back.
+   */
+  function recordRow(result: RecordResult, href: string) {
+    const typeName = coreTypeName(result.recordType, t);
+    return (
+      <Link className={styles.row} href={href} data-kind="record">
+        <span className={styles.recordName}>{result.name}</span>
+        <span className={styles.place}>
+          <span className={styles.typeLabel}>{typeName}</span>
+          <span className={styles.separator}>{', '}</span>
+          <TierLabel tier={result.tier} t={t} />
+          <span className={styles.placeLine}>{placeLine(result, t)}</span>
+        </span>
+      </Link>
     );
   }
 
   /** The scope a search searched, as the sentence of an empty one names it. */
   function searchedScope(): string {
     const tiers = scope === null ? null : scopeTiers(scope, t);
-    const parts = [tier === null ? null : tierWord(tier, t), scope?.materials.find((material) => material.id === materialId)?.name ?? null].filter(
-      (part): part is string => part !== null,
-    );
+    const parts = [
+      tier === null ? null : tierWord(tier, t),
+      scope?.materials.find((material) => material.id === materialId)?.name ?? null,
+      recordType === null ? null : coreTypeName(recordType, t),
+    ].filter((part): part is string => part !== null);
     if (tiers === null) {
       return parts.join(', ');
     }
@@ -380,7 +443,7 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onFieldKeyDown}
           />
-          {Object.entries(searchQuery({ query: '', tier, materialId })).map(([name, value]) => (
+          {Object.entries(searchQuery({ query: '', tier, materialId, recordType })).map(([name, value]) => (
             <input key={name} type="hidden" name={name} value={value} />
           ))}
           <PillButton type="submit" variant="solid" pending={view.kind === 'waiting'}>
@@ -393,8 +456,8 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
           </p>
         ) : null}
       </form>
-      {onTiers.length === 0 && materials.length === 0 ? null : (
-        <div className={styles.toolbar}>
+      <div className={styles.toolbar}>
+        {onTiers.length === 0 ? null : (
           <Tabs
             variant="chips"
             label={t('search.tiers')}
@@ -408,6 +471,8 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
               })),
             ]}
           />
+        )}
+        <div className={styles.selects}>
           {materials.length === 0 ? null : (
             <label className={styles.materialField}>
               <span className={styles.materialLabel}>{t('search.material')}</span>
@@ -425,8 +490,25 @@ export function SearchPage({ language, campaignId, query, searchId, tier, materi
               </select>
             </label>
           )}
+          <label className={styles.materialField}>
+            <span className={styles.materialLabel}>{t('search.type')}</span>
+            <select
+              className={styles.select}
+              value={recordType ?? ''}
+              onChange={(event) =>
+                router.push(filtered({ tier, materialId, recordType: event.target.value === '' ? null : (event.target.value as RecordTypeKey) }))
+              }
+            >
+              <option value="">{t('search.allTypes')}</option>
+              {CORE_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {coreTypeName(key, t)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      )}
+      </div>
       {body}
       {open === null || view.kind !== 'done' ? null : (
         <ShellPanel onReplaced={() => setOpen(null)}>

@@ -5,11 +5,12 @@ import { EmptyState, PageHeader } from '@/components/PageHeader';
 import { errorText, translator } from '@/messages';
 import { pageParam } from '@/paging';
 import { currentPreferences, currentViews } from '@/preferences';
+import { recordTypeName } from '@/record-types';
 import { getRecordType, getSystem, listRecords } from '@/server/library';
 import { listPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { recordRow, recordTypeName } from '../../../rows';
+import { recordRow } from '../../../rows';
 
 /**
  * A record type's records (Story 4.3), opened from a row of the system's records tab: the type's name as the title,

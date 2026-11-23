@@ -836,6 +836,8 @@
     "allTiers": "All",
     "material": "Material",
     "allMaterials": "All materials",
+    "type": "Type",
+    "allTypes": "All types",
     "empty": "Nothing found for “{query}” in {scope}.",
     "emptyFiltered": "{scope}, only {filter}",
     "start": "Write what you are looking for and press Enter.",
