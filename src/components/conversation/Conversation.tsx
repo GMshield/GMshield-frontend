@@ -31,7 +31,7 @@ import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
-import { ConversationTimeline } from './ConversationTimeline';
+import { ConversationOutline } from './ConversationOutline';
 import { showTurn } from './show-turn';
 import { NamedIcon } from '../Icons';
 import { PillButton } from '../PillButton';
@@ -1174,306 +1174,314 @@ export function Conversation({
   const dismissedHere = turns.filter((turn) => turn.dismissal !== 'shown').length;
   const questionCount = questions === null ? null : Math.max(0, questions + askedHere - dismissedHere);
 
-  // 2026-11-23: the questions shown, in order, for the timeline at the right.
+  // 2026-11-23: the questions shown, in order, for the outline at the right.
   const timeline = turns.filter((turn) => turn.dismissal === 'shown').map((turn) => ({ key: turn.key, question: turn.question }));
 
   return (
-    <section className={styles.conversation} aria-label={title}>
-      <h1 className={styles.visuallyHidden}>{title}</h1>
-      {/* Story 3.10: the way back to the area's list and, once the conversation has an id, its name, "Renomear" and "Excluir". */}
-      <div className={styles.top} data-testid="conversation-top">
-        <Link className={styles.back} href={`/${area}`}>
-          <NamedIcon name="back" size={16} />
-          {areaName}
-        </Link>
-        {conversation === null ? null : (
-          <>
-            <p className={styles.name}>{conversation.name}</p>
-            <PillLink href={`/${area}/${encodeURIComponent(conversation.id)}/edit`}>{t('conversation.rename')}</PillLink>
-            {deleteAction === undefined ? null : (
-              <ConversationDeleteAction id={conversation.id} questions={questionCount} language={language} action={deleteAction} />
+    // 2026-11-23: the frame holds the conversation and, where there is room, its outline beside it.
+    <div className={styles.frame}>
+      <div className={styles.layout}>
+        <section className={styles.conversation} aria-label={title}>
+          <h1 className={styles.visuallyHidden}>{title}</h1>
+          {/* Story 3.10: the way back to the area's list and, once the conversation has an id, its name, "Renomear" and "Excluir". */}
+          <div className={styles.top} data-testid="conversation-top">
+            <Link className={styles.back} href={`/${area}`}>
+              <NamedIcon name="back" size={16} />
+              {areaName}
+            </Link>
+            {conversation === null ? null : (
+              <>
+                <p className={styles.name}>{conversation.name}</p>
+                <PillLink href={`/${area}/${encodeURIComponent(conversation.id)}/edit`}>{t('conversation.rename')}</PillLink>
+                {deleteAction === undefined ? null : (
+                  <ConversationDeleteAction id={conversation.id} questions={questionCount} language={language} action={deleteAction} />
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
-      {/* Story 3.11: a conversation whose every turn was dismissed here shows the intro, as it would on a reload. */}
-      {turns.every((turn) => turn.dismissal === 'gone') ? (
-        <div className={styles.intro} data-testid="conversation-intro">
-          <span className={styles.introIcon}>
-            <NamedIcon name={area} size={28} />
-          </span>
-          <p className={styles.introTitle}>{t(area === 'rules' ? 'conversation.intro.rulesTitle' : 'conversation.intro.title')}</p>
-          <p className={styles.introText}>{t(area === 'rules' ? 'conversation.intro.rulesText' : 'conversation.intro.text')}</p>
-          <ul className={styles.examples} aria-label={t('conversation.intro.examples')}>
-            {EXAMPLES.map((example) => {
-              const text = t(`conversation.examples.${area}.${example}`);
+          </div>
+          {/* Story 3.11: a conversation whose every turn was dismissed here shows the intro, as it would on a reload. */}
+          {turns.every((turn) => turn.dismissal === 'gone') ? (
+            <div className={styles.intro} data-testid="conversation-intro">
+              <span className={styles.introIcon}>
+                <NamedIcon name={area} size={28} />
+              </span>
+              <p className={styles.introTitle}>{t(area === 'rules' ? 'conversation.intro.rulesTitle' : 'conversation.intro.title')}</p>
+              <p className={styles.introText}>{t(area === 'rules' ? 'conversation.intro.rulesText' : 'conversation.intro.text')}</p>
+              <ul className={styles.examples} aria-label={t('conversation.intro.examples')}>
+                {EXAMPLES.map((example) => {
+                  const text = t(`conversation.examples.${area}.${example}`);
+                  return (
+                    <li key={example}>
+                      <button type="button" className={styles.example} onClick={() => chooseExample(text)}>
+                        {text}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+          <ol className={styles.turns} aria-label={t('conversation.turns')}>
+            {turns.map((turn, index) => {
+              const foreign = turn.language !== null && turn.language !== language;
+              const languageName = turn.language === 'pt-BR' || turn.language === 'en' ? t(`conversation.languages.${turn.language}`) : turn.language;
+              const finished = turn.status === 'done' || turn.status === 'stopped';
+              const silent = turn.status === 'done' && turn.silent;
+              // A refusal and an outage show in place of the answer: what streamed is hidden. A truncation keeps it.
+              const hidden = turn.status === 'failed' && turn.failure !== 'truncated';
+              const turnId = turn.id;
+              const last = index === turns.length - 1 ? lastTurn : undefined;
+              if (turn.dismissal === 'gone') {
+                return null;
+              }
+              if (turn.dismissal === 'undoable') {
+                // Story 3.11: the dismissed turn's place, for its undo's time.
+                return (
+                  <li key={turn.key} className={styles.dismissedTurn} ref={last} data-testid="dismissed-line">
+                    <p className={styles.dismissedLine}>
+                      <span>{t('conversation.dismissed')}</span>
+                      {turnId === null ? null : (
+                        <PillButton
+                          ref={(button) => {
+                            if (button === null) {
+                              undoButtons.current.delete(turn.key);
+                            } else {
+                              undoButtons.current.set(turn.key, button);
+                            }
+                          }}
+                          pending={turn.undoPending}
+                          onClick={() => void undo(turn.key, turnId)}
+                        >
+                          {t('conversation.undo')}
+                        </PillButton>
+                      )}
+                    </p>
+                    {turn.undoProblem === null ? null : (
+                      <p className={styles.dismissedLine} data-testid="undo-problem">
+                        {errorText(turn.undoProblem, language)}
+                      </p>
+                    )}
+                  </li>
+                );
+              }
+              const target = turnId !== null && turnId === focusTurn;
               return (
-                <li key={example}>
-                  <button type="button" className={styles.example} onClick={() => chooseExample(text)}>
-                    {text}
-                  </button>
+                <li
+                  key={turn.key}
+                  id={turnId === null ? undefined : `turn-${turnId}`}
+                  className={styles.turn}
+                  data-turn-key={turn.key}
+                  ref={last}
+                  // Story 3.12: the turn a saved item opened takes focus once, from the page; never from the keyboard.
+                  tabIndex={target ? -1 : undefined}
+                >
+                  <p className={styles.question}>
+                    <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
+                    {turn.question}
+                  </p>
+                  {turn.status === 'sending' || turn.status === 'searching' ? (
+                    <p className={styles.waiting}>{t('conversation.searching')}</p>
+                  ) : null}
+                  {silent ? (
+                    <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
+                      <p>{translator(languageOf(turn.language, language))('conversation.silent')}</p>
+                    </div>
+                  ) : null}
+                  {silent && !turn.modelKnowledge ? (
+                    <p className={styles.offer} data-testid="silent-offer">
+                      <span>{t('conversation.offer')}</span>
+                      {scopePopover?.available === true ? (
+                        <button type="button" className={styles.offerAction} onClick={scopePopover.open}>
+                          {t('conversation.openScope')}
+                        </button>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {silent || hidden || turn.text === '' ? null : (
+                    <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
+                      {foreign ? <p className={styles.languageLabel}>{t('conversation.answerIn', { language: languageName ?? '' })}</p> : null}
+                      <AnswerMarkdown
+                        text={turn.text}
+                        linkText={linkText}
+                        marks={finished ? marksOf(turn) : []}
+                        citationWord={translator(languageOf(turn.language, language))('conversation.citation')}
+                        tiers={finished ? tierMarksOf(turn.tiers, t) : []}
+                      />
+                    </div>
+                  )}
+                  {RUNNING.has(turn.status) && turn.connection !== 'open' ? (
+                    <p className={styles.connection}>
+                      <span>{t(turn.connection === 'lost' ? 'conversation.connectionLost' : 'conversation.reconnectFailed')}</span>
+                      {turn.connection === 'failed' ? (
+                        <button type="button" className={styles.retry} onClick={() => followers.current.get(turn.key)?.reopen()}>
+                          {t('conversation.retry')}
+                        </button>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {turn.status === 'stopped' ? <p className={styles.stopped}>{t('conversation.stopped')}</p> : null}
+                  {finished && !silent && turn.references.length > 0 ? (
+                    <References
+                      references={turn.references}
+                      t={t}
+                      onOpen={turnId === null ? undefined : (reference, button) => openSource(turnId, reference, button)}
+                    />
+                  ) : null}
+                  {turn.status === 'failed' && turn.failure === null ? <p className={styles.failed}>{errorText(turn.problem, language)}</p> : null}
+                  {turn.status === 'failed' && turn.failure !== null ? (
+                    <p className={styles.failed}>
+                      <span>{t(`conversation.${turn.failure}`)}</span>
+                      {REFUSALS.has(turn.failure) ? null : (
+                        <button type="button" className={styles.retry} disabled={running} onClick={() => void ask(turn.question, turn.key)}>
+                          {t('conversation.retry')}
+                        </button>
+                      )}
+                    </p>
+                  ) : null}
+                  {finished || turn.status === 'failed' ? <hr className={styles.rule} /> : null}
+                  {/* Story 3.11: the answer's actions, right-aligned under its rule; Story 3.12: bookmark (done answers only), then dismiss. */}
+                  {finished && turnId !== null ? (
+                    <div className={styles.actions}>
+                      {/* A silent answer (the sources said nothing) is not saved (Story 3.12 review). */}
+                      {turn.status === 'done' && !turn.silent ? (
+                        <button
+                          type="button"
+                          className={styles.action}
+                          aria-label={t(turn.bookmarked ? 'conversation.unbookmark' : 'conversation.bookmark')}
+                          aria-pressed={turn.bookmarked}
+                          data-set={turn.bookmarked ? 'true' : undefined}
+                          onClick={() => toggleBookmark(turn.key, turnId, !turn.bookmarked)}
+                        >
+                          <span className={styles.actionCircle}>
+                            <NamedIcon name={turn.bookmarked ? 'bookmarkFilled' : 'bookmark'} size={16} />
+                          </span>
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={styles.action}
+                        aria-label={t('conversation.dismiss')}
+                        ref={(button) => {
+                          if (button === null) {
+                            dismissButtons.current.delete(turn.key);
+                          } else {
+                            dismissButtons.current.set(turn.key, button);
+                          }
+                        }}
+                        onClick={() => dismiss(turn.key, turnId)}
+                      >
+                        <span className={styles.actionCircle}>
+                          <NamedIcon name="dismiss" size={16} />
+                        </span>
+                      </button>
+                    </div>
+                  ) : null}
+                  {turn.dismissProblem === null ? null : (
+                    <p className={styles.failed} data-testid="dismiss-problem">
+                      {errorText(turn.dismissProblem, language)}
+                    </p>
+                  )}
+                  {turn.bookmarkProblem === null ? null : (
+                    <p className={styles.failed} data-testid="bookmark-problem">
+                      {errorText(turn.bookmarkProblem, language)}
+                    </p>
+                  )}
                 </li>
               );
             })}
-          </ul>
-        </div>
-      ) : null}
-      <ol className={styles.turns} aria-label={t('conversation.turns')}>
-        {turns.map((turn, index) => {
-          const foreign = turn.language !== null && turn.language !== language;
-          const languageName = turn.language === 'pt-BR' || turn.language === 'en' ? t(`conversation.languages.${turn.language}`) : turn.language;
-          const finished = turn.status === 'done' || turn.status === 'stopped';
-          const silent = turn.status === 'done' && turn.silent;
-          // A refusal and an outage show in place of the answer: what streamed is hidden. A truncation keeps it.
-          const hidden = turn.status === 'failed' && turn.failure !== 'truncated';
-          const turnId = turn.id;
-          const last = index === turns.length - 1 ? lastTurn : undefined;
-          if (turn.dismissal === 'gone') {
-            return null;
-          }
-          if (turn.dismissal === 'undoable') {
-            // Story 3.11: the dismissed turn's place, for its undo's time.
-            return (
-              <li key={turn.key} className={styles.dismissedTurn} ref={last} data-testid="dismissed-line">
-                <p className={styles.dismissedLine}>
-                  <span>{t('conversation.dismissed')}</span>
-                  {turnId === null ? null : (
-                    <PillButton
-                      ref={(button) => {
-                        if (button === null) {
-                          undoButtons.current.delete(turn.key);
-                        } else {
-                          undoButtons.current.set(turn.key, button);
-                        }
-                      }}
-                      pending={turn.undoPending}
-                      onClick={() => void undo(turn.key, turnId)}
-                    >
-                      {t('conversation.undo')}
-                    </PillButton>
-                  )}
-                </p>
-                {turn.undoProblem === null ? null : (
-                  <p className={styles.dismissedLine} data-testid="undo-problem">
-                    {errorText(turn.undoProblem, language)}
-                  </p>
-                )}
-              </li>
-            );
-          }
-          const target = turnId !== null && turnId === focusTurn;
-          return (
-            <li
-              key={turn.key}
-              id={turnId === null ? undefined : `turn-${turnId}`}
-              className={styles.turn}
-              data-turn-key={turn.key}
-              ref={last}
-              // Story 3.12: the turn a saved item opened takes focus once, from the page; never from the keyboard.
-              tabIndex={target ? -1 : undefined}
-            >
-              <p className={styles.question}>
-                <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
-                {turn.question}
-              </p>
-              {turn.status === 'sending' || turn.status === 'searching' ? (
-                <p className={styles.waiting}>{t('conversation.searching')}</p>
-              ) : null}
-              {silent ? (
-                <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
-                  <p>{translator(languageOf(turn.language, language))('conversation.silent')}</p>
-                </div>
-              ) : null}
-              {silent && !turn.modelKnowledge ? (
-                <p className={styles.offer} data-testid="silent-offer">
-                  <span>{t('conversation.offer')}</span>
-                  {scopePopover?.available === true ? (
-                    <button type="button" className={styles.offerAction} onClick={scopePopover.open}>
-                      {t('conversation.openScope')}
-                    </button>
-                  ) : null}
-                </p>
-              ) : null}
-              {silent || hidden || turn.text === '' ? null : (
-                <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
-                  {foreign ? <p className={styles.languageLabel}>{t('conversation.answerIn', { language: languageName ?? '' })}</p> : null}
-                  <AnswerMarkdown
-                    text={turn.text}
-                    linkText={linkText}
-                    marks={finished ? marksOf(turn) : []}
-                    citationWord={translator(languageOf(turn.language, language))('conversation.citation')}
-                    tiers={finished ? tierMarksOf(turn.tiers, t) : []}
-                  />
-                </div>
-              )}
-              {RUNNING.has(turn.status) && turn.connection !== 'open' ? (
-                <p className={styles.connection}>
-                  <span>{t(turn.connection === 'lost' ? 'conversation.connectionLost' : 'conversation.reconnectFailed')}</span>
-                  {turn.connection === 'failed' ? (
-                    <button type="button" className={styles.retry} onClick={() => followers.current.get(turn.key)?.reopen()}>
-                      {t('conversation.retry')}
-                    </button>
-                  ) : null}
-                </p>
-              ) : null}
-              {turn.status === 'stopped' ? <p className={styles.stopped}>{t('conversation.stopped')}</p> : null}
-              {finished && !silent && turn.references.length > 0 ? (
-                <References
-                  references={turn.references}
-                  t={t}
-                  onOpen={turnId === null ? undefined : (reference, button) => openSource(turnId, reference, button)}
-                />
-              ) : null}
-              {turn.status === 'failed' && turn.failure === null ? <p className={styles.failed}>{errorText(turn.problem, language)}</p> : null}
-              {turn.status === 'failed' && turn.failure !== null ? (
-                <p className={styles.failed}>
-                  <span>{t(`conversation.${turn.failure}`)}</span>
-                  {REFUSALS.has(turn.failure) ? null : (
-                    <button type="button" className={styles.retry} disabled={running} onClick={() => void ask(turn.question, turn.key)}>
-                      {t('conversation.retry')}
-                    </button>
-                  )}
-                </p>
-              ) : null}
-              {finished || turn.status === 'failed' ? <hr className={styles.rule} /> : null}
-              {/* Story 3.11: the answer's actions, right-aligned under its rule; Story 3.12: bookmark (done answers only), then dismiss. */}
-              {finished && turnId !== null ? (
-                <div className={styles.actions}>
-                  {/* A silent answer (the sources said nothing) is not saved (Story 3.12 review). */}
-                  {turn.status === 'done' && !turn.silent ? (
-                    <button
-                      type="button"
-                      className={styles.action}
-                      aria-label={t(turn.bookmarked ? 'conversation.unbookmark' : 'conversation.bookmark')}
-                      aria-pressed={turn.bookmarked}
-                      data-set={turn.bookmarked ? 'true' : undefined}
-                      onClick={() => toggleBookmark(turn.key, turnId, !turn.bookmarked)}
-                    >
-                      <span className={styles.actionCircle}>
-                        <NamedIcon name={turn.bookmarked ? 'bookmarkFilled' : 'bookmark'} size={16} />
-                      </span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={styles.action}
-                    aria-label={t('conversation.dismiss')}
-                    ref={(button) => {
-                      if (button === null) {
-                        dismissButtons.current.delete(turn.key);
-                      } else {
-                        dismissButtons.current.set(turn.key, button);
-                      }
-                    }}
-                    onClick={() => dismiss(turn.key, turnId)}
-                  >
-                    <span className={styles.actionCircle}>
-                      <NamedIcon name="dismiss" size={16} />
-                    </span>
-                  </button>
-                </div>
-              ) : null}
-              {turn.dismissProblem === null ? null : (
-                <p className={styles.failed} data-testid="dismiss-problem">
-                  {errorText(turn.dismissProblem, language)}
-                </p>
-              )}
-              {turn.bookmarkProblem === null ? null : (
-                <p className={styles.failed} data-testid="bookmark-problem">
-                  {errorText(turn.bookmarkProblem, language)}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      <ConversationTimeline items={timeline} label={t('conversation.timeline')} />
-      <div className={styles.dock}>
-        {hasSources ? null : (
-          <p className={styles.empty} data-testid="conversation-empty">
-            <span>{t('conversation.empty.noSources')}</span>
-            <button type="button" className={styles.emptyAction} onClick={() => uploads.openUpload()}>
-              {t('conversation.empty.upload')}
-            </button>
-            {review === null ? null : (
-              <a className={styles.emptyAction} href={review.href}>
-                {t('conversation.empty.review', { name: review.name })}
-              </a>
-            )}
-          </p>
-        )}
-        <form className={styles.composer} onSubmit={onSubmit}>
-          <label className={styles.visuallyHidden} htmlFor="conversation-question">
-            {t('conversation.composer.label')}
-          </label>
-          <textarea
-            ref={composer}
-            id="conversation-question"
-            className={styles.field}
-            rows={lines}
-            value={draft}
-            placeholder={t('conversation.composer.placeholder')}
-            maxLength={4000}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              writeDraft(key, event.target.value);
-            }}
-            onKeyDown={onKeyDown}
-          />
-          {running ? (
-            <button
-              type="button"
-              className={styles.send}
-              aria-label={t('conversation.stop')}
-              onClick={(event) => {
-                // A double-click on Send lands its second click here: only a single click stops.
-                if (event.detail <= 1) {
-                  stop();
-                }
-              }}
-            >
-              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24">
-                <rect className={styles.stopGlyph} x="7" y="7" width="10" height="10" rx="1" />
-              </svg>
-            </button>
-          ) : (
-            <button type="submit" className={styles.send} aria-label={t('conversation.composer.send')}>
-              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24">
-                <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          )}
-        </form>
-      </div>
-      <div className={styles.visuallyHidden} aria-live="polite" data-testid="conversation-polite">
-        {spoken.answer ? <AnswerMarkdown text={spoken.text} linkText={linkText} tiers={spoken.tiers} /> : spoken.text}
-        {spoken.note === '' ? null : <p>{spoken.note}</p>}
-        {spoken.references.length === 0 ? null : (
-          <ol aria-label={t('conversation.references')}>
-            {spoken.references.map((reference) => (
-              <li key={reference.number} value={reference.number}>
-                {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
-                {referenceLine(reference, t)}
-              </li>
-            ))}
           </ol>
-        )}
+          <div className={styles.dock}>
+            {hasSources ? null : (
+              <p className={styles.empty} data-testid="conversation-empty">
+                <span>{t('conversation.empty.noSources')}</span>
+                <button type="button" className={styles.emptyAction} onClick={() => uploads.openUpload()}>
+                  {t('conversation.empty.upload')}
+                </button>
+                {review === null ? null : (
+                  <a className={styles.emptyAction} href={review.href}>
+                    {t('conversation.empty.review', { name: review.name })}
+                  </a>
+                )}
+              </p>
+            )}
+            <form className={styles.composer} onSubmit={onSubmit}>
+              <label className={styles.visuallyHidden} htmlFor="conversation-question">
+                {t('conversation.composer.label')}
+              </label>
+              <textarea
+                ref={composer}
+                id="conversation-question"
+                className={styles.field}
+                rows={lines}
+                value={draft}
+                placeholder={t('conversation.composer.placeholder')}
+                maxLength={4000}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  writeDraft(key, event.target.value);
+                }}
+                onKeyDown={onKeyDown}
+              />
+              {running ? (
+                <button
+                  type="button"
+                  className={styles.send}
+                  aria-label={t('conversation.stop')}
+                  onClick={(event) => {
+                    // A double-click on Send lands its second click here: only a single click stops.
+                    if (event.detail <= 1) {
+                      stop();
+                    }
+                  }}
+                >
+                  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24">
+                    <rect className={styles.stopGlyph} x="7" y="7" width="10" height="10" rx="1" />
+                  </svg>
+                </button>
+              ) : (
+                <button type="submit" className={styles.send} aria-label={t('conversation.composer.send')}>
+                  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24">
+                    <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
+            </form>
+          </div>
+          <div className={styles.visuallyHidden} aria-live="polite" data-testid="conversation-polite">
+            {spoken.answer ? <AnswerMarkdown text={spoken.text} linkText={linkText} tiers={spoken.tiers} /> : spoken.text}
+            {spoken.note === '' ? null : <p>{spoken.note}</p>}
+            {spoken.references.length === 0 ? null : (
+              <ol aria-label={t('conversation.references')}>
+                {spoken.references.map((reference) => (
+                  <li key={reference.number} value={reference.number}>
+                    {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
+                    {referenceLine(reference, t)}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <div className={styles.visuallyHidden} role="alert" data-testid="conversation-alert">
+            {alerted}
+          </div>
+          {source === null ? null : (
+            <ShellPanel onReplaced={replaceSource}>
+              <SourceView
+                key={`${source.turnId}:${source.reference.number}:${source.opened}`}
+                turnId={source.turnId}
+                reference={source.reference}
+                language={language}
+                onClose={closeSource}
+                load={loadPage}
+              />
+            </ShellPanel>
+          )}
+        </section>
+        <ConversationOutline
+          items={timeline}
+          labels={{ title: t('conversation.outline.title'), count: t('conversation.outline.count', { count: timeline.length }) }}
+        />
       </div>
-      <div className={styles.visuallyHidden} role="alert" data-testid="conversation-alert">
-        {alerted}
-      </div>
-      {source === null ? null : (
-        <ShellPanel onReplaced={replaceSource}>
-          <SourceView
-            key={`${source.turnId}:${source.reference.number}:${source.opened}`}
-            turnId={source.turnId}
-            reference={source.reference}
-            language={language}
-            onClose={closeSource}
-            load={loadPage}
-          />
-        </ShellPanel>
-      )}
-    </section>
+    </div>
   );
 }

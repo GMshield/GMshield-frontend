@@ -668,7 +668,10 @@
   },
   "conversation": {
     "turns": "Perguntas e respostas",
-    "timeline": "Perguntas desta conversa",
+    "outline": {
+      "title": "Nesta conversa",
+      "count": "{count} perguntas"
+    },
     "question": "Pergunta",
     "answer": "Resposta",
     "composer": {
