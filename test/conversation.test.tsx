@@ -98,7 +98,13 @@ function UploadState() {
 type LoadPage = (turnId: string, number: number, page: number, signal: AbortSignal) => Promise<unknown>;
 
 function view(
-  options: { language?: 'pt-BR' | 'en'; hasSources?: boolean; review?: { href: string; name: string } | null; loadPage?: LoadPage } = {},
+  options: {
+    language?: 'pt-BR' | 'en';
+    hasSources?: boolean;
+    review?: { href: string; name: string } | null;
+    loadPage?: LoadPage;
+    recordTypes?: readonly { key: string; name: string }[];
+  } = {},
 ) {
   return render(
     <UploadsProvider texts={uploadTexts(options.language ?? 'pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
@@ -113,6 +119,7 @@ function view(
           return stream as unknown as EventSource;
         }}
         loadPage={options.loadPage as never}
+        recordTypes={options.recordTypes}
       />
       <UploadState />
     </UploadsProvider>,
@@ -2947,6 +2954,20 @@ describe('records in answers (Story 4.3 part C)', () => {
 
     expect(within(list()).getAllByRole('listitem')).toHaveLength(1);
     expect(superscripts()).toEqual([]);
+  });
+
+  it('Story 4.4 part B: names a cited record of a type the GM approved by the campaign system\'s type, for the eye and the ear', async () => {
+    view({ loadPage: load, recordTypes: [{ key: 'talento', name: 'Talento' }] });
+    const stream = await ask('O que faz Conjurador de Guerra?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { recordId: RECORD, offset: 3 });
+    stream.emit('done', { silent: false, references: [recordReference(1, [PASSAGE_A], { recordType: 'talento' })] });
+
+    const items = within(list()).getAllByRole('listitem');
+    expect(within(items[0]!).getByText('Talento').className).toMatch(/recordType/);
+    expect([...screen.getByTestId('conversation-polite').querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+      'Sistema: Bola de Fogo, Talento. Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3',
+    ]);
   });
 
   it('keeps a record of a type it does not know, with its number and superscript, naming the type by its key', async () => {

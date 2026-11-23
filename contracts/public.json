@@ -938,7 +938,7 @@
             "type" : "array"
           },
           "records" : {
-            "description" : "The version's records by core type (contract 1.34.0), in the core types' order, each type with at least one; empty when it has none",
+            "description" : "The version's records by type (contract 1.34.0), the core types in their order, then from contract 1.39.0 the other keys alphabetically, each type with at least one; empty when it has none",
             "items" : {
               "$ref" : "#/components/schemas/ReportRecordCount"
             },
@@ -1140,8 +1140,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "Only records of this core record type, and no passage (contract 1.36.0); absent or null for passages and records of every type",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "Only records of this record type key, and no passage (contract 1.36.0). From contract 1.39.0 any key of the pattern is accepted; one the campaign's system has no record type for finds nothing. Absent or null for passages and records of every type",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : [ "string", "null" ]
           },
           "tier" : {
@@ -1716,15 +1716,21 @@
       "RecordTypeOfRecord" : {
         "properties" : {
           "core" : {
-            "description" : "The core key of the record type: a client shows its own translation of it",
+            "description" : "The core key of a core record type: a client shows its own translation of it; null for a type the GM approved (contract 1.39.0), whose name is shown",
             "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
             "example" : "spell",
-            "type" : "string"
+            "type" : [ "string", "null" ]
           },
           "id" : {
             "description" : "The record type's id",
             "example" : "0190a0b0-0000-7000-8000-000000000003",
             "format" : "uuid",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "The record type's stable key (contract 1.39.0), the one its records store",
+            "example" : "spell",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "name" : {
@@ -1733,7 +1739,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "core", "id", "name" ],
+        "required" : [ "core", "id", "key", "name" ],
         "type" : "object"
       },
       "RecordTypePage" : {
@@ -1773,7 +1779,7 @@
         "type" : "object"
       },
       "ReportRecordCount" : {
-        "description" : "How many records of one core type the version has (contract 1.34.0)",
+        "description" : "How many records of one record type the version has (contract 1.34.0)",
         "properties" : {
           "count" : {
             "description" : "How many, at least 1",
@@ -1783,9 +1789,9 @@
             "type" : "integer"
           },
           "type" : {
-            "description" : "The core type's key",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record type's key: a core key, or from contract 1.39.0 the key of a type the GM approved (a client names it from its system's record types, and shows the key when none matches)",
             "example" : "spell",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           }
         },
@@ -2025,8 +2031,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record-type filter, a core record type, null for none (contract 1.36.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record-type filter, a record type key (any key from contract 1.39.0), null for none (contract 1.36.0)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : [ "string", "null" ]
           },
           "results" : {
@@ -2107,8 +2113,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.36.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record's type key; only for a record (contract 1.36.0). A client shows its own translation of a core key, and from contract 1.39.0 the name of the campaign system's record type with that key (the key itself when none matches)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "sectionPath" : {
@@ -2614,8 +2620,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.37.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record's type key; only for a record (contract 1.37.0). A client shows its own translation of a core key, and from contract 1.39.0 the name of the campaign system's record type with that key (the key itself when none matches)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "removed" : {
@@ -2701,7 +2707,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.38.0"
+    "version" : "1.39.0"
   },
   "openapi" : "3.1.0",
   "paths" : {

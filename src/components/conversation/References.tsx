@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { isRecordReference, type RecordReference, type SourceReference } from '@/client/conversation';
 import type { Translate } from '@/messages';
-import { coreTypeName, isCoreKey } from '@/record-types';
+import { typeLabel, type NamedRecordType } from '@/record-types';
 
 import { RecordFields } from '../RecordFields';
 import { TierLabel } from '../TierLabel';
@@ -19,14 +19,17 @@ export function referenceLine(reference: SourceReference, t: Translate): string 
   return reference.removed ? `${line} — ${t('conversation.sourceRemoved')}` : line;
 }
 
-/** Story 4.3 part C: a record type's name: a core key by its own translation, any other key as it is. */
-export function referenceTypeName(type: string, t: Translate): string {
-  return isCoreKey(type) ? coreTypeName(type, t) : type;
+/**
+ * Story 4.3 part C: a record type's name: a core key by its own translation; from Story 4.4 part B any other key by the
+ * name of the campaign's system's type with that key (`types`), else as it is.
+ */
+export function referenceTypeName(type: string, t: Translate, types: readonly NamedRecordType[] = []): string {
+  return typeLabel(type, types, t);
 }
 
 /** Story 4.3 part C: a cited record's name and its record type's name, as a reader hears its entry begin. */
-export function recordHeading(reference: RecordReference, t: Translate): string {
-  return `${reference.name}, ${referenceTypeName(reference.recordType, t)}`;
+export function recordHeading(reference: RecordReference, t: Translate, types: readonly NamedRecordType[] = []): string {
+  return `${reference.name}, ${referenceTypeName(reference.recordType, t, types)}`;
 }
 
 export type ReferencesProps = {
@@ -34,6 +37,8 @@ export type ReferencesProps = {
   readonly t: Translate;
   /** Story 2.7: opens a reference's page in the source view; `button` is where focus goes back when it closes. */
   readonly onOpen?: (reference: SourceReference, button: HTMLButtonElement) => void;
+  /** Story 4.4 part B: the campaign's system's record types, which name a cited record's key; none by default. */
+  readonly recordTypes?: readonly NamedRecordType[];
 };
 
 /**
@@ -49,7 +54,7 @@ export type ReferencesProps = {
  * its passages there marked, on the turn's ground); the name opens nothing. A removed source's line is struck through
  * as a place's, and the fields stay as they were when the answer was written.
  */
-export function References({ references, t, onOpen }: ReferencesProps) {
+export function References({ references, t, onOpen, recordTypes = [] }: ReferencesProps) {
   return (
     <ol className={styles.references} aria-label={t('conversation.references')}>
       {references.map((reference) => {
@@ -77,7 +82,7 @@ export function References({ references, t, onOpen }: ReferencesProps) {
                 {tier}
                 <span className={styles.recordName}>{reference.name}</span>
                 <span className={styles.visuallyHidden}>{', '}</span>
-                <span className={styles.recordType}>{referenceTypeName(reference.recordType, t)}</span>
+                <span className={styles.recordType}>{referenceTypeName(reference.recordType, t, recordTypes)}</span>
               </span>
               {reference.fields.length === 0 ? null : (
                 <div className={styles.recordFields}>

@@ -266,6 +266,25 @@ describe('a system page\'s tabs (Story 3.1)', () => {
     expect(recordTypeRow({ ...RECORD_TYPES[0]!, core: null, name: 'Montaria' }, t, ID).label).toBe('Montaria');
   });
 
+  it('Story 4.4 part B: a type the GM approved shows by its name with its record count, opening its records', () => {
+    const t = translator('pt-BR');
+    const talent = {
+      ...RECORD_TYPES[0]!,
+      id: '0190a0b0-0000-7000-8000-000000000608',
+      core: null,
+      key: 'talento',
+      name: 'Talento',
+      origin: { kind: 'proposal' as const, proposalId: '0190a0b0-0000-7000-8000-000000000802', materialId: null, materialName: null },
+      records: 3,
+    };
+    expect(recordTypeRow(talent, t, ID)).toMatchObject({
+      label: 'Talento',
+      detail: '3 registros',
+      href: `/systems/${ID}/record-types/0190a0b0-0000-7000-8000-000000000608`,
+      state: null,
+    });
+  });
+
   it('an unknown tab is the campaigns tab', async () => {
     render(await SystemPage({ params: Promise.resolve({ id: ID }), searchParams: Promise.resolve({ tab: 'admin' }) }));
 

@@ -1036,6 +1036,22 @@ they sit in `src/`.
   - A material's page lists its pending proposals after the quality report (`listMaterialProposals`, paged on
     `?proposals=`), with the same decisions; nothing shows while none is pending.
   - The stand-in and the demo backend (`docs/tools/frontend-demo-backend.mjs`) answer proposals and terms.
+- **Records of approved types (Story 4.4 part B).** Public contract 1.39.0; the minimum backend contract stays 1.38.0,
+  since this release names any key and a backend of 1.38.0 sends core keys only (deploy the frontend before the
+  backend).
+  - A record type key is any `^[a-z][a-z0-9_]{0,31}$` (`isRecordTypeKey`). No contract field carries a type's name:
+    `typeLabel(key, types, t)` (`src/record-types.ts`) names a key by its core translation, else by the name of the
+    record type with that key in the list the screen read, else by the key itself.
+  - Search: `search/page.tsx` reads the campaign's system's record types (`systemRecordTypes`, every page); the type
+    select offers them (the core ones translated, then the approved ones by name; the core keys when unread, and the
+    address's own key when it is none of them), and a record result names its key from them. `?type=` takes any key.
+  - Answers: the conversation pages read the campaign's system's approved types (`getCampaign`, then
+    `systemRecordTypes`) and `References` names a cited record's key from them, for the eye and the screen reader.
+  - Quality report: a key that is not core follows the core types under its type's name ("Talento: 3"), read from the
+    record types of the material's systems only when the report has such a key; an unknown key shows as itself, never
+    left out. `RecordTypeOfRecord.core` may be null (an approved type), and the record page shows its stored name.
+  - The stand-in answers the approved type "Talento" in the system's record types, a `talento` search result and a
+    report count; the demo backend has it approved with three records (search "ataque", ask about a "talento").
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

@@ -20,11 +20,14 @@ import {
   type Area,
   type ConversationSummary,
 } from '@/server/conversations';
+import type { NamedRecordType } from '@/record-types';
+import { getCampaign } from '@/server/library';
 import { listPage } from '@/server/list-page';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { deleteConversationAction, renameConversationAction } from './conversation-actions';
+import { systemRecordTypes } from './systems/rows';
 
 /**
  * The pages of the two conversation areas, Consultas (`/questions`) and Criação de Regras (`/rules`) (Story 3.10): the
@@ -128,6 +131,19 @@ async function reviewLink(token: string): Promise<{ readonly href: string; reado
 }
 
 /**
+ * The record types the GM approved in the campaign's system (Story 4.4 part B), which name a cited record's key: a core
+ * key needs none (the interface translates it). None when the campaign or the list cannot be read: the key then shows.
+ */
+async function campaignRecordTypes(token: string, campaignId: string): Promise<NamedRecordType[]> {
+  const campaign = await getCampaign(token, campaignId);
+  if (!campaign.ok) {
+    return [];
+  }
+  const types = await systemRecordTypes(token, campaign.data.system.id);
+  return types.filter((type) => type.core === null).map((type) => ({ key: type.key, name: type.name }));
+}
+
+/**
  * A new conversation of the area (Story 3.10): the current campaign's conversation screen with nothing asked yet (the
  * area's intro and examples, the cursor in the composer); its first question makes the conversation, which can then be
  * deleted (Story 3.10 part B; its dialog in words, as no count was read). With no campaign the composer is disabled with
@@ -135,7 +151,13 @@ async function reviewLink(token: string): Promise<{ readonly href: string; reado
  */
 export async function newConversationPage(area: Area) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
-  const [current, review] = await Promise.all([currentConversation(token ?? ''), reviewLink(token ?? '')]);
+  // Story 4.4 part B: the campaign's record types are read as soon as its id is known, beside the other reads.
+  const reading = currentConversation(token ?? '');
+  const [current, review, recordTypes] = await Promise.all([
+    reading,
+    reviewLink(token ?? ''),
+    reading.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId) : [])),
+  ]);
   if (!current.ok && problemFields(current.problem).code === 'request.not_found') {
     return <NoCampaignConversation language={language} area={area} />;
   }
@@ -149,6 +171,7 @@ export async function newConversationPage(area: Area) {
       campaignId={current.data.campaignId}
       hasSources={current.data.hasSources}
       review={review}
+      recordTypes={recordTypes}
       area={area}
       deleteAction={deleteConversationAction}
     />
@@ -168,12 +191,15 @@ export async function openedConversationPage(area: Area, id: string, turn?: stri
   if (!isId(id)) {
     notFoundFor({ code: 'request.not_found' });
   }
-  const [conversation, turns, current, review, deletion] = await Promise.all([
-    getConversation(token ?? '', id),
+  // Story 4.4 part B: the campaign's record types are read as soon as the conversation names its campaign.
+  const opened = getConversation(token ?? '', id);
+  const [conversation, turns, current, review, deletion, recordTypes] = await Promise.all([
+    opened,
     conversationTurns(token ?? '', id),
     currentConversation(token ?? ''),
     reviewLink(token ?? ''),
     conversationDeletion(token ?? '', id),
+    opened.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId) : [])),
   ]);
   if (!conversation.ok) {
     notFoundFor(conversation.problem);
@@ -203,6 +229,7 @@ export async function openedConversationPage(area: Area, id: string, turn?: stri
       stored={turns.data.items}
       questions={deletion.ok ? deletion.data.questions : null}
       deleteAction={deleteConversationAction}
+      recordTypes={recordTypes}
     />
   );
 }

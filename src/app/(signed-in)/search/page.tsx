@@ -9,6 +9,8 @@ import { currentPreferences } from '@/preferences';
 import { currentCampaign, getCampaignScope } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
+import { systemRecordTypes } from '../systems/rows';
+
 /** The page's title (Story 3.9): "Busca". */
 export async function generateMetadata(): Promise<Metadata> {
   const { language } = await currentPreferences();
@@ -16,8 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The search page (Story 3.9): `/search?q=…&s=…&tier=…&material=…&type=…&page=…` (`type`, a core record type, from
- * Story 4.3 part B). The header says what the search covers; the body (`SearchPage`, in the browser) has the page's own
+ * The search page (Story 3.9): `/search?q=…&s=…&tier=…&material=…&type=…&page=…` (`type`, a record type key, from
+ * Story 4.3 part B; from Story 4.4 part B the campaign's system's types, read here, name the filter's options). The header says what the search covers; the body (`SearchPage`, in the browser) has the page's own
  * field, prefilled with the query, the filters, and the results of the stored search, which it starts and reads through
  * this site's relays. The current campaign's scope settings are read here, for the tier chips, the material select and
  * the sentence of a search that found nothing; when they cannot be read the page still searches, with no filter. With
@@ -47,7 +49,11 @@ export default async function Search({ searchParams }: { readonly searchParams?:
       </>
     );
   }
-  const scope = await getCampaignScope(token ?? '', campaign.data.id);
+  // Story 4.4 part B: the campaign's system's record types, which the type filter offers and which name a result.
+  const [scope, recordTypes] = await Promise.all([
+    getCampaignScope(token ?? '', campaign.data.id),
+    systemRecordTypes(token ?? '', campaign.data.system.id),
+  ]);
   const address = searchAddressOf(query);
   return (
     <>
@@ -61,6 +67,7 @@ export default async function Search({ searchParams }: { readonly searchParams?:
         tier={address.tier}
         materialId={address.materialId}
         recordType={address.recordType}
+        recordTypes={recordTypes.map((type) => ({ key: type.key, name: type.name }))}
         page={address.page}
         scope={scope.ok ? scope.data : null}
       />

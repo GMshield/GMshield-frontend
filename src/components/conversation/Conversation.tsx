@@ -22,6 +22,7 @@ import {
   type TierStart,
 } from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
+import { type NamedRecordType } from '@/record-types';
 
 import { useSavedItems } from '../saved/SavedItems';
 import { useOptionalScopePopover } from '../ScopePopoverContext';
@@ -198,6 +199,9 @@ function languageOf(turnLanguage: string | null, fallback: Language): Language {
   return turnLanguage === 'pt-BR' || turnLanguage === 'en' ? turnLanguage : fallback;
 }
 
+/** No record type read: a cited record's core key is translated, any other shown as it is. */
+const NO_RECORD_TYPES: readonly NamedRecordType[] = [];
+
 export type ConversationProps = {
   readonly language: Language;
   readonly campaignId: string;
@@ -228,6 +232,11 @@ export type ConversationProps = {
    * the last turn, and takes focus. One not among the turns loaded leaves the conversation at its last turn.
    */
   readonly focusTurn?: string | null;
+  /**
+   * Story 4.4 part B: the record types of the campaign's system, which name a cited record's key (a type the GM
+   * approved by its name); absent, a core key is translated and any other shows as it is.
+   */
+  readonly recordTypes?: readonly NamedRecordType[];
 };
 
 /**
@@ -495,6 +504,7 @@ export function Conversation({
   questions = null,
   deleteAction,
   focusTurn = null,
+  recordTypes = NO_RECORD_TYPES,
 }: ConversationProps) {
   const t = translator(language);
   const savedItems = useSavedItems();
@@ -1334,6 +1344,7 @@ export function Conversation({
                     <References
                       references={turn.references}
                       t={t}
+                      recordTypes={recordTypes}
                       onOpen={turnId === null ? undefined : (reference, button) => openSource(turnId, reference, button)}
                     />
                   ) : null}
@@ -1465,7 +1476,7 @@ export function Conversation({
                 {spoken.references.map((reference) => (
                   <li key={reference.number} value={reference.number}>
                     {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
-                    {isRecordReference(reference) ? `${recordHeading(reference, t)}. ` : null}
+                    {isRecordReference(reference) ? `${recordHeading(reference, t, recordTypes)}. ` : null}
                     {referenceLine(reference, t)}
                   </li>
                 ))}

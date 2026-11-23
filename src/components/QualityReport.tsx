@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 import { translator, type Language, type MessagePath } from '@/messages';
 import { pageOf } from '@/paging';
-import { CORE_NAMES } from '@/record-types';
+import { typeLabel, type NamedRecordType } from '@/record-types';
 import type { Material, MaterialReport } from '@/server/materials';
 
 import { Pager } from './Pager';
@@ -39,13 +39,17 @@ function warningText(warning: Warning, language: Language): string | null {
 
 /**
  * The records of the version by type (Story 4.2), each type named in the interface's language with its count, in the
- * backend's order; a type this release does not know yet (a newer backend) is left out, never shown as its key.
+ * backend's order (the core types, then the others). Story 4.4 part B: a key that is not core is named by the record
+ * type with that key among `types` (the record types of the material's systems), and shows as its key when none has it;
+ * no type is left out.
  */
-function recordCounts(records: readonly RecordCount[], language: Language): { name: string; count: number }[] {
+function recordCounts(
+  records: readonly RecordCount[],
+  types: readonly NamedRecordType[],
+  language: Language,
+): { name: string; count: number }[] {
   const t = translator(language);
-  return records
-    .filter((record) => Object.hasOwn(CORE_NAMES, record.type))
-    .map((record) => ({ name: t(CORE_NAMES[record.type]), count: record.count }));
+  return records.map((record) => ({ name: typeLabel(record.type, types, t), count: record.count }));
 }
 
 /**
@@ -62,6 +66,7 @@ function recordCounts(records: readonly RecordCount[], language: Language): { na
  *
  * Story 4.2: after the warnings, the records the version holds by type, as a plain list of the type's name and its
  * count (no chart), or "Nenhum registro." when it holds none; and the warning that some pages' records were unread.
+ * Story 4.4 part B: a type the GM approved follows the core types, under its name ("Talento: 3").
  */
 export function QualityReport({
   materialId,
@@ -70,6 +75,7 @@ export function QualityReport({
   language,
   outlinePage = 1,
   unreadablePage = 1,
+  recordTypes = [],
 }: {
   readonly materialId: string;
   readonly pages: Pages | undefined;
@@ -78,6 +84,8 @@ export function QualityReport({
   /** Which page of the outline and of the unreadable pages to show, from the address. */
   readonly outlinePage?: number;
   readonly unreadablePage?: number;
+  /** Story 4.4 part B: the record types of the material's systems, which name a key that is not core. */
+  readonly recordTypes?: readonly NamedRecordType[];
 }) {
   const t = translator(language);
   const numerals = [
@@ -87,7 +95,7 @@ export function QualityReport({
   ] as const;
   const shallowest = report.outline.reduce((least, section) => Math.min(least, section.level), Number.POSITIVE_INFINITY);
   const warnings = report.warnings.map((warning) => warningText(warning, language)).filter((text) => text !== null);
-  const records = recordCounts(report.records, language);
+  const records = recordCounts(report.records, recordTypes, language);
   const here = `/files/${encodeURIComponent(materialId)}`;
   const base = `${here}/pages`;
   const outline = pageOf(
