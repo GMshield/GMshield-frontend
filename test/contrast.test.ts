@@ -273,6 +273,18 @@ describe('contrast (WCAG 2.1 AA, 4.5:1)', () => {
     }
   });
 
+  it('printed ink under the selection on a page picture: still 4.5:1 on white and on yellowed paper, in every theme', () => {
+    // 2026-11-23: the selection on a page picture is a translucent blue over the paper (the text layer is invisible),
+    // so what the GM reads while selecting is the printed ink over the paper under that blue.
+    const ink = hex('#111111');
+    const papers: [string, Rgb][] = [['white paper', [255, 255, 255]], ['yellowed paper', hex('#a29570')]];
+    for (const theme of THEMES) {
+      for (const [name, paper] of papers) {
+        expect(ratio(ink, over(role(theme, 'page-selection'), paper)), `${theme}: ink on selected ${name}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('sharp loads (it measures the backdrop)', async () => {
     const { info } = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ffffff' } }).raw().toBuffer({ resolveWithObject: true });
     expect(info.width).toBe(2);

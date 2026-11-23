@@ -67,6 +67,10 @@
   /* Page pictures are printed paper in every theme (Story 2.7 follow-up): the edge of a cited passage's mark. Each
      theme's --color-passage-mark-edge names it, so the role exists in every theme like the others. */
   --paper-mark-edge: #5c3200;
+  /* Text selected on a page picture (2026-11-23): a blue that each theme's --color-page-selection lays over the paper
+     translucently, so the printed words show through it. The theme's own selection (a solid bar in its text colour)
+     hid the picture under the invisible text layer. */
+  --paper-selection: #1e64dc;
 
   /* Typography: one family, DM Sans (bundled from @fontsource-variable/dm-sans) */
   --font-family: 'DM Sans Variable', system-ui, sans-serif;
@@ -158,6 +162,7 @@
   /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
   --color-passage-mark: color-mix(in srgb, var(--dark-accent) 30%, transparent);
   --color-passage-mark-edge: var(--paper-mark-edge);
+  --color-page-selection: color-mix(in srgb, var(--paper-selection) 30%, transparent);
   --color-danger: var(--dark-danger);
   --color-warning: var(--dark-warning);
   --color-success: var(--dark-success);
@@ -195,6 +200,7 @@
   /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
   --color-passage-mark: color-mix(in srgb, var(--light-accent) 20%, transparent);
   --color-passage-mark-edge: var(--paper-mark-edge);
+  --color-page-selection: color-mix(in srgb, var(--paper-selection) 30%, transparent);
   --color-danger: var(--light-danger);
   --color-warning: var(--light-warning);
   --color-success: var(--light-success);
@@ -239,6 +245,7 @@
   /* Story 2.7: the translucent accent mark under a cited passage in the source view. */
   --color-passage-mark: color-mix(in srgb, var(--illustrated-accent) 30%, transparent);
   --color-passage-mark-edge: var(--paper-mark-edge);
+  --color-page-selection: color-mix(in srgb, var(--paper-selection) 30%, transparent);
   --color-danger: var(--illustrated-danger);
   --color-warning: var(--illustrated-warning);
   --color-success: var(--illustrated-success);
