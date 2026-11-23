@@ -282,6 +282,36 @@ describe('the saved items panel (Story 3.12)', () => {
     expect(screen.getByTestId('saved-items')).toBeTruthy();
   });
 
+  it('"Ir" to an answer of the conversation open now shows it in place, even at the address an earlier "Ir" opened', async () => {
+    // 2026-11-23: a link to the address already open loads nothing again, so the page stayed where it was scrolled (or
+    // went to its top) instead of showing the answer.
+    const user = userEvent.setup();
+    const first = answer(1);
+    const turn = <li id={`turn-${first.turnId}`}>Resposta salva número 1.</li>;
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    });
+    window.history.replaceState(null, '', `/questions/${first.conversationId}?turn=${first.turnId}`);
+    render(frame(listOf(2), { children: <ol>{turn}</ol> }));
+    await user.click(button());
+    await waitFor(() => expect(entries()).toHaveLength(2));
+    for (let time = 0; time < 2; time += 1) {
+      fireEvent.click(within(panel()).getByRole('link', { name: /Magias 1/ }));
+      expect(scrolled.at(-1)?.id).toBe(`turn-${first.turnId}`);
+      expect(document.activeElement?.id).toBe(`turn-${first.turnId}`);
+      expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+      expect(window.location.search).toBe(`?turn=${first.turnId}`);
+    }
+    expect(scrolled).toHaveLength(2);
+
+    // Another conversation's answer is a plain link: the page it opens shows the answer.
+    window.history.replaceState(null, '', '/questions/0190a0b0-0000-7000-8000-0000000affff');
+    fireEvent.click(within(panel()).getByRole('link', { name: /Magias 1/ }));
+    expect(scrolled).toHaveLength(2);
+    window.history.replaceState(null, '', '/');
+  });
+
   it('"Ir" in another campaign sends its form to the Server Action; a refusal shows under it; on a phone it closes on arrival', async () => {
     const user = userEvent.setup();
     atWidth(390);

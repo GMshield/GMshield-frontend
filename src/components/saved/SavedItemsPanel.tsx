@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useActionState, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import type { CampaignActionState } from '@/app/(signed-in)/campaigns/form-state';
 import { loadSavedAnswers, type SavedAnswer, type SavedPageResult } from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
 import { pagingOf } from '@/paging';
 
+import { showTurn } from '../conversation/show-turn';
 import { CloseIcon } from '../Icons';
 import { EmptyState } from '../PageHeader';
 import { Pager } from '../Pager';
@@ -67,6 +68,33 @@ type Shown =
 /** The address of the answer's conversation, scrolled to it. */
 function answerHref(item: SavedAnswer): string {
   return `/${item.area}/${encodeURIComponent(item.conversationId)}?turn=${encodeURIComponent(item.turnId)}`;
+}
+
+/**
+ * The answer's turn when its conversation is the page open now (2026-11-23), or null. "Ir" to it then shows it in place:
+ * a link to the address already open (`?turn=` of an earlier "Ir") loads nothing again, so the page stayed where it was
+ * scrolled, or went to its top.
+ */
+function turnOnThisPage(item: SavedAnswer): HTMLElement | null {
+  if (window.location.pathname !== `/${item.area}/${encodeURIComponent(item.conversationId)}`) {
+    return null;
+  }
+  return document.getElementById(`turn-${item.turnId}`);
+}
+
+/** "Ir" to an answer of the conversation open now: its address replaces the current one, and the answer is shown. */
+function goInPlace(event: MouseEvent<HTMLAnchorElement>, item: SavedAnswer): boolean {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return false;
+  }
+  const turn = turnOnThisPage(item);
+  if (turn === null) {
+    return false;
+  }
+  event.preventDefault();
+  window.history.replaceState(null, '', answerHref(item));
+  showTurn(turn);
+  return true;
 }
 
 /**
@@ -175,7 +203,10 @@ function SavedItemsView({
                   href={answerHref(item)}
                   className={`${pillStyles.pill} ${styles.go}`}
                   aria-label={t('saved.goTo', { name: item.conversationName })}
-                  onClick={() => onGo(false)}
+                  onClick={(event) => {
+                    goInPlace(event, item);
+                    onGo(false);
+                  }}
                 >
                   {t('saved.go')}
                 </Link>
