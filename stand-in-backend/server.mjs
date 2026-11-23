@@ -33,7 +33,8 @@
 // rename answers it at version 1 under the new name. Story 3.10 part B: its deletion takes its one question, and a
 // delete of it answers 202 with no body. Story 3.12: its stored turn is not saved (`bookmarked: false`), a bookmark and
 // its removal answer 204 (as the contract declares), and the saved answers are two: the stored turn's answer in the
-// starter campaign and one in another campaign ("A Coroa Partida").
+// starter campaign and one in another campaign ("A Coroa Partida"). Story 4.1: every system has the eight core record
+// types, in their fixed order, none with records yet; one of them reads as the rule type.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -503,6 +504,17 @@ EXAMPLES['GET /api/v1/saved-answers'] = {
   ],
   total: 2,
 };
+
+/** Story 4.1: the eight core record types every system has, in their fixed order, none with records yet. */
+const CORE_RECORD_TYPES = ['rule', 'spell', 'item', 'creature', 'character_sheet', 'encounter', 'dungeon', 'note'].map((core, index) => ({
+  id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
+  name: core.replace('_', ' '),
+  core,
+  records: 0,
+  version: 0,
+}));
+EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: CORE_RECORD_TYPES, total: CORE_RECORD_TYPES.length };
+EXAMPLES['GET /api/v1/record-types/{id}'] = CORE_RECORD_TYPES[0];
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

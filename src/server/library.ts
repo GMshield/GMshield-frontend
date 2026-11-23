@@ -27,6 +27,10 @@ import { everyPage, type Every } from './every-page';
  * version and every material of its tiers, each with whether it is on), and a change of them on the version read
  * (`request.stale_version` when they changed elsewhere, `scope.material_unknown` for a material in none of its tiers).
  * Only the backend works out what a campaign may use; nothing here filters or computes a scope.
+ *
+ * Story 4.1: a system's record types by page (`{items, total}`, the eight core types first in their fixed order), each
+ * with its record count. A core type is named by its `core` key, which the screen translates; its stored `name` is never
+ * shown.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -43,7 +47,12 @@ export type CampaignChange = Schemas['CampaignChange'];
 export type Scope = Schemas['Scope'];
 export type ScopeChange = Schemas['ScopeChange'];
 export type ScopeMaterial = Schemas['ScopeMaterial'];
+export type RecordType = Schemas['RecordType'];
+export type RecordTypePage = Schemas['RecordTypePage'];
+/** The key of a core record type (Story 4.1): the same eight in every system. */
+export type CoreRecordType = NonNullable<RecordType['core']>;
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
+type RecordTypeQuery = NonNullable<operations['listRecordTypes']['parameters']['query']>;
 export type CampaignQuery = NonNullable<operations['listCampaigns']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
@@ -66,6 +75,21 @@ export function listSystems(sessionToken: string, query: PageQuery = {}, options
 export function getSystem(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<GameSystem>> {
   return call('library.system', options, (client) =>
     client.GET('/api/v1/systems/{id}', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/**
+ * The record types of one of the account's systems, a page at a time (Story 4.1): the core types first, in their fixed
+ * order, each with its record count; `request.not_found` for any other system.
+ */
+export function listRecordTypes(
+  sessionToken: string,
+  id: string,
+  query: RecordTypeQuery = {},
+  options: CallOptions = {},
+): Promise<Result<RecordTypePage>> {
+  return call('ontology.record_types', options, (client) =>
+    client.GET('/api/v1/systems/{id}/record-types', { params: { header: session(sessionToken), path: { id }, query } }),
   );
 }
 
