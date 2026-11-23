@@ -9,6 +9,7 @@ import { notFoundFor } from '@/app/not-found';
 import { FullScreenButton } from '@/components/FullScreen';
 import { Notice } from '@/components/Notice';
 import { PageView, pictureUrl } from '@/components/PageView';
+import { ZoomablePage } from '@/components/PageZoom';
 import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { getMaterial, getPage } from '@/server/materials';
@@ -99,7 +100,13 @@ export default async function MaterialPageView({
         <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} caption={false} />
       ) : (
         <div className={styles.beside}>
-          <PageView page={view} pictureSrc={pictureUrl(id, view.page)} language={language} caption={false} fit />
+          <ZoomablePage
+            page={view}
+            pictureSrc={pictureUrl(id, view.page)}
+            language={language}
+            caption={false}
+            labels={{ group: t('pageView.zoom'), zoomIn: t('pageView.zoomIn'), zoomOut: t('pageView.zoomOut'), fit: t('pageView.zoomFit') }}
+          />
           <section className={styles.extracted} aria-labelledby="extracted-text">
             <h2 id="extracted-text" className={styles.extractedHeading}>
               {t('pageView.extracted')}

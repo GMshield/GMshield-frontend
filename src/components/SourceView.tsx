@@ -8,7 +8,7 @@ import { fetchScopePage, scopePictureUrl } from '@/client/search';
 import { translator, type Language } from '@/messages';
 
 import { CloseIcon } from './Icons';
-import { PageView } from './PageView';
+import { ZoomablePage } from './PageZoom';
 import { PillButton } from './PillButton';
 import styles from './SourceView.module.css';
 
@@ -259,13 +259,13 @@ export function SourceView(props: SourceViewProps) {
       pictureSrc = referencePictureUrl(turnId ?? '', number ?? 0, shown.view.page);
     }
     body = (
-      <PageView
+      <ZoomablePage
         page={shown.view}
         pictureSrc={pictureSrc}
         language={language}
         cited={reference.passageIds}
         caption={false}
-        fit
+        labels={{ group: t('pageView.zoom'), zoomIn: t('pageView.zoomIn'), zoomOut: t('pageView.zoomOut'), fit: t('pageView.zoomFit') }}
       />
     );
   }

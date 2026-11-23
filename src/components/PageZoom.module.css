@@ -1,0 +1,33 @@
+/*
+ * A zoomable page (2026-11-23): the holder of the page (PageView keeps its room and scrolls when zoomed) and of the
+ * controls floating over its bottom edge, which stay put while the page scrolls under them.
+ */
+.box {
+  position: relative;
+  min-width: 0;
+}
+
+.floating {
+  position: absolute;
+  bottom: var(--space-3);
+  left: 50%;
+  z-index: 1;
+  translate: -50% 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  /* Opaque in every theme: the illustrated theme's surface is glass, and the page's lines showed through the level. */
+  background-color: var(--color-canvas);
+}
+
+/* "−", the level and "+": one compact group, quiet pills, the level in tabular figures so the group never shifts. */
+.controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.level {
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}

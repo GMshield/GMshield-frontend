@@ -660,7 +660,11 @@
     "citedPassage": "cited passage",
     "loadFailed": "This page could not be loaded.",
     "fullScreen": "Full screen",
-    "leaveFullScreen": "Exit full screen"
+    "leaveFullScreen": "Exit full screen",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomFit": "{percent}, fit the page"
   },
   "conversation": {
     "turns": "Questions and answers",
