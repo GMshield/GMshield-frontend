@@ -31,6 +31,7 @@ import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
 import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
+import { ConversationTimeline } from './ConversationTimeline';
 import { NamedIcon } from '../Icons';
 import { PillButton } from '../PillButton';
 import { PillLink } from '../PillLink';
@@ -1183,6 +1184,9 @@ export function Conversation({
   const dismissedHere = turns.filter((turn) => turn.dismissal !== 'shown').length;
   const questionCount = questions === null ? null : Math.max(0, questions + askedHere - dismissedHere);
 
+  // 2026-11-23: the questions shown, in order, for the timeline at the right.
+  const timeline = turns.filter((turn) => turn.dismissal === 'shown').map((turn) => ({ key: turn.key, question: turn.question }));
+
   return (
     <section className={styles.conversation} aria-label={title}>
       <h1 className={styles.visuallyHidden}>{title}</h1>
@@ -1273,6 +1277,7 @@ export function Conversation({
               key={turn.key}
               id={turnId === null ? undefined : `turn-${turnId}`}
               className={styles.turn}
+              data-turn-key={turn.key}
               ref={last}
               // Story 3.12: the turn a saved item opened takes focus once, from the page; never from the keyboard.
               tabIndex={target ? -1 : undefined}
@@ -1392,6 +1397,7 @@ export function Conversation({
           );
         })}
       </ol>
+      <ConversationTimeline items={timeline} label={t('conversation.timeline')} />
       <div className={styles.dock}>
         {hasSources ? null : (
           <p className={styles.empty} data-testid="conversation-empty">

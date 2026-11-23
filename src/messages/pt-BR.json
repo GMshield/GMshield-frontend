@@ -662,6 +662,7 @@
   },
   "conversation": {
     "turns": "Perguntas e respostas",
+    "timeline": "Perguntas desta conversa",
     "question": "Pergunta",
     "answer": "Resposta",
     "composer": {
