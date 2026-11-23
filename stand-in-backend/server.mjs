@@ -224,6 +224,19 @@ export const SEARCH_DONE = {
       firstWords: 'Fire Bolt. Evocation cantrip. You hurl a mote of fire at a creature or an object within range.',
       tier: 'system',
     },
+    // Story 4.4 part B: a record of a type the GM approved in the starter system ("Talento", key `talento`).
+    {
+      kind: 'record',
+      recordId: '0190a0b0-0000-7000-8000-000000000703',
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Talentos'],
+      page: 168,
+      name: 'Conjurador de Guerra',
+      recordType: 'talento',
+      passageIds: ['0190a0b0-0000-7000-8000-000000000014'],
+      tier: 'system',
+    },
   ],
 };
 
@@ -323,6 +336,8 @@ export const EXAMPLES = {
       { type: 'rule', count: 12 },
       { type: 'spell', count: 30 },
       { type: 'item', count: 4 },
+      // Story 4.4 part B: a type the GM approved, after the core types.
+      { type: 'talento', count: 3 },
     ],
   },
   'POST /api/v1/materials/{id}/accept': {
@@ -572,7 +587,23 @@ const CORE_RECORD_TYPES = ['rule', 'spell', 'item', 'creature', 'character_sheet
   records: 0,
   version: 0,
 }));
-EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: CORE_RECORD_TYPES, total: CORE_RECORD_TYPES.length };
+/** Story 4.4 part B: the type the GM approved in the starter system from the guide's proposal, with its records. */
+export const TALENT_TYPE = {
+  id: '0190a0b0-0000-7000-8000-000000000608',
+  name: 'Talento',
+  core: null,
+  key: 'talento',
+  origin: {
+    kind: 'proposal',
+    proposalId: '0190a0b0-0000-7000-8000-000000000802',
+    materialId: '0190a0b0-0000-7000-8000-000000000004',
+    materialName: 'Guia do Mestre.pdf',
+  },
+  records: 3,
+  version: 0,
+};
+const RECORD_TYPES = [...CORE_RECORD_TYPES, TALENT_TYPE];
+EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: RECORD_TYPES, total: RECORD_TYPES.length };
 EXAMPLES['GET /api/v1/record-types/{id}'] = CORE_RECORD_TYPES[0];
 
 /**
@@ -650,7 +681,7 @@ export const RECORD_PAGE = {
 export const RECORD = {
   id: RECORD_ID,
   name: 'Fire Bolt',
-  recordType: { id: CORE_RECORD_TYPES[1].id, core: 'spell', name: 'spell' },
+  recordType: { id: CORE_RECORD_TYPES[1].id, core: 'spell', key: 'spell', name: 'spell' },
   fields: [
     { name: 'Nível', value: 'Truque de evocação' },
     { name: 'Tempo de conjuração', value: '1 ação' },

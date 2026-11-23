@@ -1,6 +1,6 @@
 import type { Tier } from '@/client/conversation';
 import { pageParam } from '@/paging';
-import { isCoreKey } from '@/record-types';
+import { isRecordTypeKey } from '@/record-types';
 
 import type { SearchAddress } from './search-address';
 
@@ -23,9 +23,10 @@ function idOf(value: string | string[] | undefined): string | null {
 
 /**
  * The search's address read from a page's query (Story 3.9; `type` from Story 4.3 part B): `q`, `s`, `tier`,
- * `material`, `type` and `page`. A value that cannot be one of its kind (an id that is not one, an unknown tier or
- * record type, a page that is not a number from 1) is left out, never refused. Shared by the search page and a record
- * result's page, whose way back is the same search.
+ * `material`, `type` and `page`. A value that cannot be one of its kind (an id that is not one, an unknown tier, a
+ * record type that is no key's text, a page that is not a number from 1) is left out, never refused; from Story 4.4
+ * part B any key is kept, a type the GM approved too. Shared by the search page and a record result's page, whose way
+ * back is the same search.
  */
 export function searchAddressOf(query: SearchParams): Required<SearchAddress> {
   const type = one(query.type);
@@ -34,7 +35,7 @@ export function searchAddressOf(query: SearchParams): Required<SearchAddress> {
     searchId: idOf(query.s),
     tier: TIERS.find((word) => word === one(query.tier)) ?? null,
     materialId: idOf(query.material),
-    recordType: isCoreKey(type) ? type : null,
+    recordType: isRecordTypeKey(type) ? type : null,
     page: pageParam(one(query.page)),
   };
 }

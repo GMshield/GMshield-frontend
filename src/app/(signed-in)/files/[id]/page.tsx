@@ -15,15 +15,16 @@ import { SupersededVersions } from '@/components/SupersededVersions';
 import { placeOfBelonging, progressOf } from '@/components/uploads/types';
 import { errorText, failureText, messagesFor, translator } from '@/messages';
 import { pageParam } from '@/paging';
+import { isCoreKey, type NamedRecordType } from '@/record-types';
 import { currentPreferences } from '@/preferences';
-import { listAllCampaigns, listAllSystems, listMaterialProposals } from '@/server/library';
+import { listAllCampaigns, listAllSystems, listMaterialProposals, type RecordType } from '@/server/library';
 import { listPage } from '@/server/list-page';
 import { getMaterial, getPage, getReport, materialDeletion } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { systemLabel } from '../../campaigns/rows';
 import { decideProposalAction } from '../../proposal-actions';
-import { mergeTargets, proposalItem, type MergeTargets } from '../../systems/rows';
+import { mergeTargets, proposalItem, systemRecordTypes, type MergeTargets } from '../../systems/rows';
 import { belongingText } from '../rows';
 
 import { changePlaceAction, deleteMaterialAction, materialAction, removeVersionAction } from './actions';
@@ -147,9 +148,25 @@ export default async function MaterialPage({
     PROPOSALS_SIZE,
   );
   const proposalSystems = proposals.ok ? [...new Set(proposals.data.rows.map((proposal) => proposal.systemId))] : [];
-  const targets = new Map<string, MergeTargets>(
-    await Promise.all(proposalSystems.map(async (system) => [system, await mergeTargets(token ?? '', system, t)] as const)),
+  // Story 4.4 part B: a report that counts a type the GM approved names it from the record types of the material's
+  // systems, read once per system with those the proposals' merge choices need.
+  const approvedCounted = report?.ok === true && report.data.records.some((record) => !isCoreKey(record.type));
+  const belongingSystems = [
+    ...material.data.belonging.systems.map((system) => system.id),
+    ...(material.data.belonging.campaign ? [material.data.belonging.campaign.system.id] : []),
+  ];
+  const typeSystems = [...new Set([...proposalSystems, ...(approvedCounted ? belongingSystems : [])])];
+  const systemTypes = new Map<string, RecordType[]>(
+    await Promise.all(typeSystems.map(async (system) => [system, await systemRecordTypes(token ?? '', system)] as const)),
   );
+  const targets = new Map<string, MergeTargets>(
+    await Promise.all(
+      proposalSystems.map(async (system) => [system, await mergeTargets(token ?? '', system, t, systemTypes.get(system))] as const),
+    ),
+  );
+  const reportTypes: NamedRecordType[] = approvedCounted
+    ? belongingSystems.flatMap((system) => (systemTypes.get(system) ?? []).filter((type) => type.core === null))
+    : [];
   const systemNames = new Map(places.systems.map((system) => [system.id, system.name]));
   const several = material.data.belonging.systems.length > 1;
   const proposalTexts = messagesFor(language).systems.proposals;
@@ -251,6 +268,7 @@ export default async function MaterialPage({
               language={language}
               outlinePage={pageParam(query[OUTLINE_FIELD])}
               unreadablePage={pageParam(query[UNREADABLE_FIELD])}
+              recordTypes={reportTypes}
             />
           ) : (
             <p className={styles.failure}>{errorText(report.problem, language)}</p>

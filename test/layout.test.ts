@@ -709,10 +709,12 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('1 página não pôde ser aberta para leitura.');
     // A warning this release does not know is left out, never shown as its code.
     expect(html).not.toContain('something_new');
-    // Story 4.2: the records by type, a plain list of the type's name and count; a type it does not know is left out.
+    // Story 4.2: the records by type, a plain list of the type's name and count. Story 4.4 part B: a key no record type
+    // of the material's systems has (it belongs to none here) shows as its key, after the core types.
     expect(html).toContain('Registros encontrados');
-    expect(html).toMatch(/<li><span[^>]*>Regra<\/span><span[^>]*>1<\/span><\/li><li><span[^>]*>Magia<\/span><span[^>]*>30<\/span><\/li><\/ul>/);
-    expect(html).not.toContain('monster');
+    expect(html).toMatch(
+      /<li><span[^>]*>Regra<\/span><span[^>]*>1<\/span><\/li><li><span[^>]*>Magia<\/span><span[^>]*>30<\/span><\/li><li><span[^>]*>monster<\/span><span[^>]*>2<\/span><\/li><\/ul>/,
+    );
     expect(html).toContain('Os registros de 10 páginas não puderam ser lidos; os trechos delas foram mantidos.');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/9">Página 9</a>`);
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/40">Páginas 40 a 41</a>`);
@@ -736,6 +738,61 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('The records of 10 pages could not be read; their passages were kept.');
     expect(html).toContain('Pages 40 to 41');
     expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:danger']);
+  });
+
+  it('Story 4.4 part B: a type the GM approved is named by its system\'s record type after the core types', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-0000000000e1';
+    const talento = { id: '0190a0b0-0000-7000-8000-0000000000e2', name: 'Talento', core: null, key: 'talento', origin: null, records: 3, version: 0 };
+    const spell = { id: '0190a0b0-0000-7000-8000-0000000000e3', name: 'spell', core: 'spell', key: 'spell', origin: { kind: 'core' }, records: 30, version: 0 };
+    const server = await useBackend({
+      [MATERIAL]: {
+        status: 200,
+        body: {
+          id: MATERIAL_ID,
+          name: 'Livro do Jogador.pdf',
+          ...PLACE,
+          belonging: { campaign: null, systems: [{ id: SYSTEM, name: 'D&D' }] },
+          state: 'ready',
+          actions: [],
+          pages: reviewPages,
+        },
+      },
+      [REPORT]: {
+        status: 200,
+        body: { ...report, records: [{ type: 'spell', count: 30 }, { type: 'talento', count: 3 }, { type: 'vantagem', count: 1 }] },
+      },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [spell, talento], total: 2 } },
+    });
+    const html = await page();
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toContain(`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`);
+    expect(html).toMatch(
+      /<li><span[^>]*>Magia<\/span><span[^>]*>30<\/span><\/li><li><span[^>]*>Talento<\/span><span[^>]*>3<\/span><\/li><li><span[^>]*>vantagem<\/span><span[^>]*>1<\/span><\/li><\/ul>/,
+    );
+  });
+
+  it('Story 4.4 part B: a campaign\'s material names an approved type from its campaign\'s system', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-0000000000e1';
+    const CAMPAIGN = '0190a0b0-0000-7000-8000-0000000000e4';
+    const talento = { id: '0190a0b0-0000-7000-8000-0000000000e2', name: 'Talento', core: null, key: 'talento', origin: null, records: 3, version: 0 };
+    const server = await useBackend({
+      [MATERIAL]: {
+        status: 200,
+        body: {
+          id: MATERIAL_ID,
+          name: 'Notas.md',
+          ...PLACE,
+          belonging: { campaign: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: SYSTEM, name: 'D&D' } }, systems: [] },
+          state: 'ready',
+          actions: [],
+          pages: reviewPages,
+        },
+      },
+      [REPORT]: { status: 200, body: { ...report, records: [{ type: 'rule', count: 1 }, { type: 'talento', count: 3 }] } },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [talento], total: 1 } },
+    });
+    const html = await page();
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toContain(`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`);
+    expect(html).toMatch(/<li><span[^>]*>Regra<\/span><span[^>]*>1<\/span><\/li><li><span[^>]*>Talento<\/span><span[^>]*>3<\/span><\/li><\/ul>/);
   });
 
   it('shows only the actions the material allows: read-only when ready, retry and discard when failed, none while processing', async () => {
@@ -1354,7 +1411,7 @@ describe("a record type's records and a record's page (Story 4.3)", () => {
   const record: GameRecord = {
     id: RECORD_ID,
     name: 'Bola de Fogo',
-    recordType: { id: TYPE_ID, core: 'spell', name: 'spell' },
+    recordType: { id: TYPE_ID, core: 'spell', key: 'spell', name: 'spell' },
     fields: [
       { name: 'Nível', value: '3' },
       { name: 'Alcance', value: '45 metros' },
@@ -1512,7 +1569,7 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
   const record: GameRecord = {
     id: RECORD_ID,
     name: 'Vorpal Sword',
-    recordType: { id: TYPE_ID, core: 'item', name: 'item' },
+    recordType: { id: TYPE_ID, core: 'item', key: 'item', name: 'item' },
     fields: [
       { name: 'Raridade', value: 'Lendária' },
       { name: 'Sintonização', value: 'Sim' },
@@ -1565,9 +1622,12 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
     expect(html).toMatch(/>(<svg.*?<\/svg>)?Search<\/a>/);
     expect(html).toContain('aria-label="Fields"');
     expect(html).toContain('Sources');
-    // With no search in the address, the way back is the search page itself; an address that cannot be one is left out.
-    html = await page({ q: '', s: 'nope', type: 'dragon' });
+    // With no search in the address, the way back is the search page itself; an address that cannot be one is left out
+    // (Story 4.4 part B: any key's text is kept, so only a value that is no key goes).
+    html = await page({ q: '', s: 'nope', type: 'Dragon!' });
     expect(html).toMatch(/<a[^>]*href="\/search"[^>]*>(<svg.*?<\/svg>)?Busca<\/a>/);
+    html = await page({ q: '', s: 'nope', type: 'talento' });
+    expect(html).toMatch(/<a[^>]*href="\/search\?type=talento"[^>]*>(<svg.*?<\/svg>)?Busca<\/a>/);
   });
 
   it('a record outside the campaign\'s scope, or no current campaign, is the single not-found page; another failure is a notice', async () => {

@@ -38,3 +38,27 @@ export function recordTypeName(type: { readonly name: string; readonly core?: st
 export function coreTypeName(key: CoreRecordType, t: Translate): string {
   return t(CORE_NAMES[key]);
 }
+
+/** What a record type key looks like (Story 4.4 part B, public contract 1.39.0): a core key or an approved type's. */
+const RECORD_TYPE_KEY = /^[a-z][a-z0-9_]{0,31}$/;
+
+/** Whether a text is a record type key (a search's `type=` in the address, from Story 4.4 part B any key). */
+export function isRecordTypeKey(value: string): boolean {
+  return RECORD_TYPE_KEY.test(value);
+}
+
+/** A record type as {@link typeLabel} names a key by it: its key and its stored name. */
+export type NamedRecordType = { readonly key: string; readonly name: string };
+
+/**
+ * A record type key's name as this interface shows it (Story 4.4 part B): a core key by its own translation, else the
+ * name of the type with that key in `types` (the system's record types, which name a type the GM approved), else the
+ * key itself. No contract field carries a type's name: a search result, a cited record and the quality report name a
+ * key, and the screen names it from the list it reads.
+ */
+export function typeLabel(key: string, types: readonly NamedRecordType[], t: Translate): string {
+  if (isCoreKey(key)) {
+    return coreTypeName(key, t);
+  }
+  return types.find((type) => type.key === key)?.name ?? key;
+}

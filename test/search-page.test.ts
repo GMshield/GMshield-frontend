@@ -11,8 +11,8 @@ vi.mock('next/headers', () => ({
 // The page's body runs in the browser; here it shows only what the page hands it.
 vi.mock('@/components/search/SearchPage', () => ({
   SearchPage: (props: Record<string, unknown>) => {
-    const { language, campaignId, query, searchId, tier, materialId, page, scope } = props;
-    return JSON.stringify({ language, campaignId, query, searchId, tier, materialId, page, scope: scope === null ? null : 'read' });
+    const { language, campaignId, query, searchId, tier, materialId, page, scope, recordType, recordTypes } = props;
+    return JSON.stringify({ language, campaignId, query, searchId, tier, materialId, page, scope: scope === null ? null : 'read', recordType, recordTypes });
   },
 }));
 
@@ -82,6 +82,9 @@ describe('the search page (Story 3.9)', () => {
       materialId: MATERIAL,
       page: 2,
       scope: 'read',
+      recordType: null,
+      // Story 4.4 part B: the system's record types could not be read (no route here): none.
+      recordTypes: [],
     });
     // Only ids pass as a stored search or a material, only a tier of the scope as a tier, and a repeated field once.
     expect(await handed({ q: ['x', 'y'], s: 'nope', tier: 'model', material: '../x', page: '0' })).toMatchObject({
@@ -95,6 +98,35 @@ describe('the search page (Story 3.9)', () => {
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);
     }
+  });
+
+  it('Story 4.4 part B: hands its body the campaign system\'s record types, an approved one included, and any key of the address', async () => {
+    const SYSTEM = CURRENT.system.id;
+    const spell = { id: '0190a0b0-0000-7000-8000-000000000601', name: 'spell', core: 'spell', key: 'spell', origin: { kind: 'core' }, records: 0, version: 0 };
+    const talent = { id: '0190a0b0-0000-7000-8000-000000000608', name: 'Talento', core: null, key: 'talento', origin: { kind: 'proposal' }, records: 3, version: 0 };
+    const server = await useBackend({
+      'GET /api/v1/campaigns/current': { status: 200, body: CURRENT },
+      [`GET /api/v1/campaigns/${CAMPAIGN}/scope`]: { status: 200, body: SCOPE },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [spell, talent], total: 2 } },
+    });
+
+    expect(await handed({ q: 'ataque', type: 'talento' })).toMatchObject({
+      recordType: 'talento',
+      recordTypes: [
+        { key: 'spell', name: 'spell' },
+        { key: 'talento', name: 'Talento' },
+      ],
+    });
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toContain(`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`);
+  });
+
+  it('Story 4.4 part B: hands no record type when the system\'s list cannot be read', async () => {
+    await useBackend({
+      'GET /api/v1/campaigns/current': { status: 200, body: CURRENT },
+      [`GET /api/v1/campaigns/${CAMPAIGN}/scope`]: { status: 200, body: SCOPE },
+      [`GET /api/v1/systems/${CURRENT.system.id}/record-types?limit=50`]: problem(503, 'server.unavailable'),
+    });
+    expect(await handed({ q: 'ataque' })).toMatchObject({ recordTypes: [] });
   });
 
   it('still renders when the scope settings cannot be read, with none for the filters', async () => {

@@ -233,7 +233,7 @@ describe('stand-in backend', () => {
     });
     // Story 4.2: its records by type, and the warning that some pages' records were unread.
     expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({
-      body: { records: [{ type: 'rule', count: 12 }, { type: 'spell', count: 30 }, { type: 'item', count: 4 }] },
+      body: { records: [{ type: 'rule', count: 12 }, { type: 'spell', count: 30 }, { type: 'item', count: 4 }, { type: 'talento', count: 3 }] },
     });
     expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: ['reprocess'] } });
     for (const action of ['reprocess', 'retry', 'discard']) {
@@ -299,11 +299,12 @@ describe('stand-in backend', () => {
     }
     expect(ANSWER_DONE.references.map((reference) => reference.kind)).toEqual(['passage', 'passage', 'record']);
     const record = ANSWER_DONE.references[2]! as Record<string, unknown>;
-    const properties = schemas.TurnSourceReference!.properties as Record<string, { type?: string; enum?: string[] }>;
+    const properties = schemas.TurnSourceReference!.properties as Record<string, { type?: string; enum?: string[]; pattern?: string }>;
     for (const key of ['recordId', 'recordType', 'name', 'fields']) {
       expect(jsonType(record[key]), key).toBe(properties[key]?.type);
     }
-    expect(properties.recordType?.enum).toContain(record.recordType);
+    // Story 4.4 part B (contract 1.39.0): a record type is any key of the pattern, an approved type's too.
+    expect(record.recordType).toMatch(new RegExp(properties.recordType?.pattern ?? '^$'));
     for (const field of record.fields as Record<string, unknown>[]) {
       expectShape('TurnReferenceField', field);
     }
@@ -362,9 +363,11 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'POST', `/api/v1/campaigns/${campaign}/searches`, 't')).toMatchObject({ status: 202, body: { id: SEARCH_ID } });
     const read = answer(contract, 'GET', `/api/v1/searches/${SEARCH_ID}`, 't');
     expect(read).toMatchObject({ status: 200, body: SEARCH_DONE });
-    expect(SEARCH_DONE.results.map((result) => result.tier)).toEqual(['system', 'campaign', 'system']);
+    expect(SEARCH_DONE.results.map((result) => result.tier)).toEqual(['system', 'campaign', 'system', 'system']);
     // Story 4.3 part B: the record named as the query leads, and opens from the campaign as its system shows it.
-    expect(SEARCH_DONE.results.map((result) => result.kind)).toEqual(['record', 'passage', 'passage']);
+    expect(SEARCH_DONE.results.map((result) => result.kind)).toEqual(['record', 'passage', 'passage', 'record']);
+    // Story 4.4 part B: a record of a type the GM approved names its key.
+    expect(SEARCH_DONE.results[3]).toMatchObject({ kind: 'record', recordType: 'talento', name: 'Conjurador de Guerra' });
     expect(SEARCH_DONE.results[0]).toMatchObject({ recordId: RECORD_ID, name: RECORD.name, recordType: RECORD.recordType.core, versionId: BOOK_VERSION, page: 2 });
     // Its passage is one of its own version's, none of the notes' passages.
     expect(SEARCH_DONE.results[0]!.passageIds).toEqual(['0190a0b0-0000-7000-8000-000000000013']);

@@ -107,16 +107,31 @@ function everyOffsetPage<T>(
 }
 
 /**
- * The record types and terms of the system a proposal of it may be merged into (Story 4.4), every page of each, each
- * named as this interface names it (a core type by its translation). A list that cannot be read offers nothing.
+ * Every record type of the system (Story 4.4 part B), every page, in its order (the core types first); none when the
+ * list cannot be read. A screen names a record type key from it ({@link import('@/record-types').typeLabel}).
  */
-export async function mergeTargets(token: string, systemId: string, t: Translate): Promise<MergeTargets> {
+export async function systemRecordTypes(token: string, systemId: string): Promise<RecordType[]> {
+  const types = await everyOffsetPage((query) => listRecordTypes(token, systemId, query));
+  return types.ok ? types.data.items : [];
+}
+
+/**
+ * The record types and terms of the system a proposal of it may be merged into (Story 4.4), every page of each, each
+ * named as this interface names it (a core type by its translation). A list that cannot be read offers nothing. The
+ * system's record types may be given when they were read already (Story 4.4 part B, the material page).
+ */
+export async function mergeTargets(
+  token: string,
+  systemId: string,
+  t: Translate,
+  recordTypes?: readonly RecordType[],
+): Promise<MergeTargets> {
   const [types, terms] = await Promise.all([
-    everyOffsetPage((query) => listRecordTypes(token, systemId, query)),
+    recordTypes ?? systemRecordTypes(token, systemId),
     everyOffsetPage((query) => listTerms(token, systemId, query)),
   ]);
   return {
-    record_type: types.ok ? types.data.items.map((type) => ({ id: type.id, label: recordTypeName(type, t) })) : [],
+    record_type: types.map((type) => ({ id: type.id, label: recordTypeName(type, t) })),
     term: terms.ok ? terms.data.items.map((term) => ({ id: term.id, label: term.name })) : [],
   };
 }

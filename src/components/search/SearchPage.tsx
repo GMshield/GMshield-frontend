@@ -18,7 +18,7 @@ import {
 } from '@/client/search';
 import { errorText, translator, type Language } from '@/messages';
 import { pageOf } from '@/paging';
-import { CORE_KEYS, coreTypeName } from '@/record-types';
+import { CORE_KEYS, typeLabel, type NamedRecordType } from '@/record-types';
 
 import { referenceLine } from '../conversation/References';
 import { NamedIcon } from '../Icons';
@@ -40,6 +40,18 @@ export const RESULTS_PAGE = 10;
 /** The longest query, in code points (the backend's `Scopes.MAX_QUERY`). */
 export const MAX_QUERY = 500;
 
+/** No record type read: the type filter offers the core types. */
+const NO_TYPES: readonly NamedRecordType[] = [];
+
+/**
+ * The keys the type filter offers (Story 4.4 part B): the campaign's system's record types in their order, or the core
+ * keys when they could not be read; the address's own key last when it is none of them, so the select shows it.
+ */
+export function typeOptionsOf(recordTypes: readonly NamedRecordType[], current: string | null): readonly string[] {
+  const keys = recordTypes.length > 0 ? recordTypes.map((type) => type.key) : [...CORE_KEYS];
+  return current !== null && !keys.includes(current) ? [...keys, current] : keys;
+}
+
 /** How the search's calls are made: this site's relays by default; tests give their own. */
 export type SearchCalls = {
   readonly start: typeof startSearch;
@@ -60,8 +72,13 @@ export type SearchPageProps = {
   readonly searchId: string | null;
   readonly tier: Tier | null;
   readonly materialId: string | null;
-  /** Story 4.3 part B: the record-type filter in the address (`type`), a core key, or null. */
+  /** Story 4.3 part B: the record-type filter in the address (`type`), a record type key, or null. */
   readonly recordType?: RecordTypeKey | null;
+  /**
+   * Story 4.4 part B: the record types of the campaign's system, in its order (the core ones first), which the type
+   * filter offers and which name a record result's key; empty when unread (the filter then offers the core types).
+   */
+  readonly recordTypes?: readonly NamedRecordType[];
   /** The page of the results in the address, from 1. */
   readonly page: number;
   /** The campaign's scope settings, for the filters and the sentence of an empty search; null when unread. */
@@ -123,6 +140,8 @@ function placeLine(result: SearchResult, t: ReturnType<typeof translator>): stri
  *   its tier; it is a link to the record's page in the campaign's context (`/search/records/{id}`), which keeps the
  *   search's address for its way back. A type select beside the material select lists the eight core types: one
  *   leaves only records of that type (the backend narrows; the page hides nothing), and combines with the others.
+ *   Story 4.4 part B: it lists the campaign's system's record types by name instead (the core ones, then those the GM
+ *   approved), and a record result names its key from them (a key with no match shows as it is).
  * - The tier chips cover only the tiers switched on; the material select only the materials switched on in them. A
  *   filter change starts a new, narrowed search from page 1: the backend narrows the scope, the page never hides rows.
  * - A search that found nothing says so in one sentence naming the scope searched.
@@ -139,11 +158,13 @@ export function SearchPage({
   tier,
   materialId,
   recordType = null,
+  recordTypes = NO_TYPES,
   page,
   scope,
   calls = DEFAULT_CALLS,
 }: SearchPageProps) {
   const t = useMemo(() => translator(language), [language]);
+  const typeOptions = useMemo(() => typeOptionsOf(recordTypes, recordType), [recordTypes, recordType]);
   const router = useRouter();
   const fieldId = useId();
   const errorId = useId();
@@ -390,7 +411,7 @@ export function SearchPage({
    * page in the campaign's context, which keeps the search's address for its way back.
    */
   function recordRow(result: RecordResult, href: string) {
-    const typeName = coreTypeName(result.recordType, t);
+    const typeName = typeLabel(result.recordType, recordTypes, t);
     return (
       <Link className={styles.row} href={href} data-kind="record">
         <span className={styles.recordName}>{result.name}</span>
@@ -410,7 +431,7 @@ export function SearchPage({
     const parts = [
       tier === null ? null : tierWord(tier, t),
       scope?.materials.find((material) => material.id === materialId)?.name ?? null,
-      recordType === null ? null : coreTypeName(recordType, t),
+      recordType === null ? null : typeLabel(recordType, recordTypes, t),
     ].filter((part): part is string => part !== null);
     if (tiers === null) {
       return parts.join(', ');
@@ -500,9 +521,9 @@ export function SearchPage({
               }
             >
               <option value="">{t('search.allTypes')}</option>
-              {CORE_KEYS.map((key) => (
+              {typeOptions.map((key) => (
                 <option key={key} value={key}>
-                  {coreTypeName(key, t)}
+                  {typeLabel(key, recordTypes, t)}
                 </option>
               ))}
             </select>
