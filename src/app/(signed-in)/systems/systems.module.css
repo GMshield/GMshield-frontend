@@ -135,3 +135,11 @@
   font-weight: var(--font-label-weight);
   line-height: var(--font-body-line-height);
 }
+
+/* Story 4.3: the rule that closes a record's fields, before its source references. */
+.rule {
+  inline-size: 100%;
+  margin: 0;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+}

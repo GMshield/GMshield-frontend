@@ -23,8 +23,11 @@ const { default: CharactersPage } = await import('@/app/(signed-in)/characters/p
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
+const { default: RecordTypePage } = await import('@/app/(signed-in)/systems/[id]/record-types/[typeId]/page');
+const { default: RecordPage } = await import('@/app/(signed-in)/systems/[id]/records/[recordId]/page');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
+type GameRecord = import('@/server/library').GameRecord;
 
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const CREDENTIAL = 'configured-service-credential-0123456789';
@@ -1258,5 +1261,172 @@ describe('deleting a material and its previous versions on its page (Story 3.4 p
     // A backend before 1.24.0 sends no `superseded`: no card.
     routes[MATERIAL] = { status: 200, body: Object.fromEntries(Object.entries(ready).filter(([key]) => key !== 'superseded')) };
     expect(await page()).not.toContain('Versões anteriores');
+  });
+});
+
+describe("a record type's records and a record's page (Story 4.3)", () => {
+  const SYSTEM_ID = '0190a0b0-0000-7000-8000-000000000001';
+  const TYPE_ID = '0190a0b0-0000-7000-8000-000000000601';
+  const RECORD_ID = '0190a0b0-0000-7000-8000-000000000700';
+  const VERSION_ID = '0190a0b0-0000-7000-8000-000000000071';
+  const SYSTEM = `GET /api/v1/systems/${SYSTEM_ID}`;
+  const TYPE = `GET /api/v1/record-types/${TYPE_ID}`;
+  const RECORDS = `GET /api/v1/record-types/${TYPE_ID}/records?limit=10`;
+  const RECORD = `GET /api/v1/systems/${SYSTEM_ID}/records/${RECORD_ID}`;
+  const systemBody = { status: 200, body: { id: SYSTEM_ID, name: 'D&D', edition: '5.2.1', description: null, version: 0 } };
+  const typeBody = { status: 200, body: { id: TYPE_ID, name: 'spell', core: 'spell', records: 12, version: 0 } };
+  /** Twelve spells: a first page of ten; the eleventh and twelfth on page 2. */
+  const spells = Array.from({ length: 12 }, (_, index) => ({
+    id: `0190a0b0-0000-7000-8000-0000000007${String(index + 10).padStart(2, '0')}`,
+    name: index === 0 ? 'Bola de Fogo' : `Magia ${index}`,
+    materialName: 'Livro do Jogador.pdf',
+    page: 240 + index,
+  }));
+  const record: GameRecord = {
+    id: RECORD_ID,
+    name: 'Bola de Fogo',
+    recordType: { id: TYPE_ID, core: 'spell', name: 'spell' },
+    fields: [
+      { name: 'Nível', value: '3' },
+      { name: 'Alcance', value: '45 metros' },
+      { name: 'Componentes', value: 'V, S, M <guano>' },
+    ],
+    references: [
+      {
+        versionId: VERSION_ID,
+        materialName: 'Livro do Jogador.pdf',
+        sectionPath: ['Magias', 'Bola de Fogo'],
+        page: 241,
+        passageIds: ['0190a0b0-0000-7000-8000-000000000801'],
+      },
+      { versionId: VERSION_ID, materialName: 'Livro do Jogador.pdf', sectionPath: [], page: 242, passageIds: ['0190a0b0-0000-7000-8000-000000000802'] },
+    ],
+  };
+  const language = (chosen?: 'en') => {
+    if (chosen === undefined) {
+      delete cookieJar['__Host-gmshield-lang'];
+    } else {
+      cookieJar['__Host-gmshield-lang'] = chosen;
+    }
+  };
+  const list = async (query: Record<string, string> = {}, chosen?: 'en') => {
+    language(chosen);
+    return renderToStaticMarkup(
+      await RecordTypePage({ params: Promise.resolve({ id: SYSTEM_ID, typeId: TYPE_ID }), searchParams: Promise.resolve(query) }),
+    );
+  };
+  const page = async (chosen?: 'en') => {
+    language(chosen);
+    return renderToStaticMarkup(await RecordPage({ params: Promise.resolve({ id: SYSTEM_ID, recordId: RECORD_ID }) }));
+  };
+  const notFoundOf = (run: () => Promise<unknown>) =>
+    run().then(
+      () => null,
+      (error: unknown) => String((error as { digest?: unknown }).digest ?? ''),
+    );
+
+  it("lists a type's records a page at a time, each with its material and page and opening its record, the type's name the title", async () => {
+    const server = await useBackend({
+      [SYSTEM]: systemBody,
+      [TYPE]: typeBody,
+      [RECORDS]: { status: 200, body: { items: spells.slice(0, 10), total: 12 } },
+      [`GET /api/v1/record-types/${TYPE_ID}/records?limit=10&offset=10`]: { status: 200, body: { items: spells.slice(10), total: 12 } },
+    });
+    let html = await list();
+    expect(server.calls.find((call) => `${call.method} ${call.url}` === RECORDS)?.headers['x-session-token']).toBe(SESSION);
+    expect(html).toMatch(/<h1[^>]*>Magia<\/h1>/);
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/systems/${SYSTEM_ID}\\?tab=records"[^>]*>(<svg.*?</svg>)?D&amp;D</a>`));
+    expect(html).toContain('aria-label="Registros deste tipo"');
+    expect(html).toContain(`href="/systems/${SYSTEM_ID}/records/${spells[0]!.id}"`);
+    expect(html).toContain('Bola de Fogo');
+    expect(html).toContain('Livro do Jogador.pdf, p. 240');
+    expect(html).not.toContain('Magia 10');
+    expect(html).toContain('1–10 de 12');
+    expect(html).toContain(`href="/systems/${SYSTEM_ID}/record-types/${TYPE_ID}?page=2"`);
+    // The "Exibição" menu of the list.
+    expect(html).toContain('Exibição');
+    html = await list({ page: '2' });
+    expect(html).toContain('Magia 11');
+    expect(html).not.toContain('Bola de Fogo');
+    html = await list({}, 'en');
+    expect(html).toMatch(/<h1[^>]*>Spell<\/h1>/);
+    expect(html).toContain('aria-label="Records of this type"');
+    expect(html).toContain('Livro do Jogador.pdf, p. 240');
+  });
+
+  it('says in one sentence where records come from when the type has none, with no action', async () => {
+    await useBackend({ [SYSTEM]: systemBody, [TYPE]: typeBody, [RECORDS]: { status: 200, body: { items: [], total: 0 } } });
+    let html = await list();
+    expect(html).toContain('Os registros aparecem aqui quando um material deste sistema ou das suas campanhas é aceito.');
+    expect(html).not.toContain('Registros deste tipo');
+    expect(html).not.toMatch(/<button|class="[^"]*pill/);
+    html = await list({}, 'en');
+    expect(html).toContain('Records appear here once a material of this system or of its campaigns is accepted.');
+  });
+
+  it("another owner's or an unknown system or type is the single not-found page; another failure is a notice", async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [SYSTEM]: systemBody,
+      [TYPE]: problem(404, 'request.not_found'),
+    };
+    await useBackend(routes);
+    const run = () => RecordTypePage({ params: Promise.resolve({ id: SYSTEM_ID, typeId: TYPE_ID }), searchParams: Promise.resolve({}) });
+    expect(await notFoundOf(run)).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    routes[TYPE] = typeBody;
+    routes[SYSTEM] = problem(404, 'request.not_found');
+    expect(await notFoundOf(run)).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+    routes[SYSTEM] = systemBody;
+    routes[RECORDS] = problem(503, 'server.unavailable');
+    const html = await list();
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('server.unavailable');
+    expect(html).toMatch(/<h1[^>]*>Magia<\/h1>/);
+  });
+
+  it("shows a record's name under its type, its fields as a two-column list closed by a rule, then its references", async () => {
+    const server = await useBackend({ [RECORD]: { status: 200, body: record } });
+    let html = await page();
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(html).toMatch(/<h1[^>]*>Bola de Fogo<\/h1>/);
+    // The record type is the way back to its list.
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/systems/${SYSTEM_ID}/record-types/${TYPE_ID}"[^>]*>(<svg.*?</svg>)?Magia</a>`));
+    // The fields in stored order, each name beside its value; the value is text, never HTML.
+    expect(html).toMatch(/<dl class="[^"]*details[^"]*" aria-label="Campos">/);
+    expect([...html.matchAll(/<dt>([^<]*)<\/dt><dd>([^<]*)<\/dd>/g)].map((match) => `${match[1]}=${match[2]}`)).toEqual([
+      'Nível=3',
+      'Alcance=45 metros',
+      'Componentes=V, S, M &lt;guano&gt;',
+    ]);
+    expect(html).toMatch(/<\/dl><hr class="[^"]*rule[^"]*"\/>/);
+    // Then the references, each a button that opens its page.
+    expect(html.indexOf('<hr')).toBeLessThan(html.indexOf('Fontes'));
+    expect(html).toContain('Livro do Jogador.pdf, Magias › Bola de Fogo, p. 241</button>');
+    expect(html).toContain('Livro do Jogador.pdf, p. 242</button>');
+    expect(html.match(/aria-haspopup="dialog"/g)).toHaveLength(2);
+    html = await page('en');
+    expect(html).toContain('aria-label="Fields"');
+    expect(html).toContain('Sources');
+    expect(html).toMatch(/>(<svg.*?<\/svg>)?Spell<\/a>/);
+  });
+
+  it('a record without fields shows no empty list and no rule', async () => {
+    await useBackend({ [RECORD]: { status: 200, body: { ...record, fields: [] } } });
+    const html = await page();
+    expect(html).not.toContain('<dl');
+    expect(html).not.toContain('<hr');
+    expect(html).toContain('Fontes');
+  });
+
+  it("a record the system does not show is the single not-found page; another failure is a notice", async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [RECORD]: problem(404, 'request.not_found') };
+    await useBackend(routes);
+    expect(await notFoundOf(() => RecordPage({ params: Promise.resolve({ id: SYSTEM_ID, recordId: RECORD_ID }) }))).toMatch(
+      /^NEXT_HTTP_ERROR_FALLBACK;404/,
+    );
+    routes[RECORD] = problem(503, 'server.unavailable');
+    const html = await page();
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('server.unavailable');
+    expect(html).not.toContain('Bola de Fogo');
   });
 });

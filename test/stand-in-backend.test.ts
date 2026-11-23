@@ -7,6 +7,9 @@ import {
   CONVERSATION_ID,
   STORED_TURN,
   NOTES_VERSION,
+  RECORD,
+  RECORD_ID,
+  RECORD_PAGE,
   REFERENCE_TEXT_PAGE,
   SEARCH_DONE,
   SEARCH_ID,
@@ -395,6 +398,39 @@ describe('stand-in backend', () => {
     // The stored events are the streamed answer's, by sequence, ending with its done.
     expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 8, type: 'done', data: ANSWER_DONE });
+  });
+
+  it('answers a record type\'s records, a record and its version\'s pages (Story 4.3)', async () => {
+    const system = '0190a0b0-0000-7000-8000-000000000001';
+    const spell = '0190a0b0-0000-7000-8000-000000000601';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const listed = answer(contract, 'GET', `/api/v1/record-types/${spell}/records`, 't');
+    expect(listed).toMatchObject({ status: 200, body: RECORD_PAGE });
+    for (const key of schemas.RecordSummary!.required ?? []) {
+      expect(RECORD_PAGE.items[0], key).toHaveProperty(key);
+    }
+    const read = answer(contract, 'GET', `/api/v1/systems/${system}/records/${RECORD_ID}`, 't');
+    expect(read).toMatchObject({ status: 200, body: RECORD });
+    for (const key of schemas.Record!.required ?? []) {
+      expect(RECORD, key).toHaveProperty(key);
+    }
+    for (const key of schemas.RecordReference!.required ?? []) {
+      expect(RECORD.references[0], key).toHaveProperty(key);
+    }
+    expect(RECORD.recordType.id).toBe(spell);
+    const page = answer(contract, 'GET', `/api/v1/systems/${system}/records/${RECORD_ID}/pages/2`, 't');
+    expect(page).toMatchObject({ status: 200, body: REFERENCE_TEXT_PAGE });
+    // The first reference's page holds the record's passage it names, so the source view marks it.
+    expect(RECORD.references[0]!.page).toBe(REFERENCE_TEXT_PAGE.page);
+    expect(REFERENCE_TEXT_PAGE.passages.map((passage) => passage.id)).toEqual(RECORD.references[0]!.passageIds);
+    for (const reference of RECORD.references) {
+      expect(reference.passageIds.length).toBeGreaterThan(0);
+    }
+    running = await startStandIn();
+    const bytes = await fetch(`${running.url}/api/v1/systems/${system}/records/${RECORD_ID}/pages/2/picture`);
+    expect(bytes.status).toBe(200);
+    expect(bytes.headers.get('content-type')).toBe('image/webp');
   });
 
   it('answers any other path with a 404 problem detail', async () => {

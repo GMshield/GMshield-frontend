@@ -49,8 +49,8 @@ type TabPage =
  * goes with the counts the backend gives for this system; without them it names what goes in words.
  *
  * Story 4.1: two more tabs after materials. "Registros" lists the system's record types (the eight core types first,
- * each by this interface's name for it, with its record count), paged like the others, with no action on a row and no
- * link until the records list exists (Story 4.3). "Propostas de ontologia" says in one sentence that there is nothing to
+ * each by this interface's name for it, with its record count), paged like the others, with no action on a row; from
+ * Story 4.3 a row opens the type's records list. "Propostas de ontologia" says in one sentence that there is nothing to
  * review yet (Story 4.4 fills it). Every tab is a link, so each is reached and opened from the keyboard.
  */
 export default async function SystemPage({
@@ -96,7 +96,7 @@ export default async function SystemPage({
       }
       case 'records': {
         const result = await listPage((ask) => listRecordTypes(token ?? '', system.data.id, ask), at, views.recordTypes.size);
-        return result.ok ? { ok: true, tab, rows: result.data.rows.map((type) => recordTypeRow(type, t)), paging: result.data.paging } : result;
+        return result.ok ? { ok: true, tab, rows: result.data.rows.map((type) => recordTypeRow(type, t, system.data.id)), paging: result.data.paging } : result;
       }
       case 'proposals':
         // Nothing is proposed before Story 4.4: the tab reads nothing.

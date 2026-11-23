@@ -1303,6 +1303,146 @@
         "required" : [ "category", "code", "params", "status", "title", "traceId", "type" ],
         "type" : "object"
       },
+      "Record" : {
+        "properties" : {
+          "fields" : {
+            "description" : "The record's fields, in stored order; empty for a record without fields",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordField"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "description" : "The record's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000010",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The record's name, as it was extracted",
+            "example" : "Fire Bolt",
+            "type" : "string"
+          },
+          "recordType" : {
+            "$ref" : "#/components/schemas/RecordTypeOfRecord",
+            "description" : "The system's record type of the record"
+          },
+          "references" : {
+            "description" : "Where the record was read from: one reference per distinct version, section path and page, in page order",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordReference"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "fields", "id", "name", "recordType", "references" ],
+        "type" : "object"
+      },
+      "RecordField" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name, as it was extracted",
+            "example" : "Alcance",
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "The field's value, as it was extracted",
+            "example" : "36 metros",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "value" ],
+        "type" : "object"
+      },
+      "RecordPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RecordSummary"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many records the record type has in all, whatever the page",
+            "example" : 230,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "RecordReference" : {
+        "properties" : {
+          "materialName" : {
+            "description" : "The material's name",
+            "example" : "Livro do Jogador",
+            "type" : "string"
+          },
+          "page" : {
+            "description" : "The page",
+            "example" : 242,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "passageIds" : {
+            "description" : "The ids of the record's passages at this place, so the source view marks them on the page as it marks an answer's cited passages",
+            "items" : {
+              "example" : "0190a0b0-0000-7000-8000-000000000009",
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "sectionPath" : {
+            "items" : {
+              "description" : "A section title, outermost first",
+              "example" : "Magias",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "versionId" : {
+            "description" : "The material version the record was read from",
+            "example" : "0190a0b0-0000-7000-8000-000000000020",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "materialName", "page", "passageIds", "sectionPath", "versionId" ],
+        "type" : "object"
+      },
+      "RecordSummary" : {
+        "properties" : {
+          "id" : {
+            "description" : "The record's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000010",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "materialName" : {
+            "description" : "The name of the material the record was read from",
+            "example" : "Livro do Jogador",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The record's name, as it was extracted",
+            "example" : "Fire Bolt",
+            "type" : "string"
+          },
+          "page" : {
+            "description" : "The first page the record was read from",
+            "example" : 242,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "id", "materialName", "name", "page" ],
+        "type" : "object"
+      },
       "RecordType" : {
         "properties" : {
           "core" : {
@@ -1357,6 +1497,29 @@
           }
         },
         "required" : [ "name", "version" ],
+        "type" : "object"
+      },
+      "RecordTypeOfRecord" : {
+        "properties" : {
+          "core" : {
+            "description" : "The core key of the record type: a client shows its own translation of it",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "example" : "spell",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The record type's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000003",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The record type's stored name",
+            "example" : "spell",
+            "type" : "string"
+          }
+        },
+        "required" : [ "core", "id", "name" ],
         "type" : "object"
       },
       "RecordTypePage" : {
@@ -2186,7 +2349,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.34.0"
+    "version" : "1.35.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -4337,6 +4500,74 @@
         "tags" : [ "ontology" ]
       }
     },
+    "/api/v1/record-types/{id}/records" : {
+      "get" : {
+        "operationId" : "listRecords",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The record type's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The records of one of the account's record types (contract 1.35.0), alphabetical by name (case ignored; accents order only names that are otherwise equal, the unaccented first; then by id), each as it was extracted: two records with the same name are two rows. Only the records of the accepted versions of the system's materials and of its campaigns' materials are listed; a type that is not core has none yet. A page starts at an offset and names the total of the list. request.not_found (404) for any other record type id, one of a system being deleted included; request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
     "/api/v1/saved-answers" : {
       "get" : {
         "operationId" : "listSavedAnswers",
@@ -4976,6 +5207,192 @@
           }
         },
         "summary" : "The record types of one of the account's game systems, each with its record count: the eight core types first, in their fixed order (rule, spell, item, creature, character_sheet, encounter, dungeon, note), then the others oldest first. A page starts at an offset and names the total of the list. request.not_found (404) for any other system id, a system being deleted included; request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/systems/{systemId}/records/{recordId}" : {
+      "get" : {
+        "operationId" : "getRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "systemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Record"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One record as one of the account's systems shows it (contract 1.35.0): its name, the system's record type of its core key, its fields in stored order, and its source references, one per distinct version, section path and page, in page order. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/systems/{systemId}/records/{recordId}/pages/{page}" : {
+      "get" : {
+        "operationId" : "getRecordSourcePage",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "systemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The page's number, from 1",
+          "in" : "path",
+          "name" : "page",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MaterialPageView"
+                }
+              }
+            },
+            "description" : "The page"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One page of the version a record was read from, as one of the account's systems shows the record (contract 1.35.0): the same shape as MaterialPageView, for the source view of a record's reference; any page from 1 to the version's page total. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; also for a page outside 1 to the page total or a page with no view (unless it is unreadable); session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/systems/{systemId}/records/{recordId}/pages/{page}/picture" : {
+      "get" : {
+        "operationId" : "getRecordSourcePagePicture",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "systemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The page's number, from 1",
+          "in" : "path",
+          "name" : "page",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "image/webp" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The page's picture"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The picture of one page of the version a record was read from, as one of the account's systems shows the record (contract 1.35.0), as WebP, streamed. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; also for a page outside 1 to the page total or a page with no picture; session.required (401) without a session.",
         "tags" : [ "ontology" ]
       }
     },

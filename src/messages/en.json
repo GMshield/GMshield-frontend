@@ -104,6 +104,13 @@
       "dungeon": "Dungeon",
       "note": "Note"
     },
+    "records": {
+      "list": "Records of this type",
+      "empty": "Records appear here once a material of this system or of its campaigns is accepted.",
+      "from": "{material}, p. {page}",
+      "fields": "Fields",
+      "references": "Sources"
+    },
     "delete": {
       "title": "Delete this system?",
       "consequence": "Going with it: {campaigns}, {conversations} and {materials}. This cannot be undone.",

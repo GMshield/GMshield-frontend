@@ -122,7 +122,7 @@ describe('a system page\'s tabs (Story 3.1)', () => {
     expect(screen.queryByRole('button', { name: 'Carregar mais' })).toBeNull();
   });
 
-  it('the records tab lists the eight core record types by their own names, with a count and no action (Story 4.1)', async () => {
+  it('the records tab lists the eight core record types by their own names, with a count, each opening its records (Stories 4.1, 4.3)', async () => {
     const records = await SystemPage({ params: Promise.resolve({ id: ID }), searchParams: Promise.resolve({ tab: 'records' }) });
     render(records);
 
@@ -146,9 +146,12 @@ describe('a system page\'s tabs (Story 3.1)', () => {
       'Masmorra0 registros',
       'Nota0 registros',
     ]);
-    // The stored name of a core type is never shown, and a row opens nothing and offers no rename or removal.
+    // The stored name of a core type is never shown, and a row offers no rename or removal. Story 4.3: each row opens
+    // its type's records list.
     expect(screen.queryByText('character sheet')).toBeNull();
-    expect(within(list).queryAllByRole('link')).toHaveLength(0);
+    expect(within(list).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
+      RECORD_TYPES.map((type) => `/systems/${ID}/record-types/${type.id}`),
+    );
     expect(within(list).queryAllByRole('button')).toHaveLength(0);
     expect(screen.getByText('8 itens')).toBeTruthy();
   });
@@ -197,9 +200,14 @@ describe('a system page\'s tabs (Story 3.1)', () => {
     // A newer backend's core key, outside this contract's list.
     const newer = { id: RECORD_TYPES[0]!.id, name: 'vehicle', core: 'vehicle', records: 2, version: 0 } as unknown as Parameters<typeof recordTypeRow>[0];
 
-    expect(recordTypeRow(newer, t)).toMatchObject({ label: 'vehicle', detail: '2 registros', href: null, state: null });
-    expect(recordTypeRow({ ...RECORD_TYPES[4]!, core: 'character_sheet' }, t).label).toBe('Ficha de personagem');
-    expect(recordTypeRow({ ...RECORD_TYPES[0]!, core: null, name: 'Montaria' }, t).label).toBe('Montaria');
+    expect(recordTypeRow(newer, t, ID)).toMatchObject({
+      label: 'vehicle',
+      detail: '2 registros',
+      href: `/systems/${ID}/record-types/${RECORD_TYPES[0]!.id}`,
+      state: null,
+    });
+    expect(recordTypeRow({ ...RECORD_TYPES[4]!, core: 'character_sheet' }, t, ID).label).toBe('Ficha de personagem');
+    expect(recordTypeRow({ ...RECORD_TYPES[0]!, core: null, name: 'Montaria' }, t, ID).label).toBe('Montaria');
   });
 
   it('an unknown tab is the campaigns tab', async () => {
