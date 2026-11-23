@@ -1,7 +1,10 @@
 /*
- * The conversation's frame (2026-11-23): the conversation in the middle of the column and, where the column has room
- * for both (960px and more of it: a 1366px window with the sidebar open, not beside an open source view), its outline
- * at the right, the two centred together. The frame is the size container; the layout inside it is the grid.
+ * The conversation's frame (2026-11-23): the conversation in the middle and, where there is room, its outline at the
+ * right. The frame is the size container; the layout inside it is the grid.
+ * - Under 960px of frame: the conversation alone.
+ * - From 960px: the conversation and the outline side by side, centred together (a 1366px window with the sidebar open).
+ * - From 1312px: the conversation centred, as the bar above it, and the outline in the middle of the room at its right
+ *   (a 1920px window, or 1440px with the sidebar closed), which a wide screen otherwise leaves empty.
  */
 .frame {
   container: conversation-frame / inline-size;
@@ -9,6 +12,20 @@
   flex: 1;
   flex-direction: column;
   inline-size: 100%;
+}
+
+/*
+ * From 1280px the frame takes the whole width of the column, past the main column's reading width (1080px): the window
+ * less the sidebar's and the right panel's tracks (Shell.module.css) and the column's gutters, centred on the main
+ * column, which is centred in the column. `100vw` counts the window's scrollbar: the few pixels more fall in the gutters.
+ */
+@media (min-width: 1280px) {
+  .frame {
+    --frame-width: max(100%, calc(100vw - var(--sidebar-track, 0px) - var(--panel-track, 0px) - 2 * var(--space-8)));
+
+    inline-size: var(--frame-width);
+    margin-inline: calc((100% - var(--frame-width)) / 2);
+  }
 }
 
 .layout {
@@ -22,6 +39,24 @@
 @container conversation-frame (min-width: 960px) {
   .layout:has(> nav) {
     grid-template-columns: minmax(0, var(--width-prose)) 14rem;
+  }
+}
+
+@container conversation-frame (min-width: 1312px) {
+  .layout:has(> nav) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--width-prose)) minmax(0, 1fr);
+    justify-content: stretch;
+    column-gap: 0;
+  }
+
+  .layout:has(> nav) > .conversation {
+    grid-column: 2;
+  }
+
+  .layout > nav {
+    grid-column: 3;
+    justify-self: center;
+    inline-size: 14rem;
   }
 }
 

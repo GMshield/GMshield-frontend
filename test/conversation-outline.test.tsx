@@ -68,7 +68,7 @@ describe('the conversation outline', () => {
     expect(screen.queryByRole('navigation')).toBeNull();
   });
 
-  it('shows only where the conversation frame has room, beside the conversation, staying in view', () => {
+  it('shows only where the conversation frame has room, beside the conversation or in the room a wide screen leaves, staying in view', () => {
     const outline = readFileSync(join(process.cwd(), 'src/components/conversation/ConversationOutline.module.css'), 'utf8');
     expect(/\.outline \{([^}]*)\}/.exec(outline)?.[1]).toMatch(/position: sticky;[\s\S]*display: none;/);
     expect(outline).toMatch(/@container conversation-frame \(min-width: 960px\) \{\s*\.outline \{\s*display: flex;/);
@@ -77,5 +77,10 @@ describe('the conversation outline', () => {
     const conversation = readFileSync(join(process.cwd(), 'src/components/conversation/Conversation.module.css'), 'utf8');
     expect(conversation).toMatch(/\.frame \{[^}]*container: conversation-frame \/ inline-size;/);
     expect(conversation).toMatch(/@container conversation-frame \(min-width: 960px\) \{\s*\.layout:has\(> nav\) \{\s*grid-template-columns: minmax\(0, var\(--width-prose\)\) 14rem;/);
+    // A wide screen: the conversation centred, as the bar above it, and the outline in the room at its right; from
+    // 1280px the frame takes the column's whole width, past the reading width, to find that room.
+    expect(conversation).toMatch(/@container conversation-frame \(min-width: 1312px\) \{\s*\.layout:has\(> nav\) \{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, var\(--width-prose\)\) minmax\(0, 1fr\);/);
+    expect(conversation).toMatch(/\.layout > nav \{\s*grid-column: 3;\s*justify-self: center;/);
+    expect(conversation).toMatch(/@media \(min-width: 1280px\) \{\s*\.frame \{[^}]*100vw - var\(--sidebar-track, 0px\) - var\(--panel-track, 0px\)/);
   });
 });
