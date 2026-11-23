@@ -470,6 +470,47 @@ describe('the guided upload (Story 1.14)', () => {
     expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
   });
 
+  it('opens on the campaign that is current now, after the current campaign changed while it stayed mounted', async () => {
+    const user = userEvent.setup();
+    const OTHER_CAMPAIGN = '0190a0b0-0000-7000-8000-0000000000c2';
+    const two = (current: string): Belonging => ({
+      ...BELONGING,
+      campaigns: [...BELONGING.campaigns, { ...BELONGING.campaigns[0]!, id: OTHER_CAMPAIGN, name: 'Mesa de teste' }],
+      current,
+    });
+    const tree = (current: string) => (
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={two(current)} urlStorage={memoryStorage()}>
+        <Sidebar
+          labels={LABELS}
+          campaign={current === OTHER_CAMPAIGN ? 'Mesa de teste' : 'Primeira campanha'}
+          initialState="open"
+          trayRows={[]}
+        />
+      </UploadsProvider>
+    );
+    const placeChosen = async () => {
+      await choose(pdf());
+      const modal = dialog();
+      await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+      await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+      return (within(modal).getByRole('combobox', { name: 'Campanha' }) as HTMLSelectElement).value;
+    };
+    // Mounted with the first campaign current; a campaign is then created and becomes current, the dialog not yet opened.
+    const { rerender } = render(tree(CAMPAIGN_ID));
+    rerender(tree(OTHER_CAMPAIGN));
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    expect(await placeChosen()).toBe(OTHER_CAMPAIGN);
+    // Closed, the current campaign changes back while it stays mounted, and it opens again: the place follows once more.
+    await user.keyboard('{Escape}');
+    rerender(tree(CAMPAIGN_ID));
+    await user.click(screen.getByRole('button', { name: 'Adicionar Arquivo' }));
+    expect(await placeChosen()).toBe(CAMPAIGN_ID);
+    const modal = dialog();
+    await user.click(within(modal).getByRole('button', { name: 'Próximo' }));
+    await user.click(within(modal).getByRole('button', { name: 'Enviar' }));
+    expect(uploads[0]!.options.metadata).toEqual({ kind: 'rulebook', language: 'detect', campaign: CAMPAIGN_ID });
+  });
+
   it('speaks English', async () => {
     const user = userEvent.setup();
     view({ language: 'en' });
