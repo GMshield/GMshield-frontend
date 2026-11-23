@@ -937,6 +937,25 @@ they sit in `src/`.
     `test/contrast.test.ts`. The stand-in backend answers `bookmarked: false` on its stored turn, 204 for a bookmark,
     and two saved answers (one of another campaign).
   - Deploy order: backend → frontend.
+- **The core vocabulary in every system (Story 4.1).** Public contract 1.33.0 (the minimum backend contract too).
+  - **Two more tabs** on a system's page, after "Materiais": "Registros" and "Propostas de ontologia" (`?tab=records`,
+    `?tab=proposals`; any other value is the campaigns tab). Each tab is a link, so each is reached and opened from the
+    keyboard.
+  - **"Registros"** lists the system's record types through `listRecordTypes` (`src/server/library.ts`, the backend's
+    `GET /api/v1/systems/{id}/record-types` with `limit` and `offset`): the eight core types first, in their fixed order.
+    A row (`recordTypeRow`, `systems/rows.ts`) is a core type's name in the interface's language
+    (`systems.recordTypes.<core>`: Regra, Magia, Item, Criatura, Ficha de personagem, Encontro, Masmorra, Nota; Rule,
+    Spell, Item, Creature, Character sheet, Encounter, Dungeon, Note), never its stored name, and its record count
+    ("1 registro", "N registros"). A row opens nothing until the records list exists (Story 4.3) and offers no action: a
+    core type can be neither renamed nor removed. The list is paged and has its own "Exibição" view (`recordTypes` in
+    the view cookie).
+  - **"Propostas de ontologia"** reads nothing and says in one sentence that there is nothing to review yet (Story 4.4
+    fills it).
+  - Strings `systems.page.records`, `.proposals`, `.recordTypeList`, `.noRecordTypes`, `.noProposals`,
+    `.recordsOne`, `.recordsOther`, `systems.recordTypes.*`, and the category `errors.categories.ontology` with
+    `errors.codes.ontology.core_record_type`, `.record_type_name_invalid` and `.record_type_name_taken`, in pt-BR and
+    en. The stand-in backend answers the eight core types, none with records.
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

@@ -1,24 +1,41 @@
 import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
 import { notFoundFor } from '@/app/not-found';
-import { ItemList } from '@/components/ItemList';
+import type { IconName } from '@/components/Icons';
+import { ItemList, type ListRow } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { SystemActions } from '@/components/SystemActions';
-import { errorText, translator } from '@/messages';
+import { errorText, translator, type MessagePath } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageParam } from '@/paging';
-import { getSystem, listCampaigns, systemDeletion } from '@/server/library';
+import { pageParam, type Paging } from '@/paging';
+import { getSystem, listCampaigns, listRecordTypes, systemDeletion } from '@/server/library';
 import { listPage } from '@/server/list-page';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
+import type { ViewList } from '@/view-cookie';
 
 import { previewPageAction } from '../../files/actions';
 import { deleteSystemAction } from '../actions';
-import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow } from '../rows';
+import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow, recordTypeRow } from '../rows';
 import styles from '../systems.module.css';
 
-const TABS = ['campaigns', 'materials'] as const;
+const TABS = ['campaigns', 'materials', 'records', 'proposals'] as const;
 type Tab = (typeof TABS)[number];
+/** The tabs that list something: all but the ontology proposals, which have nothing to list before Story 4.4. */
+type ListedTab = Exclude<Tab, 'proposals'>;
+
+/** What each listing tab shows: its list's accessible name, its rows' icon, its display options and its empty text. */
+const LISTS: Readonly<Record<ListedTab, { label: MessagePath; icon: IconName; view: ViewList; empty: MessagePath }>> = {
+  campaigns: { label: 'systems.page.campaignList', icon: 'campaigns', view: 'campaigns', empty: 'systems.page.noCampaigns' },
+  materials: { label: 'systems.page.materialList', icon: 'file', view: 'files', empty: 'systems.page.noMaterials' },
+  records: { label: 'systems.page.recordTypeList', icon: 'rules', view: 'recordTypes', empty: 'systems.page.noRecordTypes' },
+};
+
+/** One page of a listing tab's rows, the backend's refusal, or nothing for a tab that lists nothing. */
+type TabPage =
+  | { readonly ok: true; readonly tab: ListedTab; readonly rows: readonly ListRow[]; readonly paging: Paging }
+  | { readonly ok: false; readonly problem: unknown }
+  | null;
 
 /**
  * A system's page (Story 3.1): its name, edition and description, "Editar" (the one solid pill), and two tabs,
@@ -30,6 +47,11 @@ type Tab = (typeof TABS)[number];
  *
  * Story 3.1 part B: "Excluir", a danger pill next to "Editar" ({@link SystemActions}), whose confirmation names what
  * goes with the counts the backend gives for this system; without them it names what goes in words.
+ *
+ * Story 4.1: two more tabs after materials. "Registros" lists the system's record types (the eight core types first,
+ * each by this interface's name for it, with its record count), paged like the others, with no action on a row and no
+ * link until the records list exists (Story 4.3). "Propostas de ontologia" says in one sentence that there is nothing to
+ * review yet (Story 4.4 fills it). Every tab is a link, so each is reached and opened from the keyboard.
  */
 export default async function SystemPage({
   params,
@@ -46,7 +68,7 @@ export default async function SystemPage({
     currentSessionToken(),
   ]);
   const t = translator(language);
-  const tab: Tab = query.tab === 'materials' ? 'materials' : 'campaigns';
+  const tab: Tab = TABS.find((key) => key !== 'campaigns' && key === query.tab) ?? 'campaigns';
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
   const system = await getSystem(token ?? '', id);
   if (!system.ok) {
@@ -56,26 +78,32 @@ export default async function SystemPage({
   const { name, edition, description } = system.data;
   const here = `/systems/${encodeURIComponent(system.data.id)}`;
   const at = pageParam(query.page);
-  const [page, deletion] = await Promise.all([
-    tab === 'campaigns'
-      ? listPage((ask) => listCampaigns(token ?? '', { system: system.data.id, ...ask }), at, views.campaigns.size).then(
-          (result) => (result.ok ? { ok: true as const, rows: result.data.rows.map(campaignRow), paging: result.data.paging } : result),
-        )
-      : listPage(
+  const loadTab = async (): Promise<TabPage> => {
+    switch (tab) {
+      case 'campaigns': {
+        const result = await listPage((ask) => listCampaigns(token ?? '', { system: system.data.id, ...ask }), at, views.campaigns.size);
+        return result.ok ? { ok: true, tab, rows: result.data.rows.map(campaignRow), paging: result.data.paging } : result;
+      }
+      case 'materials': {
+        const result = await listPage(
           (ask) => listMaterials(token ?? '', SYSTEM_MATERIAL_STATES, { system: system.data.id, ...ask }),
           at,
           views.files.size,
-        ).then((result) =>
-          result.ok
-            ? {
-                ok: true as const,
-                rows: result.data.rows.map((material) => materialRow(material, t, language, system.data.id)),
-                paging: result.data.paging,
-              }
-            : result,
-        ),
-    systemDeletion(token ?? '', system.data.id),
-  ]);
+        );
+        return result.ok
+          ? { ok: true, tab, rows: result.data.rows.map((material) => materialRow(material, t, language, system.data.id)), paging: result.data.paging }
+          : result;
+      }
+      case 'records': {
+        const result = await listPage((ask) => listRecordTypes(token ?? '', system.data.id, ask), at, views.recordTypes.size);
+        return result.ok ? { ok: true, tab, rows: result.data.rows.map((type) => recordTypeRow(type, t)), paging: result.data.paging } : result;
+      }
+      case 'proposals':
+        // Nothing is proposed before Story 4.4: the tab reads nothing.
+        return null;
+    }
+  };
+  const [page, deletion] = await Promise.all([loadTab(), systemDeletion(token ?? '', system.data.id)]);
   return (
     <>
       <PageHeader
@@ -102,27 +130,29 @@ export default async function SystemPage({
         label={t('systems.page.sections')}
         tabs={TABS.map((key) => ({ key, href: `${here}?tab=${key}`, label: t(`systems.page.${key}`), current: key === tab }))}
       />
-      {!page.ok ? (
+      {page === null ? (
+        <EmptyState icon="rules" text={t('systems.page.noProposals')} />
+      ) : !page.ok ? (
         <Notice status="danger" language={language} message={errorText(page.problem, language)} dismissible={false} />
       ) : page.paging.total === 0 ? (
-        tab === 'campaigns' ? (
+        page.tab === 'campaigns' ? (
           <EmptyState icon="campaigns" text={t('systems.page.noCampaigns')}>
             <PillLink href={`/campaigns/new?system=${encodeURIComponent(system.data.id)}`}>{t('campaigns.new')}</PillLink>
           </EmptyState>
         ) : (
-          <EmptyState icon="files" text={t('systems.page.noMaterials')} />
+          <EmptyState icon={LISTS[page.tab].icon} text={t(LISTS[page.tab].empty)} />
         )
       ) : (
         <ItemList
-          key={tab}
-          label={t(tab === 'campaigns' ? 'systems.page.campaignList' : 'systems.page.materialList')}
+          key={page.tab}
+          label={t(LISTS[page.tab].label)}
           rows={page.rows}
-          pages={{ paging: page.paging, path: here, query: { tab } }}
-          icon={tab === 'campaigns' ? 'campaigns' : 'file'}
-          viewKey={tab === 'campaigns' ? 'campaigns' : 'files'}
-          view={tab === 'campaigns' ? views.campaigns : views.files}
+          pages={{ paging: page.paging, path: here, query: { tab: page.tab } }}
+          icon={LISTS[page.tab].icon}
+          viewKey={LISTS[page.tab].view}
+          view={views[LISTS[page.tab].view]}
           language={language}
-          preview={tab === 'materials' ? { load: previewPageAction, label: t('preview.open') } : undefined}
+          preview={page.tab === 'materials' ? { load: previewPageAction, label: t('preview.open') } : undefined}
         />
       )}
     </>

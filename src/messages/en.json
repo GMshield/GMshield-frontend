@@ -82,10 +82,27 @@
       "sections": "System sections",
       "campaigns": "Campaigns",
       "materials": "Materials",
+      "records": "Records",
+      "proposals": "Ontology proposals",
       "campaignList": "Campaigns of this system",
       "materialList": "Materials of this system",
+      "recordTypeList": "Record types of this system",
       "noCampaigns": "This system has no campaigns yet.",
-      "noMaterials": "No material belongs to this system or its campaigns."
+      "noMaterials": "No material belongs to this system or its campaigns.",
+      "noRecordTypes": "This system has no record types yet.",
+      "noProposals": "No ontology proposals yet. When a material proposes record types or terms, they show up here for you to approve or reject.",
+      "recordsOne": "1 record",
+      "recordsOther": "{count} records"
+    },
+    "recordTypes": {
+      "rule": "Rule",
+      "spell": "Spell",
+      "item": "Item",
+      "creature": "Creature",
+      "character_sheet": "Character sheet",
+      "encounter": "Encounter",
+      "dungeon": "Dungeon",
+      "note": "Note"
     },
     "delete": {
       "title": "Delete this system?",
@@ -219,7 +236,8 @@
       "page": "This page could not be shown.",
       "material": "The action on the material could not be done.",
       "scope": "The scope could not be changed.",
-      "conversation": "The action on the conversation could not be done."
+      "conversation": "The action on the conversation could not be done.",
+      "ontology": "The system's vocabulary could not be changed."
     },
     "codes": {
       "request": {
@@ -295,6 +313,11 @@
       "conversation": {
         "turn_running": "This answer is still being written. Wait for it to finish before dismissing it.",
         "turn_not_done": "Only a finished answer can be saved."
+      },
+      "ontology": {
+        "core_record_type": "The core record types are the same in every system and cannot be renamed or removed.",
+        "record_type_name_invalid": "The name must have {min} to {max} characters.",
+        "record_type_name_taken": "This system already has a record type with this name."
       }
     }
   },

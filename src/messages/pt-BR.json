@@ -82,10 +82,27 @@
       "sections": "Seções do sistema",
       "campaigns": "Campanhas",
       "materials": "Materiais",
+      "records": "Registros",
+      "proposals": "Propostas de ontologia",
       "campaignList": "Campanhas deste sistema",
       "materialList": "Materiais deste sistema",
+      "recordTypeList": "Tipos de registro deste sistema",
       "noCampaigns": "Este sistema ainda não tem campanhas.",
-      "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas."
+      "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas.",
+      "noRecordTypes": "Este sistema ainda não tem tipos de registro.",
+      "noProposals": "Nenhuma proposta de ontologia por enquanto. Quando um material propuser tipos de registro ou termos, eles aparecem aqui para você aprovar ou recusar.",
+      "recordsOne": "1 registro",
+      "recordsOther": "{count} registros"
+    },
+    "recordTypes": {
+      "rule": "Regra",
+      "spell": "Magia",
+      "item": "Item",
+      "creature": "Criatura",
+      "character_sheet": "Ficha de personagem",
+      "encounter": "Encontro",
+      "dungeon": "Masmorra",
+      "note": "Nota"
     },
     "delete": {
       "title": "Excluir este sistema?",
@@ -219,7 +236,8 @@
       "page": "Esta página não pôde ser mostrada.",
       "material": "A ação no material não pôde ser feita.",
       "scope": "O escopo não pôde ser alterado.",
-      "conversation": "A ação na conversa não pôde ser feita."
+      "conversation": "A ação na conversa não pôde ser feita.",
+      "ontology": "O vocabulário do sistema não pôde ser alterado."
     },
     "codes": {
       "request": {
@@ -295,6 +313,11 @@
       "conversation": {
         "turn_running": "Esta resposta ainda está sendo escrita. Espere ela terminar para dispensá-la.",
         "turn_not_done": "Só uma resposta concluída pode ser salva."
+      },
+      "ontology": {
+        "core_record_type": "Os tipos de registro básicos são os mesmos em todo sistema e não podem ser renomeados nem removidos.",
+        "record_type_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "record_type_name_taken": "Este sistema já tem um tipo de registro com este nome."
       }
     }
   },

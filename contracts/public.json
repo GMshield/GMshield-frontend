@@ -1296,6 +1296,80 @@
         "required" : [ "category", "code", "params", "status", "title", "traceId", "type" ],
         "type" : "object"
       },
+      "RecordType" : {
+        "properties" : {
+          "core" : {
+            "description" : "The core key of a core type, which can be neither renamed nor removed; null for a type that is not core",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "example" : "character_sheet",
+            "type" : [ "string", "null" ]
+          },
+          "id" : {
+            "description" : "The record type's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000003",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The record type's name. For a core type it is the core key in English (\"character sheet\"); a client shows its own translation of core instead",
+            "example" : "character sheet",
+            "type" : "string"
+          },
+          "records" : {
+            "description" : "How many records of the system have this type",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "The record type's version: a rename names it and raises it by one",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "core", "id", "name", "records", "version" ],
+        "type" : "object"
+      },
+      "RecordTypeChange" : {
+        "properties" : {
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming; unique within the system, core types included, whatever the case",
+            "example" : "vehicle",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the change was made on, as the record type was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "name", "version" ],
+        "type" : "object"
+      },
+      "RecordTypePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RecordType"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many record types the system has in all, whatever the page",
+            "example" : 8,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
       "ReportPageRun" : {
         "properties" : {
           "firstPage" : {
@@ -2085,7 +2159,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.32.0"
+    "version" : "1.33.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -4099,6 +4173,143 @@
         "tags" : [ "session" ]
       }
     },
+    "/api/v1/record-types/{id}" : {
+      "delete" : {
+        "operationId" : "deleteRecordType",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record type's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The record type was removed"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Removes one of the account's record types that is not core (204, no body). ontology.core_record_type (409) for a core type, which can be neither renamed nor removed; request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
+      "get" : {
+        "operationId" : "getRecordType",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record type's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordType"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One of the account's record types, with its record count; request.not_found (404) for any other id; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
+      "patch" : {
+        "operationId" : "changeRecordType",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record type's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordTypeChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordType"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames one of the account's record types on the version it names: the record type as stored, its version raised by one. ontology.core_record_type (409) for a core type, which can be neither renamed nor removed; request.stale_version (409) when the record type has left that version; ontology.record_type_name_taken (409) when another record type of the system, a core one included, has the new name (trimmed, whatever the case); ontology.record_type_name_invalid (400) for a name outside its limits (params min and max); request.invalid (400) without a version or a name, or for a malformed body; request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
     "/api/v1/saved-answers" : {
       "get" : {
         "operationId" : "listSavedAnswers",
@@ -4671,6 +4882,74 @@
         },
         "summary" : "What goes with one of the account's game systems if it is deleted: how many campaigns, conversations and materials (those of its campaigns, and those attached to it and to no other system). request.not_found (404) for any other id, a system being deleted included; session.required (401) without a session.",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/systems/{id}/record-types" : {
+      "get" : {
+        "operationId" : "listRecordTypes",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordTypePage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The record types of one of the account's game systems, each with its record count: the eight core types first, in their fixed order (rule, spell, item, creature, character_sheet, encounter, dungeon, note), then the others oldest first. A page starts at an offset and names the total of the list. request.not_found (404) for any other system id, a system being deleted included; request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
       }
     },
     "/api/v1/turns/{turnId}/bookmark" : {
