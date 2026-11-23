@@ -88,7 +88,7 @@ describe("a record's references (Story 4.3)", () => {
   it('opens the source view at the reference\'s page from a click or from Enter, and gives focus back to it on Esc', async () => {
     const user = userEvent.setup();
     const loadRecord = vi.fn(async (_system: string, _record: string, page: number) => textPage(page));
-    render(<RecordReferences systemId={SYSTEM} recordId={RECORD} references={REFERENCES} language="pt-BR" loadRecord={loadRecord} />);
+    render(<RecordReferences ground={{ kind: 'record', systemId: SYSTEM, recordId: RECORD }} references={REFERENCES} language="pt-BR" loadRecord={loadRecord} />);
 
     const section = screen.getByRole('region', { name: 'Fontes' });
     const lines = within(section).getAllByRole('button');
@@ -120,8 +120,23 @@ describe("a record's references (Story 4.3)", () => {
     act(() => undefined);
   });
 
+  it("on the campaign's scope ground (Story 4.3 part B), opens the reference's version and page there, its passages marked", async () => {
+    const user = userEvent.setup();
+    const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+    const loadScope = vi.fn(async (_campaign: string, _version: string, page: number) => textPage(page));
+    render(<RecordReferences ground={{ kind: 'scope', campaignId: CAMPAIGN }} references={REFERENCES} language="pt-BR" loadScope={loadScope} />);
+
+    await user.click(screen.getAllByRole('button')[0]!);
+
+    const view = screen.getByRole('dialog', { name: 'Livro do Jogador.pdf, Magias › Bola de Fogo' });
+    await waitFor(() => expect(view.querySelector('[data-cited]')).not.toBeNull());
+    expect(loadScope).toHaveBeenCalledWith(CAMPAIGN, REFERENCES[0]!.versionId, REFERENCES[0]!.page, expect.any(AbortSignal));
+    // The reference's passages are marked, the page's other one is not.
+    expect([...view.querySelectorAll('[data-cited]')].map((mark) => mark.textContent)).toEqual(['Texto']);
+  });
+
   it('reads in English', () => {
-    render(<RecordReferences systemId={SYSTEM} recordId={RECORD} references={REFERENCES} language="en" />);
+    render(<RecordReferences ground={{ kind: 'record', systemId: SYSTEM, recordId: RECORD }} references={REFERENCES} language="en" />);
     expect(screen.getByRole('region', { name: 'Sources' })).toBeTruthy();
   });
 });

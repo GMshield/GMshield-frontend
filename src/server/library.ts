@@ -135,6 +135,19 @@ export function getRecord(sessionToken: string, systemId: string, recordId: stri
 }
 
 /**
+ * One record as one of the account's campaigns shows it (Story 4.3 part B, a search's record result): the same answer
+ * as {@link getRecord}, its record type the campaign's system's; `request.not_found` for a record outside the
+ * campaign's current scope (switched off, not accepted, another account's, unknown).
+ */
+export function getCampaignRecord(sessionToken: string, campaignId: string, recordId: string, options: CallOptions = {}): Promise<Result<GameRecord>> {
+  return call('ontology.campaign_record', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/records/{recordId}', {
+      params: { header: session(sessionToken), path: { campaignId, recordId } },
+    }),
+  );
+}
+
+/**
  * One page of the version a record was read from, on the record's ground (Story 4.3): the same shape as a material's
  * page; `request.not_found` for a record the system does not show or a page that is not one.
  */

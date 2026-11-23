@@ -982,6 +982,26 @@ they sit in `src/`.
   - Strings `systems.records.*` in pt-BR and en. The stand-in backend answers three records of a type, a record with
     four fields and two references (the first names the passage of its version's text page), and that text page.
   - Deploy order: backend → frontend.
+- **Records in library search (Story 4.3 part B).** Public contract 1.36.0 (the minimum backend contract too).
+  - A search result has a `kind`. A passage's row is as before; a record's row (`SearchPage`) shows the record's name
+    (label weight), its record type as a filled pill (`recordTypeName`, moved from `systems/rows.ts` to
+    `src/record-types.ts` with `CORE_KEYS` and `isCoreKey`), its tier and its place line (its first page), and is a link
+    to `/search/records/{recordId}` with the search's address (`searchRecordHref`), so its way back is the same search.
+    `isResult` (`src/client/search.ts`) checks both kinds; anything else makes the answer none.
+  - A type `<select>` sits beside the material select, listing "Todos os tipos" and the eight core types; a choice
+    starts a new search from page 1 with `type=<core key>` in the address (`search-address.ts`), sent as `recordType`
+    (`startSearch`, the relay `campaigns/[id]/searches`); it combines with the tier chips and the material, and the
+    sentence of an empty search names it. The page parses its address with `search-params.ts` (`searchAddressOf`), shared
+    with the record page.
+  - `/search/records/[recordId]` reads the record from the current campaign (`getCampaignRecord`,
+    `GET /api/v1/campaigns/{id}/records/{recordId}`): its name as the title, its record type as the subtitle, its fields
+    (`RecordFields`, shared with part A's page) and its references (`RecordReferences`, whose `ground` is now
+    `{kind: 'record', systemId, recordId}` or `{kind: 'scope', campaignId}`), each opening the source view on the scope's
+    ground with the record's passages marked. The way back is the search's address, labelled "Busca". A record outside
+    the scope, or no current campaign, is "Não encontrado."; another failure is a notice under the header.
+  - Strings `search.type` and `search.allTypes` in pt-BR and en. The stand-in backend's search leads with the record
+    "Fire Bolt" and answers it from the campaign as well.
+  - Deploy order: backend → worker → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

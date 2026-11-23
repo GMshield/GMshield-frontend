@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
 
-import type { Tier } from '@/client/conversation';
 import { EmptyState, PageHeader, PageSubtitle } from '@/components/PageHeader';
 import { PillLink } from '@/components/PillLink';
+import { searchAddressOf, type SearchParams } from '@/components/search/search-params';
 import { SearchPage } from '@/components/search/SearchPage';
 import { translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { pageParam } from '@/paging';
 import { currentCampaign, getCampaignScope } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -16,33 +15,17 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: translator(language)('search.title') };
 }
 
-type Query = Readonly<Record<string, string | string[] | undefined>>;
-
-const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
-const TIERS: readonly Tier[] = ['campaign', 'system', 'other'];
-
-/** One value of the address's query: the first when it is repeated, empty when absent. */
-function one(value: string | string[] | undefined): string {
-  return (Array.isArray(value) ? value[0] : value) ?? '';
-}
-
-/** An id of the address, or null for anything that cannot be one. */
-function idOf(value: string | string[] | undefined): string | null {
-  const text = one(value);
-  return ID.test(text) ? text : null;
-}
-
 /**
- * The search page (Story 3.9): `/search?q=…&s=…&tier=…&material=…&page=…`. The header says what the search covers; the
- * body (`SearchPage`, in the browser) has the page's own field, prefilled with the query, the filters, and the results of
- * the stored search, which it starts and reads through this site's relays. The current campaign's scope settings are
- * read here, for the tier chips, the material select and the sentence of a search that found nothing; when they cannot
- * be read the page still searches, with no filter. With no campaign there is nothing to search: one sentence and the
- * way to make one.
+ * The search page (Story 3.9): `/search?q=…&s=…&tier=…&material=…&type=…&page=…` (`type`, a core record type, from
+ * Story 4.3 part B). The header says what the search covers; the body (`SearchPage`, in the browser) has the page's own
+ * field, prefilled with the query, the filters, and the results of the stored search, which it starts and reads through
+ * this site's relays. The current campaign's scope settings are read here, for the tier chips, the material select and
+ * the sentence of a search that found nothing; when they cannot be read the page still searches, with no filter. With
+ * no campaign there is nothing to search: one sentence and the way to make one.
  */
-export default async function Search({ searchParams }: { readonly searchParams?: Promise<Query> } = {}) {
+export default async function Search({ searchParams }: { readonly searchParams?: Promise<SearchParams> } = {}) {
   const [query, { language }, token] = await Promise.all([
-    searchParams ?? Promise.resolve<Query>({}),
+    searchParams ?? Promise.resolve<SearchParams>({}),
     currentPreferences(),
     currentSessionToken(),
   ]);
@@ -65,7 +48,7 @@ export default async function Search({ searchParams }: { readonly searchParams?:
     );
   }
   const scope = await getCampaignScope(token ?? '', campaign.data.id);
-  const tier = TIERS.find((word) => word === one(query.tier)) ?? null;
+  const address = searchAddressOf(query);
   return (
     <>
       {header}
@@ -73,11 +56,12 @@ export default async function Search({ searchParams }: { readonly searchParams?:
         key={campaign.data.id}
         language={language}
         campaignId={campaign.data.id}
-        query={one(query.q)}
-        searchId={idOf(query.s)}
-        tier={tier}
-        materialId={idOf(query.material)}
-        page={pageParam(one(query.page))}
+        query={address.query}
+        searchId={address.searchId}
+        tier={address.tier}
+        materialId={address.materialId}
+        recordType={address.recordType}
+        page={address.page}
         scope={scope.ok ? scope.data : null}
       />
     </>

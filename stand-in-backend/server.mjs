@@ -174,7 +174,11 @@ export const STARTING_SCOPE = {
   ],
 };
 
-/** Story 3.9: the versions of the two materials a search finds, and the search, done with a result in each. */
+/**
+ * Story 3.9: the versions of the two materials a search finds, and the search, done with a result in each. Story 4.3
+ * part B: no record-type filter, and the record named as the query (the record `RECORD`, "Fire Bolt", a spell of the
+ * book) leads, before the two passages.
+ */
 export const NOTES_VERSION = '0190a0b0-0000-7000-8000-000000000070';
 export const BOOK_VERSION = '0190a0b0-0000-7000-8000-000000000071';
 export const SEARCH_ID = '0190a0b0-0000-7000-8000-000000000072';
@@ -184,9 +188,24 @@ export const SEARCH_DONE = {
   query: 'Fire Bolt',
   tier: null,
   materialId: null,
+  recordType: null,
   state: 'done',
   results: [
     {
+      kind: 'record',
+      recordId: '0190a0b0-0000-7000-8000-000000000700',
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Magias', 'Fire Bolt'],
+      page: 2,
+      name: 'Fire Bolt',
+      recordType: 'spell',
+      // A passage of the book's page 2, its own version's.
+      passageIds: ['0190a0b0-0000-7000-8000-000000000013'],
+      tier: 'system',
+    },
+    {
+      kind: 'passage',
       passageId: '0190a0b0-0000-7000-8000-000000000010',
       versionId: NOTES_VERSION,
       materialName: 'Notas da campanha.md',
@@ -196,6 +215,7 @@ export const SEARCH_DONE = {
       tier: 'campaign',
     },
     {
+      kind: 'passage',
       passageId: '0190a0b0-0000-7000-8000-000000000009',
       versionId: BOOK_VERSION,
       materialName: 'Livro do Jogador.pdf',
@@ -570,6 +590,8 @@ export const RECORD = {
 };
 EXAMPLES['GET /api/v1/record-types/{id}/records'] = RECORD_PAGE;
 EXAMPLES['GET /api/v1/systems/{systemId}/records/{recordId}'] = RECORD;
+// Story 4.3 part B: the same record as a campaign shows it (the search's record result).
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = RECORD;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

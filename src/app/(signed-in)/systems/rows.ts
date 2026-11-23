@@ -2,9 +2,9 @@ import 'server-only';
 
 import type { ListRow } from '@/components/ItemList';
 import type { Language, Translate } from '@/messages';
-import type { CampaignSummary, CoreRecordType, GameSystem, RecordSummary, RecordType } from '@/server/library';
+import { recordTypeName } from '@/record-types';
+import type { CampaignSummary, GameSystem, RecordSummary, RecordType } from '@/server/library';
 import type { Material, MaterialState } from '@/server/materials';
-import { CORE_NAMES } from '@/record-types';
 
 import { placeLabel, previewOf } from '../files/rows';
 
@@ -50,13 +50,6 @@ export function recordTypeRow(type: RecordType, t: Translate, systemId: string):
     href: `/systems/${encodeURIComponent(systemId)}/record-types/${encodeURIComponent(type.id)}`,
     state: null,
   };
-}
-
-/** A record type's name as this interface shows it: a core key by its own translation, else the stored name. */
-export function recordTypeName(type: { readonly name: string; readonly core?: string | null }, t: Translate): string {
-  const core = type.core ?? null;
-  const known = core !== null && Object.hasOwn(CORE_NAMES, core) ? CORE_NAMES[core as CoreRecordType] : null;
-  return known === null ? type.name : t(known);
 }
 
 /**

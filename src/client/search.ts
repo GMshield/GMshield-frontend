@@ -7,15 +7,39 @@ import { isSourcePage, type SourcePage, type Tier } from './conversation';
  * `POST /api/v1/campaigns/{id}/searches`, read with `GET /api/v1/searches/{id}` until it is done or failed, and a
  * result's page is read on the ground of the campaign's current scope from
  * `GET /api/v1/campaigns/{id}/sources/{versionId}/pages/{page}`, its picture from `.../picture`. The relays reach the
- * backend; the browser never does.
+ * backend; the browser never does. From Story 4.3 part B a search may be narrowed to a record type, and a result is a
+ * passage or a record (`kind`).
  */
 
 /** A search as the relay answers it. */
 export type Search = components['schemas']['Search'];
 export type SearchResult = components['schemas']['SearchResult'];
+/** A core record type's key, as a search's filter and a record result name it (Story 4.3 part B). */
+export type RecordTypeKey = NonNullable<components['schemas']['NewSearch']['recordType']>;
 
-/** What a search may be narrowed to: a tier of the scope, a material; each null for none. */
-export type SearchFilters = { readonly tier: Tier | null; readonly materialId: string | null };
+/** A passage result: its id and first words. */
+export type PassageResult = SearchResult & { readonly kind: 'passage'; readonly passageId: string; readonly firstWords: string };
+/** A record result (Story 4.3 part B): its id, name, core type and its passages on its first page. */
+export type RecordResult = SearchResult & {
+  readonly kind: 'record';
+  readonly recordId: string;
+  readonly name: string;
+  readonly recordType: RecordTypeKey;
+  readonly passageIds: string[];
+};
+
+/** What a search may be narrowed to: a tier of the scope, a material, a core record type; each null for none. */
+export type SearchFilters = { readonly tier: Tier | null; readonly materialId: string | null; readonly recordType?: RecordTypeKey | null };
+
+/** Whether a result is a record (Story 4.3 part B); else it is a passage. */
+export function isRecordResult(result: SearchResult): result is RecordResult {
+  return result.kind === 'record';
+}
+
+/** A result's own id: the passage's or the record's. */
+export function resultId(result: SearchResult): string {
+  return (isRecordResult(result) ? result.recordId : result.passageId) ?? '';
+}
 
 /** The problem used when the relay does not answer or answers something else: the generic "unavailable" text. */
 const UNAVAILABLE = { status: 503, category: 'server', code: 'server.unavailable', params: {} } as const;
@@ -30,15 +54,23 @@ function isStrings(value: unknown): value is string[] {
 
 const TIER_WORDS: readonly string[] = ['campaign', 'system', 'other'];
 
+/** Whether a result is a well-formed passage (Story 3.9) or record (Story 4.3 part B) result. */
 function isResult(value: unknown): value is SearchResult {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
   const result = value as Record<string, unknown>;
-  return typeof result.passageId === 'string' && typeof result.versionId === 'string'
-    && typeof result.materialName === 'string' && isStrings(result.sectionPath)
-    && Number.isInteger(result.page) && (result.page as number) >= 1 && typeof result.firstWords === 'string'
+  const common = typeof result.versionId === 'string' && typeof result.materialName === 'string' && isStrings(result.sectionPath)
+    && Number.isInteger(result.page) && (result.page as number) >= 1
     && typeof result.tier === 'string' && TIER_WORDS.includes(result.tier);
+  if (result.kind === 'passage') {
+    return common && typeof result.passageId === 'string' && typeof result.firstWords === 'string';
+  }
+  if (result.kind === 'record') {
+    return common && typeof result.recordId === 'string' && typeof result.name === 'string'
+      && typeof result.recordType === 'string' && isStrings(result.passageIds);
+  }
+  return false;
 }
 
 /** Whether the relay's answer is a search; a result that is not well formed makes it none. */
@@ -59,7 +91,7 @@ export async function startSearch(campaignId: string, query: string, filters: Se
     const response = await fetch(`/api/v1/campaigns/${encodeURIComponent(campaignId)}/searches`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, tier: filters.tier, materialId: filters.materialId }),
+      body: JSON.stringify({ query, tier: filters.tier, materialId: filters.materialId, recordType: filters.recordType ?? null }),
       credentials: 'same-origin',
       cache: 'no-store',
     });

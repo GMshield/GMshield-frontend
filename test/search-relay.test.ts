@@ -12,10 +12,31 @@ const VERSION = '0190a0b0-0000-7000-8000-000000000071';
 const NOTES = '0190a0b0-0000-7000-8000-000000000060';
 
 type Search = import('@/client/search').Search;
-type SearchResult = import('@/client/search').SearchResult;
+type PassageResult = import('@/client/search').PassageResult;
+type RecordResult = import('@/client/search').RecordResult;
 
-function result(index: number): SearchResult {
+const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+
+/** Story 4.3 part B: a record result. */
+function recordResult(overrides: Partial<RecordResult> = {}): RecordResult {
   return {
+    kind: 'record',
+    recordId: RECORD,
+    versionId: VERSION,
+    materialName: 'Livro do Jogador.pdf',
+    sectionPath: ['Magias'],
+    page: 241,
+    name: 'Vorpal Sword',
+    recordType: 'item',
+    passageIds: ['0190a0b0-0000-7000-8000-000000000150'],
+    tier: 'system',
+    ...overrides,
+  };
+}
+
+function result(index: number): PassageResult {
+  return {
+    kind: 'passage',
     passageId: `0190a0b0-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
     versionId: VERSION,
     materialName: 'Livro do Jogador.pdf',
@@ -27,7 +48,17 @@ function result(index: number): SearchResult {
 }
 
 function search(overrides: Partial<Search> = {}): Search {
-  return { id: SEARCH, campaignId: CAMPAIGN, query: 'Fire Bolt', tier: null, materialId: null, state: 'done', results: [result(1)], ...overrides };
+  return {
+    id: SEARCH,
+    campaignId: CAMPAIGN,
+    query: 'Fire Bolt',
+    tier: null,
+    materialId: null,
+    recordType: null,
+    state: 'done',
+    results: [result(1)],
+    ...overrides,
+  };
 }
 
 const PAGE = {
@@ -95,6 +126,18 @@ describe('the search relays (Story 3.9)', () => {
     expect(JSON.parse(backend.calls[0]!.body)).toEqual({ query: 'Fire Bolt', tier: 'system' });
   });
 
+  it('passes a record-type filter on as the backend takes it (Story 4.3 part B), and leaves its words to the backend', async () => {
+    const backend = await useBackend({ [`POST /api/v1/campaigns/${CAMPAIGN}/searches`]: { status: 202, body: { id: SEARCH } } });
+
+    await create({ origin: 'http://gm.test', cookie: COOKIE }, JSON.stringify({ query: 'Vorpal', tier: null, materialId: null, recordType: 'item' }));
+    await create({ origin: 'http://gm.test', cookie: COOKIE }, JSON.stringify({ query: 'Vorpal', recordType: null }));
+
+    expect(JSON.parse(backend.calls[0]!.body)).toEqual({ query: 'Vorpal', recordType: 'item' });
+    expect(JSON.parse(backend.calls[1]!.body)).toEqual({ query: 'Vorpal' });
+    expect((await create({ origin: 'http://gm.test', cookie: COOKIE }, '{"query":"x","recordType":5}')).status).toBe(400);
+    expect(backend.calls).toHaveLength(2);
+  });
+
   it('refuses another origin, a malformed body and no session without reaching the backend, and passes a refusal on', async () => {
     const backend = await useBackend({
       [`POST /api/v1/campaigns/${CAMPAIGN}/searches`]: { status: 400, body: { status: 400, category: 'request', code: 'request.invalid', params: {} } },
@@ -144,7 +187,15 @@ describe('the search relays (Story 3.9)', () => {
     const send = vi.fn(async () => Response.json({ id: SEARCH }, { status: 202 }));
     vi.stubGlobal('fetch', send);
     expect(await startSearch(CAMPAIGN, 'x', { tier: null, materialId: NOTES })).toEqual({ ok: true, id: SEARCH });
-    expect(send).toHaveBeenCalledWith(`/api/v1/campaigns/${CAMPAIGN}/searches`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ query: 'x', tier: null, materialId: NOTES }) }));
+    expect(send).toHaveBeenCalledWith(
+      `/api/v1/campaigns/${CAMPAIGN}/searches`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ query: 'x', tier: null, materialId: NOTES, recordType: null }) }),
+    );
+    await startSearch(CAMPAIGN, 'x', { tier: 'system', materialId: null, recordType: 'spell' });
+    expect(send).toHaveBeenLastCalledWith(
+      `/api/v1/campaigns/${CAMPAIGN}/searches`,
+      expect.objectContaining({ body: JSON.stringify({ query: 'x', tier: 'system', materialId: null, recordType: 'spell' }) }),
+    );
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 'request.invalid' }, { status: 400 })));
     expect(await startSearch(CAMPAIGN, '', { tier: null, materialId: null })).toMatchObject({ ok: false, status: 400 });
 
@@ -152,6 +203,20 @@ describe('the search relays (Story 3.9)', () => {
     expect(await readSearch(SEARCH)).toEqual({ ok: true, search: search() });
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(search({ results: [{ ...result(1), page: 0 }] }))));
     expect(await readSearch(SEARCH)).toMatchObject({ ok: false, status: 503 });
+    // Story 4.3 part B: a record result reads with its name, type and passages; a malformed one, or no kind, is none.
+    const mixed = search({ recordType: 'item', results: [recordResult(), result(2)] });
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(mixed)));
+    expect(await readSearch(SEARCH)).toEqual({ ok: true, search: mixed });
+    for (const bad of [
+      { ...recordResult(), name: undefined },
+      { ...recordResult(), passageIds: [3] },
+      { ...recordResult(), kind: 'creature' },
+      { ...result(1), kind: undefined },
+      { ...result(1), firstWords: undefined },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json(search({ results: [bad as PassageResult] }))));
+      expect(await readSearch(SEARCH), JSON.stringify(bad)).toMatchObject({ ok: false, status: 503 });
+    }
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 'request.not_found' }, { status: 404 })));
     expect(await readSearch(SEARCH)).toMatchObject({ ok: false, status: 404 });
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));

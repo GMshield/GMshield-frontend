@@ -1,20 +1,23 @@
 import type { Tier } from '@/client/conversation';
+import type { RecordTypeKey } from '@/client/search';
 
 /**
  * The search page's address (Story 3.9): `/search?q=…`, then the stored search once it exists (`s`, so a reload or a page
- * turned reads it instead of searching again), its filters (`tier`, `material`) and the page of its results (`page`,
- * left out for the first). Shared by the context bar's field and the search page.
+ * turned reads it instead of searching again), its filters (`tier`, `material`, and from Story 4.3 part B `type`, a
+ * core record type) and the page of its results (`page`, left out for the first). Shared by the context bar's field,
+ * the search page and a record result's page, whose way back is the search's address.
  */
 export type SearchAddress = {
   readonly query: string;
   readonly searchId?: string | null;
   readonly tier?: Tier | null;
   readonly materialId?: string | null;
+  readonly recordType?: RecordTypeKey | null;
   readonly page?: number;
 };
 
 /** The query fields of a search's address, in a fixed order, the empty ones left out. */
-export function searchQuery({ query, searchId, tier, materialId }: SearchAddress): Record<string, string> {
+export function searchQuery({ query, searchId, tier, materialId, recordType }: SearchAddress): Record<string, string> {
   const fields: Record<string, string> = {};
   if (query !== '') {
     fields.q = query;
@@ -28,17 +31,32 @@ export function searchQuery({ query, searchId, tier, materialId }: SearchAddress
   if (materialId !== undefined && materialId !== null) {
     fields.material = materialId;
   }
+  if (recordType !== undefined && recordType !== null) {
+    fields.type = recordType;
+  }
+  return fields;
+}
+
+/** The query fields of a search's address with its page, the first left out (a record result's way back). */
+export function searchQueryWithPage(address: SearchAddress): Record<string, string> {
+  const fields = searchQuery(address);
+  if (address.page !== undefined && address.page > 1) {
+    fields.page = String(address.page);
+  }
   return fields;
 }
 
 /** `/search` with the address's fields; the page only past the first. */
 export function searchHref(address: SearchAddress): string {
-  const fields = new URLSearchParams(searchQuery(address));
-  if (address.page !== undefined && address.page > 1) {
-    fields.set('page', String(address.page));
-  }
-  const query = fields.toString();
+  const query = new URLSearchParams(searchQueryWithPage(address)).toString();
   return query === '' ? '/search' : `/search?${query}`;
+}
+
+/** A record result's page (Story 4.3 part B): `/search/records/{id}`, with the search's address so its way back is the same search. */
+export function searchRecordHref(recordId: string, address: SearchAddress): string {
+  const query = new URLSearchParams(searchQueryWithPage(address)).toString();
+  const path = `/search/records/${encodeURIComponent(recordId)}`;
+  return query === '' ? path : `${path}?${query}`;
 }
 
 /** Whether the element is one where `/` is typed or handled: a field, an editable text, or inside a dialog. */

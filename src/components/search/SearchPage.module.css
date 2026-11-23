@@ -2,6 +2,8 @@
  * Story 3.9: the search page. Its own field at the top (a bordered box, then the solid "Buscar"), the filters in a
  * toolbar (tier chips, then the material select), then one line of state or the results: rows that read in two lines,
  * the passage's first words over its tier and place, in a bordered list like every list page's, and the shared pager.
+ * Story 4.3 part B: the type select sits beside the material select, and a record's row reads its name (in the label
+ * weight) over its record type (a filled pill), its tier and its place.
  */
 .page {
   display: flex;
@@ -74,12 +76,20 @@
   gap: var(--space-3) var(--space-4);
 }
 
+.selects {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  min-width: 0;
+  margin-left: auto;
+}
+
 .materialField {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  margin-left: auto;
 }
 
 .materialLabel {
@@ -198,10 +208,50 @@
   overflow-wrap: anywhere;
 }
 
+/* A record's row (Story 4.3 part B): its name, in the label weight, and its record type as a filled pill (the chip
+   colours, so it reads apart from the outlined tier pill in every theme). */
+.recordName {
+  overflow-wrap: anywhere;
+  font-weight: var(--font-label-weight);
+}
+
+.typeLabel {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--space-5);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: var(--color-chip);
+  color: var(--color-chip-icon);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  white-space: nowrap;
+}
+
+/* What a reader hears between the type and the tier (visually hidden). */
+.separator {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+a.row {
+  text-decoration: none;
+}
+
 @media (max-width: 767px) {
-  .materialField {
+  .selects {
     width: 100%;
     margin-left: 0;
+  }
+
+  .materialField {
+    width: 100%;
   }
 
   .select {

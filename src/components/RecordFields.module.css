@@ -1,0 +1,46 @@
+/*
+ * Story 4.3: a record's fields, as a campaign's overview reads (systems.module.css `.details`): each field's name in
+ * label type beside its value in body type, the names in one column (one column on a phone), closed by a rule.
+ * Shared by a record's page on its system (part A) and in a campaign's search (part B).
+ */
+.details {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-6);
+  align-items: center;
+  margin: 0;
+}
+
+.detail {
+  display: contents;
+}
+
+.detail dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  inline-size: 100%;
+  margin: 0;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+}
+
+@media (max-width: 767px) {
+  .details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .detail dd {
+    margin-bottom: var(--space-3);
+  }
+}

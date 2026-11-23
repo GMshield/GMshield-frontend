@@ -16,12 +16,13 @@ vi.mock('next/navigation', () => ({
 
 const { SearchPage, POLL_LIMIT_MS } = await import('@/components/search/SearchPage');
 const { SourceView } = await import('@/components/SourceView');
-const { focusSearchField, searchHref } = await import('@/components/search/search-address');
+const { focusSearchField, searchHref, searchRecordHref } = await import('@/components/search/search-address');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 
 type Search = import('@/client/search').Search;
-type SearchResult = import('@/client/search').SearchResult;
+type PassageResult = import('@/client/search').PassageResult;
+type RecordResult = import('@/client/search').RecordResult;
 type Scope = import('@/components/scope').Scope;
 type SearchCalls = import('@/components/search/SearchPage').SearchCalls;
 
@@ -46,8 +47,9 @@ const SCOPE: Scope = {
   ],
 };
 
-function result(index: number, overrides: Partial<SearchResult> = {}): SearchResult {
+function result(index: number, overrides: Partial<PassageResult> = {}): PassageResult {
   return {
+    kind: 'passage',
     passageId: `0190a0b0-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
     versionId: VERSION,
     materialName: 'Livro do Jogador.pdf',
@@ -60,7 +62,17 @@ function result(index: number, overrides: Partial<SearchResult> = {}): SearchRes
 }
 
 function search(overrides: Partial<Search> = {}): Search {
-  return { id: SEARCH, campaignId: CAMPAIGN, query: 'Fire Bolt', tier: null, materialId: null, state: 'done', results: [result(1)], ...overrides };
+  return {
+    id: SEARCH,
+    campaignId: CAMPAIGN,
+    query: 'Fire Bolt',
+    tier: null,
+    materialId: null,
+    recordType: null,
+    state: 'done',
+    results: [result(1)],
+    ...overrides,
+  };
 }
 
 const PAGE = {
@@ -117,7 +129,7 @@ describe('the search page (Story 3.9)', () => {
     // Meanwhile a muted line says it is searching.
     expect(screen.getByRole('status').textContent).toBe('Procurando nas fontes…');
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(scripted.start).toHaveBeenCalledExactlyOnceWith(CAMPAIGN, 'Fire Bolt', { tier: 'campaign', materialId: NOTES });
+    expect(scripted.start).toHaveBeenCalledExactlyOnceWith(CAMPAIGN, 'Fire Bolt', { tier: 'campaign', materialId: NOTES, recordType: null });
     expect(replace).toHaveBeenCalledWith(`/search?q=Fire+Bolt&s=${SEARCH}&tier=campaign&material=${NOTES}`, { scroll: false });
     expect(scripted.read).not.toHaveBeenCalled();
 
@@ -262,7 +274,7 @@ describe('the search page (Story 3.9)', () => {
     expect(alert.textContent).toContain('A busca não pôde terminar.');
     await user.click(within(alert).getByRole('button', { name: 'Tentar de novo' }));
 
-    expect(scripted.start).toHaveBeenCalledExactlyOnceWith(CAMPAIGN, 'Fire Bolt', { tier: null, materialId: null });
+    expect(scripted.start).toHaveBeenCalledExactlyOnceWith(CAMPAIGN, 'Fire Bolt', { tier: null, materialId: null, recordType: null });
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/search?q=Fire+Bolt&s=${SEARCH}`, { scroll: false }));
   });
 
@@ -395,6 +407,149 @@ describe('the search page (Story 3.9)', () => {
     expect(css).toMatch(/\.input \{[^}]*border: 1px solid var\(--color-field-border\);/);
     expect(css).toMatch(/\.results \{[^}]*border: 1px solid var\(--color-border\);/);
     expect(css).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  });
+});
+
+describe('records in the search (Story 4.3 part B)', () => {
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+
+  function recordResult(overrides: Partial<RecordResult> = {}): RecordResult {
+    return {
+      kind: 'record',
+      recordId: RECORD,
+      versionId: VERSION,
+      materialName: 'Guia do Mestre.pdf',
+      sectionPath: ['Itens mágicos'],
+      page: 209,
+      name: 'Vorpal Sword',
+      recordType: 'item',
+      passageIds: ['0190a0b0-0000-7000-8000-000000000811'],
+      tier: 'system',
+      ...overrides,
+    };
+  }
+
+  it('shows a record result with its name, its type, its tier and its place, a link to its page that keeps the search', async () => {
+    const results = [recordResult(), result(1), recordResult({ recordId: `${RECORD.slice(0, -1)}1`, name: 'Bola de Fogo', recordType: 'spell', tier: 'campaign' })];
+    render(page({ query: 'vorpal sword', tier: 'system', recordType: null, page: 1, calls: calls([{ ok: true, search: search({ query: 'vorpal sword', tier: 'system', results }) }]) }));
+
+    const list = await screen.findByRole('list', { name: 'Resultados' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    // The record is a link, not a button: it opens the record's page, the search's address kept for its way back.
+    const link = within(items[0]!).getByRole('link');
+    expect(link.textContent).toBe('Vorpal SwordItem, Sistema: Guia do Mestre.pdf, Itens mágicos, p. 209');
+    expect(link.getAttribute('href')).toBe(`/search/records/${RECORD}?q=vorpal+sword&s=${SEARCH}&tier=system`);
+    expect(link.getAttribute('aria-haspopup')).toBeNull();
+    // The passage keeps its row, which opens the source view.
+    expect(within(items[1]!).getByRole('button').getAttribute('aria-haspopup')).toBe('dialog');
+    expect(within(items[2]!).getByRole('link').textContent).toBe('Bola de FogoMagia, Campanha: Guia do Mestre.pdf, Itens mágicos, p. 209');
+    cleanup();
+
+    // In English, and on the second page of results the link keeps the page too.
+    const many: (PassageResult | RecordResult)[] = [...Array.from({ length: 10 }, (_, index) => result(index + 1)), recordResult()];
+    render(page({ language: 'en', query: 'vorpal sword', page: 2, calls: calls([{ ok: true, search: search({ query: 'vorpal sword', results: many }) }]) }));
+    const second = await screen.findByRole('link', { name: /Vorpal Sword/ });
+    expect(second.textContent).toBe('Vorpal SwordItem, System: Guia do Mestre.pdf, Itens mágicos, p. 209');
+    expect(second.getAttribute('href')).toBe(`/search/records/${RECORD}?q=vorpal+sword&s=${SEARCH}&page=2`);
+  });
+
+  it('opens a record result from the keyboard: Tab reaches its link, a passage row keeps its button', async () => {
+    const user = userEvent.setup();
+    render(page({ calls: calls([{ ok: true, search: search({ results: [result(1), recordResult()] }) }]) }));
+    const list = await screen.findByRole('list', { name: 'Resultados' });
+    within(list).getByRole('button').focus();
+    await user.tab();
+    expect(document.activeElement).toBe(within(list).getByRole('link'));
+  });
+
+  it('offers the eight core types beside the material select; a choice starts a search of that type from page 1, with the other filters', async () => {
+    const user = userEvent.setup();
+    render(page({ tier: 'system', materialId: GUIDE, page: 2, calls: calls([{ ok: true, search: search({ tier: 'system', materialId: GUIDE }) }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+
+    const select = screen.getByRole('combobox', { name: ptBR.search.type }) as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['', 'Todos os tipos'],
+      ['rule', 'Regra'],
+      ['spell', 'Magia'],
+      ['item', 'Item'],
+      ['creature', 'Criatura'],
+      ['character_sheet', 'Ficha de personagem'],
+      ['encounter', 'Encontro'],
+      ['dungeon', 'Masmorra'],
+      ['note', 'Nota'],
+    ]);
+    expect(select.value).toBe('');
+
+    await user.selectOptions(select, 'spell');
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(`/search?q=Fire+Bolt&tier=system&material=${GUIDE}&type=spell`);
+    cleanup();
+    push.mockClear();
+
+    // With a type chosen: it is selected, the chips and the material keep it, and "Todos os tipos" leaves it.
+    render(page({ recordType: 'spell', calls: calls([{ ok: true, search: search({ recordType: 'spell' }) }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+    const chosen = screen.getByRole('combobox', { name: ptBR.search.type }) as HTMLSelectElement;
+    expect(chosen.value).toBe('spell');
+    expect(within(screen.getByRole('navigation', { name: ptBR.search.tiers })).getByRole('link', { name: 'Sistema' }).getAttribute('href')).toBe(
+      '/search?q=Fire+Bolt&tier=system&type=spell',
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: ptBR.search.material }), NOTES);
+    expect(push).toHaveBeenLastCalledWith(`/search?q=Fire+Bolt&material=${NOTES}&type=spell`);
+    await user.selectOptions(chosen, '');
+    expect(push).toHaveBeenLastCalledWith('/search?q=Fire+Bolt');
+  });
+
+  it('starts the search with its type, names it in the address, and says a search of a type that found nothing naming the scope and the type', async () => {
+    const scripted = calls([{ ok: true, search: search({ recordType: 'item', results: [] }) }]);
+    const { rerender } = render(page({ searchId: null, recordType: 'item', calls: scripted }));
+    await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(scripted.start).toHaveBeenCalledExactlyOnceWith(CAMPAIGN, 'Fire Bolt', { tier: null, materialId: null, recordType: 'item' });
+    expect(replace).toHaveBeenCalledWith(`/search?q=Fire+Bolt&s=${SEARCH}&type=item`, { scroll: false });
+
+    rerender(page({ recordType: 'item', calls: scripted }));
+    expect(await screen.findByText('Nada encontrado para «Fire Bolt» em Campanha + Sistema, só Item.')).toBeTruthy();
+    cleanup();
+    render(page({ language: 'en', tier: 'system', recordType: 'item', calls: calls([{ ok: true, search: search({ recordType: 'item', results: [] }) }]) }));
+    expect(await screen.findByText('Nothing found for “Fire Bolt” in Campaign + System, only System, Item.')).toBeTruthy();
+  });
+
+  it('keeps the type select with no tier on, and keeps the type in the field\'s own search', async () => {
+    const user = userEvent.setup();
+    render(page({ recordType: 'note', scope: { ...SCOPE, campaignTier: false, systemTier: false }, calls: calls([{ ok: true, search: search() }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+    expect(screen.queryByRole('navigation', { name: ptBR.search.tiers })).toBeNull();
+    expect((screen.getByRole('combobox', { name: ptBR.search.type }) as HTMLSelectElement).value).toBe('note');
+    const field = screen.getByRole('searchbox', { name: ptBR.search.field });
+    await user.clear(field);
+    await user.type(field, 'Luz{Enter}');
+    expect(push).toHaveBeenLastCalledWith('/search?q=Luz&type=note');
+  });
+
+  it('keeps the type when it searches again: a gone search, another campaign\'s, and the pager\'s next page', async () => {
+    render(page({ recordType: 'spell', calls: calls([{ ok: false, status: 404, problem: { code: 'request.not_found' } }]) }));
+    await waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/search?q=Fire+Bolt&type=spell', { scroll: false }));
+    cleanup();
+    replace.mockClear();
+
+    render(page({ recordType: 'spell', calls: calls([{ ok: true, search: search({ recordType: 'spell', campaignId: '0190a0b0-0000-7000-8000-000000000099' }) }]) }));
+    await waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/search?q=Fire+Bolt&type=spell', { scroll: false }));
+    cleanup();
+
+    const many = Array.from({ length: 11 }, (_, index) => recordResult({ recordId: `0190a0b0-0000-7000-8000-0000000007${String(index + 10)}`, recordType: 'spell' }));
+    render(page({ recordType: 'spell', calls: calls([{ ok: true, search: search({ recordType: 'spell', results: many }) }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+    expect(screen.getByRole('link', { name: /Próxima/ }).getAttribute('href')).toBe(`/search?q=Fire+Bolt&s=${SEARCH}&type=spell&page=2`);
+  });
+
+  it('writes a record result\'s address with the search\'s, the first page left out', () => {
+    expect(searchRecordHref(RECORD, { query: '' })).toBe(`/search/records/${RECORD}`);
+    expect(searchRecordHref(RECORD, { query: 'x', searchId: SEARCH, tier: 'other', materialId: NOTES, recordType: 'rule', page: 2 })).toBe(
+      `/search/records/${RECORD}?q=x&s=${SEARCH}&tier=other&material=${NOTES}&type=rule&page=2`,
+    );
+    expect(searchHref({ query: 'x', recordType: 'dungeon', page: 1 })).toBe('/search?q=x&type=dungeon');
   });
 });
 

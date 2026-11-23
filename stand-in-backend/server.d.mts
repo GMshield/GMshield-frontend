@@ -45,12 +45,17 @@ export const NOTES_VERSION: string;
 export const BOOK_VERSION: string;
 export const SEARCH_ID: string;
 export type StandInSearchResult = {
-  passageId: string;
+  kind: 'passage' | 'record';
+  passageId?: string;
+  recordId?: string;
   versionId: string;
   materialName: string;
   sectionPath: string[];
   page: number;
-  firstWords: string;
+  firstWords?: string;
+  name?: string;
+  recordType?: string;
+  passageIds?: string[];
   tier: 'campaign' | 'system' | 'other';
 };
 export const SEARCH_DONE: {
@@ -59,6 +64,7 @@ export const SEARCH_DONE: {
   query: string;
   tier: null;
   materialId: null;
+  recordType: null;
   state: 'done';
   results: StandInSearchResult[];
 };
