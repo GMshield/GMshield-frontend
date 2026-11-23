@@ -8,6 +8,9 @@ vi.mock('next/headers', () => ({
     set: () => undefined,
   }),
 }));
+// Recorded, so a test can see that an action refreshed the shared layout before redirecting.
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({ refresh: () => undefined, revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 // The pages' client parts ask for the router; outside Next.js there is none.
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/navigation')>()),
@@ -86,6 +89,7 @@ const linkTo = (html: string, href: string) => [...html.matchAll(/<a\b[^>]*>/g)]
 const solids = (html: string) => [...html.matchAll(/<(a|button)[^>]*data-variant="solid"[^>]*>(.*?)<\/\1>/g)].map((match) => match[2]);
 
 beforeEach(() => {
+  revalidatePath.mockClear();
   cookieJar = { '__Host-gmshield-session': `${SESSION}.9999999999` };
 });
 
@@ -235,6 +239,8 @@ describe('a new system (Story 3.1)', () => {
     const initial = { values: { name: '', edition: '', description: '' }, version: null, error: null, field: null, stale: false };
 
     expect(await thrownDigest(() => createSystemAction(initial, form(typed)))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/systems/${ID};`));
+    // The shared layout (the upload's place picker, the switcher, the context bar) is refreshed before the redirect.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
     expect(JSON.parse(server.calls[0]!.body)).toEqual(typed);
     expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
 
@@ -267,6 +273,8 @@ describe('a new system (Story 3.1)', () => {
     // Anything else is about the whole form.
     routes['POST /api/v1/systems'] = problem(503, 'server.unavailable');
     expect(await createSystemAction(initial, form(typed))).toMatchObject({ field: null, error: 'The service is unavailable right now. Try again in a moment.' });
+    // Every refusal after the success above refreshed nothing: one refresh, the success's.
+    expect(revalidatePath).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -447,6 +455,8 @@ describe('deleting a system (Story 3.1 part B)', () => {
     const server = await useBackend(routes);
 
     expect(await thrownDigest(() => deleteSystemAction({ error: null }, form({ id: ID })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/systems;/);
+    // The shared layout (the upload's place picker, the switcher, the context bar) is refreshed before the redirect.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
     expect(server.calls.map((call) => `${call.method} ${call.url}`)).toEqual([`DELETE /api/v1/systems/${ID}`]);
     expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
 
@@ -461,6 +471,8 @@ describe('deleting a system (Story 3.1 part B)', () => {
       expect(await deleteSystemAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
     }
     expect(server.calls).toHaveLength(calls);
+    // Every refusal after the success above refreshed nothing: one refresh, the success's.
+    expect(revalidatePath).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -492,6 +504,8 @@ describe('a system\'s edit page (Story 3.1)', () => {
     const typed = { id: ID, version: '3', name: 'Dungeons & Dragons', edition: '', description: 'Nova.' };
 
     expect(await thrownDigest(() => changeSystemAction(previous, form(typed)))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/systems/${ID};`));
+    // The shared layout (the upload's place picker, the switcher, the context bar) is refreshed before the redirect.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
     // A cleared edition is sent empty, which removes it.
     expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 3, name: 'Dungeons & Dragons', edition: '', description: 'Nova.' });
 
@@ -527,5 +541,7 @@ describe('a system\'s edit page (Story 3.1)', () => {
       expect((await changeSystemAction(previous, form(fields))).error).toBe('The request is not valid.');
     }
     expect(server.calls).toHaveLength(calls);
+    // Every refusal refreshed nothing: two refreshes, those of the two successes (the first save and the CRLF one).
+    expect(revalidatePath).toHaveBeenCalledTimes(2);
   });
 });
