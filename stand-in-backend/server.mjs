@@ -412,11 +412,16 @@ export const EXAMPLES = {
   },
 };
 
+/** Story 4.3 part C: the record the stand-in answer cites (the Fire Bolt record of Story 4.3). */
+export const ANSWER_RECORD_ID = '0190a0b0-0000-7000-8000-000000000700';
+
 /**
  * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds one into a
  * Markdown material (a text page). Story 3.7: the answer is the campaign's house rule, then the book's rule; each
  * reference carries its tier, the campaign's (1, the text page) first, then the system's (2, the picture page). Story
- * 3.8: the turn's model knowledge, frozen with it, was off (the starting scope's).
+ * 3.8: the turn's model knowledge, frozen with it, was off (the starting scope's). Story 4.3 part C: the book's rule
+ * also cites the Fire Bolt spell record, reference 3, with its name, type and fields as written, placed at the picture
+ * page whose passage it was read from.
  */
 export const ANSWER_DONE = {
   stopped: false,
@@ -425,6 +430,7 @@ export const ANSWER_DONE = {
   references: [
     {
       number: 1,
+      kind: 'passage',
       materialName: 'Notas da campanha.md',
       sectionPath: ['Magias'],
       page: 2,
@@ -434,6 +440,24 @@ export const ANSWER_DONE = {
     },
     {
       number: 2,
+      kind: 'passage',
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Spells', 'Fire Bolt'],
+      page: 13,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000009'],
+      removed: false,
+      tier: 'system',
+    },
+    {
+      number: 3,
+      kind: 'record',
+      recordId: ANSWER_RECORD_ID,
+      recordType: 'spell',
+      name: 'Fire Bolt',
+      fields: [
+        { name: 'Alcance', value: '36 metros' },
+        { name: 'Dano', value: '1d10 de fogo' },
+      ],
       materialName: 'Livro do Jogador.pdf',
       sectionPath: ['Spells', 'Fire Bolt'],
       page: 13,
@@ -472,8 +496,8 @@ const BOOK_AT = Array.from(HOUSE_RULE).length + 2;
 /**
  * Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its
  * references; Story 2.6: not stopped). Story 3.7: the sources disagree, so a `tier` event opens each version: the
- * campaign's at 0, the system's after the blank line. `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the
- * contract declares.
+ * campaign's at 0, the system's after the blank line. Story 4.3 part C: the book's rule cites a record too.
+ * `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the contract declares.
  */
 export const ANSWER_EVENTS = [
   ['tier', { tier: 'campaign', offset: 0 }],
@@ -483,6 +507,7 @@ export const ANSWER_EVENTS = [
   ['tier', { tier: 'system', offset: BOOK_AT }],
   ['delta', { text: BOOK_RULE }],
   ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+  ['citation', { recordId: ANSWER_RECORD_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
   ['done', ANSWER_DONE],
 ]
   .map(([name, data], index) => `id:${index + 1}\nevent:${name}\ndata:${JSON.stringify(data)}\n\n`)
@@ -502,6 +527,7 @@ export const STORED_TURN = {
     ['tier', { tier: 'system', offset: BOOK_AT }],
     ['delta', { text: BOOK_RULE }],
     ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+    ['citation', { recordId: ANSWER_RECORD_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
     ['done', ANSWER_DONE],
   ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
   bookmarked: false,

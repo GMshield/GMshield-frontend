@@ -445,6 +445,58 @@
   margin-inline-end: var(--space-2);
 }
 
+/*
+ * Story 4.3 part C: a cited record's entry in the references: its name (in the text colour) and its type's chip, its
+ * fields in body type (their names keep label type), then its source line, each on its own row.
+ */
+.recordEntry {
+  display: list-item;
+  padding-block: var(--space-2);
+}
+
+.recordHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.recordHead .referenceTier {
+  margin-inline-end: 0;
+}
+
+.recordName {
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.recordType {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: var(--space-5);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: var(--color-chip);
+  color: var(--color-chip-icon);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-line-height);
+  white-space: nowrap;
+}
+
+.recordFields {
+  margin-block: var(--space-2) 0;
+  color: var(--color-text);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-body-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.recordSource {
+  display: block;
+}
+
 /* A removed source: struck through, then "fonte removida". */
 .removed {
   text-decoration: line-through;

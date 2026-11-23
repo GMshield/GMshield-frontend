@@ -101,7 +101,7 @@ function searchable(query: string): boolean {
 /** The result's place as a reference line: "Material, Section › Sub, p. N". */
 function placeLine(result: SearchResult, t: ReturnType<typeof translator>): string {
   return referenceLine(
-    { number: 0, materialName: result.materialName, sectionPath: result.sectionPath, page: result.page, passageIds: [], removed: false },
+    { number: 0, kind: 'passage', materialName: result.materialName, sectionPath: result.sectionPath, page: result.page, passageIds: [], removed: false },
     t,
   );
 }

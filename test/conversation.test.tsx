@@ -38,7 +38,7 @@ const PASSAGE_C = '0190a0b0-0000-7000-8000-00000000000c';
 
 /** A source reference as the done event carries it (Story 2.5). */
 function reference(number: number, passageIds: string[], more: Record<string, unknown> = {}) {
-  return { number, materialName: 'Livro do Jogador.pdf', sectionPath: ['Magias', 'Fire Bolt'], page: 3, passageIds, removed: false, ...more };
+  return { number, kind: 'passage' as const, materialName: 'Livro do Jogador.pdf', sectionPath: ['Magias', 'Fire Bolt'], page: 3, passageIds, removed: false, ...more };
 }
 
 /** A done event with one reference of `passageIds`. */
@@ -2783,5 +2783,185 @@ describe('conversations by area (Story 3.10)', () => {
     const [first, second] = turnItems();
     expect(bookmarkOf(first!, 'Save answer').getAttribute('aria-pressed')).toBe('false');
     expect(bookmarkOf(second!, 'Remove from saved items').getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('records in answers (Story 4.3 part C)', () => {
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+  const PICTURE_PAGE = (page: number) => ({
+    page,
+    pageTotal: 4,
+    picture: { width: 1000, height: 2000 },
+    lines: [{ text: `Linha ${page}`, box: [0.1, 0.2, 0.5, 0.22] }],
+    text: null,
+    passages: page === 3 ? [{ id: PASSAGE_A, boxes: [[0.1, 0.19, 0.7, 0.26]] }] : [],
+    outcome: 'read_directly',
+  });
+  let load: ReturnType<typeof vi.fn<LoadPage>>;
+
+  /** A cited record's reference as the done event carries it: the Bola de Fogo spell, read from `passageIds` on p. 3. */
+  function recordReference(number: number, passageIds: string[], more: Record<string, unknown> = {}) {
+    return {
+      number,
+      kind: 'record' as const,
+      recordId: RECORD,
+      recordType: 'spell',
+      name: 'Bola de Fogo',
+      fields: [
+        { name: 'Alcance', value: '45 m' },
+        { name: 'Nível', value: '3' },
+      ],
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Magias', 'Bola de Fogo'],
+      page: 3,
+      passageIds,
+      removed: false,
+      tier: 'system',
+      ...more,
+    };
+  }
+
+  /** A finished answer citing passage B (reference 1) and the record (reference 2, read from passage A, maybe removed). */
+  async function answered(removed = false, language: 'pt-BR' | 'en' = 'pt-BR'): Promise<void> {
+    const stream = await ask('Qual o alcance de Bola de Fogo?', language);
+    stream.emit('delta', { text: 'Um. Dois.' }, 1);
+    stream.emit('citation', { passageId: PASSAGE_B, offset: 3 }, 2);
+    stream.emit('citation', { recordId: RECORD, offset: 9 }, 3);
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 9 }, 4);
+    stream.emit(
+      'done',
+      {
+        stopped: false,
+        silent: false,
+        references: [
+          reference(1, [PASSAGE_B], { page: 12 }),
+          recordReference(2, [PASSAGE_A], { removed }),
+          reference(3, [PASSAGE_A]),
+        ],
+      },
+      5,
+    );
+  }
+
+  function list(): HTMLElement {
+    return screen.getAllByRole('list', { name: /^(Fontes|Sources)$/ })[0]!;
+  }
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+    load = vi.fn<LoadPage>(async (_turn, _number, page) => PICTURE_PAGE(page));
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('numbers a record citation with its entry, and a passage it was read from with that passage\'s own reference', async () => {
+    view({ loadPage: load });
+    await answered();
+
+    // The record's citation carries the record entry's number; passage A, also among the record's passages, its own.
+    expect(superscripts()).toEqual(['1', '2', '3']);
+  });
+
+  it('shows a record as its own entry: its name and type, its fields as a two-column list, then its source line', async () => {
+    view({ loadPage: load });
+    await answered();
+
+    const items = within(list()).getAllByRole('listitem');
+    expect(items.map((item) => item.getAttribute('value'))).toEqual(['1', '2', '3']);
+    // A passage's reference stays one line.
+    expect(items[0]!.textContent).toBe('Livro do Jogador.pdf, Magias › Fire Bolt, p. 12');
+    const record = items[1]!;
+    expect(record.getAttribute('data-kind')).toBe('record');
+    expect(record.textContent).toContain('Sistema');
+    expect(within(record).getByText('Bola de Fogo').className).toMatch(/recordName/);
+    expect(within(record).getByText('Magia').className).toMatch(/recordType/);
+    const fields = record.querySelector('dl')!;
+    expect(fields.getAttribute('aria-label')).toBe('Campos');
+    expect([...fields.querySelectorAll('dt')].map((term) => term.textContent)).toEqual(['Alcance', 'Nível']);
+    expect([...fields.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(['45 m', '3']);
+    // No rule closes the fields inside the list: the answer's own rule follows the references.
+    expect(record.querySelector('hr')).toBeNull();
+    // Only the source line is a button; the name opens nothing.
+    expect(within(record).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3',
+    ]);
+    expect(record.querySelector('a')).toBeNull();
+    expect(document.body.innerHTML).not.toContain('style=');
+  });
+
+  it('opens the record\'s source line at its page on the turn\'s ground with its passages marked, and gives focus back', async () => {
+    view({ loadPage: load });
+    await answered();
+    const user = userEvent.setup();
+    const line = within(list()).getByRole('button', { name: 'Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3' });
+
+    line.focus();
+    await user.keyboard('{Enter}');
+
+    const dialog = screen.getByRole('dialog', { name: 'Livro do Jogador.pdf, Magias › Bola de Fogo' });
+    expect(load).toHaveBeenCalledWith(TURN, 2, 3, expect.any(AbortSignal));
+    await waitFor(() => expect(dialog.querySelector('image')).not.toBeNull());
+    expect(dialog.querySelector('image')!.getAttribute('href')).toBe(`/api/v1/turns/${TURN}/references/2/pages/3/picture`);
+    expect(within(dialog).getByRole('group', { name: 'trecho citado' }).textContent).toBe('Linha 3');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(line);
+  });
+
+  it('strikes a removed record\'s source line through, opens nothing, and keeps its fields as written', async () => {
+    view({ loadPage: load });
+    await answered(true);
+
+    const record = within(list()).getAllByRole('listitem')[1]!;
+    expect(record.querySelector('s')?.textContent).toBe('Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3');
+    expect(record.textContent).toContain('— fonte removida');
+    expect(record.querySelector('button')).toBeNull();
+    expect([...record.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(['45 m', '3']);
+  });
+
+  it('says a record\'s name and type before its source line in the polite region, in English too', async () => {
+    view({ language: 'en', loadPage: load });
+    await answered(false, 'en');
+
+    const spoken = [...screen.getByTestId('conversation-polite').querySelectorAll('li')].map((item) => item.textContent);
+    expect(spoken[1]).toBe('System: Bola de Fogo, Spell. Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3');
+    expect(within(list()).getByText('Spell')).toBeTruthy();
+    expect(list().querySelector('dl')?.getAttribute('aria-label')).toBe('Fields');
+  });
+
+  it('leaves out a record reference that is not well formed, and a citation naming both a passage and a record', async () => {
+    view({ loadPage: load });
+    const stream = await ask('Qual o alcance?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { passageId: PASSAGE_A, recordId: RECORD, offset: 3 });
+    stream.emit('done', {
+      silent: false,
+      references: [reference(1, [PASSAGE_A]), recordReference(2, [PASSAGE_A], { recordType: '' }), recordReference(3, [PASSAGE_A], { fields: [{ name: 'x' }] })],
+    });
+
+    expect(within(list()).getAllByRole('listitem')).toHaveLength(1);
+    expect(superscripts()).toEqual([]);
+  });
+
+  it('keeps a record of a type it does not know, with its number and superscript, naming the type by its key', async () => {
+    view({ loadPage: load });
+    const stream = await ask('Qual o alcance?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { recordId: RECORD, offset: 3 });
+    stream.emit('done', { silent: false, references: [recordReference(1, [PASSAGE_A], { recordType: 'vehicle' })] });
+
+    const items = within(list()).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(within(items[0]!).getByText('vehicle').className).toMatch(/recordType/);
+    expect(superscripts()).toEqual(['1']);
+    expect([...screen.getByTestId('conversation-polite').querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+      'Sistema: Bola de Fogo, vehicle. Livro do Jogador.pdf, Magias › Bola de Fogo, p. 3',
+    ]);
   });
 });

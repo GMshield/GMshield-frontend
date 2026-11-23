@@ -1093,6 +1093,7 @@ describe('HTML in a material name or section path is text (Story 2.8)', () => {
   const SECTION = '<script>alert(1)</script>';
   const hostile = {
     number: 1,
+    kind: 'passage' as const,
     materialName: NAME,
     sectionPath: [SECTION, '<iframe src="https://example.invalid/f"></iframe>'],
     page: 3,
@@ -1271,7 +1272,7 @@ describe('TierLabel (Story 3.7)', () => {
 
   it('is drawn on a reference line before its button, and not at all for a reference without a tier', () => {
     const t = translator('pt-BR');
-    const base = { materialName: 'Livro.pdf', sectionPath: [], page: 3, passageIds: ['p'], removed: false };
+    const base = { kind: 'passage' as const, materialName: 'Livro.pdf', sectionPath: [], page: 3, passageIds: ['p'], removed: false };
     render(<References references={[{ ...base, number: 1, tier: 'system' }, { ...base, number: 2 }]} t={t} onOpen={() => undefined} />);
     const items = screen.getAllByRole('listitem');
     expect(items[0]!.firstElementChild?.textContent).toBe('Sistema');
