@@ -1,10 +1,12 @@
 import { PageHeader } from '@/components/PageHeader';
 import { PillButton } from '@/components/PillButton';
 import { PillLink } from '@/components/PillLink';
+import Form from 'next/form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { notFoundFor } from '@/app/not-found';
+import { FullScreenButton } from '@/components/FullScreen';
 import { Notice } from '@/components/Notice';
 import { PageView, pictureUrl } from '@/components/PageView';
 import { errorText, translator } from '@/messages';
@@ -50,6 +52,8 @@ export default async function MaterialPageView({
   }
   const view = found.data;
   const base = `/files/${encodeURIComponent(id)}`;
+  const previous = view.page > 1 ? `${base}/pages/${view.page - 1}` : null;
+  const next = view.page < view.pageTotal ? `${base}/pages/${view.page + 1}` : null;
   return (
     <>
       <PageHeader
@@ -61,7 +65,9 @@ export default async function MaterialPageView({
           <>
             {view.page > 1 ? <PillLink href={`${base}/pages/${view.page - 1}`}>{t('pageView.previous')}</PillLink> : null}
             {view.pageTotal > 1 ? (
-              <form className={styles.jump} action={`${base}/pages`} method="get">
+              // next/form: a GET form that turns the page in the browser (so full screen stays on), and a plain form
+              // without JavaScript.
+              <Form className={styles.jump} action={`${base}/pages`}>
                 <label className={styles.jumpLabel} htmlFor="page-jump">
                   {t('paging.goTo')}
                 </label>
@@ -77,9 +83,10 @@ export default async function MaterialPageView({
                   required
                 />
                 <PillButton type="submit">{t('paging.go')}</PillButton>
-              </form>
+              </Form>
             ) : null}
             {view.page < view.pageTotal ? <PillLink href={`${base}/pages/${view.page + 1}`}>{t('pageView.next')}</PillLink> : null}
+            <FullScreenButton enter={t('pageView.fullScreen')} leave={t('pageView.leaveFullScreen')} previous={previous} next={next} />
           </>
         }
       />

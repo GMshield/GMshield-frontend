@@ -658,7 +658,9 @@
     "noText": "Nenhum texto foi extraído desta página.",
     "unopened": "Esta página não pôde ser aberta. Ela consta como ilegível no relatório.",
     "citedPassage": "trecho citado",
-    "loadFailed": "Não foi possível carregar esta página."
+    "loadFailed": "Não foi possível carregar esta página.",
+    "fullScreen": "Tela cheia",
+    "leaveFullScreen": "Sair da tela cheia"
   },
   "conversation": {
     "turns": "Perguntas e respostas",

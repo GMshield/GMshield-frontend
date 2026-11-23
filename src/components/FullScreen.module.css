@@ -1,0 +1,26 @@
+/*
+ * The page view's full-screen frame (2026-11-23). Outside full screen it is no box at all: its children stay items of
+ * the main column, with the column's own gap. In full screen it is the whole screen in the theme's canvas, the header
+ * and the page with the main column's gap, scrolling only when the page cannot fit (a phone held sideways).
+ */
+.frame {
+  display: contents;
+}
+
+.frame:fullscreen {
+  /* The page may grow past the source view's width: the screen's height is what limits it. */
+  --width-source-view: 100vw;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  box-sizing: border-box;
+  padding: var(--space-6);
+  overflow-y: auto;
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.frame:fullscreen::backdrop {
+  background-color: var(--color-canvas);
+}

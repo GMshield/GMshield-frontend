@@ -73,7 +73,9 @@ export type IconName =
   | 'search'
   | 'dismiss'
   | 'bookmark'
-  | 'bookmarkFilled';
+  | 'bookmarkFilled'
+  | 'fullScreen'
+  | 'fullScreenExit';
 
 const PATHS: Readonly<Record<IconName, string>> = {
   questions: 'M4 5h16v11H9l-5 4z',
@@ -109,6 +111,9 @@ const PATHS: Readonly<Record<IconName, string>> = {
   bookmark: 'M7 4h10v16l-5-4-5 4z',
   /** Story 3.12: the same ribbon filled: a saved answer's bookmark. */
   bookmarkFilled: 'M7 4h10v16l-5-4-5 4z',
+  /** 2026-11-23: the page view's full screen: four corners pointing out, and pointing in to leave it. */
+  fullScreen: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
+  fullScreenExit: 'M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5',
 };
 
 /** Story 3.12: the icons drawn filled as well as stroked. */

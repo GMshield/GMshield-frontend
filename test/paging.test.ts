@@ -299,8 +299,11 @@ describe('"Ir para a página"', () => {
     });
     const route = async (number: string) => renderToStaticMarkup(await PageRoute({ params: Promise.resolve({ id: MATERIAL_ID, page: number }) }));
     let html = await route('13');
-    // A plain GET form: it works without JavaScript, and the address it posts to answers with the page.
-    expect(html).toMatch(new RegExp(`<form[^>]*action="/files/${MATERIAL_ID}/pages"[^>]*method="get"|<form[^>]*method="get"[^>]*action="/files/${MATERIAL_ID}/pages"`));
+    // A GET form (no method: GET is a form's own; next/form since 2026-11-23, so full screen stays on): it works without
+    // JavaScript, and the address it goes to answers with the page.
+    const form = new RegExp(`<form[^>]*action="/files/${MATERIAL_ID}/pages"[^>]*>`).exec(html)?.[0] ?? '';
+    expect(form).not.toBe('');
+    expect(form).not.toMatch(/method="post"/i);
     expect(html).toMatch(/<label[^>]*for="page-jump"[^>]*>Ir para a página<\/label>/);
     const input = /<input[^>]*id="page-jump"[^>]*>/.exec(html)?.[0] ?? '';
     for (const attribute of ['type="number"', 'name="page"', 'min="1"', 'max="364"', 'value="13"', 'inputMode="numeric"']) {

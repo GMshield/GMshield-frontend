@@ -658,7 +658,9 @@
     "noText": "No text was extracted from this page.",
     "unopened": "This page could not be opened. The report lists it as unreadable.",
     "citedPassage": "cited passage",
-    "loadFailed": "This page could not be loaded."
+    "loadFailed": "This page could not be loaded.",
+    "fullScreen": "Full screen",
+    "leaveFullScreen": "Exit full screen"
   },
   "conversation": {
     "turns": "Questions and answers",

@@ -45,6 +45,14 @@
   cursor: text;
 }
 
+/*
+ * What the GM selects on a page picture (2026-11-23): a translucent highlight over the printed words. The global
+ * ::selection paints a solid bar in the theme's text colour, which hid the selected lines of the picture.
+ */
+.line::selection {
+  background-color: var(--color-page-selection);
+}
+
 /* A text page: its own line breaks and blank lines, wrapped to the column. */
 .text {
   margin: 0;
