@@ -17,9 +17,18 @@ function keyed(fields: readonly RecordField[]): { readonly key: string; readonly
 /**
  * A record's fields (Story 4.3): a two-column list (the field's name in label type, its value in body type), in stored
  * order and closed by a rule. A record without fields draws nothing: no empty list and no rule. Shared by the record's
- * page on its system and (Story 4.3 part B) in a campaign's search.
+ * page on its system and (Story 4.3 part B) in a campaign's search; (Story 4.3 part C) an answer's record entry draws
+ * the list without its rule (`rule` false), its source line following it in the references list.
  */
-export function RecordFields({ fields, t }: { readonly fields: readonly RecordField[]; readonly t: Translate }) {
+export function RecordFields({
+  fields,
+  t,
+  rule = true,
+}: {
+  readonly fields: readonly RecordField[];
+  readonly t: Translate;
+  readonly rule?: boolean;
+}) {
   if (fields.length === 0) {
     return null;
   }
@@ -33,7 +42,7 @@ export function RecordFields({ fields, t }: { readonly fields: readonly RecordFi
           </div>
         ))}
       </dl>
-      <hr className={styles.rule} />
+      {rule ? <hr className={styles.rule} /> : null}
     </>
   );
 }

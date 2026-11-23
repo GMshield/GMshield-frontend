@@ -2212,7 +2212,7 @@
         "type" : "object"
       },
       "TurnCitationEvent" : {
-        "description" : "The data of a citation event: a passage cited at a place of the answer's text",
+        "description" : "The data of a citation event: a passage cited at a place of the answer's text, or (contract 1.37.0) a record: exactly one of passageId and recordId",
         "properties" : {
           "offset" : {
             "description" : "Where the citation stands, in code points of the answer's text",
@@ -2221,11 +2221,17 @@
             "type" : "integer"
           },
           "passageId" : {
+            "description" : "The cited passage; absent when recordId is given",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recordId" : {
+            "description" : "The cited record (contract 1.37.0); absent when passageId is given",
             "format" : "uuid",
             "type" : "string"
           }
         },
-        "required" : [ "offset", "passageId" ],
+        "required" : [ "offset" ],
         "type" : "object"
       },
       "TurnDeltaEvent" : {
@@ -2276,11 +2282,42 @@
         "required" : [ "code" ],
         "type" : "object"
       },
-      "TurnSourceReference" : {
-        "description" : "A source reference of a completed answer, stored by value with the turn: one distinct place (material version, section path, page) the answer cited",
+      "TurnReferenceField" : {
+        "description" : "One field of a cited record (contract 1.37.0)",
         "properties" : {
+          "name" : {
+            "description" : "The field's name",
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "The field's value",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "value" ],
+        "type" : "object"
+      },
+      "TurnSourceReference" : {
+        "description" : "A source reference of a completed answer, stored by value with the turn: one distinct place (material version, section path, page) the answer cited, or (contract 1.37.0) one record the answer cited, with its name, type and fields as they were when the answer was written, placed at its first page",
+        "properties" : {
+          "fields" : {
+            "description" : "The record's fields in order, as they were when the answer was written; may be empty; only for a record (contract 1.37.0)",
+            "items" : {
+              "$ref" : "#/components/schemas/TurnReferenceField"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "description" : "passage for a cited place, record for a cited record (contract 1.37.0)",
+            "enum" : [ "passage", "record" ],
+            "type" : "string"
+          },
           "materialName" : {
             "description" : "The material's name",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The record's name, as it was when the answer was written; only for a record (contract 1.37.0)",
             "type" : "string"
           },
           "number" : {
@@ -2290,13 +2327,13 @@
             "type" : "integer"
           },
           "page" : {
-            "description" : "The page",
+            "description" : "The page; for a record, its first page",
             "format" : "int32",
             "minimum" : 1,
             "type" : "integer"
           },
           "passageIds" : {
-            "description" : "The cited passages at this place, in the order first cited; a passage id appears in at most one reference of the turn",
+            "description" : "The cited passages at this place, in the order first cited; a passage id appears in at most one passage reference of the turn. For a record, its passages on its first page, so the source view marks them: record references may share them",
             "items" : {
               "format" : "uuid",
               "type" : "string"
@@ -2304,12 +2341,22 @@
             "minItems" : 1,
             "type" : "array"
           },
+          "recordId" : {
+            "description" : "The cited record's id; only for a record (contract 1.37.0)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.37.0)",
+            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "type" : "string"
+          },
           "removed" : {
             "description" : "Whether its source has been removed since (its version gone, discarded or pending removal, or its material gone), as of when the event is sent. A version superseded by a newer accepted one is not removed",
             "type" : "boolean"
           },
           "sectionPath" : {
-            "description" : "The section path, outermost first; may be empty",
+            "description" : "The section path, outermost first; may be empty. For a record, its first passage's on its first page",
             "items" : {
               "type" : "string"
             },
@@ -2321,7 +2368,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "materialName", "number", "page", "passageIds", "removed", "sectionPath" ],
+        "required" : [ "kind", "materialName", "number", "page", "passageIds", "removed", "sectionPath" ],
         "type" : "object"
       },
       "TurnTierEvent" : {
@@ -2387,7 +2434,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.36.0"
+    "version" : "1.37.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
