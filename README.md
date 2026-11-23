@@ -956,6 +956,18 @@ they sit in `src/`.
     `errors.codes.ontology.core_record_type`, `.record_type_name_invalid` and `.record_type_name_taken`, in pt-BR and
     en. The stand-in backend answers the eight core types, none with records.
   - Deploy order: backend → frontend.
+- **Records found by type (Story 4.2 part A).** Public contract 1.34.0 (the minimum backend contract too).
+  - The quality report (`QualityReport`) gains, after its warnings, "Registros encontrados": a plain list of each
+    record type's name in the interface's language (`CORE_NAMES`, `src/record-types.ts`, shared with the records tab)
+    and its count, in the backend's order, or "Nenhum registro." when the version has none. A type this release does not know is left
+    out, never shown as its key. The warning `report.records_unread` says how many pages' records could not be read
+    (their passages were kept).
+  - The records tab's counts come from the backend unchanged: from contract 1.34.0 they are the records of the
+    system's accepted versions.
+  - Strings `material.report.records`, `.recordsNone`, `material.report.warning.records_unread.{one,other}` and
+    `errors.codes.ontology.record_type_in_use`, in pt-BR and en. The stand-in backend's report carries records of three
+    types and the unread warning.
+  - Deploy order: backend → worker → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

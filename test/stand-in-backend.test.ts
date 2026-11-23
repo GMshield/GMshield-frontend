@@ -228,6 +228,10 @@ describe('stand-in backend', () => {
       status: 200,
       body: { outline: [{ level: 1, title: 'Equipment', page: 92 }, { level: 2 }], unreadable: [{ firstPage: 40, lastPage: 41 }] },
     });
+    // Story 4.2: its records by type, and the warning that some pages' records were unread.
+    expect(answer(contract, 'GET', `/api/v1/materials/${id}/report`, 't')).toMatchObject({
+      body: { records: [{ type: 'rule', count: 12 }, { type: 'spell', count: 30 }, { type: 'item', count: 4 }] },
+    });
     expect(answer(contract, 'POST', `/api/v1/materials/${id}/accept`, 't')).toMatchObject({ status: 200, body: { state: 'ready', actions: ['reprocess'] } });
     for (const action of ['reprocess', 'retry', 'discard']) {
       const answered = answer(contract, 'POST', `/api/v1/materials/${id}/${action}`, 't');

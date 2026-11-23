@@ -221,6 +221,7 @@ describe('the quality report of a long book', () => {
     outline: Array.from({ length: 34 }, (_, index) => ({ level: index % 5 === 0 ? 1 : 2, title: `Seção ${index + 1}`, page: 10 + index })),
     unreadable: Array.from({ length: 15 }, (_, index) => ({ firstPage: 100 + index * 3, lastPage: 100 + index * 3 })),
     warnings: [{ code: 'report.pages_unreadable', count: 15 }],
+    records: [{ type: 'spell', count: 30 }],
   };
   const page = async (query: Record<string, string> = {}) =>
     renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }), searchParams: Promise.resolve(query) }));

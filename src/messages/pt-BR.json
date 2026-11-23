@@ -317,7 +317,8 @@
       "ontology": {
         "core_record_type": "Os tipos de registro básicos são os mesmos em todo sistema e não podem ser renomeados nem removidos.",
         "record_type_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
-        "record_type_name_taken": "Este sistema já tem um tipo de registro com este nome."
+        "record_type_name_taken": "Este sistema já tem um tipo de registro com este nome.",
+        "record_type_in_use": "Este tipo de registro tem registros e não pode ser removido."
       }
     }
   },
@@ -407,8 +408,14 @@
         "outline_empty": {
           "one": "Nenhuma seção foi encontrada no texto.",
           "other": "Nenhuma seção foi encontrada no texto."
+        },
+        "records_unread": {
+          "one": "Os registros de 1 página não puderam ser lidos; os trechos dela foram mantidos.",
+          "other": "Os registros de {count} páginas não puderam ser lidos; os trechos delas foram mantidos."
         }
-      }
+      },
+      "records": "Registros encontrados",
+      "recordsNone": "Nenhum registro."
     },
     "actions": {
       "label": "Ações",
