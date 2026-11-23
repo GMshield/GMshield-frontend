@@ -668,6 +668,7 @@
   },
   "conversation": {
     "turns": "Questions and answers",
+    "timeline": "Questions in this conversation",
     "question": "Question",
     "answer": "Answer",
     "composer": {
