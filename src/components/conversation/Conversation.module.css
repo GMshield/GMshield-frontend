@@ -1,11 +1,36 @@
-.conversation {
+/*
+ * The conversation's frame (2026-11-23): the conversation in the middle of the column and, where the column has room
+ * for both (960px and more of it: a 1366px window with the sidebar open, not beside an open source view), its outline
+ * at the right, the two centred together. The frame is the size container; the layout inside it is the grid.
+ */
+.frame {
+  container: conversation-frame / inline-size;
   display: flex;
   flex: 1;
+  flex-direction: column;
+  inline-size: 100%;
+}
+
+.layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, var(--width-prose));
+  justify-content: center;
+  column-gap: var(--space-8);
+}
+
+@container conversation-frame (min-width: 960px) {
+  .layout:has(> nav) {
+    grid-template-columns: minmax(0, var(--width-prose)) 14rem;
+  }
+}
+
+.conversation {
+  display: flex;
   flex-direction: column;
   gap: var(--space-6);
   inline-size: 100%;
   max-inline-size: var(--width-prose);
-  min-block-size: 100%;
   margin-inline: auto;
 }
 

@@ -1,0 +1,98 @@
+/*
+ * The conversation's outline (2026-11-23): a documentation page's "On this page" beside the conversation. It stays in
+ * view under the top of the window while the conversation scrolls, and its list scrolls by itself when it is longer
+ * than the window. It shows only where the conversation's frame (Conversation.module.css) has room for it.
+ */
+.outline {
+  position: sticky;
+  top: var(--space-6);
+  display: none;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-self: start;
+  /* Short of the column's bottom padding too: at the end of the page the outline's area ends there, and a taller outline
+     was pushed up past its top margin. */
+  max-block-size: calc(100dvh - 2 * var(--space-6) - var(--space-12));
+  min-inline-size: 0;
+}
+
+@container conversation-frame (min-width: 960px) {
+  .outline {
+    display: flex;
+  }
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* The entries: a quiet rule at their left, on which the question being read draws its accent bar. */
+.entries {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--color-border);
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+/* An entry: its number, then the question's first two lines; the whole row is the target. */
+.entry {
+  display: flex;
+  gap: var(--space-2);
+  inline-size: 100%;
+  margin-inline-start: -1px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  text-align: start;
+  cursor: pointer;
+}
+
+.entry:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+/* The question being read: the accent bar on the rule, the text colour and the label weight. */
+.entry[aria-current='true'] {
+  border-inline-start-color: var(--color-accent);
+  color: var(--color-text);
+  font-weight: var(--font-label-weight);
+}
+
+.number {
+  flex: none;
+  min-inline-size: 1.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.question {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
