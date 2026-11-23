@@ -121,18 +121,20 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
     }
   }, [open]);
 
-  // A new opening starts again from the files (state adjusted while rendering, not in an effect).
+  // A new opening starts again from the files (state adjusted while rendering, not in an effect). The place starts
+  // from the current campaign as it is now: the dialog stays mounted while the current campaign changes.
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
-    if (!open) {
+    if (open) {
+      setDraft(draftOf(belonging));
+    } else {
       setStep(1);
       setChosen([]);
       setBatch(null);
       setSetMode('pages');
       setOrder([]);
       setSetName(null);
-      setDraft(draftOf(belonging));
     }
   }
 

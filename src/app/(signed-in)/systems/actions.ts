@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import type { SystemDeleteState } from '@/components/SystemActions';
@@ -19,6 +20,11 @@ import type { SystemField, SystemFormState, SystemFormValues } from './form-stat
  * (src/proxy.ts) and Next.js refuse a cross-origin post before any of these runs.
  *
  * Story 3.1 part B: the delete of a system, confirmed in its dialog, which opens the list of systems.
+ *
+ * Each success refreshes the shared signed-in layout before it redirects (`revalidatePath('/', 'layout')`): the layout
+ * reads every system for the guided upload's place picker, shows a system's name beside its campaigns in the switcher
+ * and the context bar, and loses the current campaign when its system is deleted. A redirect alone renders only the
+ * destination below a layout that keeps the old values. A refusal changes nothing, so it refreshes nothing.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -70,6 +76,7 @@ export async function createSystemAction(_previous: SystemFormState, form: FormD
   });
   if (result.ok) {
     await flash('success', translator(language)('feedback.systemCreated', { name: result.data.name }));
+    revalidatePath('/', 'layout');
     redirect(`/systems/${encodeURIComponent(result.data.id)}`);
   }
   return { values, version: null, error: errorText(result.problem, language), field: fieldOf(result.problem), stale: false };
@@ -96,6 +103,7 @@ export async function changeSystemAction(previous: SystemFormState, form: FormDa
   });
   if (result.ok) {
     await flash('success', translator(language)('feedback.systemChanged', { name: result.data.name }));
+    revalidatePath('/', 'layout');
     redirect(`/systems/${encodeURIComponent(id)}`);
   }
   if (problemFields(result.problem).code === 'request.stale_version') {
@@ -129,6 +137,7 @@ export async function deleteSystemAction(_previous: SystemDeleteState, form: For
   const result = await deleteSystem((await currentSessionToken()) ?? '', id);
   if (result.ok) {
     await flash('success', translator(language)('feedback.systemDeleted'));
+    revalidatePath('/', 'layout');
     redirect('/systems');
   }
   return { error: errorText(result.problem, language) };
