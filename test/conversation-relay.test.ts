@@ -618,11 +618,38 @@ describe("the browser's stop call and stream address (Story 2.6)", () => {
 
   it('reads a stopped done: never silent, its references kept', async () => {
     const { parseDone } = await import('@/client/conversation');
-    const reference = { number: 1, materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
+    const reference = { number: 1, kind: 'passage', materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
     expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [] });
     expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [reference] });
     expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, modelKnowledge: false, references: [] });
     expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, modelKnowledge: false, references: [reference] });
+  });
+
+  it('Story 4.3 part C: reads a record citation and a record reference, and a reference without a kind as a place', async () => {
+    const { parseCitation, parseDone, isRecordReference } = await import('@/client/conversation');
+    expect(parseCitation({ recordId: 'r', offset: 4 })).toEqual({ recordId: 'r', offset: 4 });
+    expect(parseCitation({ passageId: 'p', offset: 4 })).toEqual({ passageId: 'p', offset: 4 });
+    expect(parseCitation({ passageId: 'p', recordId: 'r', offset: 4 })).toBeNull();
+    expect(parseCitation({ offset: 4 })).toBeNull();
+    expect(parseCitation({ recordId: 'r', offset: -1 })).toBeNull();
+    const place = { number: 1, materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
+    const record = {
+      ...place,
+      number: 2,
+      kind: 'record',
+      recordId: 'r',
+      recordType: 'spell',
+      name: 'Luz',
+      fields: [{ name: 'Nível', value: '0' }],
+    };
+    const done = parseDone({ stopped: false, silent: false, references: [place, record, { ...record, number: 3, kind: 'thing' }] });
+    expect(done.references).toEqual([{ ...place, kind: 'passage' }, record]);
+    expect(done.references.map(isRecordReference)).toEqual([false, true]);
+    for (const broken of [{ recordType: '' }, { recordType: 5 }, { name: 5 }, { fields: [{ name: 'x' }] }, { recordId: undefined }]) {
+      expect(parseDone({ references: [{ ...record, ...broken }] }).references, JSON.stringify(broken)).toEqual([]);
+    }
+    // A type key this interface does not know yet (a newer backend's) keeps the reference.
+    expect(parseDone({ references: [{ ...record, recordType: 'vehicle' }] }).references).toEqual([{ ...record, recordType: 'vehicle' }]);
   });
 
   it('Story 3.8: reads modelKnowledge, true only when said, and keeps an answer with a model part from being silent', async () => {

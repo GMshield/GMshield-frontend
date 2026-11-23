@@ -1002,6 +1002,23 @@ they sit in `src/`.
   - Strings `search.type` and `search.allTypes` in pt-BR and en. The stand-in backend's search leads with the record
     "Fire Bolt" and answers it from the campaign as well.
   - Deploy order: backend → worker → frontend.
+- **Records in answers (Story 4.3 part C).** Public contract 1.37.0 (the minimum backend contract too).
+  - A reference of the `done` event has a `kind` (`passage` or `record`; one without a kind reads as a place's). A
+    record's reference also has `recordId`, `recordType` (a core key), `name` and `fields`, as they were when the answer
+    was written (`isReference` checks both kinds, `isRecordReference` tells them apart). A `recordType` this
+    interface does not know is kept and shown as its key (`referenceTypeName`), so no reference or number is lost. A `citation` event names a
+    `passageId` or a `recordId`, exactly one (`parseCitation`).
+  - `marksOf`: a record's citation takes its record entry's number; a passage's citation only a place's reference
+    (a record's reference lists its passages too, for the source view).
+  - `References`: a record is its own numbered entry: its tier's pill, its name and its type's chip (`coreTypeName`),
+    its fields as `RecordFields` without the closing rule (`rule={false}`; names in label type, values in body type),
+    then its source line, which alone is a button and opens the source view at the record's first page on the turn's
+    ground, its passages marked; the name opens nothing. A removed source's line is struck through and opens nothing,
+    and its fields stay. The polite region says "name, type." before the source line. A passage's reference is one line
+    as before. No new string.
+  - The stand-in backend's answer also cites the Fire Bolt record (reference 3). The demo backend's "magia" question
+    answers with a passage and a record.
+  - Deploy order: backend → worker → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

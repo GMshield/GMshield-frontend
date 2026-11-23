@@ -19,6 +19,12 @@ export const STARTING_SCOPE: {
 };
 export type StandInReference = {
   number: number;
+  /** Story 4.3 part C: a cited place's, or a cited record's (with its id, core type, name and fields). */
+  kind: 'passage' | 'record';
+  recordId?: string;
+  recordType?: string;
+  name?: string;
+  fields?: { name: string; value: string }[];
   materialName: string;
   sectionPath: string[];
   page: number;
@@ -28,6 +34,8 @@ export type StandInReference = {
   tier?: 'campaign' | 'system' | 'other';
 };
 export const ANSWER_DONE: { stopped: boolean; silent: boolean; references: StandInReference[] };
+/** Story 4.3 part C: the record the stand-in answer cites. */
+export const ANSWER_RECORD_ID: string;
 /** Story 2.7: the pages of the stand-in answer's references 2 (a picture page) and 1 (a text page). */
 export const REFERENCE_PAGE: unknown;
 export const REFERENCE_TEXT_PAGE: {

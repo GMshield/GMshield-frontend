@@ -163,14 +163,44 @@ export async function loadSavedAnswers(offset: number, limit: number): Promise<S
   }
 }
 
-/** A source reference of a finished answer, as the `done` event carries it (Story 2.5, `TurnSourceReference`). */
-export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceReference'], 'sectionPath' | 'passageIds'>> & {
+/** One field of a cited record (Story 4.3 part C, `TurnReferenceField`): its name and its value. */
+export type ReferenceField = Readonly<components['schemas']['TurnReferenceField']>;
+
+/**
+ * A source reference of a finished answer, as the `done` event carries it (Story 2.5, `TurnSourceReference`): one cited
+ * place (`kind` passage), or (Story 4.3 part C) one cited record (`kind` record), with its name, core type and fields
+ * as they were when the answer was written, placed at its first page.
+ */
+export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceReference'], 'sectionPath' | 'passageIds' | 'fields'>> & {
   readonly sectionPath: readonly string[];
   readonly passageIds: readonly string[];
+  readonly fields?: readonly ReferenceField[];
 };
 
-/** A citation of the answer: a passage id at a code-point offset of the answer's text (`TurnCitationEvent`). */
-export type Citation = { readonly passageId: string; readonly offset: number };
+/**
+ * A cited record's reference (Story 4.3 part C): its record's id, name, core type and fields. The type is a core key
+ * the contract names, or (from a newer backend) a key this interface does not know yet, shown as it is.
+ */
+export type RecordReference = Omit<SourceReference, 'recordType'> & {
+  readonly kind: 'record';
+  readonly recordId: string;
+  readonly name: string;
+  readonly recordType: string;
+  readonly fields: readonly ReferenceField[];
+};
+
+/** Whether a reference is a cited record's (Story 4.3 part C); else it is a cited place's. */
+export function isRecordReference(reference: SourceReference): reference is SourceReference & RecordReference {
+  return reference.kind === 'record';
+}
+
+/**
+ * A citation of the answer: a passage id at a code-point offset of the answer's text (`TurnCitationEvent`), or (Story
+ * 4.3 part C) a record id.
+ */
+export type Citation =
+  | { readonly passageId: string; readonly recordId?: undefined; readonly offset: number }
+  | { readonly recordId: string; readonly passageId?: undefined; readonly offset: number };
 
 /** A tier of the campaign's scope, as the backend labels a source (Story 3.7). */
 export type Tier = NonNullable<components['schemas']['TurnSourceReference']['tier']>;
@@ -217,16 +247,37 @@ function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
+function isFields(value: unknown): value is ReferenceField[] {
+  return Array.isArray(value) && value.every((field) => typeof field === 'object' && field !== null
+    && typeof (field as Record<string, unknown>).name === 'string' && typeof (field as Record<string, unknown>).value === 'string');
+}
+
 function isReference(value: unknown): value is SourceReference {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
   const reference = value as Record<string, unknown>;
-  return Number.isInteger(reference.number) && (reference.number as number) >= 1
+  const place = Number.isInteger(reference.number) && (reference.number as number) >= 1
     && typeof reference.materialName === 'string' && isStrings(reference.sectionPath)
     && Number.isInteger(reference.page) && isStrings(reference.passageIds) && typeof reference.removed === 'boolean'
     // Story 3.7: a tier is optional (none on a reference stored before it), and only one the backend writes.
     && (reference.tier === undefined || isTier(reference.tier));
+  if (!place) {
+    return false;
+  }
+  // Story 4.3 part C: a record's reference carries its record; a place's carries none of it.
+  if (reference.kind === 'record') {
+    return typeof reference.recordId === 'string' && typeof reference.name === 'string'
+      // Any type key: a key this interface does not know is shown as it is, never dropped (no numbering gap).
+      && typeof reference.recordType === 'string' && reference.recordType !== '' && isFields(reference.fields);
+  }
+  // A place's reference; one without a kind (a backend before contract 1.37.0) is a place's too.
+  return reference.kind === 'passage' || reference.kind === undefined;
+}
+
+/** A well-formed reference with its kind: a reference that names none is a place's (Story 4.3 part C). */
+function withKind(reference: SourceReference): SourceReference {
+  return (reference.kind as string | undefined) === undefined ? { ...reference, kind: 'passage' } : reference;
 }
 
 /**
@@ -239,7 +290,7 @@ function isReference(value: unknown): value is SourceReference {
 export function parseDone(data: Record<string, unknown> | null, modelPart = false): Done {
   const stopped = data?.stopped === true;
   const modelKnowledge = data?.modelKnowledge === true;
-  const references = Array.isArray(data?.references) ? data.references.filter(isReference) : [];
+  const references = Array.isArray(data?.references) ? data.references.filter(isReference).map(withKind) : [];
   if (stopped) {
     return { stopped, silent: false, modelKnowledge, references };
   }
@@ -249,12 +300,19 @@ export function parseDone(data: Record<string, unknown> | null, modelPart = fals
   return { stopped, silent: references.length === 0 && !modelPart, modelKnowledge, references };
 }
 
-/** The data of a `citation` event, or null when it is not one. */
+/** The data of a `citation` event, or null when it is not one: a passage id or (Story 4.3 part C) a record id. */
 export function parseCitation(data: Record<string, unknown> | null): Citation | null {
-  if (typeof data?.passageId !== 'string' || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
+  if (data === null || !Number.isInteger(data.offset) || (data.offset as number) < 0) {
     return null;
   }
-  return { passageId: data.passageId, offset: data.offset as number };
+  const offset = data.offset as number;
+  if (typeof data.passageId === 'string' && data.recordId === undefined) {
+    return { passageId: data.passageId, offset };
+  }
+  if (typeof data.recordId === 'string' && data.passageId === undefined) {
+    return { recordId: data.recordId, offset };
+  }
+  return null;
 }
 
 /**

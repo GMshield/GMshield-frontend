@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import {
   MODEL_TIER,
   defaultName,
+  isRecordReference,
   parseCitation,
   parseDone,
   parseTier,
@@ -38,7 +39,7 @@ import { PillButton } from '../PillButton';
 import { PillLink } from '../PillLink';
 
 import styles from './Conversation.module.css';
-import { References, referenceLine } from './References';
+import { References, recordHeading, referenceLine } from './References';
 
 /** The most lines the composer grows to; past them it scrolls. */
 export const COMPOSER_MAX_LINES = 6;
@@ -145,18 +146,27 @@ function failureOf(code: string | null): Failure {
   return (code === null ? undefined : FAILURES.get(code)) ?? 'unavailable';
 }
 
-/** The superscripts of a finished answer: each citation whose passage is in a reference, with its number. */
+/**
+ * The superscripts of a finished answer: each citation whose passage is in a place's reference, with its number; from
+ * Story 4.3 part C each citation of a record that has a reference, with that record entry's number. A record's
+ * reference also lists its passages, but a passage's citation is marked only by a place's reference.
+ */
 function marksOf(turn: ShownTurn): CitationMark[] {
-  const numbers = new Map<string, number>();
+  const passages = new Map<string, number>();
+  const records = new Map<string, number>();
   for (const reference of turn.references) {
+    if (isRecordReference(reference)) {
+      records.set(reference.recordId, reference.number);
+      continue;
+    }
     for (const passageId of reference.passageIds) {
-      if (!numbers.has(passageId)) {
-        numbers.set(passageId, reference.number);
+      if (!passages.has(passageId)) {
+        passages.set(passageId, reference.number);
       }
     }
   }
   return turn.citations.flatMap((citation) => {
-    const number = numbers.get(citation.passageId);
+    const number = citation.recordId === undefined ? passages.get(citation.passageId) : records.get(citation.recordId);
     return number === undefined ? [] : [{ offset: citation.offset, number }];
   });
 }
@@ -1453,6 +1463,7 @@ export function Conversation({
             {spoken.references.map((reference) => (
               <li key={reference.number} value={reference.number}>
                 {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
+                {isRecordReference(reference) ? `${recordHeading(reference, t)}. ` : null}
                 {referenceLine(reference, t)}
               </li>
             ))}
