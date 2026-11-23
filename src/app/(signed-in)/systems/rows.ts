@@ -1,9 +1,22 @@
 import 'server-only';
 
 import type { ListRow } from '@/components/ItemList';
+import type { ProposalItem } from '@/components/ProposalList';
 import type { Language, Translate } from '@/messages';
 import { recordTypeName } from '@/record-types';
-import type { CampaignSummary, GameSystem, RecordSummary, RecordType } from '@/server/library';
+import type { Result } from '@/server/accounts';
+import { everyPage } from '@/server/every-page';
+import {
+  listRecordTypes,
+  listTerms,
+  type CampaignSummary,
+  type GameSystem,
+  type Proposal,
+  type ProposalKind,
+  type RecordSummary,
+  type RecordType,
+  type Term,
+} from '@/server/library';
 import type { Material, MaterialState } from '@/server/materials';
 
 import { placeLabel, previewOf } from '../files/rows';
@@ -64,4 +77,79 @@ export function recordRow(record: RecordSummary, t: Translate, systemId: string)
     href: `/systems/${encodeURIComponent(systemId)}/records/${encodeURIComponent(record.id)}`,
     state: null,
   };
+}
+
+/** What a proposal of each kind may be merged into (Story 4.4): the system's record types, or its terms. */
+export type MergeTargets = Readonly<Record<ProposalKind, readonly { readonly id: string; readonly label: string }[]>>;
+
+/** A page of the record types or terms a merge's choice reads: the backend's largest. */
+const TARGET_PAGE = 50;
+
+/**
+ * Every page of a list the backend pages by offset (`{items, total}`), through {@link everyPage}: the offset of the next
+ * page is its cursor.
+ */
+function everyOffsetPage<T>(
+  load: (query: { limit: number; offset?: number }) => Promise<Result<{ items: T[]; total: number }>>,
+) {
+  return everyPage<T>(async (cursor) => {
+    const offset = cursor === undefined ? 0 : Number(cursor);
+    const result = await load(offset === 0 ? { limit: TARGET_PAGE } : { limit: TARGET_PAGE, offset });
+    if (!result.ok) {
+      return result;
+    }
+    const next = offset + result.data.items.length;
+    return {
+      ok: true,
+      data: { items: result.data.items, ...(result.data.items.length > 0 && next < result.data.total ? { nextCursor: String(next) } : {}) },
+    };
+  });
+}
+
+/**
+ * The record types and terms of the system a proposal of it may be merged into (Story 4.4), every page of each, each
+ * named as this interface names it (a core type by its translation). A list that cannot be read offers nothing.
+ */
+export async function mergeTargets(token: string, systemId: string, t: Translate): Promise<MergeTargets> {
+  const [types, terms] = await Promise.all([
+    everyOffsetPage((query) => listRecordTypes(token, systemId, query)),
+    everyOffsetPage((query) => listTerms(token, systemId, query)),
+  ]);
+  return {
+    record_type: types.ok ? types.data.items.map((type) => ({ id: type.id, label: recordTypeName(type, t) })) : [],
+    term: terms.ok ? terms.data.items.map((term) => ({ id: term.id, label: term.name })) : [],
+  };
+}
+
+/**
+ * A pending proposal's row (Story 4.4): its name, its kind in words, where it comes from (its material, or "material
+ * removido"; with `system`, the system it was proposed to, for a material in several), its definition and its examples
+ * with their pages, and what it may be merged into.
+ */
+export function proposalItem(proposal: Proposal, t: Translate, targets: MergeTargets, system: string | null = null): ProposalItem {
+  const material = proposal.materialName ?? t('systems.proposals.materialRemoved');
+  return {
+    id: proposal.id,
+    version: proposal.version,
+    kind: proposal.kind,
+    name: proposal.name,
+    kindLabel: t(`systems.proposals.kind.${proposal.kind}`),
+    detail: system === null ? t('systems.proposals.from', { material }) : t('systems.proposals.fromIn', { material, system }),
+    definition: proposal.definition,
+    examples: proposal.examples.map((example) => t('systems.proposals.example', { quote: example.quote, page: example.page })),
+    targets: targets[proposal.kind],
+  };
+}
+
+/**
+ * An approved term's row on its system's "Ontologia" tab (Story 4.4): its name, then its definition, its other names
+ * and where it came from (its material, or "material removido"). It opens no page.
+ */
+export function termRow(term: Term, t: Translate): ListRow {
+  const material = term.origin.materialName ?? t('systems.proposals.materialRemoved');
+  const parts = [term.definition, t('systems.proposals.from', { material })];
+  if (term.aliases.length > 0) {
+    parts.splice(1, 0, t('systems.proposals.aliases', { aliases: term.aliases.join(', ') }));
+  }
+  return { id: term.id, label: term.name, detail: parts.join(' · '), href: null, state: null };
 }

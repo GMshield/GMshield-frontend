@@ -1171,6 +1171,8 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
         `GET /api/v1/materials/${MATERIAL_ID}/deletion`,
         // Usability pass: a ready material with pages shows its first page beside its facts.
         `GET /api/v1/materials/${MATERIAL_ID}/pages/1?ground=review`,
+        // Story 4.4: its pending ontology proposals.
+        `GET /api/v1/materials/${MATERIAL_ID}/proposals?limit=10`,
         `GET /api/v1/materials/${MATERIAL_ID}/report`,
         'GET /api/v1/systems?limit=50',
       ].sort(),
@@ -1190,6 +1192,72 @@ describe('"Meus Arquivos" and where a material belongs (Story 3.3)', () => {
     expect(html).toContain('Em nenhum lugar: nenhuma pergunta usa este arquivo.');
     expect(html).not.toMatch(/>Alterar<\/button>/);
     expect(html).toMatch(/aria-labelledby="material-place".*O serviço está indisponível agora\. Tente de novo em instantes\./s);
+  });
+
+  it('a material in two systems lists its pending proposals after the report, each naming its system, paged (Story 4.4)', async () => {
+    const proposal = (index: number) => ({
+      id: `0190a0b0-0000-7000-8000-0000000008${String(index).padStart(2, '0')}`,
+      systemId: index % 2 === 0 ? SYSTEM : OTHER_SYSTEM,
+      materialId: MATERIAL_ID,
+      materialName: 'Livro.pdf',
+      kind: 'record_type',
+      name: `Talento ${index}`,
+      definition: null,
+      examples: [{ page: 40 + index, quote: `Talento ${index} do livro` }],
+      state: 'pending',
+      version: 0,
+    });
+    const core = (n: number) => ({
+      id: `0190a0b0-0000-7000-8000-0000000009${String(n).padStart(2, '0')}`,
+      name: `tipo ${n}`,
+      core: null,
+      key: `tipo_${n}`,
+      origin: { kind: 'proposal', proposalId: null, materialId: null, materialName: null },
+      records: 0,
+      version: 0,
+    });
+    const routes = (total: number) => ({
+      [`GET /api/v1/materials/${MATERIAL_ID}`]: { status: 200, body: { ...files[1]!, id: MATERIAL_ID } },
+      'GET /api/v1/campaigns?limit=50': { status: 200, body: { items: [] } },
+      'GET /api/v1/systems?limit=50': {
+        status: 200,
+        body: {
+          items: [
+            { id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 },
+            { id: OTHER_SYSTEM, name: 'Pathfinder', edition: null, description: null, version: 0 },
+          ],
+        },
+      },
+      [`GET /api/v1/materials/${MATERIAL_ID}/proposals?limit=10`]: {
+        status: 200,
+        body: { items: total === 0 ? [] : Array.from({ length: 10 }, (_, index) => proposal(index)), total },
+      },
+      ...Object.fromEntries(
+        [SYSTEM, OTHER_SYSTEM].flatMap((system) => [
+          [`GET /api/v1/systems/${system}/record-types?limit=50`, { status: 200, body: { items: Array.from({ length: 50 }, (_, n) => core(n)), total: 51 } }],
+          [`GET /api/v1/systems/${system}/record-types?limit=50&offset=50`, { status: 200, body: { items: [core(50)], total: 51 } }],
+          [`GET /api/v1/systems/${system}/terms?limit=50`, { status: 200, body: { items: [], total: 0 } }],
+        ]),
+      ),
+    });
+    const server = await useBackend(routes(12));
+    const html = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(html).toContain('>Propostas de ontologia</h2>');
+    expect(html).toContain('Talento 1');
+    expect(html).toContain('De Livro.pdf, em Pathfinder');
+    expect(html).toContain('De Livro.pdf, em D&amp;D');
+    expect(html).toContain('«Talento 1 do livro», p. 41');
+    for (const pill of ['Aprovar', 'Renomear', 'Mesclar', 'Rejeitar']) {
+      expect(html).toContain(`>${pill}</button>`);
+    }
+    expect(html).toContain(`href="/files/${MATERIAL_ID}?proposals=2"`);
+    // The merge choices read every page of the system's record types.
+    expect(server.calls.map((call) => `${call.method} ${call.url}`)).toContain(`GET /api/v1/systems/${SYSTEM}/record-types?limit=50&offset=50`);
+
+    await backend?.close();
+    await useBackend(routes(0));
+    const none = renderToStaticMarkup(await MaterialPage({ params: Promise.resolve({ id: MATERIAL_ID }) }));
+    expect(none).not.toContain('Propostas de ontologia');
   });
 });
 

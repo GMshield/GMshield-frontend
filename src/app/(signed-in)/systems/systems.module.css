@@ -143,3 +143,17 @@
   border: 0;
   border-block-start: 1px solid var(--color-border);
 }
+
+/* Story 4.4: the "Ontologia" tab: the pending proposals, then the approved terms, each under its heading. */
+.ontology {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}

@@ -83,14 +83,19 @@
       "campaigns": "Campanhas",
       "materials": "Materiais",
       "records": "Registros",
-      "proposals": "Propostas de ontologia",
+      "proposals": "Ontologia",
       "campaignList": "Campanhas deste sistema",
       "materialList": "Materiais deste sistema",
       "recordTypeList": "Tipos de registro deste sistema",
+      "proposalList": "Propostas de ontologia deste sistema",
+      "termList": "Termos aprovados deste sistema",
+      "pending": "Propostas pendentes",
+      "terms": "Termos aprovados",
       "noCampaigns": "Este sistema ainda não tem campanhas.",
       "noMaterials": "Nenhum material está ligado a este sistema ou às suas campanhas.",
       "noRecordTypes": "Este sistema ainda não tem tipos de registro.",
       "noProposals": "Nenhuma proposta de ontologia por enquanto. Quando um material propuser tipos de registro ou termos, eles aparecem aqui para você aprovar ou recusar.",
+      "noTerms": "Nenhum termo aprovado ainda. Um termo aparece aqui quando você aprova uma proposta de termo.",
       "recordsOne": "1 registro",
       "recordsOther": "{count} registros"
     },
@@ -122,6 +127,33 @@
       "materialsOne": "1 material ligado só a ele",
       "materialsOther": "{count} materiais ligados só a ele",
       "confirm": "Excluir sistema"
+    },
+    "proposals": {
+      "kind": {
+        "record_type": "Tipo de registro",
+        "term": "Termo"
+      },
+      "from": "De {material}",
+      "fromIn": "De {material}, em {system}",
+      "materialRemoved": "material removido",
+      "example": "«{quote}», p. {page}",
+      "examples": "Exemplos do material",
+      "definition": "Definição:",
+      "approve": "Aprovar",
+      "rename": "Renomear",
+      "renameLabel": "Novo nome para «{name}»",
+      "approveAs": "Aprovar como",
+      "merge": "Mesclar",
+      "mergeLabel": "Mesclar «{name}» em",
+      "mergeInto": "Mesclar",
+      "noTerms": "Este sistema ainda não tem termos para mesclar. Aprove um termo primeiro.",
+      "reject": "Rejeitar",
+      "cancel": "Cancelar",
+      "stale": "Este item mudou em outra aba.",
+      "viewCurrent": "Ver a versão atual",
+      "actions": "Decidir sobre «{name}»",
+      "heading": "Propostas de ontologia",
+      "aliases": "Também chamado: {aliases}"
     }
   },
   "campaigns": {
@@ -325,7 +357,10 @@
         "core_record_type": "Os tipos de registro básicos são os mesmos em todo sistema e não podem ser renomeados nem removidos.",
         "record_type_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "record_type_name_taken": "Este sistema já tem um tipo de registro com este nome.",
-        "record_type_in_use": "Este tipo de registro tem registros e não pode ser removido."
+        "record_type_in_use": "Este tipo de registro tem registros e não pode ser removido.",
+        "name_taken": "Este sistema já tem um tipo de registro, um termo ou um tipo básico com este nome.",
+        "name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "merge_target_invalid": "Escolha um item deste sistema do mesmo tipo da proposta."
       }
     }
   },
@@ -761,7 +796,13 @@
     "uploadFailed": "O envio de «{name}» falhou.",
     "viewSaved": "Exibição salva neste navegador.",
     "conversationRenamed": "Conversa renomeada para «{name}».",
-    "conversationDeleted": "Conversa «{name}» excluída."
+    "conversationDeleted": "Conversa «{name}» excluída.",
+    "proposal": {
+      "typeApproved": "Tipo de registro «{name}» aprovado.",
+      "termApproved": "Termo «{name}» aprovado.",
+      "merged": "«{name}» mesclado.",
+      "rejected": "«{name}» rejeitado. Ele não volta a ser proposto por este material."
+    }
   },
   "notifications": {
     "title": "Notificações",
