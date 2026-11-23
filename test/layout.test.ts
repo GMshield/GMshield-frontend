@@ -667,6 +667,12 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
       { code: 'report.pages_unreadable', count: 3 },
       { code: 'report.pages_unopened', count: 1 },
       { code: 'report.something_new', count: 7 },
+      { code: 'report.records_unread', count: 10 },
+    ],
+    records: [
+      { type: 'rule', count: 1 },
+      { type: 'spell', count: 30 },
+      { type: 'monster', count: 2 },
     ],
   };
   const page = async (language?: 'en') => {
@@ -699,6 +705,11 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(html).toContain('1 página não pôde ser aberta para leitura.');
     // A warning this release does not know is left out, never shown as its code.
     expect(html).not.toContain('something_new');
+    // Story 4.2: the records by type, a plain list of the type's name and count; a type it does not know is left out.
+    expect(html).toContain('Registros encontrados');
+    expect(html).toMatch(/<li><span[^>]*>Regra<\/span><span[^>]*>1<\/span><\/li><li><span[^>]*>Magia<\/span><span[^>]*>30<\/span><\/li><\/ul>/);
+    expect(html).not.toContain('monster');
+    expect(html).toContain('Os registros de 10 páginas não puderam ser lidos; os trechos delas foram mantidos.');
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/9">Página 9</a>`);
     expect(html).toContain(`href="/files/${MATERIAL_ID}/pages/40">Páginas 40 a 41</a>`);
     // The outline: a plain list indented by level through classes, titles as text, never HTML.
@@ -716,12 +727,15 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     html = await page('en');
     expect(html).toContain('Quality report');
     expect(html).toContain('3 pages could not be read.');
+    expect(html).toContain('Records found');
+    expect(html).toMatch(/<span[^>]*>Spell<\/span><span[^>]*>30<\/span>/);
+    expect(html).toContain('The records of 10 pages could not be read; their passages were kept.');
     expect(html).toContain('Pages 40 to 41');
     expect(buttons(html)).toEqual(['Accept:solid', 'Reprocess failed pages:default', 'Discard:danger']);
   });
 
   it('shows only the actions the material allows: read-only when ready, retry and discard when failed, none while processing', async () => {
-    const routes: Record<string, { status: number; body: unknown }> = { [REPORT]: { status: 200, body: { outline: [], unreadable: [], warnings: [{ code: 'report.outline_empty', count: 0 }] } } };
+    const routes: Record<string, { status: number; body: unknown }> = { [REPORT]: { status: 200, body: { outline: [], unreadable: [], warnings: [{ code: 'report.outline_empty', count: 0 }], records: [] } } };
     const server = await useBackend(routes);
     const answer = (body: Record<string, unknown>) => {
       routes[MATERIAL] = { status: 200, body: { id: MATERIAL_ID, name: 'Livro.pdf', ...PLACE, ...body } };
@@ -733,6 +747,8 @@ describe('the quality report, the actions and the needs-review notice (Story 1.2
     expect(buttons(html)).toEqual(['Aceitar:solid', 'Descartar:danger']);
     expect(html).toContain('Nenhuma seção foi encontrada no texto.');
     expect(html).not.toContain('Páginas ilegíveis');
+    // Story 4.2: a version with no record says so.
+    expect(html).toContain('Nenhum registro.');
 
     // Accepted: the report, read-only, and the pill "pronto". Story 3.4: "Substituir" and "Reprocessar", two plain pills,
     // with no confirmation (nothing is removed).

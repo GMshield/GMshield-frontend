@@ -35,7 +35,7 @@ const BACKEND_CODES = {
   material: ['action_unavailable', 'version_in_progress', 'not_ready'],
   scope: ['material_unknown'],
   conversation: ['turn_running', 'turn_not_done'],
-  ontology: ['core_record_type', 'record_type_name_invalid', 'record_type_name_taken'],
+  ontology: ['core_record_type', 'record_type_name_invalid', 'record_type_name_taken', 'record_type_in_use'],
 } as const;
 
 function leaves(value: unknown): string[] {

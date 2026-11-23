@@ -1,9 +1,10 @@
 import 'server-only';
 
 import type { ListRow } from '@/components/ItemList';
-import type { Language, MessagePath, Translate } from '@/messages';
+import type { Language, Translate } from '@/messages';
 import type { CampaignSummary, CoreRecordType, GameSystem, RecordType } from '@/server/library';
 import type { Material, MaterialState } from '@/server/materials';
+import { CORE_NAMES } from '@/record-types';
 
 import { placeLabel, previewOf } from '../files/rows';
 
@@ -34,21 +35,6 @@ export function materialRow(material: Material, t: Translate, language: Language
     ...previewOf(material),
   };
 }
-
-/**
- * The message of each core record type's name (Story 4.1). Typed by the contract's core keys, so a key the contract
- * gains fails the type check until it is here and in both message files.
- */
-const CORE_NAMES: Readonly<Record<CoreRecordType, MessagePath>> = {
-  rule: 'systems.recordTypes.rule',
-  spell: 'systems.recordTypes.spell',
-  item: 'systems.recordTypes.item',
-  creature: 'systems.recordTypes.creature',
-  character_sheet: 'systems.recordTypes.character_sheet',
-  encounter: 'systems.recordTypes.encounter',
-  dungeon: 'systems.recordTypes.dungeon',
-  note: 'systems.recordTypes.note',
-};
 
 /**
  * A record type's row on its system's page (Story 4.1): a core type by this interface's own name for its key (its

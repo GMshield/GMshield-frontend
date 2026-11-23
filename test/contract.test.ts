@@ -22,6 +22,7 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 4.2: it reads a report's records by type and the warning report.records_unread, added in 1.34.0.
     // Story 4.1: it lists a system's record types, added in 1.33.0.
     // Story 3.12: it bookmarks answers, reads `bookmarked` on turns and lists the saved answers, added in 1.32.0.
     // Story 3.11: it dismisses an answer and undoes the dismissal, added in 1.31.0.
@@ -31,10 +32,11 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.33.0');
-    expect(meetsMinimum('1.33.0')).toBe(true);
-    expect(meetsMinimum('1.33.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.34.0');
     expect(meetsMinimum('1.34.0')).toBe(true);
+    expect(meetsMinimum('1.34.1')).toBe(true);
+    expect(meetsMinimum('1.35.0')).toBe(true);
+    expect(meetsMinimum('1.33.0')).toBe(false);
     expect(meetsMinimum('1.32.0')).toBe(false);
     expect(meetsMinimum('1.31.0')).toBe(false);
     expect(meetsMinimum('1.30.0')).toBe(false);

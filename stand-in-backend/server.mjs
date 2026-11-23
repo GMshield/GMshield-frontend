@@ -295,6 +295,14 @@ export const EXAMPLES = {
     warnings: [
       { code: 'report.pages_unreadable', count: 2 },
       { code: 'report.pages_unopened', count: 1 },
+      // Story 4.2: the records of pages 31 to 40 could not be read.
+      { code: 'report.records_unread', count: 10 },
+    ],
+    // Story 4.2: the records found by type.
+    records: [
+      { type: 'rule', count: 12 },
+      { type: 'spell', count: 30 },
+      { type: 'item', count: 4 },
     ],
   },
   'POST /api/v1/materials/{id}/accept': {

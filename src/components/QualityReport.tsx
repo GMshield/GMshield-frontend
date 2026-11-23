@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { translator, type Language, type MessagePath } from '@/messages';
 import { pageOf } from '@/paging';
+import { CORE_NAMES } from '@/record-types';
 import type { Material, MaterialReport } from '@/server/materials';
 
 import { Pager } from './Pager';
@@ -19,17 +20,32 @@ export const UNREADABLE_FIELD = 'unreadable';
 const DEEPEST = 6;
 
 type Warning = MaterialReport['warnings'][number];
+type RecordCount = MaterialReport['records'][number];
 type Pages = NonNullable<Material['pages']>;
+
+/** The warnings this release has words for, by their reason (the code after `report.`). */
+const WARNINGS = ['pages_unreadable', 'pages_unopened', 'outline_empty', 'records_unread'];
 
 /** The words of a warning the backend found, or null for a code this release does not know (never the code). */
 function warningText(warning: Warning, language: Language): string | null {
   const t = translator(language);
   const reason = warning.code.startsWith('report.') ? warning.code.slice('report.'.length) : '';
-  if (!['pages_unreadable', 'pages_unopened', 'outline_empty'].includes(reason)) {
+  if (!WARNINGS.includes(reason)) {
     return null;
   }
   const form = warning.count === 1 ? 'one' : 'other';
   return t(`material.report.warning.${reason}.${form}` as MessagePath, { count: warning.count });
+}
+
+/**
+ * The records of the version by type (Story 4.2), each type named in the interface's language with its count, in the
+ * backend's order; a type this release does not know yet (a newer backend) is left out, never shown as its key.
+ */
+function recordCounts(records: readonly RecordCount[], language: Language): { name: string; count: number }[] {
+  const t = translator(language);
+  return records
+    .filter((record) => Object.hasOwn(CORE_NAMES, record.type))
+    .map((record) => ({ name: t(CORE_NAMES[record.type]), count: record.count }));
 }
 
 /**
@@ -43,6 +59,9 @@ function warningText(warning: Warning, language: Language): string | null {
  * sections at a time and the unreadable pages twelve runs, each with a small pager beside its heading (`?outline=`,
  * `?unreadable=`); turning one keeps the other and the place on the screen. Indents come from the whole outline, so a
  * section sits at the same depth on every page.
+ *
+ * Story 4.2: after the warnings, the records the version holds by type, as a plain list of the type's name and its
+ * count (no chart), or "Nenhum registro." when it holds none; and the warning that some pages' records were unread.
  */
 export function QualityReport({
   materialId,
@@ -68,6 +87,7 @@ export function QualityReport({
   ] as const;
   const shallowest = report.outline.reduce((least, section) => Math.min(least, section.level), Number.POSITIVE_INFINITY);
   const warnings = report.warnings.map((warning) => warningText(warning, language)).filter((text) => text !== null);
+  const records = recordCounts(report.records, language);
   const here = `/files/${encodeURIComponent(materialId)}`;
   const base = `${here}/pages`;
   const outline = pageOf(
@@ -109,6 +129,23 @@ export function QualityReport({
           </ul>
         </section>
       )}
+      <section className={styles.part} aria-labelledby="report-records">
+        <h3 id="report-records" className={styles.meta}>
+          {t('material.report.records')}
+        </h3>
+        {records.length === 0 ? (
+          <p className={styles.none}>{t('material.report.recordsNone')}</p>
+        ) : (
+          <ul className={styles.records}>
+            {records.map(({ name, count }) => (
+              <li key={name}>
+                <span className={styles.recordType}>{name}</span>
+                <span className={styles.recordCount}>{count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {report.unreadable.length === 0 ? null : (
         <section className={styles.part} aria-labelledby="report-unreadable">
           <div className={styles.partHead}>

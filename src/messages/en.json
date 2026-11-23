@@ -317,7 +317,8 @@
       "ontology": {
         "core_record_type": "The core record types are the same in every system and cannot be renamed or removed.",
         "record_type_name_invalid": "The name must have {min} to {max} characters.",
-        "record_type_name_taken": "This system already has a record type with this name."
+        "record_type_name_taken": "This system already has a record type with this name.",
+        "record_type_in_use": "This record type has records and cannot be removed."
       }
     }
   },
@@ -407,8 +408,14 @@
         "outline_empty": {
           "one": "No section was found in the text.",
           "other": "No section was found in the text."
+        },
+        "records_unread": {
+          "one": "The records of 1 page could not be read; its passages were kept.",
+          "other": "The records of {count} pages could not be read; their passages were kept."
         }
-      }
+      },
+      "records": "Records found",
+      "recordsNone": "No records."
     },
     "actions": {
       "label": "Actions",
