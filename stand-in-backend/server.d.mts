@@ -79,3 +79,13 @@ export const STORED_TURN: {
   createdAt: string;
   events: { sequence: number; type: string; data: unknown }[];
 };
+/** Story 4.3: a record type's records, one record as its system shows it, and that record's id. */
+export const RECORD_ID: string;
+export const RECORD_PAGE: { items: { id: string; name: string; materialName: string; page: number }[]; total: number };
+export const RECORD: {
+  id: string;
+  name: string;
+  recordType: { id: string; core: string; name: string };
+  fields: { name: string; value: string }[];
+  references: { versionId: string; materialName: string; sectionPath: string[]; page: number; passageIds: string[] }[];
+};

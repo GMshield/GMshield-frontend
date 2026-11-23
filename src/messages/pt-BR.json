@@ -104,6 +104,13 @@
       "dungeon": "Masmorra",
       "note": "Nota"
     },
+    "records": {
+      "list": "Registros deste tipo",
+      "empty": "Os registros aparecem aqui quando um material deste sistema ou das suas campanhas é aceito.",
+      "from": "{material}, p. {page}",
+      "fields": "Campos",
+      "references": "Fontes"
+    },
     "delete": {
       "title": "Excluir este sistema?",
       "consequence": "Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.",

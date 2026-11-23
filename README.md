@@ -968,6 +968,20 @@ they sit in `src/`.
     `errors.codes.ontology.record_type_in_use`, in pt-BR and en. The stand-in backend's report carries records of three
     types and the unread warning.
   - Deploy order: backend → worker → frontend.
+- **Browse records (Story 4.3 part A).** Public contract 1.35.0 (the minimum backend contract too).
+  - A row of the system's records tab opens `/systems/{id}/record-types/{typeId}`: the type's name as the title, the
+    system's name as the way back to its records tab, and the type's records (`listRecords`) in an `ItemList` with the
+    "Exibição" menu (view key `records`) and the pager; each row shows the record's name, with "material, p. N" as the
+    detail. An empty type says in one sentence that records come from accepted materials, with no action.
+  - A record row opens `/systems/{id}/records/{recordId}` (`getRecord`): the name under its record type (the way back
+    to the type's list), its fields as a two-column `<dl>` closed by a rule (none drawn when it has no field), then its
+    source references (`RecordReferences`), each a button that opens the source view (`SourceView`, ground
+    `{kind: 'record', systemId, recordId}`) at that page in the right panel, the reference's `passageIds` (the record's
+    passages on that page) marked as an answer's cited passages are; Esc gives focus back to the reference.
+  - Relays: `GET /api/v1/systems/{id}/records/{recordId}/pages/{page}` and `.../picture` (`relayRecordPicture`).
+  - Strings `systems.records.*` in pt-BR and en. The stand-in backend answers three records of a type, a record with
+    four fields and two references (the first names the passage of its version's text page), and that text page.
+  - Deploy order: backend → frontend.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

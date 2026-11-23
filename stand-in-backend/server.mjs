@@ -439,6 +439,8 @@ export const REFERENCE_TEXT_PAGE = {
 };
 
 const REFERENCE_PAGE_PATH = /^\/api\/v1\/turns\/[^/]+\/references\/([^/]+)\/pages\/[^/]+$/;
+/** Story 4.3: a page of a record's version, on the record's ground. */
+const RECORD_PAGE_PATH = /^\/api\/v1\/systems\/[^/]+\/records\/[^/]+\/pages\/[^/]+$/;
 /** Story 3.9: a page of the current scope, by version. */
 const SOURCE_PAGE_PATH = /^\/api\/v1\/campaigns\/[^/]+\/sources\/([^/]+)\/pages\/[^/]+$/;
 
@@ -524,6 +526,51 @@ const CORE_RECORD_TYPES = ['rule', 'spell', 'item', 'creature', 'character_sheet
 EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: CORE_RECORD_TYPES, total: CORE_RECORD_TYPES.length };
 EXAMPLES['GET /api/v1/record-types/{id}'] = CORE_RECORD_TYPES[0];
 
+/**
+ * Story 4.3: a record type's records, alphabetical by name, each with its material and first page (two records named
+ * alike are two rows, as they were extracted), and one record as its system shows it: its fields in stored order and
+ * one reference per version, section path and page, each with the record's passages there. Its version's pages are the
+ * text page of Fire Bolt, whose passage the first reference names.
+ */
+export const RECORD_ID = '0190a0b0-0000-7000-8000-000000000700';
+export const RECORD_PAGE = {
+  items: [
+    { id: '0190a0b0-0000-7000-8000-000000000701', name: 'Bola de Fogo', materialName: 'Livro do Jogador.pdf', page: 241 },
+    { id: RECORD_ID, name: 'Fire Bolt', materialName: 'Livro do Jogador.pdf', page: 2 },
+    { id: '0190a0b0-0000-7000-8000-000000000702', name: 'Fire Bolt', materialName: 'Notas da campanha.md', page: 1 },
+  ],
+  total: 3,
+};
+export const RECORD = {
+  id: RECORD_ID,
+  name: 'Fire Bolt',
+  recordType: { id: CORE_RECORD_TYPES[1].id, core: 'spell', name: 'spell' },
+  fields: [
+    { name: 'Nível', value: 'Truque de evocação' },
+    { name: 'Tempo de conjuração', value: '1 ação' },
+    { name: 'Alcance', value: '36 metros' },
+    { name: 'Dano', value: '1d10 de fogo' },
+  ],
+  references: [
+    {
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Magias', 'Fire Bolt'],
+      page: 2,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000010'],
+    },
+    {
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Magias', 'Fire Bolt'],
+      page: 3,
+      passageIds: ['0190a0b0-0000-7000-8000-000000000011', '0190a0b0-0000-7000-8000-000000000012'],
+    },
+  ],
+};
+EXAMPLES['GET /api/v1/record-types/{id}/records'] = RECORD_PAGE;
+EXAMPLES['GET /api/v1/systems/{systemId}/records/{recordId}'] = RECORD;
+
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
 
@@ -564,6 +611,9 @@ export function answer(contract, method, pathname, traceId) {
     const source = SOURCE_PAGE_PATH.exec(pathname)?.[1];
     if (source !== undefined && method.toUpperCase() === 'GET') {
       return { status: 200, type, body: source === NOTES_VERSION ? REFERENCE_TEXT_PAGE : REFERENCE_PAGE, ...headers };
+    }
+    if (RECORD_PAGE_PATH.test(pathname) && method.toUpperCase() === 'GET') {
+      return { status: 200, type, body: REFERENCE_TEXT_PAGE, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});

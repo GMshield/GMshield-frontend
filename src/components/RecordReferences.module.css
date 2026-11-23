@@ -1,0 +1,49 @@
+/* Story 4.3: a record's source references, under the rule that closes its fields. */
+.references {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+/* A reference's line is a button that opens its page; it reads as the line, underlined, as an answer's references do. */
+.reference {
+  display: inline-block;
+  min-block-size: var(--space-touch-target);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.reference[data-open='true'] {
+  color: var(--color-text);
+}

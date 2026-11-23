@@ -12,7 +12,9 @@ import { outgoingTraceparent, traceFrom } from '../trace';
  * 2.7: the same relay serves the picture of a page a turn's source reference names,
  * `GET /api/v1/turns/{turnId}/references/{number}/pages/{page}/picture`, whose path is its ground. Story 3.9: and the
  * picture of a page of the campaign's current scope, `GET /api/v1/campaigns/{campaignId}/sources/{versionId}/pages/
- * {page}/picture` (a search result's page).
+ * {page}/picture` (a search result's page). Story 4.3: and the picture of a page of the version a record was read from,
+ * `GET /api/v1/systems/{systemId}/records/{recordId}/pages/{page}/picture` (a record's reference), whose path is its
+ * ground too.
  *
  * - The material or turn id must be a UUID, the reference and page numbers numbers from 1, and the ground a plain
  *   word: anything else answers "not found" without reaching the backend. The backend decides everything else
@@ -81,6 +83,17 @@ export function scopePicturePath(campaignId: string, versionId: string, page: st
   return `/api/v1/campaigns/${campaignId}/sources/${versionId}/pages/${page}/picture`;
 }
 
+/**
+ * The backend path of the picture of a page of the version a record was read from (Story 4.3); null when an id or the
+ * page cannot be one.
+ */
+export function recordPicturePath(systemId: string, recordId: string, page: string): string | null {
+  if (!ID.test(systemId) || !ID.test(recordId) || !PAGE.test(page)) {
+    return null;
+  }
+  return `/api/v1/systems/${systemId}/records/${recordId}/pages/${page}/picture`;
+}
+
 function problem(status: number, category: string, code: string, title: string, traceId: string): Response {
   const body = JSON.stringify({ type: `urn:gmshield:problem:${code}`, title, status, category, code, params: {}, traceId });
   return new Response(body, {
@@ -127,6 +140,17 @@ export function relayScopePicture(
   options: PictureRelayOptions = {},
 ): Promise<Response> {
   return relayPictureAt(request, scopePicturePath(campaignId, versionId, page), options);
+}
+
+/** Relays the picture of a page of the version a record was read from (Story 4.3), as {@link relayPicture} does. */
+export function relayRecordPicture(
+  request: PictureRequest,
+  systemId: string,
+  recordId: string,
+  page: string,
+  options: PictureRelayOptions = {},
+): Promise<Response> {
+  return relayPictureAt(request, recordPicturePath(systemId, recordId, page), options);
 }
 
 /** Relays one picture request to the backend path `path` (null: "not found", the backend is not reached). */

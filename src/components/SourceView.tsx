@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 
 import { fetchReferencePage, referencePictureUrl, type SourcePage, type SourceReference } from '@/client/conversation';
+import { fetchRecordPage, recordPictureUrl } from '@/client/records';
 import { fetchScopePage, scopePictureUrl } from '@/client/search';
 import { translator, type Language } from '@/messages';
 
@@ -17,11 +18,17 @@ export type LoadPage = (turnId: string, number: number, page: number, signal: Ab
 /** How a page of the campaign's current scope is read (Story 3.9): the relay's fetcher by default; tests give their own. */
 export type LoadScopePage = (campaignId: string, versionId: string, page: number, signal: AbortSignal) => Promise<SourcePage | null>;
 
+/** How a page of a record's version is read (Story 4.3): the relay's fetcher by default; tests give their own. */
+export type LoadRecordPage = (systemId: string, recordId: string, page: number, signal: AbortSignal) => Promise<SourcePage | null>;
+
 /**
  * The ground a page is served on (AD-9), other than a turn's reference (Story 3.9): the campaign's current scope, a
  * version of which a search result names.
  */
 export type ScopeGround = { readonly kind: 'scope'; readonly campaignId: string; readonly versionId: string };
+
+/** Story 4.3: the ground "a record as its system shows it", whose version a record's reference names. */
+export type RecordGround = { readonly kind: 'record'; readonly systemId: string; readonly recordId: string };
 
 /** What the view shows of where the page comes from, and what it marks: a reference, or a search result's place. */
 export type SourceSpot = Pick<SourceReference, 'materialName' | 'sectionPath' | 'page' | 'passageIds'>;
@@ -42,6 +49,7 @@ export type SourceViewProps = Common &
         readonly ground?: undefined;
         readonly load?: LoadPage;
         readonly loadScope?: undefined;
+        readonly loadRecord?: undefined;
       }
     | {
         /** Story 3.9: the ground "the current scope", for a search result. */
@@ -51,6 +59,17 @@ export type SourceViewProps = Common &
         readonly turnId?: undefined;
         readonly load?: undefined;
         readonly loadScope?: LoadScopePage;
+        readonly loadRecord?: undefined;
+      }
+    | {
+        /** Story 4.3: the ground "a record as its system shows it", for a record's reference. */
+        readonly ground: RecordGround;
+        /** The reference's place: its page is where the view opens, and the record's passages there are marked. */
+        readonly reference: SourceSpot;
+        readonly turnId?: undefined;
+        readonly load?: undefined;
+        readonly loadScope?: undefined;
+        readonly loadRecord?: LoadRecordPage;
       }
   );
 
@@ -87,14 +106,19 @@ function sourceLine(reference: SourceSpot): string {
  *
  * Story 3.9: the page is read on a ground. With `turnId`, a turn's reference, as above; with `ground` of kind `scope`,
  * the campaign's current scope (a search result's version and page, its passage marked). Everything else is the same.
+ *
+ * Story 4.3: with `ground` of kind `record`, a record as its system shows it (a record's reference: its version's page,
+ * the record's passages on it marked, any page of that version reached from there).
  */
 export function SourceView(props: SourceViewProps) {
   const { reference, language, onClose } = props;
-  const scope = props.ground ?? null;
+  const scope = props.ground?.kind === 'scope' ? props.ground : null;
+  const record = props.ground?.kind === 'record' ? props.ground : null;
   const turnId = props.turnId ?? null;
   const number = props.ground === undefined ? props.reference.number : null;
   const load = props.load ?? fetchReferencePage;
   const loadScope = props.loadScope ?? fetchScopePage;
+  const loadRecord = props.loadRecord ?? fetchRecordPage;
   const t = translator(language);
   const titleId = useId();
   const viewRef = useRef<HTMLDialogElement>(null);
@@ -114,12 +138,18 @@ export function SourceView(props: SourceViewProps) {
 
   const campaignId = scope?.campaignId ?? null;
   const versionId = scope?.versionId ?? null;
+  const systemId = record?.systemId ?? null;
+  const recordId = record?.recordId ?? null;
   useEffect(() => {
     const controller = new AbortController();
-    const read =
-      campaignId !== null && versionId !== null
-        ? loadScope(campaignId, versionId, page, controller.signal)
-        : load(turnId ?? '', number ?? 0, page, controller.signal);
+    let read: Promise<SourcePage | null>;
+    if (systemId !== null && recordId !== null) {
+      read = loadRecord(systemId, recordId, page, controller.signal);
+    } else if (campaignId !== null && versionId !== null) {
+      read = loadScope(campaignId, versionId, page, controller.signal);
+    } else {
+      read = load(turnId ?? '', number ?? 0, page, controller.signal);
+    }
     void read.then((view) => {
       if (controller.signal.aborted) {
         return;
@@ -132,7 +162,7 @@ export function SourceView(props: SourceViewProps) {
       setShown({ page, state: 'loaded', view });
     });
     return () => controller.abort();
-  }, [load, loadScope, page, number, turnId, campaignId, versionId, attempt]);
+  }, [load, loadScope, loadRecord, page, number, turnId, campaignId, versionId, systemId, recordId, attempt]);
 
   const atLast = total === null || page >= total;
   /** Moves one page. A control that reaches the end is disabled: its focus goes to a control still enabled. */
@@ -220,14 +250,18 @@ export function SourceView(props: SourceViewProps) {
   } else if (shown.view.picture === null && shown.view.text === null) {
     body = <p className={styles.unopened}>{t('pageView.unopened')}</p>;
   } else {
+    let pictureSrc: string;
+    if (systemId !== null && recordId !== null) {
+      pictureSrc = recordPictureUrl(systemId, recordId, shown.view.page);
+    } else if (campaignId !== null && versionId !== null) {
+      pictureSrc = scopePictureUrl(campaignId, versionId, shown.view.page);
+    } else {
+      pictureSrc = referencePictureUrl(turnId ?? '', number ?? 0, shown.view.page);
+    }
     body = (
       <PageView
         page={shown.view}
-        pictureSrc={
-          campaignId !== null && versionId !== null
-            ? scopePictureUrl(campaignId, versionId, shown.view.page)
-            : referencePictureUrl(turnId ?? '', number ?? 0, shown.view.page)
-        }
+        pictureSrc={pictureSrc}
         language={language}
         cited={reference.passageIds}
         caption={false}

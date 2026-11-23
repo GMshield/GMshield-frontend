@@ -31,6 +31,11 @@ import { everyPage, type Every } from './every-page';
  * Story 4.1: a system's record types by page (`{items, total}`, the eight core types first in their fixed order), each
  * with its record count. A core type is named by its `core` key, which the screen translates; its stored `name` is never
  * shown.
+ *
+ * Story 4.3: one record type, a record type's records by page (`{items, total}`, alphabetical by name, each with the
+ * material it was read from and its first page), one record as its system shows it (its name, its record type, its
+ * fields and its source references), and a page of the record's version (the same shape as a material's page), read on
+ * the record's ground. Only the records of the system's accepted versions are read: any other is `request.not_found`.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -49,10 +54,17 @@ export type ScopeChange = Schemas['ScopeChange'];
 export type ScopeMaterial = Schemas['ScopeMaterial'];
 export type RecordType = Schemas['RecordType'];
 export type RecordTypePage = Schemas['RecordTypePage'];
+export type RecordSummary = Schemas['RecordSummary'];
+export type RecordPage = Schemas['RecordPage'];
+export type GameRecord = Schemas['Record'];
+export type RecordField = Schemas['RecordField'];
+export type RecordReference = Schemas['RecordReference'];
+export type RecordSourcePage = Schemas['MaterialPageView'];
 /** The key of a core record type (Story 4.1): the same eight in every system. */
 export type CoreRecordType = NonNullable<RecordType['core']>;
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
 type RecordTypeQuery = NonNullable<operations['listRecordTypes']['parameters']['query']>;
+type RecordQuery = NonNullable<operations['listRecords']['parameters']['query']>;
 export type CampaignQuery = NonNullable<operations['listCampaigns']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
@@ -90,6 +102,53 @@ export function listRecordTypes(
 ): Promise<Result<RecordTypePage>> {
   return call('ontology.record_types', options, (client) =>
     client.GET('/api/v1/systems/{id}/record-types', { params: { header: session(sessionToken), path: { id }, query } }),
+  );
+}
+
+/** One of the account's record types, with its record count (Story 4.1); `request.not_found` for any other id. */
+export function getRecordType(sessionToken: string, id: string, options: CallOptions = {}): Promise<Result<RecordType>> {
+  return call('ontology.record_type', options, (client) =>
+    client.GET('/api/v1/record-types/{id}', { params: { header: session(sessionToken), path: { id } } }),
+  );
+}
+
+/**
+ * The records of one of the account's record types, a page at a time (Story 4.3): alphabetical by name, each with the
+ * material it was read from and its first page; `request.not_found` for any other record type.
+ */
+export function listRecords(sessionToken: string, id: string, query: RecordQuery = {}, options: CallOptions = {}): Promise<Result<RecordPage>> {
+  return call('ontology.records', options, (client) =>
+    client.GET('/api/v1/record-types/{id}/records', { params: { header: session(sessionToken), path: { id }, query } }),
+  );
+}
+
+/**
+ * One record as one of the account's systems shows it (Story 4.3): its name, its record type, its fields in stored
+ * order and its source references; `request.not_found` for a record the system does not show.
+ */
+export function getRecord(sessionToken: string, systemId: string, recordId: string, options: CallOptions = {}): Promise<Result<GameRecord>> {
+  return call('ontology.record', options, (client) =>
+    client.GET('/api/v1/systems/{systemId}/records/{recordId}', {
+      params: { header: session(sessionToken), path: { systemId, recordId } },
+    }),
+  );
+}
+
+/**
+ * One page of the version a record was read from, on the record's ground (Story 4.3): the same shape as a material's
+ * page; `request.not_found` for a record the system does not show or a page that is not one.
+ */
+export function recordSourcePage(
+  sessionToken: string,
+  systemId: string,
+  recordId: string,
+  page: string,
+  options: CallOptions = {},
+): Promise<Result<RecordSourcePage>> {
+  return call('ontology.record_page', options, (client) =>
+    client.GET('/api/v1/systems/{systemId}/records/{recordId}/pages/{page}', {
+      params: { header: session(sessionToken), path: { systemId, recordId, page: Number(page) } },
+    }),
   );
 }
 
