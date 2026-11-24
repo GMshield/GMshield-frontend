@@ -4,25 +4,39 @@ import type { IconName } from '@/components/Icons';
 import { ItemList, type ListRow } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
+import { ProposalList } from '@/components/ProposalList';
 import { SystemActions } from '@/components/SystemActions';
-import { errorText, translator, type MessagePath } from '@/messages';
+import { errorText, messagesFor, translator, type MessagePath } from '@/messages';
 import { currentPreferences, currentViews } from '@/preferences';
-import { pageParam, type Paging } from '@/paging';
-import { getSystem, listCampaigns, listRecordTypes, systemDeletion } from '@/server/library';
-import { listPage } from '@/server/list-page';
+import { DEFAULT_PAGE_SIZE, pageParam, type Paging } from '@/paging';
+import type { Result } from '@/server/accounts';
+import {
+  getSystem,
+  listCampaigns,
+  listRecordTypes,
+  listSystemProposals,
+  listTerms,
+  systemDeletion,
+  type Proposal,
+  type Term,
+} from '@/server/library';
+import { listPage, type ListPage } from '@/server/list-page';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 import type { ViewList } from '@/view-cookie';
 
 import { previewPageAction } from '../../files/actions';
+import { decideProposalAction } from '../../proposal-actions';
 import { deleteSystemAction } from '../actions';
-import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow, recordTypeRow } from '../rows';
+import { SYSTEM_MATERIAL_STATES, campaignRow, materialRow, mergeTargets, proposalItem, recordTypeRow, termRow, type MergeTargets } from '../rows';
 import styles from '../systems.module.css';
 
 const TABS = ['campaigns', 'materials', 'records', 'proposals'] as const;
 type Tab = (typeof TABS)[number];
-/** The tabs that list something: all but the ontology proposals, which have nothing to list before Story 4.4. */
+/** The tabs that list one thing; "Ontologia" (Story 4.4) lists two, its proposals and its terms. */
 type ListedTab = Exclude<Tab, 'proposals'>;
+/** The query field that carries the page of the approved terms, beside the proposals' `page`. */
+const TERMS_FIELD = 'terms';
 
 /** What each listing tab shows: its list's accessible name, its rows' icon, its display options and its empty text. */
 const LISTS: Readonly<Record<ListedTab, { label: MessagePath; icon: IconName; view: ViewList; empty: MessagePath }>> = {
@@ -31,11 +45,17 @@ const LISTS: Readonly<Record<ListedTab, { label: MessagePath; icon: IconName; vi
   records: { label: 'systems.page.recordTypeList', icon: 'rules', view: 'recordTypes', empty: 'systems.page.noRecordTypes' },
 };
 
-/** One page of a listing tab's rows, the backend's refusal, or nothing for a tab that lists nothing. */
+/** One page of a listing tab's rows, the backend's refusal, or the "Ontologia" tab's two lists (Story 4.4). */
 type TabPage =
   | { readonly ok: true; readonly tab: ListedTab; readonly rows: readonly ListRow[]; readonly paging: Paging }
   | { readonly ok: false; readonly problem: unknown }
-  | null;
+  | {
+      readonly ok: true;
+      readonly tab: 'proposals';
+      readonly proposals: Result<ListPage<Proposal>>;
+      readonly terms: Result<ListPage<Term>>;
+      readonly targets: MergeTargets;
+    };
 
 /**
  * A system's page (Story 3.1): its name, edition and description, "Editar" (the one solid pill), and two tabs,
@@ -50,8 +70,12 @@ type TabPage =
  *
  * Story 4.1: two more tabs after materials. "Registros" lists the system's record types (the eight core types first,
  * each by this interface's name for it, with its record count), paged like the others, with no action on a row; from
- * Story 4.3 a row opens the type's records list. "Propostas de ontologia" says in one sentence that there is nothing to
- * review yet (Story 4.4 fills it). Every tab is a link, so each is reached and opened from the keyboard.
+ * Story 4.3 a row opens the type's records list. Every tab is a link, so each is reached and opened from the keyboard.
+ *
+ * Story 4.4: the last tab is "Ontologia" (`?tab=proposals`): the pending proposals of the system's materials
+ * ({@link ProposalList}: approve, rename and approve, merge, reject, each with a toast), paged (`?page=`), then the
+ * approved terms with their definition, other names and origin, paged on their own (`?terms=`). Each says in one
+ * sentence when it is empty.
  */
 export default async function SystemPage({
   params,
@@ -98,9 +122,15 @@ export default async function SystemPage({
         const result = await listPage((ask) => listRecordTypes(token ?? '', system.data.id, ask), at, views.recordTypes.size);
         return result.ok ? { ok: true, tab, rows: result.data.rows.map((type) => recordTypeRow(type, t, system.data.id)), paging: result.data.paging } : result;
       }
-      case 'proposals':
-        // Nothing is proposed before Story 4.4: the tab reads nothing.
-        return null;
+      case 'proposals': {
+        const termsAt = pageParam(query[TERMS_FIELD]);
+        const [proposals, terms, targets] = await Promise.all([
+          listPage((ask) => listSystemProposals(token ?? '', system.data.id, ask), at, DEFAULT_PAGE_SIZE),
+          listPage((ask) => listTerms(token ?? '', system.data.id, ask), termsAt, views.terms.size),
+          mergeTargets(token ?? '', system.data.id, t),
+        ]);
+        return { ok: true, tab, proposals, terms, targets };
+      }
     }
   };
   const [page, deletion] = await Promise.all([loadTab(), systemDeletion(token ?? '', system.data.id)]);
@@ -130,8 +160,8 @@ export default async function SystemPage({
         label={t('systems.page.sections')}
         tabs={TABS.map((key) => ({ key, href: `${here}?tab=${key}`, label: t(`systems.page.${key}`), current: key === tab }))}
       />
-      {page === null ? (
-        <EmptyState icon="rules" text={t('systems.page.noProposals')} />
+      {page.ok && page.tab === 'proposals' ? (
+        <Ontology page={page} here={here} views={views} language={language} />
       ) : !page.ok ? (
         <Notice status="danger" language={language} message={errorText(page.problem, language)} dismissible={false} />
       ) : page.paging.total === 0 ? (
@@ -155,6 +185,96 @@ export default async function SystemPage({
           preview={page.tab === 'materials' ? { load: previewPageAction, label: t('preview.open') } : undefined}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * The "Ontologia" tab (Story 4.4): "Propostas pendentes", the system's pending proposals, then "Termos aprovados", its
+ * terms; each paged on its own query field, each said in one sentence when it is empty, a refusal said in a notice.
+ */
+function Ontology({
+  page,
+  here,
+  views,
+  language,
+}: {
+  readonly page: Extract<TabPage, { readonly tab: 'proposals' }>;
+  readonly here: string;
+  readonly views: Awaited<ReturnType<typeof currentViews>>;
+  readonly language: Parameters<typeof translator>[0];
+}) {
+  const t = translator(language);
+  const texts = messagesFor(language).systems.proposals;
+  const { proposals, terms, targets } = page;
+  const proposalsPage = proposals.ok ? proposals.data.paging.page : 1;
+  const termsPage = terms.ok ? terms.data.paging.page : 1;
+  return (
+    <>
+      <section className={styles.ontology} aria-labelledby="ontology-pending">
+        <h2 id="ontology-pending" className={styles.sectionHeading}>
+          {t('systems.page.pending')}
+        </h2>
+        {!proposals.ok ? (
+          <Notice status="danger" language={language} message={errorText(proposals.problem, language)} dismissible={false} />
+        ) : proposals.data.paging.total === 0 ? (
+          <EmptyState icon="rules" text={t('systems.page.noProposals')} />
+        ) : (
+          <ProposalList
+            label={t('systems.page.proposalList')}
+            items={proposals.data.rows.map((proposal) => proposalItem(proposal, t, targets))}
+            texts={{
+              examples: texts.examples,
+              definition: texts.definition,
+              approve: texts.approve,
+              rename: texts.rename,
+              renameLabel: texts.renameLabel,
+              approveAs: texts.approveAs,
+              merge: texts.merge,
+              mergeLabel: texts.mergeLabel,
+              mergeInto: texts.mergeInto,
+              noTargets: texts.noTerms,
+              reject: texts.reject,
+              cancel: texts.cancel,
+              stale: texts.stale,
+              viewCurrent: texts.viewCurrent,
+              actions: texts.actions,
+            }}
+            action={decideProposalAction}
+            pages={{
+              paging: proposals.data.paging,
+              path: here,
+              query: { tab: 'proposals', ...(termsPage > 1 ? { [TERMS_FIELD]: String(termsPage) } : {}) },
+            }}
+            language={language}
+          />
+        )}
+      </section>
+      <section className={styles.ontology} aria-labelledby="ontology-terms">
+        <h2 id="ontology-terms" className={styles.sectionHeading}>
+          {t('systems.page.terms')}
+        </h2>
+        {!terms.ok ? (
+          <Notice status="danger" language={language} message={errorText(terms.problem, language)} dismissible={false} />
+        ) : terms.data.paging.total === 0 ? (
+          <EmptyState icon="info" text={t('systems.page.noTerms')} />
+        ) : (
+          <ItemList
+            label={t('systems.page.termList')}
+            rows={terms.data.rows.map((term) => termRow(term, t))}
+            pages={{
+              paging: terms.data.paging,
+              path: here,
+              query: { tab: 'proposals', ...(proposalsPage > 1 ? { page: String(proposalsPage) } : {}) },
+              field: TERMS_FIELD,
+            }}
+            icon="info"
+            viewKey="terms"
+            view={views.terms}
+            language={language}
+          />
+        )}
+      </section>
     </>
   );
 }

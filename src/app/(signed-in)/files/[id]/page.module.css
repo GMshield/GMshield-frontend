@@ -158,3 +158,11 @@
   border-color: var(--color-text);
   background-image: linear-gradient(var(--color-hover), var(--color-hover));
 }
+
+/* Story 4.4: the material's pending ontology proposals, under their heading, as rows of their own card. */
+.proposals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}

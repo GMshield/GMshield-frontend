@@ -224,6 +224,19 @@ export const SEARCH_DONE = {
       firstWords: 'Fire Bolt. Evocation cantrip. You hurl a mote of fire at a creature or an object within range.',
       tier: 'system',
     },
+    // Story 4.4 part B: a record of a type the GM approved in the starter system ("Talento", key `talento`).
+    {
+      kind: 'record',
+      recordId: '0190a0b0-0000-7000-8000-000000000703',
+      versionId: BOOK_VERSION,
+      materialName: 'Livro do Jogador.pdf',
+      sectionPath: ['Talentos'],
+      page: 168,
+      name: 'Conjurador de Guerra',
+      recordType: 'talento',
+      passageIds: ['0190a0b0-0000-7000-8000-000000000014'],
+      tier: 'system',
+    },
   ],
 };
 
@@ -323,6 +336,8 @@ export const EXAMPLES = {
       { type: 'rule', count: 12 },
       { type: 'spell', count: 30 },
       { type: 'item', count: 4 },
+      // Story 4.4 part B: a type the GM approved, after the core types.
+      { type: 'talento', count: 3 },
     ],
   },
   'POST /api/v1/materials/{id}/accept': {
@@ -566,11 +581,87 @@ const CORE_RECORD_TYPES = ['rule', 'spell', 'item', 'creature', 'character_sheet
   id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
   name: core.replace('_', ' '),
   core,
+  // Story 4.4: a core type's key is its core key, and its origin is core.
+  key: core,
+  origin: { kind: 'core', proposalId: null, materialId: null, materialName: null },
   records: 0,
   version: 0,
 }));
-EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: CORE_RECORD_TYPES, total: CORE_RECORD_TYPES.length };
+/** Story 4.4 part B: the type the GM approved in the starter system from the guide's proposal, with its records. */
+export const TALENT_TYPE = {
+  id: '0190a0b0-0000-7000-8000-000000000608',
+  name: 'Talento',
+  core: null,
+  key: 'talento',
+  origin: {
+    kind: 'proposal',
+    proposalId: '0190a0b0-0000-7000-8000-000000000802',
+    materialId: '0190a0b0-0000-7000-8000-000000000004',
+    materialName: 'Guia do Mestre.pdf',
+  },
+  records: 3,
+  version: 0,
+};
+const RECORD_TYPES = [...CORE_RECORD_TYPES, TALENT_TYPE];
+EXAMPLES['GET /api/v1/systems/{id}/record-types'] = { items: RECORD_TYPES, total: RECORD_TYPES.length };
 EXAMPLES['GET /api/v1/record-types/{id}'] = CORE_RECORD_TYPES[0];
+
+/**
+ * Story 4.4: the starter system's pending ontology proposals (a record type and a term the guide proposed, each with its
+ * quoted examples), the same on the guide's material page, a decision on one (the record type approved), and the
+ * system's one approved term with its alias and origin.
+ */
+export const PROPOSAL_PAGE = {
+  items: [
+    {
+      id: '0190a0b0-0000-7000-8000-000000000800',
+      systemId: '0190a0b0-0000-7000-8000-000000000001',
+      materialId: '0190a0b0-0000-7000-8000-000000000004',
+      materialName: 'Guia do Mestre.pdf',
+      kind: 'record_type',
+      name: 'Talento',
+      definition: null,
+      examples: [
+        { page: 40, quote: 'Talentos são habilidades especiais' },
+        { page: 42, quote: 'Cada talento tem um pré-requisito' },
+      ],
+      state: 'pending',
+      version: 0,
+    },
+    {
+      id: '0190a0b0-0000-7000-8000-000000000801',
+      systemId: '0190a0b0-0000-7000-8000-000000000001',
+      materialId: '0190a0b0-0000-7000-8000-000000000004',
+      materialName: 'Guia do Mestre.pdf',
+      kind: 'term',
+      name: 'PV',
+      definition: 'Pontos de Vida (PV) medem a saúde do personagem.',
+      examples: [{ page: 12, quote: 'Pontos de Vida (PV)' }],
+      state: 'pending',
+      version: 0,
+    },
+  ],
+  total: 2,
+};
+EXAMPLES['GET /api/v1/systems/{id}/proposals'] = PROPOSAL_PAGE;
+EXAMPLES['GET /api/v1/materials/{id}/proposals'] = PROPOSAL_PAGE;
+const DECIDED = { proposal: { ...PROPOSAL_PAGE.items[0], state: 'approved', version: 1 }, resultId: '0190a0b0-0000-7000-8000-000000000810' };
+EXAMPLES['POST /api/v1/proposals/{id}/approval'] = DECIDED;
+EXAMPLES['POST /api/v1/proposals/{id}/merge'] = { proposal: { ...PROPOSAL_PAGE.items[1], state: 'merged', version: 1 }, resultId: '0190a0b0-0000-7000-8000-000000000811' };
+EXAMPLES['POST /api/v1/proposals/{id}/rejection'] = { proposal: { ...PROPOSAL_PAGE.items[0], state: 'rejected', version: 1 }, resultId: null };
+EXAMPLES['GET /api/v1/systems/{id}/terms'] = {
+  items: [
+    {
+      id: '0190a0b0-0000-7000-8000-000000000811',
+      name: 'Pontos de Vida',
+      definition: 'Pontos de Vida (PV) medem a saúde do personagem.',
+      aliases: ['PV'],
+      origin: { kind: 'proposal', proposalId: '0190a0b0-0000-7000-8000-000000000802', materialId: '0190a0b0-0000-7000-8000-000000000004', materialName: 'Guia do Mestre.pdf' },
+      version: 0,
+    },
+  ],
+  total: 1,
+};
 
 /**
  * Story 4.3: a record type's records, alphabetical by name, each with its material and first page (two records named
@@ -590,7 +681,7 @@ export const RECORD_PAGE = {
 export const RECORD = {
   id: RECORD_ID,
   name: 'Fire Bolt',
-  recordType: { id: CORE_RECORD_TYPES[1].id, core: 'spell', name: 'spell' },
+  recordType: { id: CORE_RECORD_TYPES[1].id, core: 'spell', key: 'spell', name: 'spell' },
   fields: [
     { name: 'Nível', value: 'Truque de evocação' },
     { name: 'Tempo de conjuração', value: '1 ação' },

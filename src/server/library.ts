@@ -36,6 +36,12 @@ import { everyPage, type Every } from './every-page';
  * material it was read from and its first page), one record as its system shows it (its name, its record type, its
  * fields and its source references), and a page of the record's version (the same shape as a material's page), read on
  * the record's ground. Only the records of the system's accepted versions are read: any other is `request.not_found`.
+ *
+ * Story 4.4 part A: a system's pending ontology proposals by page, a material's (in every system it counts under), the
+ * GM's decision on one on the version read (approve as proposed or under another name, merge into a type or term of its
+ * system, reject; `request.stale_version` when it moved or was decided elsewhere, `ontology.name_taken`,
+ * `ontology.name_invalid`, `ontology.merge_target_invalid`), and a system's approved terms by page, each with its
+ * quoted definition, its aliases and its origin. A record type now carries its stable `key` and its `origin`.
  */
 type Schemas = components['schemas'];
 export type Campaign = Schemas['Campaign'];
@@ -60,11 +66,20 @@ export type GameRecord = Schemas['Record'];
 export type RecordField = Schemas['RecordField'];
 export type RecordReference = Schemas['RecordReference'];
 export type RecordSourcePage = Schemas['MaterialPageView'];
+export type Proposal = Schemas['Proposal'];
+export type ProposalPage = Schemas['ProposalPage'];
+export type ProposalDecision = Schemas['ProposalDecision'];
+export type ProposalKind = Proposal['kind'];
+export type Term = Schemas['Term'];
+export type TermPage = Schemas['TermPage'];
+export type Origin = Schemas['Origin'];
 /** The key of a core record type (Story 4.1): the same eight in every system. */
 export type CoreRecordType = NonNullable<RecordType['core']>;
 type PageQuery = NonNullable<operations['listSystems']['parameters']['query']>;
 type RecordTypeQuery = NonNullable<operations['listRecordTypes']['parameters']['query']>;
 type RecordQuery = NonNullable<operations['listRecords']['parameters']['query']>;
+type ProposalQuery = NonNullable<operations['listSystemProposals']['parameters']['query']>;
+type TermQuery = NonNullable<operations['listTerms']['parameters']['query']>;
 export type CampaignQuery = NonNullable<operations['listCampaigns']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
@@ -298,5 +313,72 @@ export function getCampaignScope(sessionToken: string, id: string, options: Call
 export function changeCampaignScope(sessionToken: string, id: string, body: ScopeChange, options: CallOptions = {}): Promise<Result<Scope>> {
   return call('scope.campaign_change', options, (client) =>
     client.PUT('/api/v1/campaigns/{id}/scope', { params: { header: session(sessionToken), path: { id } }, body }),
+  );
+}
+
+/** The pending ontology proposals of one of the account's systems, a page at a time, oldest first (Story 4.4). */
+export function listSystemProposals(
+  sessionToken: string,
+  id: string,
+  query: ProposalQuery = {},
+  options: CallOptions = {},
+): Promise<Result<ProposalPage>> {
+  return call('ontology.system_proposals', options, (client) =>
+    client.GET('/api/v1/systems/{id}/proposals', { params: { header: session(sessionToken), path: { id }, query } }),
+  );
+}
+
+/**
+ * The pending ontology proposals of one of the account's materials, in every system it counts under (each names its
+ * system), a page at a time (Story 4.4).
+ */
+export function listMaterialProposals(
+  sessionToken: string,
+  id: string,
+  query: ProposalQuery = {},
+  options: CallOptions = {},
+): Promise<Result<ProposalPage>> {
+  return call('ontology.material_proposals', options, (client) =>
+    client.GET('/api/v1/materials/{id}/proposals', { params: { header: session(sessionToken), path: { id }, query } }),
+  );
+}
+
+/** The GM's decision on a proposal (Story 4.4): approve (as proposed, or under `name`), merge into `targetId`, reject. */
+export type ProposalChoice =
+  | { readonly decision: 'approve'; readonly version: number; readonly name?: string }
+  | { readonly decision: 'merge'; readonly version: number; readonly targetId: string }
+  | { readonly decision: 'reject'; readonly version: number };
+
+/** Decides one of the account's pending proposals on the version read (Story 4.4). */
+export function decideProposal(
+  sessionToken: string,
+  id: string,
+  choice: ProposalChoice,
+  options: CallOptions = {},
+): Promise<Result<ProposalDecision>> {
+  const params = { header: session(sessionToken), path: { id } };
+  switch (choice.decision) {
+    case 'approve':
+      return call('ontology.proposal_approve', options, (client) =>
+        client.POST('/api/v1/proposals/{id}/approval', {
+          params,
+          body: choice.name === undefined ? { version: choice.version } : { version: choice.version, name: choice.name },
+        }),
+      );
+    case 'merge':
+      return call('ontology.proposal_merge', options, (client) =>
+        client.POST('/api/v1/proposals/{id}/merge', { params, body: { version: choice.version, targetId: choice.targetId } }),
+      );
+    case 'reject':
+      return call('ontology.proposal_reject', options, (client) =>
+        client.POST('/api/v1/proposals/{id}/rejection', { params, body: { version: choice.version } }),
+      );
+  }
+}
+
+/** The approved terms of one of the account's systems, a page at a time, oldest first (Story 4.4). */
+export function listTerms(sessionToken: string, id: string, query: TermQuery = {}, options: CallOptions = {}): Promise<Result<TermPage>> {
+  return call('ontology.terms', options, (client) =>
+    client.GET('/api/v1/systems/{id}/terms', { params: { header: session(sessionToken), path: { id }, query } }),
   );
 }

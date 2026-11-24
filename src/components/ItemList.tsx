@@ -41,6 +41,8 @@ export type ListPaging = {
   readonly paging: Paging;
   readonly path: string;
   readonly query?: Readonly<Record<string, string>>;
+  /** The query field that carries the page (Story 4.4: `page` unless the screen pages two lists). */
+  readonly field?: string;
 };
 
 export type ItemListProps = {
@@ -106,7 +108,7 @@ export function ItemList({
     if (next.size !== view.size && listPages !== undefined) {
       // Another number of rows a page: the server cuts the pages again, from the first one.
       if (listPages.paging.page > 1) {
-        router.replace(pageHref(listPages.path, listPages.query ?? {}, 1));
+        router.replace(pageHref(listPages.path, listPages.query ?? {}, 1, listPages.field));
       } else {
         router.refresh();
       }
@@ -136,6 +138,7 @@ export function ItemList({
                 paging={listPages.paging}
                 path={listPages.path}
                 query={listPages.query}
+                field={listPages.field}
                 language={language}
                 label={translator(language)('paging.labelTop')}
                 compact
@@ -199,7 +202,7 @@ export function ItemList({
         })}
       </ul>
       {listPages === undefined || language === undefined ? null : (
-        <Pager paging={listPages.paging} path={listPages.path} query={listPages.query} language={language} />
+        <Pager paging={listPages.paging} path={listPages.path} query={listPages.query} field={listPages.field} language={language} />
       )}
       {previewing === null || preview === undefined || language === undefined ? null : (
         <ShellPanel

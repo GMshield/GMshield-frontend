@@ -1019,6 +1019,39 @@ they sit in `src/`.
   - The stand-in backend's answer also cites the Fire Bolt record (reference 3). The demo backend's "magia" question
     answers with a passage and a record.
   - Deploy order: backend → worker → frontend.
+- **Ontology proposals and terms (Story 4.4 part A).** Public contract 1.38.0 (the minimum backend contract too).
+  - The system page's last tab is "Ontologia" (`?tab=proposals`): "Propostas pendentes", the system's pending proposals
+    (`listSystemProposals`, paged on `?page=`), then "Termos aprovados" (`listTerms`, an `ItemList` with its own
+    "Exibição" key `terms`, paged on `?terms=`: `ListPaging.field`). Each says in one sentence when it is empty.
+  - `ProposalList` (`src/components/ProposalList.tsx`): a row shows the name, its kind, where it comes from ("De
+    {material}", "material removido", and the system on a material in several), a term's definition and the examples
+    with their pages, then "Aprovar", "Renomear" (an inline bordered field, then "Aprovar como"), "Mesclar" (a select of
+    the system's record types or terms of the same kind, `mergeTargets`, then "Mesclar") and "Rejeitar". Every control
+    is a button, a field or a select, so the row works from the keyboard; a decided row that held the focus hands it to
+    the next row's first pill.
+  - `decideProposalAction` (`src/app/(signed-in)/proposal-actions.ts`) posts the decision on the version read
+    (`decideProposal`), then `flash()`, `revalidatePath` of the system's and the material's pages and `refresh()`. A
+    stale answer shows "Este item mudou em outra aba." with "Ver a versão atual" (a refresh); any other refusal its
+    text (`ontology.name_taken`, `ontology.name_invalid`, `ontology.merge_target_invalid` are new texts).
+  - A material's page lists its pending proposals after the quality report (`listMaterialProposals`, paged on
+    `?proposals=`), with the same decisions; nothing shows while none is pending.
+  - The stand-in and the demo backend (`docs/tools/frontend-demo-backend.mjs`) answer proposals and terms.
+- **Records of approved types (Story 4.4 part B).** Public contract 1.39.0; the minimum backend contract stays 1.38.0,
+  since this release names any key and a backend of 1.38.0 sends core keys only (deploy the frontend before the
+  backend).
+  - A record type key is any `^[a-z][a-z0-9_]{0,31}$` (`isRecordTypeKey`). No contract field carries a type's name:
+    `typeLabel(key, types, t)` (`src/record-types.ts`) names a key by its core translation, else by the name of the
+    record type with that key in the list the screen read, else by the key itself.
+  - Search: `search/page.tsx` reads the campaign's system's record types (`systemRecordTypes`, every page); the type
+    select offers them (the core ones translated, then the approved ones by name; the core keys when unread, and the
+    address's own key when it is none of them), and a record result names its key from them. `?type=` takes any key.
+  - Answers: the conversation pages read the campaign's system's approved types (`getCampaign`, then
+    `systemRecordTypes`) and `References` names a cited record's key from them, for the eye and the screen reader.
+  - Quality report: a key that is not core follows the core types under its type's name ("Talento: 3"), read from the
+    record types of the material's systems only when the report has such a key; an unknown key shows as itself, never
+    left out. `RecordTypeOfRecord.core` may be null (an approved type), and the record page shows its stored name.
+  - The stand-in answers the approved type "Talento" in the system's record types, a `talento` search result and a
+    report count; the demo backend has it approved with three records (search "ataque", ask about a "talento").
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

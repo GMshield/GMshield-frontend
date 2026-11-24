@@ -8,18 +8,23 @@ import { MaterialRefresher } from '@/components/MaterialRefresher';
 import { PageHeader, PageSubtitle } from '@/components/PageHeader';
 import { PageView, pictureUrl } from '@/components/PageView';
 import { Notice } from '@/components/Notice';
+import { ProposalList } from '@/components/ProposalList';
 import { OUTLINE_FIELD, QualityReport, UNREADABLE_FIELD } from '@/components/QualityReport';
 import { StatePill } from '@/components/StatePill';
 import { SupersededVersions } from '@/components/SupersededVersions';
 import { placeOfBelonging, progressOf } from '@/components/uploads/types';
 import { errorText, failureText, messagesFor, translator } from '@/messages';
 import { pageParam } from '@/paging';
+import { isCoreKey, type NamedRecordType } from '@/record-types';
 import { currentPreferences } from '@/preferences';
-import { listAllCampaigns, listAllSystems } from '@/server/library';
+import { listAllCampaigns, listAllSystems, listMaterialProposals, type RecordType } from '@/server/library';
+import { listPage } from '@/server/list-page';
 import { getMaterial, getPage, getReport, materialDeletion } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import { systemLabel } from '../../campaigns/rows';
+import { decideProposalAction } from '../../proposal-actions';
+import { mergeTargets, proposalItem, systemRecordTypes, type MergeTargets } from '../../systems/rows';
 import { belongingText } from '../rows';
 
 import { changePlaceAction, deleteMaterialAction, materialAction, removeVersionAction } from './actions';
@@ -57,7 +62,17 @@ import styles from './page.module.css';
  * Story 3.4 part B: "Excluir" in the header ({@link MaterialDeleteAction}) deletes the material after a confirmation
  * that names its versions and pages (read here with the material), then Meus Arquivos opens with the toast. A material
  * with superseded versions lists them in "Versões anteriores" ({@link SupersededVersions}), each with "Remover".
+ *
+ * Story 4.4: after the quality report, "Propostas de ontologia" lists the record types and terms the material proposed
+ * that wait for the GM ({@link ProposalList}, paged on `?proposals=`), with the same decisions as the system's
+ * "Ontologia" tab; on a material in several systems each names the system it was proposed to, since each system decides
+ * on its own. Nothing shows while none is pending.
  */
+/** The query field that carries the page of the material's proposals (Story 4.4). */
+const PROPOSALS_FIELD = 'proposals';
+/** How many proposals a page of the material's holds. */
+const PROPOSALS_SIZE = 10;
+
 export default async function MaterialPage({
   params,
   searchParams,
@@ -126,6 +141,35 @@ export default async function MaterialPage({
         ]
       : [];
   const first = reviewed && (pages?.total ?? 0) > 0 ? await getPage(token ?? '', id, 1) : null;
+  // Story 4.4: the material's pending proposals, with what each may be merged into in its own system.
+  const proposals = await listPage(
+    (ask) => listMaterialProposals(token ?? '', material.data.id, ask),
+    pageParam(query[PROPOSALS_FIELD]),
+    PROPOSALS_SIZE,
+  );
+  const proposalSystems = proposals.ok ? [...new Set(proposals.data.rows.map((proposal) => proposal.systemId))] : [];
+  // Story 4.4 part B: a report that counts a type the GM approved names it from the record types of the material's
+  // systems, read once per system with those the proposals' merge choices need.
+  const approvedCounted = report?.ok === true && report.data.records.some((record) => !isCoreKey(record.type));
+  const belongingSystems = [
+    ...material.data.belonging.systems.map((system) => system.id),
+    ...(material.data.belonging.campaign ? [material.data.belonging.campaign.system.id] : []),
+  ];
+  const typeSystems = [...new Set([...proposalSystems, ...(approvedCounted ? belongingSystems : [])])];
+  const systemTypes = new Map<string, RecordType[]>(
+    await Promise.all(typeSystems.map(async (system) => [system, await systemRecordTypes(token ?? '', system)] as const)),
+  );
+  const targets = new Map<string, MergeTargets>(
+    await Promise.all(
+      proposalSystems.map(async (system) => [system, await mergeTargets(token ?? '', system, t, systemTypes.get(system))] as const),
+    ),
+  );
+  const reportTypes: NamedRecordType[] = approvedCounted
+    ? belongingSystems.flatMap((system) => (systemTypes.get(system) ?? []).filter((type) => type.core === null))
+    : [];
+  const systemNames = new Map(places.systems.map((system) => [system.id, system.name]));
+  const several = material.data.belonging.systems.length > 1;
+  const proposalTexts = messagesFor(language).systems.proposals;
   const firstPage = first !== null && first.ok ? first.data : null;
   const pagesHref = `/files/${encodeURIComponent(material.data.id)}/pages/1`;
   return (
@@ -224,9 +268,57 @@ export default async function MaterialPage({
               language={language}
               outlinePage={pageParam(query[OUTLINE_FIELD])}
               unreadablePage={pageParam(query[UNREADABLE_FIELD])}
+              recordTypes={reportTypes}
             />
           ) : (
             <p className={styles.failure}>{errorText(report.problem, language)}</p>
+          )}
+          {!proposals.ok ? (
+            <p className={styles.failure}>{errorText(proposals.problem, language)}</p>
+          ) : proposals.data.paging.total === 0 ? null : (
+            <section className={styles.proposals} aria-labelledby="material-proposals">
+              <h2 id="material-proposals" className={styles.sectionHeading}>
+                {proposalTexts.heading}
+              </h2>
+              <ProposalList
+                label={proposalTexts.heading}
+                items={proposals.data.rows.map((proposal) =>
+                  proposalItem(
+                    proposal,
+                    t,
+                    targets.get(proposal.systemId) ?? { record_type: [], term: [] },
+                    several ? (systemNames.get(proposal.systemId) ?? null) : null,
+                  ),
+                )}
+                texts={{
+                  examples: proposalTexts.examples,
+                  definition: proposalTexts.definition,
+                  approve: proposalTexts.approve,
+                  rename: proposalTexts.rename,
+                  renameLabel: proposalTexts.renameLabel,
+                  approveAs: proposalTexts.approveAs,
+                  merge: proposalTexts.merge,
+                  mergeLabel: proposalTexts.mergeLabel,
+                  mergeInto: proposalTexts.mergeInto,
+                  noTargets: proposalTexts.noTerms,
+                  reject: proposalTexts.reject,
+                  cancel: proposalTexts.cancel,
+                  stale: proposalTexts.stale,
+                  viewCurrent: proposalTexts.viewCurrent,
+                  actions: proposalTexts.actions,
+                }}
+                action={decideProposalAction}
+                pages={{
+                  paging: proposals.data.paging,
+                  path: `/files/${encodeURIComponent(material.data.id)}`,
+                  query: Object.fromEntries(
+                    Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+                  ),
+                  field: PROPOSALS_FIELD,
+                }}
+                language={language}
+              />
+            </section>
           )}
         </div>
         {firstPage === null ? null : (

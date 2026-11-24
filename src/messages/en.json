@@ -83,14 +83,19 @@
       "campaigns": "Campaigns",
       "materials": "Materials",
       "records": "Records",
-      "proposals": "Ontology proposals",
+      "proposals": "Ontology",
       "campaignList": "Campaigns of this system",
       "materialList": "Materials of this system",
       "recordTypeList": "Record types of this system",
+      "proposalList": "Ontology proposals of this system",
+      "termList": "Approved terms of this system",
+      "pending": "Pending proposals",
+      "terms": "Approved terms",
       "noCampaigns": "This system has no campaigns yet.",
       "noMaterials": "No material belongs to this system or its campaigns.",
       "noRecordTypes": "This system has no record types yet.",
       "noProposals": "No ontology proposals yet. When a material proposes record types or terms, they show up here for you to approve or reject.",
+      "noTerms": "No approved terms yet. A term appears here once you approve a term proposal.",
       "recordsOne": "1 record",
       "recordsOther": "{count} records"
     },
@@ -122,6 +127,33 @@
       "materialsOne": "1 material linked only to it",
       "materialsOther": "{count} materials linked only to it",
       "confirm": "Delete system"
+    },
+    "proposals": {
+      "kind": {
+        "record_type": "Record type",
+        "term": "Term"
+      },
+      "from": "From {material}",
+      "fromIn": "From {material}, in {system}",
+      "materialRemoved": "material removed",
+      "example": "«{quote}», p. {page}",
+      "examples": "Examples from the material",
+      "definition": "Definition:",
+      "approve": "Approve",
+      "rename": "Rename",
+      "renameLabel": "New name for «{name}»",
+      "approveAs": "Approve as",
+      "merge": "Merge",
+      "mergeLabel": "Merge «{name}» into",
+      "mergeInto": "Merge",
+      "noTerms": "This system has no terms to merge into yet. Approve a term first.",
+      "reject": "Reject",
+      "cancel": "Cancel",
+      "stale": "This item changed in another tab.",
+      "viewCurrent": "See the current version",
+      "actions": "Decide on «{name}»",
+      "heading": "Ontology proposals",
+      "aliases": "Also called: {aliases}"
     }
   },
   "campaigns": {
@@ -325,7 +357,10 @@
         "core_record_type": "The core record types are the same in every system and cannot be renamed or removed.",
         "record_type_name_invalid": "The name must have {min} to {max} characters.",
         "record_type_name_taken": "This system already has a record type with this name.",
-        "record_type_in_use": "This record type has records and cannot be removed."
+        "record_type_in_use": "This record type has records and cannot be removed.",
+        "name_taken": "This system already has a record type, a term or a core type with this name.",
+        "name_invalid": "The name must have {min} to {max} characters.",
+        "merge_target_invalid": "Choose an item of this system of the same kind as the proposal."
       }
     }
   },
@@ -761,7 +796,13 @@
     "uploadFailed": "The upload of «{name}» failed.",
     "viewSaved": "Display saved in this browser.",
     "conversationRenamed": "Conversation renamed to «{name}».",
-    "conversationDeleted": "Conversation «{name}» deleted."
+    "conversationDeleted": "Conversation «{name}» deleted.",
+    "proposal": {
+      "typeApproved": "Record type «{name}» approved.",
+      "termApproved": "Term «{name}» approved.",
+      "merged": "«{name}» merged.",
+      "rejected": "«{name}» rejected. This material will not propose it again."
+    }
   },
   "notifications": {
     "title": "Notifications",

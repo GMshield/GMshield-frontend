@@ -14,7 +14,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => router,
 }));
 
-const { SearchPage, POLL_LIMIT_MS } = await import('@/components/search/SearchPage');
+const { SearchPage, POLL_LIMIT_MS, typeOptionsOf } = await import('@/components/search/SearchPage');
+const { searchAddressOf } = await import('@/components/search/search-params');
 const { SourceView } = await import('@/components/SourceView');
 const { focusSearchField, searchHref, searchRecordHref } = await import('@/components/search/search-address');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -550,6 +551,74 @@ describe('records in the search (Story 4.3 part B)', () => {
       `/search/records/${RECORD}?q=x&s=${SEARCH}&tier=other&material=${NOTES}&type=rule&page=2`,
     );
     expect(searchHref({ query: 'x', recordType: 'dungeon', page: 1 })).toBe('/search?q=x&type=dungeon');
+  });
+});
+
+describe('records of a type the GM approved in the search (Story 4.4 part B)', () => {
+  const TYPES = [
+    { key: 'rule', name: 'rule' },
+    { key: 'spell', name: 'spell' },
+    { key: 'item', name: 'item' },
+    { key: 'talento', name: 'Talento' },
+  ];
+  const talent: RecordResult = {
+    kind: 'record',
+    recordId: '0190a0b0-0000-7000-8000-000000000703',
+    versionId: VERSION,
+    materialName: 'Livro do Jogador.pdf',
+    sectionPath: ['Talentos'],
+    page: 168,
+    name: 'Conjurador de Guerra',
+    recordType: 'talento',
+    passageIds: ['0190a0b0-0000-7000-8000-000000000814'],
+    tier: 'system',
+  };
+
+  it('names a record of an approved type by the system\'s type, and a key with no match as it is', async () => {
+    const other: RecordResult = { ...talent, recordId: '0190a0b0-0000-7000-8000-000000000704', name: 'Sortudo', recordType: 'vantagem' };
+    render(page({ recordTypes: TYPES, calls: calls([{ ok: true, search: search({ results: [talent, other] }) }]) }));
+    const list = await screen.findByRole('list', { name: 'Resultados' });
+    const links = within(list).getAllByRole('link');
+    expect(links[0]!.textContent).toBe('Conjurador de GuerraTalento, Sistema: Livro do Jogador.pdf, Talentos, p. 168');
+    expect(links[1]!.textContent).toBe('Sortudovantagem, Sistema: Livro do Jogador.pdf, Talentos, p. 168');
+  });
+
+  it('offers the campaign system\'s types by name, the core ones translated, and a choice searches that key', async () => {
+    const user = userEvent.setup();
+    render(page({ recordTypes: TYPES, calls: calls([{ ok: true, search: search() }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+    const select = screen.getByRole('combobox', { name: ptBR.search.type }) as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['', 'Todos os tipos'],
+      ['rule', 'Regra'],
+      ['spell', 'Magia'],
+      ['item', 'Item'],
+      ['talento', 'Talento'],
+    ]);
+    await user.selectOptions(select, 'talento');
+    expect(push).toHaveBeenCalledExactlyOnceWith('/search?q=Fire+Bolt&type=talento');
+    cleanup();
+
+    // A search of the type that found nothing names it; a key of the address the list lacks stays selectable.
+    render(page({ recordType: 'talento', recordTypes: TYPES, calls: calls([{ ok: true, search: search({ recordType: 'talento', results: [] }) }]) }));
+    expect(await screen.findByText(/Talento/)).toBeTruthy();
+    cleanup();
+    render(page({ recordType: 'vantagem', recordTypes: TYPES, calls: calls([{ ok: true, search: search({ recordType: 'vantagem' }) }]) }));
+    await screen.findByRole('list', { name: 'Resultados' });
+    const kept = screen.getByRole('combobox', { name: ptBR.search.type }) as HTMLSelectElement;
+    expect(kept.value).toBe('vantagem');
+    expect([...kept.options].at(-1)?.textContent).toBe('vantagem');
+  });
+
+  it('reads any key from the address, and leaves out what is no key', () => {
+    expect(searchAddressOf({ type: 'talento' }).recordType).toBe('talento');
+    expect(searchAddressOf({ type: 't_3d6_tabela' }).recordType).toBe('t_3d6_tabela');
+    for (const bad of ['Talento', '3d6', '', 'a-b', 'x'.repeat(33)]) {
+      expect(searchAddressOf({ type: bad }).recordType).toBeNull();
+    }
+    expect(typeOptionsOf([], null)).toEqual(['rule', 'spell', 'item', 'creature', 'character_sheet', 'encounter', 'dungeon', 'note']);
+    expect(typeOptionsOf(TYPES, 'talento')).toEqual(['rule', 'spell', 'item', 'talento']);
+    expect(typeOptionsOf(TYPES, 'vantagem')).toEqual(['rule', 'spell', 'item', 'talento', 'vantagem']);
   });
 });
 

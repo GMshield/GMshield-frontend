@@ -273,6 +273,63 @@ describe('a new and an opened conversation (Story 3.10)', () => {
     expect(html).not.toContain('Que regra você quer criar?');
   });
 
+  it('Story 4.4 part B: an opened conversation names a cited record of a type the GM approved by the campaign system\'s type', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+    const RECORD = '0190a0b0-0000-7000-8000-000000000703';
+    const talent = { id: '0190a0b0-0000-7000-8000-000000000608', name: 'Talento', core: null, key: 'talento', origin: { kind: 'proposal' }, records: 3, version: 0 };
+    const spell = { id: '0190a0b0-0000-7000-8000-000000000601', name: 'spell', core: 'spell', key: 'spell', origin: { kind: 'core' }, records: 0, version: 0 };
+    const cited = {
+      ...STORED,
+      events: [
+        { sequence: 1, type: 'delta', data: { text: 'Ataque Poderoso troca precisão por dano.' } },
+        { sequence: 2, type: 'citation', data: { recordId: RECORD, offset: 39 } },
+        {
+          sequence: 3,
+          type: 'done',
+          data: {
+            stopped: false,
+            silent: false,
+            modelKnowledge: false,
+            references: [
+              {
+                number: 1,
+                kind: 'record',
+                recordId: RECORD,
+                recordType: 'talento',
+                name: 'Ataque Poderoso',
+                fields: [{ name: 'Benefício', value: '+10 no dano' }],
+                materialName: 'Livro do Jogador.pdf',
+                sectionPath: ['Talentos'],
+                page: 168,
+                passageIds: [PASSAGE],
+                removed: false,
+                tier: 'system',
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const server = await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [cited] } },
+      [`GET /api/v1/campaigns/${CAMPAIGN}`]: {
+        status: 200,
+        body: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 0 },
+      },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [spell, talent], total: 2 } },
+    });
+
+    const html = inShell(await RulesConversationPage({ params: params(RULES_ID) }));
+
+    expect(calls(server)).toEqual(expect.arrayContaining([`GET /api/v1/campaigns/${CAMPAIGN}`, `GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]));
+    expect(html).toContain('Ataque Poderoso');
+    expect(html).toMatch(/>Talento<\/span>/);
+    expect(html).not.toMatch(/>talento</);
+  });
+
   it('a conversation of the other area opens under its own address; another account\'s is "Não encontrado."', async () => {
     await useBackend({
       'GET /api/v1/conversations/current': CURRENT,

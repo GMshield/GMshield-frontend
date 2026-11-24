@@ -22,6 +22,8 @@ const deleteSystemAction = vi.fn();
 vi.mock('@/app/(signed-in)/systems/actions', () => ({
   deleteSystemAction: (...args: unknown[]) => deleteSystemAction(...args),
 }));
+// Story 4.4: a proposal's decisions post to their own action, which these tests never call.
+vi.mock('@/app/(signed-in)/proposal-actions', () => ({ decideProposalAction: vi.fn() }));
 
 const { default: SystemPage } = await import('@/app/(signed-in)/systems/[id]/page');
 const { recordTypeRow } = await import('@/app/(signed-in)/systems/rows');
@@ -42,9 +44,49 @@ const RECORD_TYPES = CORE.map((core, index) => ({
   id: `0190a0b0-0000-7000-8000-0000000006${String(index).padStart(2, '0')}`,
   name: core.replace('_', ' '),
   core,
+  key: core,
+  origin: { kind: 'core' as const, proposalId: null, materialId: null, materialName: null },
   records: index === 0 ? 1 : 0,
   version: 0,
 }));
+
+/** Story 4.4: the system's pending proposals (a type and a term), and its one approved term. */
+const PROPOSALS = [
+  {
+    id: '0190a0b0-0000-7000-8000-000000000800',
+    systemId: ID,
+    materialId: MATERIAL,
+    materialName: 'SRD.pdf',
+    kind: 'record_type',
+    name: 'Talento',
+    definition: null,
+    examples: [{ page: 40, quote: 'Talentos são habilidades especiais' }],
+    state: 'pending',
+    version: 0,
+  },
+  {
+    id: '0190a0b0-0000-7000-8000-000000000801',
+    systemId: ID,
+    materialId: MATERIAL,
+    materialName: 'SRD.pdf',
+    kind: 'term',
+    name: 'PV',
+    definition: 'Pontos de Vida (PV) medem a saúde.',
+    examples: [{ page: 12, quote: 'Pontos de Vida (PV)' }],
+    state: 'pending',
+    version: 0,
+  },
+];
+const TERMS = [
+  {
+    id: '0190a0b0-0000-7000-8000-000000000811',
+    name: 'Pontos de Vida',
+    definition: 'Pontos de Vida (PV) medem a saúde.',
+    aliases: ['HP'],
+    origin: { kind: 'proposal', proposalId: '0190a0b0-0000-7000-8000-000000000802', materialId: MATERIAL, materialName: 'SRD.pdf' },
+    version: 0,
+  },
+];
 
 let backend: Server | undefined;
 
@@ -66,6 +108,10 @@ beforeEach(async () => {
     [`GET /api/v1/campaigns?system=${ID}&limit=10`]: { status: 200, body: { items: CAMPAIGNS.slice(0, 10), nextCursor: CAMPAIGNS[9]!.id, total: 12 } },
     [`GET /api/v1/campaigns?system=${ID}&limit=10&offset=10`]: { status: 200, body: { items: CAMPAIGNS.slice(10), total: 12 } },
     [`GET /api/v1/systems/${ID}/record-types?limit=10`]: { status: 200, body: { items: RECORD_TYPES, total: 8 } },
+    [`GET /api/v1/systems/${ID}/record-types?limit=50`]: { status: 200, body: { items: RECORD_TYPES, total: 8 } },
+    [`GET /api/v1/systems/${ID}/proposals?limit=10`]: { status: 200, body: { items: PROPOSALS, total: 2 } },
+    [`GET /api/v1/systems/${ID}/terms?limit=10`]: { status: 200, body: { items: TERMS, total: 1 } },
+    [`GET /api/v1/systems/${ID}/terms?limit=50`]: { status: 200, body: { items: TERMS, total: 1 } },
     [MATERIALS]: {
       status: 200,
       body: {
@@ -131,7 +177,7 @@ describe('a system page\'s tabs (Story 3.1)', () => {
       'Campanhas',
       'Materiais',
       'Registros',
-      'Propostas de ontologia',
+      'Ontologia',
     ]);
     expect(within(tabs).getByRole('link', { name: 'Registros' }).getAttribute('aria-current')).toBe('page');
     const list = screen.getByRole('list', { name: 'Tipos de registro deste sistema' });
@@ -173,11 +219,21 @@ describe('a system page\'s tabs (Story 3.1)', () => {
     ]);
   });
 
-  it('the ontology proposals tab says there is nothing to review yet, and every tab is reached from the keyboard', async () => {
+  it('the Ontologia tab lists the pending proposals, then the approved terms, and every tab is reached from the keyboard', async () => {
     const user = userEvent.setup();
     render(await SystemPage({ params: Promise.resolve({ id: ID }), searchParams: Promise.resolve({ tab: 'proposals' }) }));
 
-    expect(screen.getByText(/Nenhuma proposta de ontologia por enquanto/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Propostas pendentes' })).toBeTruthy();
+    const proposals = screen.getByRole('list', { name: 'Propostas de ontologia deste sistema' });
+    expect(within(proposals).getByText('Talento')).toBeTruthy();
+    expect(within(proposals).getByText('«Talentos são habilidades especiais», p. 40')).toBeTruthy();
+    for (const pill of ['Aprovar', 'Renomear', 'Mesclar', 'Rejeitar']) {
+      expect(within(screen.getByRole('group', { name: 'Decidir sobre «PV»' })).getByRole('button', { name: pill })).toBeTruthy();
+    }
+    expect(screen.getByRole('heading', { name: 'Termos aprovados' })).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'Termos aprovados deste sistema' })).getByRole('listitem').textContent).toBe(
+      'Pontos de VidaPontos de Vida (PV) medem a saúde. · Também chamado: HP · De SRD.pdf',
+    );
     expect(screen.queryByRole('list', { name: 'Tipos de registro deste sistema' })).toBeNull();
     const tabs = within(screen.getByRole('navigation', { name: 'Seções do sistema' })).getAllByRole('link');
     expect(tabs.at(-1)!.getAttribute('aria-current')).toBe('page');
@@ -208,6 +264,25 @@ describe('a system page\'s tabs (Story 3.1)', () => {
     });
     expect(recordTypeRow({ ...RECORD_TYPES[4]!, core: 'character_sheet' }, t, ID).label).toBe('Ficha de personagem');
     expect(recordTypeRow({ ...RECORD_TYPES[0]!, core: null, name: 'Montaria' }, t, ID).label).toBe('Montaria');
+  });
+
+  it('Story 4.4 part B: a type the GM approved shows by its name with its record count, opening its records', () => {
+    const t = translator('pt-BR');
+    const talent = {
+      ...RECORD_TYPES[0]!,
+      id: '0190a0b0-0000-7000-8000-000000000608',
+      core: null,
+      key: 'talento',
+      name: 'Talento',
+      origin: { kind: 'proposal' as const, proposalId: '0190a0b0-0000-7000-8000-000000000802', materialId: null, materialName: null },
+      records: 3,
+    };
+    expect(recordTypeRow(talent, t, ID)).toMatchObject({
+      label: 'Talento',
+      detail: '3 registros',
+      href: `/systems/${ID}/record-types/0190a0b0-0000-7000-8000-000000000608`,
+      state: null,
+    });
   });
 
   it('an unknown tab is the campaigns tab', async () => {

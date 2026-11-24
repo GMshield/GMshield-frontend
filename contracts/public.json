@@ -938,7 +938,7 @@
             "type" : "array"
           },
           "records" : {
-            "description" : "The version's records by core type (contract 1.34.0), in the core types' order, each type with at least one; empty when it has none",
+            "description" : "The version's records by type (contract 1.34.0), the core types in their order, then from contract 1.39.0 the other keys alphabetically, each type with at least one; empty when it has none",
             "items" : {
               "$ref" : "#/components/schemas/ReportRecordCount"
             },
@@ -1140,8 +1140,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "Only records of this core record type, and no passage (contract 1.36.0); absent or null for passages and records of every type",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "Only records of this record type key, and no passage (contract 1.36.0). From contract 1.39.0 any key of the pattern is accepted; one the campaign's system has no record type for finds nothing. Absent or null for passages and records of every type",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : [ "string", "null" ]
           },
           "tier" : {
@@ -1198,6 +1198,35 @@
           }
         },
         "required" : [ "question" ],
+        "type" : "object"
+      },
+      "Origin" : {
+        "properties" : {
+          "kind" : {
+            "description" : "core for a core type; proposal for a record type or term the GM approved from a material's proposal",
+            "enum" : [ "core", "proposal" ],
+            "example" : "proposal",
+            "type" : "string"
+          },
+          "materialId" : {
+            "description" : "The material that proposed it; null for a core type, and once that material was deleted",
+            "example" : "0190a0b0-0000-7000-8000-000000000004",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "materialName" : {
+            "description" : "That material's name; null when materialId is null",
+            "example" : "Livro do Jogador",
+            "type" : [ "string", "null" ]
+          },
+          "proposalId" : {
+            "description" : "The approving proposal; null for a core type",
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "kind", "materialId", "materialName", "proposalId" ],
         "type" : "object"
       },
       "PageLine" : {
@@ -1306,6 +1335,176 @@
           }
         },
         "required" : [ "category", "code", "params", "status", "title", "traceId", "type" ],
+        "type" : "object"
+      },
+      "Proposal" : {
+        "properties" : {
+          "definition" : {
+            "description" : "A term's definition, quoted from the material; for a record type, the quoted definition when the material gives one, else null",
+            "example" : "Pontos de Vida (PV) medem a saúde do personagem",
+            "type" : [ "string", "null" ]
+          },
+          "examples" : {
+            "description" : "One to three examples quoted from the material, each with its page",
+            "items" : {
+              "$ref" : "#/components/schemas/ProposalExample"
+            },
+            "maxItems" : 3,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "id" : {
+            "description" : "The proposal's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "What it proposes: a record type or a term",
+            "enum" : [ "record_type", "term" ],
+            "example" : "record_type",
+            "type" : "string"
+          },
+          "materialId" : {
+            "description" : "The material that proposed it; null once that material was deleted",
+            "example" : "0190a0b0-0000-7000-8000-000000000004",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "materialName" : {
+            "description" : "That material's name; null when materialId is null",
+            "example" : "Livro do Jogador",
+            "type" : [ "string", "null" ]
+          },
+          "name" : {
+            "description" : "The proposed name",
+            "example" : "Talento",
+            "type" : "string"
+          },
+          "state" : {
+            "description" : "pending until the GM decides",
+            "enum" : [ "pending", "approved", "merged", "rejected" ],
+            "example" : "pending",
+            "type" : "string"
+          },
+          "systemId" : {
+            "description" : "The system it was proposed to: each system the material counts under decides on its own",
+            "example" : "0190a0b0-0000-7000-8000-000000000001",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The proposal's version: a decision names it",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "definition", "examples", "id", "kind", "materialId", "materialName", "name", "state", "systemId", "version" ],
+        "type" : "object"
+      },
+      "ProposalApproval" : {
+        "properties" : {
+          "name" : {
+            "description" : "The name to approve it under, 1 to 120 code points after trimming; the proposed name when absent or null",
+            "example" : "Feat",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : [ "string", "null" ]
+          },
+          "version" : {
+            "description" : "The version the decision was made on, as the proposal was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
+      "ProposalDecision" : {
+        "properties" : {
+          "proposal" : {
+            "$ref" : "#/components/schemas/Proposal",
+            "description" : "The proposal as stored, decided"
+          },
+          "resultId" : {
+            "description" : "The record type or term the approval made, or the one the merge went into; null for a rejection",
+            "example" : "0190a0b0-0000-7000-8000-000000000031",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "proposal", "resultId" ],
+        "type" : "object"
+      },
+      "ProposalExample" : {
+        "properties" : {
+          "page" : {
+            "description" : "The page of the passage the quote was found in",
+            "example" : 42,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "quote" : {
+            "description" : "The quote, verbatim from that passage, at most 200 code points",
+            "example" : "Talentos são habilidades especiais",
+            "type" : "string"
+          }
+        },
+        "required" : [ "page", "quote" ],
+        "type" : "object"
+      },
+      "ProposalMerge" : {
+        "properties" : {
+          "targetId" : {
+            "description" : "A record type of the proposal's system for a record type proposal, or a term of it for a term proposal",
+            "example" : "0190a0b0-0000-7000-8000-000000000031",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the decision was made on, as the proposal was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "targetId", "version" ],
+        "type" : "object"
+      },
+      "ProposalPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Proposal"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many pending proposals there are in all, whatever the page",
+            "example" : 3,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "ProposalRejection" : {
+        "properties" : {
+          "version" : {
+            "description" : "The version the decision was made on, as the proposal was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
         "type" : "object"
       },
       "Record" : {
@@ -1462,10 +1661,20 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "key" : {
+            "description" : "The record type's stable key (contract 1.38.0): a core type's core key, or the slug of an approved type's name at its approval (lower-case letters, digits and underscores); it never changes, a rename included",
+            "example" : "feat",
+            "pattern" : "^[a-z0-9_]{1,32}$",
+            "type" : "string"
+          },
           "name" : {
             "description" : "The record type's name. For a core type it is the core key in English (\"character sheet\"); a client shows its own translation of core instead",
             "example" : "character sheet",
             "type" : "string"
+          },
+          "origin" : {
+            "$ref" : "#/components/schemas/Origin",
+            "description" : "Where the record type came from (contract 1.38.0): core, or the approving proposal and its material"
           },
           "records" : {
             "description" : "How many records of the system have this type: from contract 1.34.0, the records of the accepted versions of the materials of the system and of its campaigns",
@@ -1481,7 +1690,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "core", "id", "name", "records", "version" ],
+        "required" : [ "core", "id", "key", "name", "origin", "records", "version" ],
         "type" : "object"
       },
       "RecordTypeChange" : {
@@ -1507,15 +1716,21 @@
       "RecordTypeOfRecord" : {
         "properties" : {
           "core" : {
-            "description" : "The core key of the record type: a client shows its own translation of it",
+            "description" : "The core key of a core record type: a client shows its own translation of it; null for a type the GM approved (contract 1.39.0), whose name is shown",
             "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
             "example" : "spell",
-            "type" : "string"
+            "type" : [ "string", "null" ]
           },
           "id" : {
             "description" : "The record type's id",
             "example" : "0190a0b0-0000-7000-8000-000000000003",
             "format" : "uuid",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "The record type's stable key (contract 1.39.0), the one its records store",
+            "example" : "spell",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "name" : {
@@ -1524,7 +1739,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "core", "id", "name" ],
+        "required" : [ "core", "id", "key", "name" ],
         "type" : "object"
       },
       "RecordTypePage" : {
@@ -1564,7 +1779,7 @@
         "type" : "object"
       },
       "ReportRecordCount" : {
-        "description" : "How many records of one core type the version has (contract 1.34.0)",
+        "description" : "How many records of one record type the version has (contract 1.34.0)",
         "properties" : {
           "count" : {
             "description" : "How many, at least 1",
@@ -1574,9 +1789,9 @@
             "type" : "integer"
           },
           "type" : {
-            "description" : "The core type's key",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record type's key: a core key, or from contract 1.39.0 the key of a type the GM approved (a client names it from its system's record types, and shows the key when none matches)",
             "example" : "spell",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           }
         },
@@ -1816,8 +2031,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record-type filter, a core record type, null for none (contract 1.36.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record-type filter, a record type key (any key from contract 1.39.0), null for none (contract 1.36.0)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : [ "string", "null" ]
           },
           "results" : {
@@ -1898,8 +2113,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.36.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record's type key; only for a record (contract 1.36.0). A client shows its own translation of a core key, and from contract 1.39.0 the name of the campaign system's record type with that key (the key itself when none matches)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "sectionPath" : {
@@ -2190,6 +2405,64 @@
         "required" : [ "edition", "id", "name" ],
         "type" : "object"
       },
+      "Term" : {
+        "properties" : {
+          "aliases" : {
+            "description" : "Its other names: those of the term proposals merged into it, oldest first",
+            "items" : {
+              "example" : "PV",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "definition" : {
+            "description" : "Its definition, quoted from its material",
+            "example" : "Pontos de Vida (PV) medem a saúde do personagem",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The term's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000031",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The term's name, as approved",
+            "example" : "Pontos de Vida",
+            "type" : "string"
+          },
+          "origin" : {
+            "$ref" : "#/components/schemas/Origin",
+            "description" : "The approving proposal and its material"
+          },
+          "version" : {
+            "description" : "The term's version",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "aliases", "definition", "id", "name", "origin", "version" ],
+        "type" : "object"
+      },
+      "TermPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Term"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many terms the system has in all, whatever the page",
+            "example" : 12,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
       "Turn" : {
         "properties" : {
           "conversationId" : {
@@ -2347,8 +2620,8 @@
             "type" : "string"
           },
           "recordType" : {
-            "description" : "The record's core record type: a client shows its own translation of it; only for a record (contract 1.37.0)",
-            "enum" : [ "rule", "spell", "item", "creature", "character_sheet", "encounter", "dungeon", "note" ],
+            "description" : "The record's type key; only for a record (contract 1.37.0). A client shows its own translation of a core key, and from contract 1.39.0 the name of the campaign system's record type with that key (the key itself when none matches)",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
             "type" : "string"
           },
           "removed" : {
@@ -2434,7 +2707,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.37.0"
+    "version" : "1.39.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -4280,6 +4553,74 @@
         "tags" : [ "materials" ]
       }
     },
+    "/api/v1/materials/{id}/proposals" : {
+      "get" : {
+        "operationId" : "listMaterialProposals",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The material's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProposalPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The pending ontology proposals of one of the account's materials (contract 1.38.0), in every system it counts under (each proposal names its system), oldest first. request.not_found (404) for any other material id; A page starts at an offset and names the total of the list. request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
     "/api/v1/materials/{id}/report" : {
       "get" : {
         "operationId" : "getMaterialReport",
@@ -4501,6 +4842,174 @@
         },
         "summary" : "The signed-in account; session.required (401) without a session, session.renewal_required (401) when the token must be renewed first",
         "tags" : [ "session" ]
+      }
+    },
+    "/api/v1/proposals/{id}/approval" : {
+      "post" : {
+        "operationId" : "approveProposal",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The proposal's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProposalApproval"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProposalDecision"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Approves one of the account's pending ontology proposals on the version it names (contract 1.38.0), as proposed or under another name: a record type proposal becomes a record type of its system (its key the slug of the approved name, its origin the proposal), a term proposal a term with its quoted definition. ontology.name_taken (409) when the system already has the name (a record type, a term, an alias, or a core type's name in pt-BR or en, trimmed, whatever the case); ontology.name_invalid (400) for a name outside its limits (params min and max); request.stale_version (409) when the proposal has left that version or was decided meanwhile; request.invalid (400) without a version or for a malformed body; request.not_found (404) for any other id, one of a system being deleted included; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/proposals/{id}/merge" : {
+      "post" : {
+        "operationId" : "mergeProposal",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The proposal's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProposalMerge"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProposalDecision"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Merges one of the account's pending ontology proposals into an item of its system on the version it names (contract 1.38.0): a term proposal into a term, whose aliases gain the proposal's name; a record type proposal into a record type, which only closes the proposal. ontology.merge_target_invalid (400) for a target that is not of the proposal's kind and system (another account's, unknown or malformed included); ontology.name_taken (409) when the system already has the term proposal's name; request.stale_version (409) when the proposal has left that version or was decided meanwhile; request.invalid (400) without a version or for a malformed body; request.not_found (404) for any other id, one of a system being deleted included; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/proposals/{id}/rejection" : {
+      "post" : {
+        "operationId" : "rejectProposal",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The proposal's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProposalRejection"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProposalDecision"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Rejects one of the account's pending ontology proposals on the version it names (contract 1.38.0): it is never raised again for the same material, a reprocess included; request.stale_version (409) when the proposal has left that version or was decided meanwhile; request.invalid (400) without a version or for a malformed body; request.not_found (404) for any other id, one of a system being deleted included; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
       }
     },
     "/api/v1/record-types/{id}" : {
@@ -5282,6 +5791,74 @@
         "tags" : [ "library" ]
       }
     },
+    "/api/v1/systems/{id}/proposals" : {
+      "get" : {
+        "operationId" : "listSystemProposals",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProposalPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The pending ontology proposals of one of the account's game systems (contract 1.38.0): the record types and terms its materials proposed, oldest first, each with its examples. A proposal joins nothing until the GM approves it. request.not_found (404) for any other system id, a system being deleted included; A page starts at an offset and names the total of the list. request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
     "/api/v1/systems/{id}/record-types" : {
       "get" : {
         "operationId" : "listRecordTypes",
@@ -5347,6 +5924,74 @@
           }
         },
         "summary" : "The record types of one of the account's game systems, each with its record count: the eight core types first, in their fixed order (rule, spell, item, creature, character_sheet, encounter, dungeon, note), then the others oldest first. A page starts at an offset and names the total of the list. request.not_found (404) for any other system id, a system being deleted included; request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      }
+    },
+    "/api/v1/systems/{id}/terms" : {
+      "get" : {
+        "operationId" : "listTerms",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TermPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The approved terms of one of the account's game systems (contract 1.38.0), oldest first, each with its quoted definition, its aliases and its origin. request.not_found (404) for any other system id, a system being deleted included; A page starts at an offset and names the total of the list. request.invalid (400) for a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
         "tags" : [ "ontology" ]
       }
     },

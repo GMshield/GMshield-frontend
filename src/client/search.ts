@@ -14,12 +14,15 @@ import { isSourcePage, type SourcePage, type Tier } from './conversation';
 /** A search as the relay answers it. */
 export type Search = components['schemas']['Search'];
 export type SearchResult = components['schemas']['SearchResult'];
-/** A core record type's key, as a search's filter and a record result name it (Story 4.3 part B). */
+/**
+ * A record type's key, as a search's filter and a record result name it (Story 4.3 part B): a core key, or from Story
+ * 4.4 part B (public contract 1.39.0) the key of a type the GM approved, so any text of the key pattern.
+ */
 export type RecordTypeKey = NonNullable<components['schemas']['NewSearch']['recordType']>;
 
 /** A passage result: its id and first words. */
 export type PassageResult = SearchResult & { readonly kind: 'passage'; readonly passageId: string; readonly firstWords: string };
-/** A record result (Story 4.3 part B): its id, name, core type and its passages on its first page. */
+/** A record result (Story 4.3 part B): its id, name, type key and its passages on its first page. */
 export type RecordResult = SearchResult & {
   readonly kind: 'record';
   readonly recordId: string;
@@ -28,7 +31,7 @@ export type RecordResult = SearchResult & {
   readonly passageIds: string[];
 };
 
-/** What a search may be narrowed to: a tier of the scope, a material, a core record type; each null for none. */
+/** What a search may be narrowed to: a tier of the scope, a material, a record type key; each null for none. */
 export type SearchFilters = { readonly tier: Tier | null; readonly materialId: string | null; readonly recordType?: RecordTypeKey | null };
 
 /** Whether a result is a record (Story 4.3 part B); else it is a passage. */
