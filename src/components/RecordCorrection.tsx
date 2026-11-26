@@ -102,7 +102,8 @@ export type RecordDeletion = {
   /** The interface's language (the dialog's own words). */
   readonly language: Language;
   readonly action: (previous: RecordDeleteState, form: FormData) => Promise<RecordDeleteState>;
-  readonly then: { readonly recordTypeId: string } | { readonly back: string };
+  /** Where the page goes once the record is deleted: its type's list, or the search it was opened from. */
+  readonly after: { readonly recordTypeId: string } | { readonly back: string };
 };
 
 /** The page that offers no delete: never called. */
@@ -242,10 +243,10 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
     data.set('ground', ground.kind);
     data.set('owner', ground.kind === 'system' ? ground.systemId : ground.campaignId);
     data.set('recordId', recordId);
-    if ('recordTypeId' in deletion.then) {
-      data.set('recordTypeId', deletion.then.recordTypeId);
+    if ('recordTypeId' in deletion.after) {
+      data.set('recordTypeId', deletion.after.recordTypeId);
     } else {
-      data.set('back', deletion.then.back);
+      data.set('back', deletion.after.back);
     }
     startTransition(() => deleteDispatch(data));
   };

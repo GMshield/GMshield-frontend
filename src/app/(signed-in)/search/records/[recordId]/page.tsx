@@ -83,7 +83,7 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
         types={typeOptions(types, recordType, t)}
         texts={correctionTexts(t)}
         action={correctRecordAction}
-        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, then: { back: back.href } }}
+        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, after: { back: back.href } }}
       >
         <RecordFields fields={fields} t={t} />
       </RecordCorrection>
