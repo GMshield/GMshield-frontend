@@ -1086,6 +1086,39 @@ they sit in `src/`.
     tab) moves the page on the same way, without the toast. Messages `systems.records.delete.*`.
   - The stand-in answers both `DELETE` routes with 204 from the contract; the demo backend deletes its records in
     memory (lists, counts, record pages and search follow) and refuses a record named "Falha ao excluir" with 404.
+- **Write an artifact by hand (Story 5.1 part A).** Public contract 1.42.0 (the minimum backend contract too: the
+  three artifact routes are new; deploy the backend, then this frontend). `src/server/artifacts.ts` calls them:
+  `createArtifact`, `listArtifacts`, `getArtifact`, and `artifactsPage` (a list page with the record types in use).
+  - A campaign's page gains the tab "Artefatos" (`?tab=artifacts`, read only on that tab): "Novo artefato" (a solid
+    pill), then the campaign's artifacts newest first in `ItemList` (`viewKey="artifacts"`, paged with `listPage` and
+    `?page=`), each row the artifact's name and its record type (`typeLabel`: a core type translated, an approved one by
+    the name its system gives it), opening its page. The type chips (`Tabs variant="chips"`: "Todos", then each type in
+    use with its count, from the list's `types`) narrow it with `?type=`, which the page links keep. An empty campaign
+    says so in one sentence with "Novo artefato"; a type with none leads back to all.
+  - `/campaigns/[id]/artifacts/new` (`?type=` chooses the type, else a note) is `ArtifactForm`: the record's editable
+    body, `RecordFieldsEditor` (the name, the type among the campaign's system's record types, the field rows with
+    "Remover campo" and "Adicionar campo"), now shared with `RecordCorrection`, whose behaviour is unchanged; then
+    "Conteúdo", a bordered textarea; then "Salvar" and "Cancelar". `createArtifactAction`
+    (`campaigns/[id]/artifacts/actions.ts`) reads the post with `valuesOf` (moved with `fieldOf` to
+    `records/form-values.ts`, which both actions use), then `flash()` "Artefato salvo.", `revalidatePath('/',
+    'layout')` and `redirect` to the artifact's page. A `request.invalid` naming `params.field` shows its own text
+    (`artifacts.errors.*`, with its limits) under that part, the focus moved there, with what was typed kept.
+  - `/campaigns/[id]/artifacts/[artifactId]`: `PageHeader` (back to the artifacts tab, the type as the subtitle), the
+    fields (`RecordFields`), the content as plain text (line breaks kept, never HTML), and "Fontes", which says a
+    hand-written artifact has none.
+  - "Personagens" (`/characters`) lists the current campaign's character sheets (`?recordType=character_sheet`) the
+    same way, with "Nova ficha" (the form with `character_sheet` chosen); with no sheet, one sentence and "Nova ficha";
+    with no current campaign, one sentence and a link to the campaigns. Its rows and "Nova ficha" carry
+    `from=characters` (the only value taken), so the form's "Cancelar", the artifact page's way back and the page a save
+    opens lead back to "Personagens"; otherwise both pages lead back to the artifacts tab, labelled "Artefatos". The
+    new-artifact page is titled "Novo artefato" and an artifact's page by its name (`generateMetadata`). The placeholder
+    component is gone: no entry page is a placeholder any more.
+  - The system's and the campaign's delete dialogs (`SystemActions`, `CampaignDeleteAction`) name the artifacts that go
+    with the others, from the deletion counts' new `artifacts` (`systems.delete.*` and `campaigns.delete.*` gain
+    `{artifacts}`, `artifactsOne` and `artifactsOther`).
+  - Messages `campaigns.page.artifacts`, `artifacts.*`, `characters.*`, `feedback.artifactSaved`. The stand-in
+    answers the three routes (two character sheets and an item); the demo backend (`docs/tools/frontend-demo-backend.mjs`)
+    keeps artifacts in memory with the backend's checks.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

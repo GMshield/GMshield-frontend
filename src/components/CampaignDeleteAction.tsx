@@ -17,6 +17,8 @@ const INITIAL: CampaignDeleteState = { error: null };
 export type CampaignDeletionCounts = {
   readonly conversations: number;
   readonly materials: number;
+  /** Story 5.1: its artifacts. */
+  readonly artifacts: number;
 };
 
 export type CampaignDeleteActionProps = {
@@ -28,7 +30,7 @@ export type CampaignDeleteActionProps = {
 };
 
 /** "1 conversa" or "{n} conversas": the one form for one, the other for any other count (zero included). */
-function counted(t: Translate, key: 'conversations' | 'materials', count: number): string {
+function counted(t: Translate, key: 'conversations' | 'materials' | 'artifacts', count: number): string {
   return count === 1 ? t(`campaigns.delete.${key}One`) : t(`campaigns.delete.${key}Other`, { count });
 }
 
@@ -40,6 +42,7 @@ export function campaignDeletionConsequence(t: Translate, counts: CampaignDeleti
   return t('campaigns.delete.consequence', {
     conversations: counted(t, 'conversations', counts.conversations),
     materials: counted(t, 'materials', counts.materials),
+    artifacts: counted(t, 'artifacts', counts.artifacts),
   });
 }
 

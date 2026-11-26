@@ -57,7 +57,6 @@
     "rules": "Aqui você vai escrever suas próprias regras e conteúdos, à mão ou com um agente.",
     "campaigns": "Aqui você vai ver e organizar suas campanhas.",
     "systems": "Aqui você vai ver e organizar seus sistemas de jogo.",
-    "characters": "Aqui você vai guardar os personagens das suas campanhas.",
     "files": "Aqui você vai ver os arquivos que enviou e o estado de cada um."
   },
   "systems": {
@@ -146,14 +145,16 @@
     },
     "delete": {
       "title": "Excluir este sistema?",
-      "consequence": "Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.",
-      "unknown": "Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele. Isso não pode ser desfeito.",
+      "consequence": "Vão junto: {campaigns}, {conversations}, {materials} e {artifacts}. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as campanhas deste sistema, as conversas e os artefatos delas e os materiais ligados só a ele. Isso não pode ser desfeito.",
       "campaignsOne": "1 campanha",
       "campaignsOther": "{count} campanhas",
       "conversationsOne": "1 conversa",
       "conversationsOther": "{count} conversas",
       "materialsOne": "1 material ligado só a ele",
       "materialsOther": "{count} materiais ligados só a ele",
+      "artifactsOne": "1 artefato",
+      "artifactsOther": "{count} artefatos",
       "confirm": "Excluir sistema"
     },
     "proposals": {
@@ -191,7 +192,7 @@
     "filters": "Quais campanhas",
     "inUse": "Em uso",
     "archived": "Arquivadas",
-    "empty": "Uma campanha reúne as conversas e os materiais de uma mesa de jogo.",
+    "empty": "Uma campanha reúne as conversas, os materiais e os artefatos de uma mesa de jogo.",
     "emptyArchived": "Nenhuma campanha arquivada.",
     "systemEdition": "{name} {edition}",
     "form": {
@@ -218,6 +219,7 @@
       "overview": "Visão geral",
       "scope": "Escopo",
       "conversations": "Conversas",
+      "artifacts": "Artefatos",
       "name": "Nome",
       "system": "Sistema",
       "state": "Situação",
@@ -230,12 +232,14 @@
     },
     "delete": {
       "title": "Excluir esta campanha?",
-      "consequence": "Vão junto: {conversations} e {materials} desta campanha. Isso não pode ser desfeito.",
-      "unknown": "Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.",
+      "consequence": "Vão junto: {conversations}, {materials} e {artifacts} desta campanha. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as conversas, os materiais e os artefatos desta campanha. Isso não pode ser desfeito.",
       "conversationsOne": "1 conversa",
       "conversationsOther": "{count} conversas",
       "materialsOne": "1 material",
       "materialsOther": "{count} materiais",
+      "artifactsOne": "1 artefato",
+      "artifactsOther": "{count} artefatos",
       "confirm": "Excluir campanha"
     },
     "scope": {
@@ -251,6 +255,40 @@
       "noMaterials": "Nenhum material pronto.",
       "stale": "O escopo foi alterado em outro lugar. Os interruptores agora mostram o escopo atual: faça sua alteração de novo."
     }
+  },
+  "artifacts": {
+    "list": "Artefatos desta campanha",
+    "new": "Novo artefato",
+    "empty": "Esta campanha ainda não tem artefatos, como personagens, itens ou notas que você escreve.",
+    "types": "Tipos de registro",
+    "all": "Todos",
+    "form": {
+      "title": "Novo artefato",
+      "content": "Conteúdo",
+      "save": "Salvar",
+      "cancel": "Cancelar"
+    },
+    "errors": {
+      "name": "O nome precisa ter de {min} a {max} caracteres.",
+      "recordType": "Escolha um tipo de registro do sistema desta campanha.",
+      "fields": "Um artefato pode ter até {max} campos.",
+      "fieldName": "O nome do campo precisa ter de {min} a {max} caracteres.",
+      "fieldValue": "O valor do campo precisa ter de {min} a {max} caracteres.",
+      "content": "O conteúdo pode ter até {max} caracteres."
+    },
+    "page": {
+      "content": "Conteúdo",
+      "sources": "Fontes",
+      "noSources": "Nenhuma fonte: este artefato foi escrito à mão."
+    }
+  },
+  "characters": {
+    "list": "Fichas de personagem de {campaign}",
+    "campaign": "Campanha {name}",
+    "noCampaign": "Escolha uma campanha para ver as fichas de personagem dela.",
+    "campaigns": "Ver campanhas",
+    "empty": "Esta campanha ainda não tem fichas de personagem.",
+    "new": "Nova ficha"
   },
   "files": {
     "list": "Seus arquivos",
@@ -386,7 +424,7 @@
         "core_record_type": "Os tipos de registro básicos são os mesmos em todo sistema e não podem ser renomeados nem removidos.",
         "record_type_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "record_type_name_taken": "Este sistema já tem um tipo de registro com este nome.",
-        "record_type_in_use": "Este tipo de registro tem registros e não pode ser removido.",
+        "record_type_in_use": "Este tipo de registro é usado por registros ou artefatos e não pode ser removido.",
         "name_taken": "Este sistema já tem um tipo de registro, um termo ou um tipo básico com este nome.",
         "name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "merge_target_invalid": "Escolha um item deste sistema do mesmo tipo da proposta."
@@ -838,7 +876,8 @@
       "termApproved": "Termo «{name}» aprovado.",
       "merged": "«{name}» mesclado.",
       "rejected": "«{name}» rejeitado. Ele não volta a ser proposto por este material."
-    }
+    },
+    "artifactSaved": "Artefato salvo."
   },
   "notifications": {
     "title": "Notificações",

@@ -1,4 +1,5 @@
 import { NamedIcon } from '@/components/Icons';
+import { ItemList, type ListRow } from '@/components/ItemList';
 import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
 import Link from 'next/link';
 
@@ -8,17 +9,23 @@ import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
 import { PillLink } from '@/components/PillLink';
 import { ScopeControls } from '@/components/ScopeControls';
-import { errorText, translator } from '@/messages';
-import { currentPreferences } from '@/preferences';
+import { errorText, translator, type Language } from '@/messages';
+import { pageParam } from '@/paging';
+import { currentPreferences, currentViews } from '@/preferences';
+import { isRecordTypeKey, typeLabel } from '@/record-types';
+import { artifactsPage, type ArtifactSummary, type ArtifactTypeCount } from '@/server/artifacts';
 import { AREAS, listConversations } from '@/server/conversations';
 import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
+import type { ListPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
+import type { ListView } from '@/view-cookie';
 
+import { systemRecordTypes } from '../../systems/rows';
 import styles from '../../systems/systems.module.css';
 import { archiveCampaignAction, changeScopeAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
-import { systemLabel } from '../rows';
+import { artifactRow, systemLabel } from '../rows';
 
-const TABS = ['overview', 'scope', 'conversations'] as const;
+const TABS = ['overview', 'scope', 'conversations', 'artifacts'] as const;
 type Tab = (typeof TABS)[number];
 
 function tabOf(value: unknown): Tab {
@@ -36,6 +43,10 @@ function tabOf(value: unknown): Tab {
  * - conversations: from Story 3.10 one row per area (Consultas, Criação de Regras) with how many conversations the
  *   campaign has there and "Abrir", which makes the campaign current and opens that area's list (for an archived
  *   campaign, which cannot be current, a sentence asks to restore it instead); one sentence when it has none in either.
+ * - artifacts (Story 5.1): the campaign's artifacts, newest first, paged (`?page=`, rows a page from the "Exibição"
+ *   menu), each opening its page and named by its name with its record type under it; the type chips ("Todos", then
+ *   each record type in use, with its count) narrow the list (`?type=`); "Novo artefato" (a solid pill) opens the form.
+ *   A campaign without artifacts says so in one sentence with "Novo artefato"; a type with none leads back to all.
  * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
  * "Não encontrado." page.
  *
@@ -50,7 +61,13 @@ export default async function CampaignPage({
   readonly params: Promise<{ readonly id: string }>;
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
 }) {
-  const [{ id }, query, { language }, token] = await Promise.all([params, searchParams, currentPreferences(), currentSessionToken()]);
+  const [{ id }, query, { language }, views, token] = await Promise.all([
+    params,
+    searchParams,
+    currentPreferences(),
+    currentViews(),
+    currentSessionToken(),
+  ]);
   const t = translator(language);
   const tab = tabOf(query.tab);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
@@ -67,11 +84,15 @@ export default async function CampaignPage({
   const campaignId = campaign.data.id;
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
-  const [areas, scope] = await Promise.all([
+  const type = typeof query.type === 'string' && isRecordTypeKey(query.type) ? query.type : null;
+  const [areas, scope, artifacts, recordTypes] = await Promise.all([
     tab === 'conversations'
       ? Promise.all(AREAS.map(async (area) => ({ area, list: await listConversations(token ?? '', campaignId, area, { limit: 1 }) })))
       : null,
     tab === 'scope' ? getCampaignScope(token ?? '', campaignId) : null,
+    tab === 'artifacts' ? artifactsPage(token ?? '', campaignId, type, pageParam(query.page), views.artifacts.size) : null,
+    // The record types name the rows' types and the chips (an approved type by the name its system gives it).
+    tab === 'artifacts' ? systemRecordTypes(token ?? '', system.id) : [],
   ]);
   const refused = areas?.map(({ list }) => list).find((list) => !list.ok);
   const counted = areas?.map(({ area, list }) => ({ area, total: list.ok ? list.data.total : 0 })) ?? [];
@@ -167,6 +188,100 @@ export default async function CampaignPage({
             </li>
           ))}
         </ul>
+      )}
+      {artifacts === null ? null : !artifacts.ok ? (
+        <Notice status="danger" language={language} message={errorText(artifacts.problem, language)} dismissible={false} />
+      ) : (
+        <ArtifactsTab
+          here={here}
+          type={type}
+          page={artifacts.data.list}
+          inUse={artifacts.data.types}
+          labels={{ all: t('artifacts.all'), types: t('artifacts.types'), list: t('artifacts.list'), new: t('artifacts.new') }}
+          empty={{ all: t('artifacts.empty'), type: t('view.emptyFilter'), clear: t('view.clearFilter') }}
+          rows={artifacts.data.list.rows.map((artifact) => artifactRow(artifact, here, recordTypes, t))}
+          typeName={(key) => typeLabel(key, recordTypes, t)}
+          view={views.artifacts}
+          language={language}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The artifacts tab (Story 5.1): "Novo artefato", then the list with its type chips and its pages, or the one sentence
+ * of an empty campaign, or of a type with no artifact (which leads back to all).
+ */
+function ArtifactsTab({
+  here,
+  type,
+  page,
+  inUse,
+  labels,
+  empty,
+  rows,
+  typeName,
+  view,
+  language,
+}: {
+  readonly here: string;
+  readonly type: string | null;
+  readonly page: ListPage<ArtifactSummary>;
+  readonly inUse: readonly ArtifactTypeCount[];
+  readonly labels: { readonly all: string; readonly types: string; readonly list: string; readonly new: string };
+  readonly empty: { readonly all: string; readonly type: string; readonly clear: string };
+  readonly rows: readonly ListRow[];
+  readonly typeName: (key: string) => string;
+  readonly view: ListView;
+  readonly language: Language;
+}) {
+  const tabHref = `${here}?tab=artifacts`;
+  const newHref = `${here}/artifacts/new${type === null ? '' : `?type=${encodeURIComponent(type)}`}`;
+  const create = (
+    <PillLink href={newHref} solid>
+      {labels.new}
+    </PillLink>
+  );
+  const chips = (
+    <Tabs
+      variant="chips"
+      label={labels.types}
+      tabs={[
+        { key: 'all', href: tabHref, label: labels.all, current: type === null },
+        ...inUse.map((used) => ({
+          key: used.key,
+          href: `${tabHref}&type=${encodeURIComponent(used.key)}`,
+          label: `${typeName(used.key)} (${used.count})`,
+          current: used.key === type,
+        })),
+      ]}
+    />
+  );
+  if (page.paging.total === 0 && type === null) {
+    return <EmptyState icon="rules" text={empty.all}>{create}</EmptyState>;
+  }
+  return (
+    <>
+      <div className={styles.tabActions}>{create}</div>
+      {page.paging.total === 0 ? (
+        <>
+          {chips}
+          <EmptyState icon="rules" text={empty.type}>
+            <PillLink href={tabHref}>{empty.clear}</PillLink>
+          </EmptyState>
+        </>
+      ) : (
+        <ItemList
+          label={labels.list}
+          rows={rows}
+          pages={{ paging: page.paging, path: here, query: type === null ? { tab: 'artifacts' } : { tab: 'artifacts', type } }}
+          icon="rules"
+          viewKey="artifacts"
+          view={view}
+          language={language}
+          toolbar={chips}
+        />
       )}
     </>
   );

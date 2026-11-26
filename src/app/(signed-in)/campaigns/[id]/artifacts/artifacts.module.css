@@ -1,0 +1,33 @@
+/*
+ * Story 5.1: an artifact's page. Under its fields, its content as plain text in body type (its line breaks kept, a long
+ * word wrapped), then its sources, each under a heading in label type, as a record's source references read
+ * (RecordReferences.module.css).
+ */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 72ch;
+  margin: 0;
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.content {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.none {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}

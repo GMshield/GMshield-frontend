@@ -407,7 +407,7 @@ describe('a system page (Story 3.1)', () => {
 });
 
 describe('deleting a system (Story 3.1 part B)', () => {
-  const counts = { status: 200, body: { campaigns: 2, conversations: 3, materials: 1 } };
+  const counts = { status: 200, body: { campaigns: 2, conversations: 3, materials: 1, artifacts: 4 } };
 
   it('"Excluir" is a danger pill next to "Editar", and its closed confirmation names the counts, in both languages', async () => {
     await useBackend({
@@ -425,13 +425,13 @@ describe('deleting a system (Story 3.1 part B)', () => {
       expect(html).toContain(messages.systems.delete.title);
       expect(html).toContain(
         language === 'en'
-          ? 'Going with it: 2 campaigns, 3 conversations and 1 material linked only to it. This cannot be undone.'
-          : 'Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito.',
+          ? 'Going with it: 2 campaigns, 3 conversations, 1 material linked only to it and 4 artifacts. This cannot be undone.'
+          : 'Vão junto: 2 campanhas, 3 conversas, 1 material ligado só a ele e 4 artefatos. Isso não pode ser desfeito.',
       );
       expect(html).toContain(`>${messages.systems.delete.confirm}</button>`);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
-    expect(ptBR.systems.delete.consequence).toBe('Vão junto: {campaigns}, {conversations} e {materials}. Isso não pode ser desfeito.');
+    expect(ptBR.systems.delete.consequence).toBe('Vão junto: {campaigns}, {conversations}, {materials} e {artifacts}. Isso não pode ser desfeito.');
     for (const messages of [ptBR, en]) {
       expect(JSON.stringify(messages.systems.delete)).not.toMatch(/!|\p{Extended_Pictographic}/u);
     }

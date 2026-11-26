@@ -18,6 +18,8 @@ export type SystemDeletionCounts = {
   readonly campaigns: number;
   readonly conversations: number;
   readonly materials: number;
+  /** Story 5.1: the artifacts of its campaigns. */
+  readonly artifacts: number;
 };
 
 export type SystemActionsProps = {
@@ -29,7 +31,7 @@ export type SystemActionsProps = {
 };
 
 /** "1 campanha" or "{n} campanhas": the one form for one, the other for any other count (zero included). */
-function counted(t: Translate, key: 'campaigns' | 'conversations' | 'materials', count: number): string {
+function counted(t: Translate, key: 'campaigns' | 'conversations' | 'materials' | 'artifacts', count: number): string {
   return count === 1 ? t(`systems.delete.${key}One`) : t(`systems.delete.${key}Other`, { count });
 }
 
@@ -42,6 +44,7 @@ export function deletionConsequence(t: Translate, counts: SystemDeletionCounts |
     campaigns: counted(t, 'campaigns', counts.campaigns),
     conversations: counted(t, 'conversations', counts.conversations),
     materials: counted(t, 'materials', counts.materials),
+    artifacts: counted(t, 'artifacts', counts.artifacts),
   });
 }
 

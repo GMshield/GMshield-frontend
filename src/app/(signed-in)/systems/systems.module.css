@@ -157,3 +157,10 @@
   font-weight: var(--font-section-weight);
   line-height: var(--font-section-line-height);
 }
+
+/* A tab's own action above its list (Story 5.1: "Novo artefato" on a campaign's artifacts tab). */
+.tabActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   ANSWER_DONE,
+  ARTIFACT,
+  ARTIFACT_PAGE,
   BOOK_VERSION,
   CONVERSATION,
   CONVERSATION_ID,
@@ -131,14 +133,14 @@ describe('stand-in backend', () => {
     // Story 3.1 part B: what the starter system's deletion takes, and the delete itself (202, no body).
     expect(answer(contract, 'GET', `/api/v1/systems/${system.id}/deletion`, 't')).toMatchObject({
       status: 200,
-      body: { campaigns: 1, conversations: 1, materials: 0 },
+      body: { campaigns: 1, conversations: 1, materials: 0, artifacts: 3 },
     });
     expect(answer(contract, 'DELETE', `/api/v1/systems/${system.id}`, 't')).toEqual({ status: 202, type: null, body: null });
     expect(answer(contract, 'PUT', `/api/v1/systems/${system.id}`, 't')).toMatchObject({ status: 405 });
     // Story 3.2 part B: what the starter campaign's deletion takes, and the delete itself (202, no body).
     expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/deletion`, 't')).toMatchObject({
       status: 200,
-      body: { conversations: 1, materials: 0 },
+      body: { conversations: 1, materials: 0, artifacts: 3 },
     });
     expect(answer(contract, 'DELETE', `/api/v1/campaigns/${campaign.id}`, 't')).toEqual({ status: 202, type: null, body: null });
   });
@@ -484,6 +486,28 @@ describe('stand-in backend', () => {
     for (const path of [`/api/v1/systems/${system}/records/${RECORD_ID}`, `/api/v1/campaigns/${campaign}/records/${RECORD_ID}`]) {
       expect(answer(contract, 'DELETE', path, 't')).toMatchObject({ status: 204, type: null, body: null });
     }
+  });
+
+  it('answers a campaign\'s artifacts, one artifact and a new one (Story 5.1)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign}/artifacts`, 't')).toMatchObject({ status: 200, body: ARTIFACT_PAGE });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign}/artifacts/${ARTIFACT.id}`, 't')).toMatchObject({ status: 200, body: ARTIFACT });
+    expect(answer(contract, 'POST', `/api/v1/campaigns/${campaign}/artifacts`, 't')).toMatchObject({ status: 201, body: ARTIFACT });
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(ARTIFACT, key).toHaveProperty(key);
+    }
+    for (const key of schemas.ArtifactPage!.required ?? []) {
+      expect(ARTIFACT_PAGE, key).toHaveProperty(key);
+    }
+    for (const item of ARTIFACT_PAGE.items) {
+      for (const key of schemas.ArtifactSummary!.required ?? []) {
+        expect(item, key).toHaveProperty(key);
+      }
+    }
+    // The types in use count the rows, as the backend counts them.
+    expect(ARTIFACT_PAGE.types.reduce((sum, type) => sum + type.count, 0)).toBe(ARTIFACT_PAGE.total);
   });
 
   it('answers any other path with a 404 problem detail', async () => {

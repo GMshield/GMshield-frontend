@@ -8,6 +8,7 @@ import type { Language } from '@/messages';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { PillButton, SolidPillButton } from './PillButton';
 import styles from './RecordCorrection.module.css';
+import { RecordFieldsEditor, editorRows, type EditorDraft, type EditorField, type EditorTypeOption } from './RecordFieldsEditor';
 import formStyles from './SystemForm.module.css';
 
 /** A record's field as the form holds it. */
@@ -24,7 +25,7 @@ export type CorrectionValues = {
  * The part of the form a refusal is about: the name, the type, the fields as a whole, or one field's name or value by
  * its position from 0; null for a refusal about the whole form.
  */
-export type CorrectionField = 'name' | 'recordType' | 'fields' | `fieldName:${number}` | `fieldValue:${number}`;
+export type CorrectionField = EditorField;
 
 /**
  * What a correction answered (Story 4.5); `serial` counts the answers. `saved`: the backend took it. `stale`: the
@@ -55,7 +56,7 @@ export type CorrectionGround =
   | { readonly kind: 'campaign'; readonly campaignId: string };
 
 /** A record type the form offers: its key and its name as this interface shows it. */
-export type RecordTypeOption = { readonly key: string; readonly label: string };
+export type RecordTypeOption = EditorTypeOption;
 
 /** Every text of the form, in the interface's language (the server translates). */
 export type RecordCorrectionTexts = {
@@ -128,14 +129,6 @@ export type RecordCorrectionProps = {
   readonly deletion?: RecordDeletion;
 };
 
-/** A field row of the form, with a key of its own: two rows may hold the same name and value. */
-type Row = { readonly key: number; readonly name: string; readonly value: string };
-
-type Draft = { readonly name: string; readonly recordType: string; readonly rows: readonly Row[] };
-
-/** The focus target after the last field row is removed: "Adicionar campo". */
-const ADD = -1;
-
 function fill(text: string, params: Readonly<Record<string, string | number>>): string {
   return text.replace(/\{(\w+)\}/g, (placeholder, name: string) => (Object.hasOwn(params, name) ? String(params[name]) : placeholder));
 }
@@ -151,6 +144,9 @@ function fill(text: string, params: Readonly<Record<string, string | number>>): 
  * again on the current version). Every part is reachable from the keyboard: the form takes the focus on the name, a new
  * field on its name, and "Corrigir" gets it back when the form closes.
  *
+ * Story 5.1: the form's editable body (the name, the type and the field rows) is {@link RecordFieldsEditor}, shared with
+ * a new artifact's form.
+ *
  * Story 4.5 part B: with `deletion`, "Excluir" (a danger pill) sits beside "Corrigir" and opens the confirmation the way
  * a campaign's delete does ({@link ConfirmationDialog}: "Cancelar" or Esc closes it and focus goes back to "Excluir").
  * Confirmed, the record goes to the Server Action, which deletes it and moves the page on with the toast "Registro
@@ -164,13 +160,10 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
   const [confirming, setConfirming] = useState(false);
   // The answer the form opened after (null: closed): a correction saved since then closes it.
   const [openedAt, setOpenedAt] = useState<number | null>(null);
-  const [draft, setDraft] = useState<Draft>({ name: '', recordType: '', rows: [] });
+  const [draft, setDraft] = useState<EditorDraft>({ name: '', recordType: '', rows: [] });
   const [base, setBase] = useState(version);
-  const nextKey = useRef(0);
   const opener = useRef<HTMLButtonElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
-  const addButton = useRef<HTMLButtonElement>(null);
-  const focusRow = useRef<number | null>(null);
   const wasOpen = useRef(false);
   const id = useId();
   const open = openedAt !== null && !(state.saved && state.serial > openedAt);
@@ -184,20 +177,12 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
     }
     wasOpen.current = open;
   }, [open]);
-  useEffect(() => {
-    if (focusRow.current === ADD) {
-      addButton.current?.focus();
-    } else if (focusRow.current !== null) {
-      document.getElementById(`${id}-field-${focusRow.current}-name`)?.focus();
-    }
-    focusRow.current = null;
-  }, [draft.rows, id]);
 
   const start = () => {
     setDraft({
       name: values.name,
       recordType: values.recordType,
-      rows: values.fields.map((field) => ({ key: nextKey.current++, name: field.name, value: field.value })),
+      rows: editorRows(values.fields),
     });
     // Right after a save the page may not have brought the new version yet: the saved one is the newer.
     setBase(state.saved && state.currentVersion !== null ? Math.max(version, state.currentVersion) : version);
@@ -218,22 +203,6 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
     setBase(on);
     startTransition(() => dispatch(data));
   };
-  const change = (key: number, part: 'name' | 'value', text: string) =>
-    setDraft((before) => ({ ...before, rows: before.rows.map((row) => (row.key === key ? { ...row, [part]: text } : row)) }));
-  const add = () => {
-    const key = nextKey.current++;
-    focusRow.current = key;
-    setDraft((before) => ({ ...before, rows: [...before.rows, { key, name: '', value: '' }] }));
-  };
-  const remove = (key: number) => {
-    const at = draft.rows.findIndex((row) => row.key === key);
-    const rows = draft.rows.filter((row) => row.key !== key);
-    // The focus goes to the row that takes its place, else the one before, else "Adicionar campo".
-    const next = rows[Math.min(at, rows.length - 1)];
-    focusRow.current = next === undefined ? ADD : next.key;
-    setDraft({ ...draft, rows });
-  };
-
   const confirmDelete = () => {
     setConfirming(false);
     if (deletion === undefined) {
@@ -297,15 +266,6 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
   }
 
   const shown = (field: CorrectionField) => answered && !state.stale && state.error !== null && state.field === field;
-  const errorId = (field: CorrectionField) => `${id}-${field.replace(':', '-')}-error`;
-  const describedBy = (field: CorrectionField) => (shown(field) ? errorId(field) : undefined);
-  const error = (field: CorrectionField) =>
-    shown(field) ? (
-      <p id={errorId(field)} role="alert" className={formStyles.error}>
-        {state.error}
-      </p>
-    ) : null;
-  const offered = types.some((type) => type.key === draft.recordType) ? types : [{ key: draft.recordType, label: draft.recordType }, ...types];
   return (
     <form
       className={formStyles.form}
@@ -334,98 +294,15 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
           </div>
         </div>
       ) : null}
-      <div className={formStyles.fields}>
-        <div className={formStyles.field}>
-          <label htmlFor={`${id}-name`} className={formStyles.label}>
-            {texts.name}
-          </label>
-          <input
-            ref={nameInput}
-            id={`${id}-name`}
-            className={formStyles.input}
-            value={draft.name}
-            onChange={(event) => setDraft((before) => ({ ...before, name: event.target.value }))}
-            aria-required
-            autoComplete="off"
-            aria-invalid={shown('name')}
-            aria-describedby={describedBy('name')}
-          />
-          {error('name')}
-        </div>
-        <div className={formStyles.field}>
-          <label htmlFor={`${id}-type`} className={formStyles.label}>
-            {texts.type}
-          </label>
-          <select
-            id={`${id}-type`}
-            className={formStyles.select}
-            value={draft.recordType}
-            onChange={(event) => setDraft((before) => ({ ...before, recordType: event.target.value }))}
-            aria-invalid={shown('recordType')}
-            aria-describedby={describedBy('recordType')}
-          >
-            {offered.map((type) => (
-              <option key={type.key} value={type.key}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-          {error('recordType')}
-        </div>
-        <fieldset className={styles.group} aria-describedby={describedBy('fields')}>
-          <legend className={formStyles.label}>{texts.fields}</legend>
-          {draft.rows.length === 0 ? <p className={styles.none}>{texts.noFields}</p> : null}
-          {draft.rows.length === 0 ? null : (
-            <div className={styles.heads} aria-hidden="true">
-              <span>{texts.fieldName}</span>
-              <span>{texts.fieldValue}</span>
-            </div>
-          )}
-          <ol className={styles.rows}>
-            {draft.rows.map((row, index) => {
-              const number = index + 1;
-              const nameField: CorrectionField = `fieldName:${index}`;
-              const valueField: CorrectionField = `fieldValue:${index}`;
-              return (
-                <li key={row.key} className={styles.row}>
-                  <input
-                    id={`${id}-field-${row.key}-name`}
-                    className={formStyles.input}
-                    value={row.name}
-                    onChange={(event) => change(row.key, 'name', event.target.value)}
-                    aria-label={fill(texts.fieldNameOf, { number })}
-                    placeholder={texts.fieldName}
-                    autoComplete="off"
-                    aria-invalid={shown(nameField)}
-                    aria-describedby={describedBy(nameField)}
-                  />
-                  <textarea
-                    className={`${formStyles.textarea} ${styles.value}`}
-                    value={row.value}
-                    rows={1}
-                    onChange={(event) => change(row.key, 'value', event.target.value)}
-                    aria-label={fill(texts.fieldValueOf, { number })}
-                    placeholder={texts.fieldValue}
-                    aria-invalid={shown(valueField)}
-                    aria-describedby={describedBy(valueField)}
-                  />
-                  <PillButton variant="quiet" className={styles.remove} aria-label={fill(texts.removeFieldOf, { number })} onClick={() => remove(row.key)}>
-                    {texts.removeField}
-                  </PillButton>
-                  {error(nameField)}
-                  {error(valueField)}
-                </li>
-              );
-            })}
-          </ol>
-          {error('fields')}
-          <div>
-            <PillButton ref={addButton} onClick={add}>
-              {texts.addField}
-            </PillButton>
-          </div>
-        </fieldset>
-      </div>
+      <RecordFieldsEditor
+        id={id}
+        draft={draft}
+        onChange={setDraft}
+        types={types}
+        texts={texts}
+        errorOf={(field) => (shown(field) ? state.error : null)}
+        nameRef={nameInput}
+      />
       {answered && !state.stale && state.error !== null && state.field === null ? (
         <p role="alert" className={formStyles.error}>
           {state.error}
