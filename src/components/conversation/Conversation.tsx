@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import {
   MODEL_TIER,
   defaultName,
+  isArtifactReference,
   isRecordReference,
   parseCitation,
   parseDone,
@@ -18,6 +19,7 @@ import {
   type Area,
   type Citation,
   type SourceReference,
+  type TurnReference,
   type StoredTurn,
   type TierStart,
 } from '@/client/conversation';
@@ -40,7 +42,7 @@ import { PillButton } from '../PillButton';
 import { PillLink } from '../PillLink';
 
 import styles from './Conversation.module.css';
-import { References, recordHeading, referenceLine } from './References';
+import { artifactLine, References, recordHeading, referenceLine } from './References';
 
 /** The most lines the composer grows to; past them it scrolls. */
 export const COMPOSER_MAX_LINES = 6;
@@ -114,7 +116,7 @@ type ShownTurn = {
   readonly problem: unknown;
   readonly citations: readonly Citation[];
   readonly tiers: readonly TierStart[];
-  readonly references: readonly SourceReference[];
+  readonly references: readonly TurnReference[];
   readonly silent: boolean;
   readonly modelKnowledge: boolean;
   readonly failure: Failure | null;
@@ -134,7 +136,7 @@ type ShownTurn = {
 type Spoken = {
   readonly text: string;
   readonly answer: boolean;
-  readonly references: readonly SourceReference[];
+  readonly references: readonly TurnReference[];
   readonly note: string;
   readonly tiers: readonly TierMark[];
 };
@@ -156,6 +158,11 @@ function marksOf(turn: ShownTurn): CitationMark[] {
   const passages = new Map<string, number>();
   const records = new Map<string, number>();
   for (const reference of turn.references) {
+    // Story 5.1 part B: an artifact is cited by its id, as a record is.
+    if (isArtifactReference(reference)) {
+      records.set(reference.artifactId, reference.number);
+      continue;
+    }
     if (isRecordReference(reference)) {
       records.set(reference.recordId, reference.number);
       continue;
@@ -595,7 +602,7 @@ export function Conversation({
    * its references as a list.
    */
   const say = useCallback(
-    (text: string, answer = false, references: readonly SourceReference[] = [], note = '', tiers: readonly TierMark[] = []) => {
+    (text: string, answer = false, references: readonly TurnReference[] = [], note = '', tiers: readonly TierMark[] = []) => {
       // A zero-width space alternates so that the same words are said again.
       setSpoken((previous) => ({ text: previous.text === text ? `${text}\u200b` : text, answer, references, note, tiers }));
     },
@@ -1343,6 +1350,7 @@ export function Conversation({
                   {finished && !silent && turn.references.length > 0 ? (
                     <References
                       references={turn.references}
+                      campaignId={campaignId}
                       t={t}
                       recordTypes={recordTypes}
                       onOpen={turnId === null ? undefined : (reference, button) => openSource(turnId, reference, button)}
@@ -1476,8 +1484,9 @@ export function Conversation({
                 {spoken.references.map((reference) => (
                   <li key={reference.number} value={reference.number}>
                     {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
-                    {isRecordReference(reference) ? `${recordHeading(reference, t, recordTypes)}. ` : null}
-                    {referenceLine(reference, t)}
+                    {isRecordReference(reference) || isArtifactReference(reference)
+                      ? `${recordHeading(reference, t, recordTypes)}. ` : null}
+                    {isArtifactReference(reference) ? artifactLine(reference, t) : referenceLine(reference, t)}
                   </li>
                 ))}
               </ol>

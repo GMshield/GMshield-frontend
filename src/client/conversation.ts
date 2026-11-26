@@ -169,13 +169,43 @@ export type ReferenceField = Readonly<components['schemas']['TurnReferenceField'
 /**
  * A source reference of a finished answer, as the `done` event carries it (Story 2.5, `TurnSourceReference`): one cited
  * place (`kind` passage), or (Story 4.3 part C) one cited record (`kind` record), with its name, core type and fields
- * as they were when the answer was written, placed at its first page.
+ * as they were when the answer was written, placed at its first page. Both name a material, a page and passages, which
+ * the contract leaves optional only for an artifact's reference (`ArtifactReference`, contract 1.43.0).
  */
-export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceReference'], 'sectionPath' | 'passageIds' | 'fields'>> & {
+export type SourceReference = Readonly<Omit<components['schemas']['TurnSourceReference'], 'kind' | 'materialName' | 'page'
+  | 'sectionPath' | 'passageIds' | 'fields' | 'artifactId' | 'artifactVersion'>> & {
+  readonly kind: 'passage' | 'record';
+  readonly materialName: string;
+  readonly page: number;
   readonly sectionPath: readonly string[];
   readonly passageIds: readonly string[];
   readonly fields?: readonly ReferenceField[];
 };
+
+/**
+ * Story 5.1 part B: a cited artifact's reference (`kind` artifact, contract 1.43.0): the artifact's id, the version the
+ * answer cited, its record type, name and fields as they were then (never its content), and its tier. It names no
+ * material, page or passage: it opens the artifact's page, never the source view.
+ */
+export type ArtifactReference = {
+  readonly number: number;
+  readonly kind: 'artifact';
+  readonly artifactId: string;
+  readonly artifactVersion: number;
+  readonly recordType: string;
+  readonly name: string;
+  readonly fields: readonly ReferenceField[];
+  readonly removed: boolean;
+  readonly tier?: Tier;
+};
+
+/** Any reference of a finished answer: a cited place's, a cited record's or (Story 5.1 part B) a cited artifact's. */
+export type TurnReference = SourceReference | ArtifactReference;
+
+/** Whether a reference is a cited artifact's (Story 5.1 part B). */
+export function isArtifactReference(reference: TurnReference): reference is ArtifactReference {
+  return reference.kind === 'artifact';
+}
 
 /**
  * A cited record's reference (Story 4.3 part C): its record's id, name, core type and fields. The type is a core key
@@ -190,7 +220,7 @@ export type RecordReference = Omit<SourceReference, 'recordType'> & {
 };
 
 /** Whether a reference is a cited record's (Story 4.3 part C); else it is a cited place's. */
-export function isRecordReference(reference: SourceReference): reference is SourceReference & RecordReference {
+export function isRecordReference(reference: TurnReference): reference is SourceReference & RecordReference {
   return reference.kind === 'record';
 }
 
@@ -240,7 +270,7 @@ export type Done = {
   readonly stopped: boolean;
   readonly silent: boolean;
   readonly modelKnowledge: boolean;
-  readonly references: readonly SourceReference[];
+  readonly references: readonly TurnReference[];
 };
 
 function isStrings(value: unknown): value is string[] {
@@ -252,11 +282,20 @@ function isFields(value: unknown): value is ReferenceField[] {
     && typeof (field as Record<string, unknown>).name === 'string' && typeof (field as Record<string, unknown>).value === 'string');
 }
 
-function isReference(value: unknown): value is SourceReference {
+function isReference(value: unknown): value is TurnReference {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
   const reference = value as Record<string, unknown>;
+  // Story 5.1 part B: an artifact's reference names its artifact, its version and its record, and no place.
+  if (reference.kind === 'artifact') {
+    return Number.isInteger(reference.number) && (reference.number as number) >= 1
+      && typeof reference.artifactId === 'string' && reference.artifactId !== ''
+      && Number.isInteger(reference.artifactVersion) && (reference.artifactVersion as number) >= 1
+      && typeof reference.name === 'string' && typeof reference.recordType === 'string' && reference.recordType !== ''
+      && isFields(reference.fields) && typeof reference.removed === 'boolean'
+      && (reference.tier === undefined || isTier(reference.tier));
+  }
   const place = Number.isInteger(reference.number) && (reference.number as number) >= 1
     && typeof reference.materialName === 'string' && isStrings(reference.sectionPath)
     && Number.isInteger(reference.page) && isStrings(reference.passageIds) && typeof reference.removed === 'boolean'
@@ -276,8 +315,8 @@ function isReference(value: unknown): value is SourceReference {
 }
 
 /** A well-formed reference with its kind: a reference that names none is a place's (Story 4.3 part C). */
-function withKind(reference: SourceReference): SourceReference {
-  return (reference.kind as string | undefined) === undefined ? { ...reference, kind: 'passage' } : reference;
+function withKind(reference: TurnReference): TurnReference {
+  return (reference.kind as string | undefined) === undefined ? { ...(reference as SourceReference), kind: 'passage' } : reference;
 }
 
 /**

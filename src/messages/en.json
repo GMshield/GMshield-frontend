@@ -803,6 +803,7 @@
     "references": "Sources",
     "citation": "source",
     "sourceRemoved": "source removed",
+    "artifactSource": "Campaign artifact, version {version}",
     "page": "p. {page}",
     "stop": "Stop",
     "stopped": "Stopped",
