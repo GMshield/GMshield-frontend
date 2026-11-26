@@ -1427,6 +1427,7 @@ describe("a record type's records and a record's page (Story 4.3)", () => {
       },
       { versionId: VERSION_ID, materialName: 'Livro do Jogador.pdf', sectionPath: [], page: 242, passageIds: ['0190a0b0-0000-7000-8000-000000000802'] },
     ],
+    version: 3,
   };
   const language = (chosen?: 'en') => {
     if (chosen === undefined) {
@@ -1529,7 +1530,15 @@ describe("a record type's records and a record's page (Story 4.3)", () => {
     expect(html).toContain('Livro do Jogador.pdf, Magias › Bola de Fogo, p. 241</button>');
     expect(html).toContain('Livro do Jogador.pdf, p. 242</button>');
     expect(html.match(/aria-haspopup="dialog"/g)).toHaveLength(2);
+    // Story 4.5: "Corrigir" under the fields, before the references; the form opens only when chosen.
+    expect(html).toMatch(/<button[^>]*>Corrigir<\/button>/);
+    expect(html.indexOf('<hr')).toBeLessThan(html.indexOf('>Corrigir<'));
+    expect(html.indexOf('>Corrigir<')).toBeLessThan(html.indexOf('Fontes'));
+    expect(html).not.toContain('<form');
+    // The system's record types are read for the form's type select.
+    expect(server.calls.some((call) => call.url.startsWith(`/api/v1/systems/${SYSTEM_ID}/record-types`))).toBe(true);
     html = await page('en');
+    expect(html).toMatch(/<button[^>]*>Correct<\/button>/);
     expect(html).toContain('aria-label="Fields"');
     expect(html).toContain('Sources');
     expect(html).toMatch(/>(<svg.*?<\/svg>)?Spell<\/a>/);
@@ -1583,6 +1592,7 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
         passageIds: ['0190a0b0-0000-7000-8000-000000000811'],
       },
     ],
+    version: 0,
   };
   const query = { q: 'vorpal sword', s: SEARCH_ID, tier: 'system', material: MATERIAL_ID, type: 'item', page: '2' };
   const page = async (search: Record<string, string> = query, chosen?: 'en') => {
@@ -1616,6 +1626,9 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
     expect(html).toMatch(/<\/dl><hr class="[^"]*rule[^"]*"\/>/);
     expect(html).toContain('Guia do Mestre.pdf, Itens mágicos, p. 209</button>');
     expect(html).toContain('aria-haspopup="dialog"');
+    // Story 4.5: the record is corrected here too, its types the campaign's system's.
+    expect(html).toMatch(/<button[^>]*>Corrigir<\/button>/);
+    expect(server.calls.some((call) => call.url.startsWith(`/api/v1/systems/${CAMPAIGN.body.system.id}/record-types`))).toBe(true);
     // In English.
     html = await page(query, 'en');
     expect(html).toMatch(/<p[^>]*>Item<\/p>/);

@@ -704,11 +704,16 @@ export const RECORD = {
       passageIds: ['0190a0b0-0000-7000-8000-000000000011', '0190a0b0-0000-7000-8000-000000000012'],
     },
   ],
+  version: 0,
 };
 EXAMPLES['GET /api/v1/record-types/{id}/records'] = RECORD_PAGE;
 EXAMPLES['GET /api/v1/systems/{systemId}/records/{recordId}'] = RECORD;
 // Story 4.3 part B: the same record as a campaign shows it (the search's record result).
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = RECORD;
+/** Story 4.5 (contract 1.40.0): a correction answers the record as stored, its version raised by one. */
+export const CORRECTED_RECORD = { ...RECORD, fields: RECORD.fields.slice(0, 3), version: 1 };
+EXAMPLES['PATCH /api/v1/systems/{systemId}/records/{recordId}'] = CORRECTED_RECORD;
+EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/records/{recordId}'] = CORRECTED_RECORD;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

@@ -114,7 +114,28 @@
       "empty": "Os registros aparecem aqui quando um material deste sistema ou das suas campanhas é aceito.",
       "from": "{material}, p. {page}",
       "fields": "Campos",
-      "references": "Fontes"
+      "references": "Fontes",
+      "correct": {
+        "open": "Corrigir",
+        "form": "Corrigir «{name}»",
+        "name": "Nome",
+        "type": "Tipo de registro",
+        "fields": "Campos",
+        "fieldName": "Campo",
+        "fieldValue": "Valor",
+        "fieldNameOf": "Nome do campo {number}",
+        "fieldValueOf": "Valor do campo {number}",
+        "noFields": "Este registro não tem campos.",
+        "addField": "Adicionar campo",
+        "removeField": "Remover campo",
+        "removeFieldOf": "Remover campo {number}",
+        "save": "Salvar",
+        "cancel": "Cancelar",
+        "stale": "Este item mudou em outra aba.",
+        "viewCurrent": "Ver a versão atual",
+        "keepMine": "Manter a minha como nova versão",
+        "toast": "Registro corrigido."
+      }
     },
     "delete": {
       "title": "Excluir este sistema?",
@@ -276,7 +297,8 @@
       "material": "A ação no material não pôde ser feita.",
       "scope": "O escopo não pôde ser alterado.",
       "conversation": "A ação na conversa não pôde ser feita.",
-      "ontology": "O vocabulário do sistema não pôde ser alterado."
+      "ontology": "O vocabulário do sistema não pôde ser alterado.",
+      "record": "O registro não pôde ser corrigido."
     },
     "codes": {
       "request": {
@@ -361,6 +383,13 @@
         "name_taken": "Este sistema já tem um tipo de registro, um termo ou um tipo básico com este nome.",
         "name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "merge_target_invalid": "Escolha um item deste sistema do mesmo tipo da proposta."
+      },
+      "record": {
+        "name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "fields_invalid": "Um registro pode ter até {max} campos.",
+        "field_name_invalid": "O nome do campo precisa ter de {min} a {max} caracteres.",
+        "field_value_invalid": "O valor do campo precisa ter de {min} a {max} caracteres.",
+        "type_invalid": "Escolha um tipo de registro deste sistema."
       }
     }
   },

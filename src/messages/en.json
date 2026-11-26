@@ -114,7 +114,28 @@
       "empty": "Records appear here once a material of this system or of its campaigns is accepted.",
       "from": "{material}, p. {page}",
       "fields": "Fields",
-      "references": "Sources"
+      "references": "Sources",
+      "correct": {
+        "open": "Correct",
+        "form": "Correct «{name}»",
+        "name": "Name",
+        "type": "Record type",
+        "fields": "Fields",
+        "fieldName": "Field",
+        "fieldValue": "Value",
+        "fieldNameOf": "Name of field {number}",
+        "fieldValueOf": "Value of field {number}",
+        "noFields": "This record has no fields.",
+        "addField": "Add field",
+        "removeField": "Remove field",
+        "removeFieldOf": "Remove field {number}",
+        "save": "Save",
+        "cancel": "Cancel",
+        "stale": "This item changed in another tab.",
+        "viewCurrent": "See the current version",
+        "keepMine": "Keep mine as a new version",
+        "toast": "Record corrected."
+      }
     },
     "delete": {
       "title": "Delete this system?",
@@ -276,7 +297,8 @@
       "material": "The action on the material could not be done.",
       "scope": "The scope could not be changed.",
       "conversation": "The action on the conversation could not be done.",
-      "ontology": "The system's vocabulary could not be changed."
+      "ontology": "The system's vocabulary could not be changed.",
+      "record": "The record could not be corrected."
     },
     "codes": {
       "request": {
@@ -361,6 +383,13 @@
         "name_taken": "This system already has a record type, a term or a core type with this name.",
         "name_invalid": "The name must have {min} to {max} characters.",
         "merge_target_invalid": "Choose an item of this system of the same kind as the proposal."
+      },
+      "record": {
+        "name_invalid": "The name must have {min} to {max} characters.",
+        "fields_invalid": "A record can have up to {max} fields.",
+        "field_name_invalid": "The field's name must have {min} to {max} characters.",
+        "field_value_invalid": "The field's value must have {min} to {max} characters.",
+        "type_invalid": "Choose one of this system's record types."
       }
     }
   },

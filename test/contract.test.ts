@@ -22,6 +22,8 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 4.5 part A: it corrects a record on a system's and a campaign's record page and reads a record's version,
+    // added in 1.40.0 (Story 4.4 part B's 1.39.0 named any record type key, which this frontend already read).
     // Story 4.4 part A: it lists and decides ontology proposals, lists a system's terms and reads a record type's key and
     // origin, added in 1.38.0.
     // Story 4.3 part C: it reads record references (`kind`, a record's name, type and fields) and record citations in an
@@ -39,10 +41,12 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.38.0');
-    expect(meetsMinimum('1.38.0')).toBe(true);
-    expect(meetsMinimum('1.38.1')).toBe(true);
-    expect(meetsMinimum('1.39.0')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.40.0');
+    expect(meetsMinimum('1.40.0')).toBe(true);
+    expect(meetsMinimum('1.40.1')).toBe(true);
+    expect(meetsMinimum('1.41.0')).toBe(true);
+    expect(meetsMinimum('1.39.0')).toBe(false);
+    expect(meetsMinimum('1.38.0')).toBe(false);
     expect(meetsMinimum('1.37.0')).toBe(false);
     expect(meetsMinimum('1.36.0')).toBe(false);
     expect(meetsMinimum('1.35.0')).toBe(false);

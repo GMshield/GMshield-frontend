@@ -102,4 +102,7 @@ export const RECORD: {
   recordType: { id: string; core: string; name: string };
   fields: { name: string; value: string }[];
   references: { versionId: string; materialName: string; sectionPath: string[]; page: number; passageIds: string[] }[];
+  version: number;
 };
+/** Story 4.5: a record's correction as both routes answer it, its version raised by one. */
+export const CORRECTED_RECORD: typeof RECORD;

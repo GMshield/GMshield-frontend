@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
 
+import { correctRecordAction } from '@/app/(signed-in)/records/actions';
+import { correctionTexts, typeOptions } from '@/app/(signed-in)/records/correction';
+import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
 import { Notice } from '@/components/Notice';
 import { PageHeader, PageSubtitle } from '@/components/PageHeader';
+import { RecordCorrection } from '@/components/RecordCorrection';
 import { RecordFields } from '@/components/RecordFields';
 import { RecordReferences } from '@/components/RecordReferences';
 import { searchHref } from '@/components/search/search-address';
@@ -32,7 +36,8 @@ type Props = {
  * source view at its page on the ground of the campaign's current scope, the record's passages there marked. The way
  * back is the search it was opened from, with its address (query, stored search, filters and page), labelled with the
  * search's title. A record outside the scope (switched off, not accepted, another account's, unknown or malformed), or
- * no current campaign, shows the single "Não encontrado." page; another failure is a notice.
+ * no current campaign, shows the single "Não encontrado." page; another failure is a notice. Story 4.5: "Corrigir" opens
+ * the record's correction there too ({@link RecordCorrection}), its type among the campaign's system's record types.
  */
 export default async function SearchRecordPage({ params, searchParams }: Props) {
   const [{ recordId }, query, { language }, token] = await Promise.all([
@@ -49,7 +54,10 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
     notFoundFor(campaign.problem);
     return <Notice status="danger" language={language} message={errorText(campaign.problem, language)} dismissible={false} />;
   }
-  const record = await getCampaignRecord(token ?? '', campaign.data.id, recordId);
+  const [record, types] = await Promise.all([
+    getCampaignRecord(token ?? '', campaign.data.id, recordId),
+    systemRecordTypes(token ?? '', campaign.data.system.id),
+  ]);
   if (!record.ok) {
     notFoundFor(record.problem);
     return (
@@ -59,13 +67,23 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
       </>
     );
   }
-  const { name, recordType, fields, references } = record.data;
+  const { name, recordType, fields, references, version } = record.data;
   return (
     <>
       <PageHeader title={name} back={back}>
         <PageSubtitle>{recordTypeName(recordType, t)}</PageSubtitle>
       </PageHeader>
-      <RecordFields fields={fields} t={t} />
+      <RecordCorrection
+        ground={{ kind: 'campaign', campaignId: campaign.data.id }}
+        recordId={record.data.id}
+        version={version}
+        values={{ name, recordType: recordType.key, fields }}
+        types={typeOptions(types, recordType, t)}
+        texts={correctionTexts(t)}
+        action={correctRecordAction}
+      >
+        <RecordFields fields={fields} t={t} />
+      </RecordCorrection>
       <RecordReferences ground={{ kind: 'scope', campaignId: campaign.data.id }} references={references} language={language} />
     </>
   );

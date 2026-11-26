@@ -1523,7 +1523,7 @@
             "type" : "string"
           },
           "name" : {
-            "description" : "The record's name, as it was extracted",
+            "description" : "The record's name, as it was extracted or as the GM corrected it",
             "example" : "Fire Bolt",
             "type" : "string"
           },
@@ -1537,9 +1537,70 @@
               "$ref" : "#/components/schemas/RecordReference"
             },
             "type" : "array"
+          },
+          "version" : {
+            "description" : "The record's version (contract 1.40.0): a correction names it and raises it by one",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
           }
         },
-        "required" : [ "fields", "id", "name", "recordType", "references" ],
+        "required" : [ "fields", "id", "name", "recordType", "references", "version" ],
+        "type" : "object"
+      },
+      "RecordCorrection" : {
+        "properties" : {
+          "fields" : {
+            "description" : "The record's fields in order, at most 64; each replaces the stored ones, so a field left out is removed",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordCorrectionField"
+            },
+            "maxItems" : 64,
+            "type" : "array"
+          },
+          "name" : {
+            "description" : "The record's name: 1 to 200 code points after trimming",
+            "example" : "Fire Bolt",
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of one of the system's record types, core or approved (the campaign's system's on a campaign's route)",
+            "example" : "spell",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the correction was made on, as the record was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "fields", "name", "recordType", "version" ],
+        "type" : "object"
+      },
+      "RecordCorrectionField" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name: 1 to 200 code points after trimming",
+            "example" : "Alcance",
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "The field's value: 1 to 8,000 code points after trimming",
+            "example" : "36 metros",
+            "maxLength" : 8000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "value" ],
         "type" : "object"
       },
       "RecordField" : {
@@ -2707,7 +2768,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.39.0"
+    "version" : "1.40.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3096,6 +3157,69 @@
           }
         },
         "summary" : "One record as one of the account's campaigns shows it (contract 1.36.0, a search's record result): the same answer as getRecord, its record type the campaign's system's type of its core key. Only a record of an accepted version in the campaign's current scope is read (its tiers and materials switched on, any tier); its references open the source view on the ground of that scope (getScopeSourcePage). request.not_found (404) for a campaign that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of a material switched off or outside the scope): none is told apart, and no name or field is answered then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
+      "patch" : {
+        "operationId" : "correctCampaignRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordCorrection"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Record"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Corrects one record as one of the account's campaigns shows it (contract 1.40.0, a search's record result), on the version it names: the record as stored, as getCampaignRecord answers it, its version raised by one. The type is a key of the campaign's system's record types. The name, the type and the fields are replaced together: the name and each field's name and value are trimmed. The record keeps its id and its source references; the next question reads the correction, and its page is indexed again by a job. request.stale_version (409) when the record has left that version; record.name_invalid (400) for a name outside 1 to 200 code points; record.fields_invalid (400) for more than 64 fields; record.field_name_invalid and record.field_value_invalid (400, params min, max and index, the field's position from 0) for a field's name outside 1 to 200 or value outside 1 to 8,000 code points; record.type_invalid (400) for a key that is not one of the system's record types; request.invalid (400) without a version, a name, a type or the fields, or for a malformed body; nothing changes then. request.not_found (404) for a campaign that is not the account's, and for a record that getCampaignRecord does not answer; none is told apart; session.required (401) without a session.",
         "tags" : [ "ontology" ]
       }
     },
@@ -6047,6 +6171,69 @@
           }
         },
         "summary" : "One record as one of the account's systems shows it (contract 1.35.0): its name, the system's record type of its core key, its fields in stored order, and its source references, one per distinct version, section path and page, in page order. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
+      "patch" : {
+        "operationId" : "correctRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "systemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordCorrection"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Record"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Corrects one record as one of the account's systems shows it (contract 1.40.0), on the version it names: the record as stored, as getRecord answers it, its version raised by one. The type is a key of the system's record types. The name, the type and the fields are replaced together: the name and each field's name and value are trimmed. The record keeps its id and its source references; the next question reads the correction, and its page is indexed again by a job. request.stale_version (409) when the record has left that version; record.name_invalid (400) for a name outside 1 to 200 code points; record.fields_invalid (400) for more than 64 fields; record.field_name_invalid and record.field_value_invalid (400, params min, max and index, the field's position from 0) for a field's name outside 1 to 200 or value outside 1 to 8,000 code points; record.type_invalid (400) for a key that is not one of the system's record types; request.invalid (400) without a version, a name, a type or the fields, or for a malformed body; nothing changes then. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; session.required (401) without a session.",
         "tags" : [ "ontology" ]
       }
     },
