@@ -47,7 +47,7 @@ export default async function RecordPage({ params }: { readonly params: Promise<
         types={typeOptions(types, recordType, t)}
         texts={correctionTexts(t)}
         action={correctRecordAction}
-        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, then: { recordTypeId: recordType.id } }}
+        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, after: { recordTypeId: recordType.id } }}
       >
         <RecordFields fields={fields} t={t} />
       </RecordCorrection>

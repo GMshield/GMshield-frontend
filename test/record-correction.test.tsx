@@ -277,7 +277,7 @@ describe("a record's delete (Story 4.5 part B)", () => {
 
   type DeleteAction = (previous: RecordDeleteState, form: FormData) => Promise<RecordDeleteState>;
 
-  function deletable(action: DeleteAction, then: RecordDeletion['then'], language: 'pt-BR' | 'en' = 'pt-BR', campaign = false) {
+  function deletable(action: DeleteAction, after: RecordDeletion['after'], language: 'pt-BR' | 'en' = 'pt-BR', campaign = false) {
     const t = translator(language);
     return render(
       <RecordCorrection
@@ -288,7 +288,7 @@ describe("a record's delete (Story 4.5 part B)", () => {
         types={TYPES}
         texts={correctionTexts(t)}
         action={vi.fn()}
-        deletion={{ texts: deletionTexts(t), language, action, then }}
+        deletion={{ texts: deletionTexts(t), language, action, after }}
       />,
     );
   }

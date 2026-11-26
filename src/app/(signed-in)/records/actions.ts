@@ -135,7 +135,7 @@ function searchBack(value: FormDataEntryValue | null): string {
     return '/search';
   }
   try {
-    const base = 'http://frontend.invalid';
+    const base = 'https://frontend.invalid';
     const url = new URL(value, base);
     return url.origin === base && url.pathname === '/search' ? `/search${url.search}` : '/search';
   } catch {
