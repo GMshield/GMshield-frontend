@@ -40,7 +40,10 @@ export function recordHeading(reference: RecordReference | ArtifactReference, t:
   return `${reference.name}, ${referenceTypeName(reference.recordType, t, types)}`;
 }
 
-/** Story 5.1 part B: a cited artifact's source line: the campaign's artifact and the version the answer cited. */
+/**
+ * Story 5.1 part B: a cited artifact's source line: the campaign's artifact and the version the answer cited. Story 5.2
+ * part B: a deleted artifact's line is followed by " — fonte removida" where it is shown and where it is spoken.
+ */
 export function artifactLine(reference: ArtifactReference, t: Translate): string {
   return t('conversation.artifactSource', { version: reference.artifactVersion });
 }
@@ -79,7 +82,8 @@ export type ReferencesProps = {
  *
  * Story 5.1 part B: a cited artifact is an entry like a record's (its tier's pill, its name, its record type and its
  * fields as they were when the answer was written), whose source line is a link to the artifact's page in the
- * conversation's campaign, naming the version cited. It never opens the source view.
+ * conversation's campaign, naming the version cited. It never opens the source view. Story 5.2 part B: once the
+ * artifact is deleted, its line is struck through and followed by "fonte removida", with no link.
  */
 export function References({ references, campaignId, t, onOpen, recordTypes = [] }: ReferencesProps) {
   return (
@@ -157,9 +161,16 @@ function ArtifactEntry({ reference, campaignId, t, recordTypes }: ArtifactEntryP
         </div>
       )}
       <span className={styles.recordSource}>
-        <Link className={styles.reference} href={artifactHref(campaignId, reference)}>
-          {artifactLine(reference, t)}
-        </Link>
+        {reference.removed ? (
+          <>
+            <s className={styles.removed}>{artifactLine(reference, t)}</s>
+            {` — ${t('conversation.sourceRemoved')}`}
+          </>
+        ) : (
+          <Link className={styles.reference} href={artifactHref(campaignId, reference)}>
+            {artifactLine(reference, t)}
+          </Link>
+        )}
       </span>
     </li>
   );

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
+import { ArtifactDeleteAction } from '@/components/ArtifactDeleteAction';
 import { ArtifactEditor } from '@/components/ArtifactEditor';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
 import { Notice } from '@/components/Notice';
@@ -17,7 +18,7 @@ import { artifactVersionsPage, getArtifact, type ArtifactVersionSummary } from '
 import { getCampaign } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { restoreArtifactAction, updateArtifactAction } from '../actions';
+import { deleteArtifactAction, restoreArtifactAction, updateArtifactAction } from '../actions';
 import styles from '../artifacts.module.css';
 import { artifactBack, artifactEditorTexts, artifactTypeOptions, artifactVersionsTexts, fromOf, FROM_CHARACTERS } from '../texts';
 
@@ -97,6 +98,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  *   the editor always lives there and a save or restore, which reads the address again, shows the newest.
  * - "Versões" ({@link ArtifactVersions}) lists the versions newest first, paged (`?page=`): each row opens its version,
  *   the newest is tagged "atual", and the others have "Restaurar".
+ *
+ * Story 5.2 part B: "Excluir" in the header ({@link ArtifactDeleteAction}), on every version shown, deletes the artifact
+ * after a confirmation that names it by its current name (read again on an earlier version's page), and lands on the
+ * artifacts tab (or "Personagens", `from=characters`) with a toast.
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -123,10 +128,13 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
   }
   const versionsPage = pageParam(query.page);
   // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
-  const [types, versions] = await Promise.all([
+  const [types, versions, newest] = await Promise.all([
     campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
     artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
+    // Story 5.2 part B: "Excluir" names the artifact by its current name, also on an earlier version's page.
+    older ? getArtifact(token ?? '', campaignId, artifact.data.id) : null,
   ]);
+  const currentName = newest?.ok ? newest.data.name : name;
   const shownFields = (
     <>
       <RecordFields fields={fields} t={t} />
@@ -162,7 +170,20 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     : [];
   return (
     <>
-      <PageHeader title={name} back={artifactBack(campaignId, from, t)}>
+      <PageHeader
+        title={name}
+        back={artifactBack(campaignId, from, t)}
+        actions={
+          <ArtifactDeleteAction
+            campaignId={campaignId}
+            artifactId={artifact.data.id}
+            name={currentName}
+            from={from}
+            language={language}
+            action={deleteArtifactAction}
+          />
+        }
+      >
         <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
       </PageHeader>
       {older ? (

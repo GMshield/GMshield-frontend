@@ -525,6 +525,15 @@ describe('stand-in backend', () => {
     }
   });
 
+  it('answers an artifact\'s delete with 202 and no body (Story 5.2 part B)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    expect(answer(contract, 'DELETE', `/api/v1/campaigns/${campaign}/artifacts/${ARTIFACT.id}`, 't')).toEqual({
+      status: 202,
+      type: null,
+      body: null,
+    });
+  });
+
   it('answers a campaign\'s artifacts, one artifact and a new one (Story 5.1)', () => {
     const campaign = '0190a0b0-0000-7000-8000-000000000002';
     type Schema = { required?: string[] };

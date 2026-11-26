@@ -36,7 +36,8 @@
 // starter campaign and one in another campaign ("A Coroa Partida"). Story 4.1: every system has the eight core record
 // types, in their fixed order, none with records yet; one of them reads as the rule type. Story 5.1: the starter campaign
 // has three artifacts (two character sheets and an item), and a new artifact answers as stored, version 1. Story 5.2:
-// an edit or a restore answers version 2, and an artifact's versions are its one version 1.
+// an edit or a restore answers version 2, and an artifact's versions are its one version 1. Story 5.2 part B: an
+// artifact's delete answers 202 with no body, as the contract declares.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';

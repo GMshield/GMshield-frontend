@@ -18,6 +18,7 @@ import { listPage, type ListPage } from './list-page';
  * - Story 5.2 (contract 1.44.0): {@link updateArtifact} (the GM's edit) and {@link restoreArtifact} (an earlier version
  *   copied as the newest) each store the next version and name the newest version the GM saw (`version`); a stale one
  *   is `request.stale_version`. {@link artifactVersions} lists the versions newest first, a page at a time.
+ * - Story 5.2 part B (contract 1.45.0): {@link deleteArtifact} starts the artifact's deletion with every version.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -125,6 +126,19 @@ export function artifactVersions(
   return call('artifacts.versions', options, (client) =>
     client.GET('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions', {
       params: { header: session(sessionToken), path: { campaignId, artifactId }, query },
+    }),
+  );
+}
+
+/**
+ * Deletes one of the account's campaigns' artifacts with every version (Story 5.2 part B; 202, no body: its versions,
+ * index rows and index points go in the backend). It leaves every list and every question at once; answers that cited
+ * it show "fonte removida". `request.not_found` for any other campaign or artifact, one already being deleted included.
+ */
+export function deleteArtifact(sessionToken: string, campaignId: string, artifactId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('artifacts.delete', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
     }),
   );
 }

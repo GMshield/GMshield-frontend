@@ -26,6 +26,7 @@ const { PageView, pictureUrl } = await import('@/components/PageView');
 const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
 const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
+const { ArtifactDeleteAction } = await import('@/components/ArtifactDeleteAction');
 const { ConversationDeleteAction } = await import('@/components/conversation/ConversationDeleteAction');
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
@@ -836,6 +837,102 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('ArtifactDeleteAction (Story 5.2 part B)', () => {
+  const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+  const ARTIFACT = '0190a0b0-0000-7000-8000-000000000900';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+  const props = { campaignId: CAMPAIGN, artifactId: ARTIFACT, name: 'Espada de Kael' } as const;
+
+  it('Excluir is a danger pill that opens the confirmation naming the artifact; Esc or Cancelar closes it; confirming posts it', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ArtifactDeleteAction {...props} from="characters" language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog, focus starts on "Cancelar".
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Espada de Kael»?' });
+    expect(dialog.textContent).toContain('Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir artefato' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ campaignId: CAMPAIGN, artifactId: ARTIFACT, name: 'Espada de Kael', from: 'characters' }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('posts no `from` when the page was not opened from "Personagens", and reads in English', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    render(<ArtifactDeleteAction {...props} from={null} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete «Espada de Kael»?' });
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete artifact' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ campaignId: CAMPAIGN, artifactId: ARTIFACT, name: 'Espada de Kael' }]));
+  });
+
+  it('"Excluir" ignores clicks while the delete runs, and takes them again once it ends', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<ArtifactDeleteAction {...props} from={null} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir artefato' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: null }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(true);
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder({ error: 'O pedido não é válido.' });
+    render(<ArtifactDeleteAction {...props} from={null} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir artefato' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('O pedido não é válido.');
     expect(document.activeElement).toBe(opener);
     expect(opener.hasAttribute('disabled')).toBe(false);
   });

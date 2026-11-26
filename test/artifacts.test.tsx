@@ -375,7 +375,6 @@ describe("an artifact's versions (Story 5.2)", () => {
     const html = renderToStaticMarkup(await page({ version: '1' }));
 
     expect(calls(server)).toContain(`GET ${ONE}/versions/1`);
-    expect(calls(server)).not.toContain(`GET ${ONE}`);
     expect(html).toMatch(/<h1[^>]*>Espada de Kael<\/h1>/);
     expect(html).toContain(ptBR.systems.recordTypes.item);
     expect(html).toContain('Forjada nas montanhas do norte.');
@@ -441,6 +440,67 @@ describe("an artifact's versions (Story 5.2)", () => {
     const refused = renderToStaticMarkup(await page());
     expect(refused).not.toContain(`>${ptBR.artifacts.versions.title}</h2>`);
     expect(refused).toContain('data-status="danger"');
+  });
+});
+
+describe("an artifact's delete (Story 5.2 part B)", () => {
+  const ONE = `${ARTIFACTS}/${SWORD}`;
+
+  it('"Excluir" sits in the header on every version shown, and its dialog names the artifact and what goes, in both languages', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      for (const searchParams of [query(), query({ version: '1' })]) {
+        const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams }));
+        const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+        expect(header).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*aria-haspopup="dialog"[^>]*>${messages.artifacts.delete.action}</button>`));
+        expect(html).toContain(`>${messages.artifacts.delete.title.replace('{name}', 'Espada de Kael')}</h2>`);
+        expect(html).toContain(messages.artifacts.delete.consequence);
+        expect(html).toMatch(new RegExp(`<button[^>]*>${messages.artifacts.delete.cancel}</button>`));
+        expect(html).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*>${messages.artifacts.delete.confirm}</button>`));
+      }
+    }
+    expect(ptBR.artifacts.delete).toEqual({
+      action: 'Excluir',
+      title: 'Excluir «{name}»?',
+      consequence: 'Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.',
+      confirm: 'Excluir artefato',
+      cancel: 'Cancelar',
+    });
+    expect(ptBR.feedback.artifactDeleted).toBe('Artefato «{name}» excluído.');
+    expect(Object.keys(en.artifacts.delete)).toEqual(Object.keys(ptBR.artifacts.delete));
+  });
+
+  it('on an earlier version\'s page, "Excluir" names the artifact by its current name, not the version\'s', async () => {
+    const server = await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, name: 'Espada Rubra', version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+
+    // The page shows version 1 under its own name; the delete is about the artifact, named as it is now.
+    expect(html).toMatch(/<h1[^>]*>Espada de Kael<\/h1>/);
+    expect(html).toContain('>Excluir «Espada Rubra»?</h2>');
+    expect(html).not.toContain('Excluir «Espada de Kael»?');
+    expect(calls(server)).toContain(`GET ${ONE}`);
+
+    // The newest version's own page reads the artifact once.
+    server.calls.length = 0;
+    const newest = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+    expect(newest).toContain('>Excluir «Espada Rubra»?</h2>');
+    expect(calls(server).filter((call) => call === `GET ${ONE}`)).toHaveLength(1);
   });
 });
 

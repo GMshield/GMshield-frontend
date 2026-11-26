@@ -300,6 +300,13 @@
       "viewCurrent": "Ver a versão atual",
       "restoreAnyway": "Restaurar a versão {number} mesmo assim",
       "typeGone": "O tipo de registro desta versão não existe mais no sistema desta campanha."
+    },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir «{name}»?",
+      "consequence": "Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "confirm": "Excluir artefato",
+      "cancel": "Cancelar"
     }
   },
   "characters": {
@@ -900,7 +907,8 @@
     },
     "artifactSaved": "Artefato salvo.",
     "artifactUpdated": "Artefato atualizado.",
-    "artifactRestored": "Versão {number} restaurada."
+    "artifactRestored": "Versão {number} restaurada.",
+    "artifactDeleted": "Artefato «{name}» excluído."
   },
   "notifications": {
     "title": "Notificações",

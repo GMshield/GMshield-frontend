@@ -15,7 +15,7 @@ vi.mock('next/cache', () => ({ refresh: () => steps.push('refresh'), revalidateP
 const flashed = vi.fn((...args: unknown[]) => steps.push(`flash ${args.join(' ')}`));
 vi.mock('@/server/flash', () => ({ flash: async (...args: unknown[]) => flashed(...args) }));
 
-const { createArtifactAction, restoreArtifactAction, updateArtifactAction } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
+const { createArtifactAction, deleteArtifactAction, restoreArtifactAction, updateArtifactAction } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
 const { NO_ARTIFACT_EDIT, NO_ARTIFACT_RESTORE } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
@@ -321,3 +321,65 @@ describe("an artifact's edit and restore Server Actions (Story 5.2)", () => {
 });
 
 const calls = (server: Scripted) => server.calls.map((call) => `${call.method} ${call.url}`);
+
+describe("an artifact's delete Server Action (Story 5.2 part B)", () => {
+  const ONE = `${ARTIFACTS}/${ARTIFACT}`;
+  const DELETE = { campaignId: CAMPAIGN, artifactId: ARTIFACT, name: 'Espada de Kael' };
+
+  it('deletes it, then the toast naming it, the layout revalidated, and the campaign\'s artifacts tab', async () => {
+    const server = await withBackend({ [`DELETE ${ONE}`]: { status: 202 } });
+
+    const digest = await thrownDigest(() => deleteArtifactAction({ error: null }, form(DELETE)));
+
+    expect(digest).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}\\?tab=artifacts;`));
+    expect(calls(server)).toEqual([`DELETE ${ONE}`]);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(server.calls[0]!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    expect(steps).toEqual(['flash success Artefato «Espada de Kael» excluído.', 'revalidate / layout']);
+  });
+
+  it('opened from "Personagens", it lands there; any other `from` is ignored; the toast is in the interface\'s language', async () => {
+    await withBackend({ [`DELETE ${ONE}`]: { status: 202 } });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+
+    expect(await thrownDigest(() => deleteArtifactAction({ error: null }, form({ ...DELETE, from: 'characters' })))).toMatch(
+      /^NEXT_REDIRECT;[a-z]+;\/characters;/,
+    );
+    expect(flashed).toHaveBeenCalledWith('success', 'Artifact «Espada de Kael» deleted.');
+    expect(await thrownDigest(() => deleteArtifactAction({ error: null }, form({ ...DELETE, from: 'https://evil.example' })))).toMatch(
+      new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}\\?tab=artifacts;`),
+    );
+  });
+
+  it('already deleted (another tab): it lands on the tab the same way, without the toast', async () => {
+    await withBackend({ [`DELETE ${ONE}`]: problemOf(404, 'request.not_found') });
+
+    expect(await thrownDigest(() => deleteArtifactAction({ error: null }, form({ ...DELETE, from: 'characters' })))).toMatch(
+      /^NEXT_REDIRECT;[a-z]+;\/characters;/,
+    );
+    expect(steps).toEqual(['revalidate / layout']);
+    expect(flashed).not.toHaveBeenCalled();
+  });
+
+  it('another refusal comes back in words, and nothing else happens', async () => {
+    await withBackend({ [`DELETE ${ONE}`]: problemOf(400, 'request.invalid') });
+
+    expect(await deleteArtifactAction({ error: null }, form(DELETE))).toEqual({ error: 'O pedido não é válido.' });
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed form', async () => {
+    const server = await withBackend({});
+    for (const fields of [
+      { ...DELETE, campaignId: 'x' },
+      { ...DELETE, artifactId: '../x' },
+      { campaignId: CAMPAIGN, artifactId: ARTIFACT },
+      {},
+    ] as Record<string, string>[]) {
+      expect(await deleteArtifactAction({ error: null }, form(fields))).toEqual({ error: 'O pedido não é válido.' });
+    }
+    expect(server.calls).toEqual([]);
+    expect(steps).toEqual([]);
+  });
+});
+

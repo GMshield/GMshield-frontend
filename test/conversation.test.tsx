@@ -3121,6 +3121,35 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
     expect(within(artifact).getByRole('link').getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}?version=1`);
   });
 
+  it('Story 5.2 part B: strikes a deleted artifact\'s line through with "fonte removida" and no link, for the eye and the ear', async () => {
+    for (const language of ['pt-BR', 'en'] as const) {
+      view({ language });
+      const stream = await ask('O que faz a Espada de Kael?', language);
+      stream.emit('delta', { text: 'Um.' });
+      stream.emit('citation', { recordId: ARTIFACT, offset: 3 });
+      stream.emit('done', { silent: false, references: [artifactReference(1, { removed: true })] });
+
+      const artifact = within(list()).getAllByRole('listitem')[0]!;
+      const line = language === 'pt-BR' ? 'Artefato da campanha, versão 1' : 'Campaign artifact, version 1';
+      const removed = language === 'pt-BR' ? 'fonte removida' : 'source removed';
+      expect(artifact.querySelector('s')?.textContent).toBe(line);
+      expect(artifact.textContent).toContain(`— ${removed}`);
+      expect(within(artifact).queryByRole('link')).toBeNull();
+      expect(artifact.querySelector('button')).toBeNull();
+      // Its name and fields stay as they were when the answer was written.
+      expect(within(artifact).getByText('Espada de Kael').className).toMatch(/recordName/);
+      expect([...artifact.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(['1d8 cortante']);
+      const spoken = [...screen.getByTestId('conversation-polite').querySelectorAll('li')].map((item) => item.textContent);
+      expect(spoken[0]).toBe(
+        language === 'pt-BR'
+          ? `Campanha: Espada de Kael, Item. ${line} — ${removed}`
+          : `Campaign: Espada de Kael, Item. ${line} — ${removed}`,
+      );
+      cleanup();
+      streams = [];
+    }
+  });
+
   it('leaves out an artifact reference that is not well formed', async () => {
     view();
     const stream = await ask('O que faz a Espada?');

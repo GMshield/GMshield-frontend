@@ -6,12 +6,13 @@ import { redirect } from 'next/navigation';
 import { fieldOf, typedText, valuesOf } from '@/app/(signed-in)/records/form-values';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { createArtifact, getArtifact, restoreArtifact, updateArtifact } from '@/server/artifacts';
+import type { ArtifactDeleteState } from '@/components/ArtifactDeleteAction';
+import { createArtifact, deleteArtifact, getArtifact, restoreArtifact, updateArtifact } from '@/server/artifacts';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import type { ArtifactEditState, ArtifactFormField, ArtifactFormState, ArtifactFormValues, ArtifactRestoreState } from './form-state';
-import { fromOf } from './texts';
+import { artifactBack, fromOf } from './texts';
 
 /** An id as the backend mints it; anything else is an item nowhere. */
 const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
@@ -204,4 +205,40 @@ export async function restoreArtifactAction(previous: ArtifactRestoreState, form
   // The version's type is no longer one of the system's: said as such, not as a choice to make in a form.
   const typeGone = code === 'request.invalid' && params.field === 'recordType';
   return refused(typeGone ? translator(language)('artifacts.versions.typeGone') : errorText(result.problem, language), restored);
+}
+
+/** The most of an artifact's name a toast names (its limit is 200 code points); only a runaway post is cut. */
+const MOST_NAME = 1_000;
+
+/**
+ * "Excluir artefato" confirmed on an artifact's page (Story 5.2 part B): the campaign's and the artifact's ids, its name
+ * (for the toast) and where the page was opened from (`from=characters`). Once the backend has recorded the deletion, a
+ * toast says "Artefato «Espada de Kael» excluído.", the whole signed-in layout is revalidated (the campaign's lists,
+ * counts and "Personagens" change), and the page goes to the campaign's artifacts tab, or to "Personagens" when it was
+ * opened from there. An artifact not found (already deleted in another tab) moves the page on the same way, without
+ * the toast. Another refusal comes back as its text, never a code. A malformed form never reaches the backend. The proxy
+ * (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
+ */
+export async function deleteArtifactAction(_previous: ArtifactDeleteState, form: FormData): Promise<ArtifactDeleteState> {
+  const { language } = await currentPreferences();
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const name = typedText(form.get('name'), MOST_NAME);
+  if (typeof campaignId !== 'string' || !ID.test(campaignId) || typeof artifactId !== 'string' || !ID.test(artifactId) || name === null) {
+    return { error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await deleteArtifact(token, campaignId, artifactId);
+  // Not found: already deleted (another tab) or no longer the campaign's; the page is dead either way, so it moves on.
+  const gone = !result.ok && problemFields(result.problem).code === 'request.not_found';
+  if (!result.ok && !gone) {
+    return { error: errorText(result.problem, language) };
+  }
+  const t = translator(language);
+  if (result.ok) {
+    await flash('success', t('feedback.artifactDeleted', { name }));
+  }
+  revalidatePath('/', 'layout');
+  redirect(artifactBack(campaignId, fromOf(form.get('from')), t).href);
 }

@@ -300,6 +300,13 @@
       "viewCurrent": "See the current version",
       "restoreAnyway": "Restore version {number} anyway",
       "typeGone": "This version's record type no longer exists in this campaign's system."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete «{name}»?",
+      "consequence": "Every version of this artifact goes with it. Answers that cited it show «source removed». This cannot be undone.",
+      "confirm": "Delete artifact",
+      "cancel": "Cancel"
     }
   },
   "characters": {
@@ -900,7 +907,8 @@
     },
     "artifactSaved": "Artifact saved.",
     "artifactUpdated": "Artifact updated.",
-    "artifactRestored": "Version {number} restored."
+    "artifactRestored": "Version {number} restored.",
+    "artifactDeleted": "Artifact «{name}» deleted."
   },
   "notifications": {
     "title": "Notifications",

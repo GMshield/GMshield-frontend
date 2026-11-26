@@ -1486,7 +1486,9 @@ export function Conversation({
                     {reference.tier === undefined ? null : `${tierWord(reference.tier, t)}${TIER_SEPARATOR}`}
                     {isRecordReference(reference) || isArtifactReference(reference)
                       ? `${recordHeading(reference, t, recordTypes)}. ` : null}
-                    {isArtifactReference(reference) ? artifactLine(reference, t) : referenceLine(reference, t)}
+                    {isArtifactReference(reference)
+                      ? `${artifactLine(reference, t)}${reference.removed ? ` — ${t('conversation.sourceRemoved')}` : ''}`
+                      : referenceLine(reference, t)}
                   </li>
                 ))}
               </ol>

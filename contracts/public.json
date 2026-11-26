@@ -3039,7 +3039,7 @@
             "type" : "string"
           },
           "removed" : {
-            "description" : "Whether its source has been removed since (its version gone, discarded or pending removal, or its material gone), as of when the event is sent. A version superseded by a newer accepted one is not removed. An artifact's is false",
+            "description" : "Whether its source has been removed since (its version gone, discarded or pending removal, or its material gone), as of when the event is sent. A version superseded by a newer accepted one is not removed. From contract 1.45.0 an artifact's is true once the artifact is deleted (being deleted or gone)",
             "type" : "boolean"
           },
           "sectionPath" : {
@@ -3121,7 +3121,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.44.0"
+    "version" : "1.45.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3474,6 +3474,52 @@
       }
     },
     "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}" : {
+      "delete" : {
+        "operationId" : "deleteArtifact",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifact's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "description" : "The deletion is recorded"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one of the account's campaigns' artifacts with every version (contract 1.45.0; 202, no body): from now on it is not found on every route (its page, its versions, an edit or a restore), gone from the campaign's list and type counts and from the campaign tier of every question, and an answer still being written leaves it out; its versions, index rows and index points are removed in the background. A reference an answer stored to it reads as a removed source. Nothing of its campaign, of its system's materials or of other artifacts changes. Cannot be undone. request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; request.not_found (404) too for an artifact already being deleted; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      },
       "get" : {
         "operationId" : "getArtifact",
         "parameters" : [ {

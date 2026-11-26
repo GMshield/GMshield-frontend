@@ -22,6 +22,7 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 5.2 part B: it deletes an artifact and shows a deleted artifact's reference as removed, added in 1.45.0.
     // Story 5.2: it edits an artifact, lists and opens its versions and restores one, added in 1.44.0.
     // Story 5.1 part B: it reads an artifact's reference (`kind` artifact, `artifactId`, `artifactVersion`), added in 1.43.0.
     // Story 5.1: it writes, lists and opens a campaign's artifacts, added in 1.42.0.
@@ -45,10 +46,11 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.44.0');
-    expect(meetsMinimum('1.44.0')).toBe(true);
-    expect(meetsMinimum('1.44.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.45.0');
     expect(meetsMinimum('1.45.0')).toBe(true);
+    expect(meetsMinimum('1.45.1')).toBe(true);
+    expect(meetsMinimum('1.46.0')).toBe(true);
+    expect(meetsMinimum('1.44.0')).toBe(false);
     expect(meetsMinimum('1.43.0')).toBe(false);
     expect(meetsMinimum('1.42.0')).toBe(false);
     expect(meetsMinimum('1.41.0')).toBe(false);
