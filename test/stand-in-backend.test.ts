@@ -8,6 +8,7 @@ import {
   STORED_TURN,
   NOTES_VERSION,
   RECORD,
+  CORRECTED_RECORD,
   RECORD_ID,
   RECORD_PAGE,
   REFERENCE_TEXT_PAGE,
@@ -457,6 +458,24 @@ describe('stand-in backend', () => {
     const bytes = await fetch(`${running.url}/api/v1/systems/${system}/records/${RECORD_ID}/pages/2/picture`);
     expect(bytes.status).toBe(200);
     expect(bytes.headers.get('content-type')).toBe('image/webp');
+  });
+
+  it('answers a record\'s correction on both pages with the record as stored, its version raised (Story 4.5)', () => {
+    const system = '0190a0b0-0000-7000-8000-000000000001';
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(schemas.Record!.required).toContain('version');
+    expect(RECORD.version).toBe(0);
+    for (const path of [`/api/v1/systems/${system}/records/${RECORD_ID}`, `/api/v1/campaigns/${campaign}/records/${RECORD_ID}`]) {
+      const corrected = answer(contract, 'PATCH', path, 't');
+      expect(corrected).toMatchObject({ status: 200, body: CORRECTED_RECORD });
+    }
+    for (const key of schemas.Record!.required ?? []) {
+      expect(CORRECTED_RECORD, key).toHaveProperty(key);
+    }
+    expect(CORRECTED_RECORD).toMatchObject({ id: RECORD.id, version: 1, references: RECORD.references });
+    expect(schemas.RecordCorrection!.required).toEqual(['fields', 'name', 'recordType', 'version']);
   });
 
   it('answers any other path with a 404 problem detail', async () => {

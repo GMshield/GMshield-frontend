@@ -65,6 +65,7 @@ export type RecordPage = Schemas['RecordPage'];
 export type GameRecord = Schemas['Record'];
 export type RecordField = Schemas['RecordField'];
 export type RecordReference = Schemas['RecordReference'];
+export type RecordCorrection = Schemas['RecordCorrection'];
 export type RecordSourcePage = Schemas['MaterialPageView'];
 export type Proposal = Schemas['Proposal'];
 export type ProposalPage = Schemas['ProposalPage'];
@@ -158,6 +159,46 @@ export function getCampaignRecord(sessionToken: string, campaignId: string, reco
   return call('ontology.campaign_record', options, (client) =>
     client.GET('/api/v1/campaigns/{campaignId}/records/{recordId}', {
       params: { header: session(sessionToken), path: { campaignId, recordId } },
+    }),
+  );
+}
+
+/**
+ * The GM's correction of one record as one of the account's systems shows it (Story 4.5), on the version it names: its
+ * name, type key and fields replaced together; the record as stored, its version raised by one.
+ * `request.stale_version` when it moved on, a `record.*` problem for a value the backend refuses, `request.not_found`
+ * for a record the system does not show.
+ */
+export function correctRecord(
+  sessionToken: string,
+  systemId: string,
+  recordId: string,
+  body: RecordCorrection,
+  options: CallOptions = {},
+): Promise<Result<GameRecord>> {
+  return call('ontology.record_correct', options, (client) =>
+    client.PATCH('/api/v1/systems/{systemId}/records/{recordId}', {
+      params: { header: session(sessionToken), path: { systemId, recordId } },
+      body,
+    }),
+  );
+}
+
+/**
+ * The same correction of one record as one of the account's campaigns shows it (Story 4.5, a search's record result),
+ * its type a key of the campaign's system's types; `request.not_found` for a record outside the campaign's scope.
+ */
+export function correctCampaignRecord(
+  sessionToken: string,
+  campaignId: string,
+  recordId: string,
+  body: RecordCorrection,
+  options: CallOptions = {},
+): Promise<Result<GameRecord>> {
+  return call('ontology.campaign_record_correct', options, (client) =>
+    client.PATCH('/api/v1/campaigns/{campaignId}/records/{recordId}', {
+      params: { header: session(sessionToken), path: { campaignId, recordId } },
+      body,
     }),
   );
 }

@@ -1052,10 +1052,31 @@ they sit in `src/`.
     left out. `RecordTypeOfRecord.core` may be null (an approved type), and the record page shows its stored name.
   - The stand-in answers the approved type "Talento" in the system's record types, a `talento` search result and a
     report count; the demo backend has it approved with three records (search "ataque", ask about a "talento").
+- **Correct a record (Story 4.5 part A).** Public contract 1.40.0 (the minimum backend contract too: a record's
+  `version` and the two `PATCH` routes are new; deploy the backend first).
+  - `RecordCorrection` (`src/components/RecordCorrection.tsx`), on a system's record page and on a search's record page:
+    the record's fields (`RecordFields`, its children) and "Corrigir" under them. "Corrigir" opens a form in their place
+    with the `SystemForm` bordered fields: the name, the type (a select of the page's system's record types, core and
+    approved, `systemRecordTypes`; the campaign's system on the search page), and each field as a name, a value and
+    "Remover campo", then "Adicionar campo", "Salvar" (the solid pill) and "Cancelar". The form takes the focus on the
+    name, a new field on its name, and "Corrigir" gets it back when the form closes; every control is a button, a field
+    or a select. A row is one column on a phone.
+  - `correctRecordAction` (`src/app/(signed-in)/records/actions.ts`) sends the name, type key and fields on the
+    version read (`correctRecord`, `correctCampaignRecord`), then `flash()` "Registro corrigido.", `revalidatePath` of
+    the systems' and the search's pages and `refresh()`. A stale answer reads the record again and answers `{stale,
+    currentVersion}`: the form keeps the GM's edits and says "Este item mudou em outra aba." with "Ver a versão atual"
+    (the page read again, the form closed) and "Manter a minha como nova versão" (the GM's edits sent again on the
+    current version).
+    Another refusal shows under its part: `record.name_invalid`, `record.type_invalid`, `record.fields_invalid`, and
+    `record.field_name_invalid` / `record.field_value_invalid` under the field their `index` names. The category
+    `record` is new.
+  - The stand-in answers both `PATCH` routes with the record at version 1; the demo backend
+    (`docs/tools/frontend-demo-backend.mjs`) corrects its records in memory, refuses the limits as the backend does, and
+    answers a save on an old version (two tabs) as stale; a name with "outra aba" in it plays another tab saving first.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,
-  `scope`, `conversation`), else the generic `server` text; a code is never
+  `scope`, `conversation`, `ontology`, `record`), else the generic `server` text; a code is never
   shown. `notFoundFor(problem)` (`src/app/not-found.tsx`) renders "Não encontrado." for
   `request.not_found` and for any 403, so another owner's item looks like a missing one.
 
