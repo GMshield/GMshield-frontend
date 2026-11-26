@@ -74,8 +74,12 @@ const ARTIFACT = {
   ],
   content: 'Forjada nas montanhas do norte.\n<b>Brilha</b> perto de orcs.',
   version: 1,
+  currentVersion: 1,
   createdAt: '2026-11-26T12:00:00Z',
 };
+/** Story 5.2: an artifact's versions as the page reads their first page. */
+const VERSIONS_ROUTE = `GET /api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}/versions?limit=10`;
+const ONE_VERSION = { status: 200, body: { items: [{ number: 1, recordType: 'item', name: 'Espada de Kael', createdAt: '2026-11-26T12:00:00Z' }], total: 1 } };
 
 const ARTIFACTS = `/api/v1/campaigns/${CAMPAIGN}/artifacts`;
 const RECORD_TYPES = `GET /api/v1/systems/${SYSTEM}/record-types?limit=50`;
@@ -269,7 +273,7 @@ describe("a new artifact's form (Story 5.1)", () => {
 
 describe("an artifact's page (Story 5.1)", () => {
   it('shows the name, the type as the subtitle, the fields as a two-column list, the content as plain text and no sources', async () => {
-    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: ARTIFACT } });
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
       const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
@@ -304,6 +308,7 @@ describe("an artifact's page (Story 5.1)", () => {
       ...BASE,
       [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...ARTIFACT, fields: [], content: null } },
       [`GET ${ARTIFACTS}/${KAEL}`]: problem(404, 'request.not_found'),
+      [VERSIONS_ROUTE]: ONE_VERSION,
     });
     const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
     expect(html).not.toContain('<dl');
@@ -313,6 +318,189 @@ describe("an artifact's page (Story 5.1)", () => {
     expect(await thrownDigest(() => ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: KAEL }) }))).toMatch(
       /^NEXT_HTTP_ERROR_FALLBACK;404/,
     );
+  });
+});
+
+describe("an artifact's versions (Story 5.2)", () => {
+  const ONE = `${ARTIFACTS}/${SWORD}`;
+  const V3 = { ...ARTIFACT, recordType: 'talento', name: 'Espada Rubra', content: 'Reforjada no vulcão.', version: 3, currentVersion: 3 };
+  const V1 = { ...ARTIFACT, version: 1, currentVersion: 3 };
+  const THREE = {
+    status: 200,
+    body: {
+      items: [
+        { number: 3, recordType: 'talento', name: 'Espada Rubra', createdAt: '2026-11-26T15:00:00Z' },
+        { number: 2, recordType: 'note', name: 'Espada lembrada', createdAt: '2026-11-26T14:00:00Z' },
+        { number: 1, recordType: 'item', name: 'Espada de Kael', createdAt: '2026-11-25T12:00:00Z' },
+      ],
+      total: 3,
+    },
+  };
+  const page = (values: Record<string, string> = {}) =>
+    ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query(values) });
+
+  it('the newest version is edited in place, and "Versões" lists every version newest first, the newest "atual", the others with "Restaurar"', async () => {
+    const server = await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: V3 }, [VERSIONS_ROUTE]: THREE });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await page());
+
+      expect(html).toMatch(/<h1[^>]*>Espada Rubra<\/h1>/);
+      // The approved type by its system's name; the content shown; "Editar" under them, and no notice of an older version.
+      expect(html).toContain('Talento');
+      expect(html).toContain('Reforjada no vulcão.');
+      expect(html).toMatch(new RegExp(`<button[^>]*>${messages.artifacts.edit.open}</button>`));
+      expect(html).not.toContain(messages.artifacts.page.citedVersion.split('{')[0]!);
+      expect(html).toContain(`>${messages.artifacts.versions.title}</h2>`);
+      const rows = [...html.matchAll(/<li[^>]*data-version="(\d+)"[^>]*>(.*?)<\/li>/g)];
+      expect(rows.map((row) => row[1])).toEqual(['3', '2', '1']);
+      expect(rows[0]![2]).toContain(`>${messages.artifacts.versions.current}<`);
+      expect(rows[0]![2]).not.toContain('<button');
+      expect(rows[0]![2]).toContain('aria-current="page"');
+      expect(rows[1]![2]).toContain(`>${messages.artifacts.versions.restore}<`);
+      expect(rows[2]![2]).toContain(messages.artifacts.versions.restoreOf.replace('{number}', '1'));
+      // A row reads its number, its name and its day; the newest opens the page itself, the others their version.
+      expect(rows[2]![2]).toContain(language === 'pt-BR' ? 'Versão 1 · Espada de Kael · 25 de nov. de 2026' : 'Version 1 · Espada de Kael · Nov 25, 2026');
+      expect(linkTo(rows[0]![2]!, `/campaigns/${CAMPAIGN}/artifacts/${SWORD}`)).not.toBe('');
+      expect(linkTo(rows[1]![2]!, amp(`/campaigns/${CAMPAIGN}/artifacts/${SWORD}?version=2&via=versions`))).not.toBe('');
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    expect(calls(server)).toContain(VERSIONS_ROUTE);
+  });
+
+  it('a cited version shows as it was, read-only, with a notice naming it and a link to the newest', async () => {
+    const server = await useBackend({ ...BASE, [`GET ${ONE}/versions/1`]: { status: 200, body: V1 }, [VERSIONS_ROUTE]: THREE });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(await page({ version: '1' }));
+
+    expect(calls(server)).toContain(`GET ${ONE}/versions/1`);
+    expect(html).toMatch(/<h1[^>]*>Espada de Kael<\/h1>/);
+    expect(html).toContain(ptBR.systems.recordTypes.item);
+    expect(html).toContain('Forjada nas montanhas do norte.');
+    expect(html).toContain('Você está vendo a versão 1, citada numa resposta.');
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/campaigns/${CAMPAIGN}/artifacts/${SWORD}"[^>]*>${ptBR.artifacts.versions.viewCurrent}</a>`));
+    // No editor on an earlier version; its row is the one shown, and the newest is still "atual".
+    expect(html).not.toMatch(new RegExp(`<button[^>]*>${ptBR.artifacts.edit.open}</button>`));
+    const rows = [...html.matchAll(/<li[^>]*data-version="(\d+)"[^>]*>(.*?)<\/li>/g)];
+    expect(rows[2]![2]).toContain('aria-current="page"');
+    expect(rows[0]![2]).toContain(`>${ptBR.artifacts.versions.current}<`);
+
+    // Opened from "Versões", the notice names the version only; "Personagens" is kept on the way to the newest.
+    await backend?.close();
+    await useBackend({ ...BASE, [`GET ${ONE}/versions/1`]: { status: 200, body: V1 }, [VERSIONS_ROUTE]: THREE });
+    const listed = renderToStaticMarkup(await page({ version: '1', via: 'versions', from: 'characters' }));
+    expect(listed).toContain('Você está vendo a versão 1.');
+    expect(listed).not.toContain('citada numa resposta');
+    expect(listed).toMatch(new RegExp(`<a[^>]*href="/campaigns/${CAMPAIGN}/artifacts/${SWORD}\\?from=characters"[^>]*>${ptBR.artifacts.versions.viewCurrent}</a>`));
+    expect(linkTo(listed, '/characters')).not.toBe('');
+  });
+
+  it('the newest version\'s number leads to the page\'s own address; a malformed one is ignored; an unknown one is not found', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: V3 },
+      [`GET ${ONE}/versions/3`]: { status: 200, body: V3 },
+      [`GET ${ONE}/versions/9`]: problem(404, 'request.not_found'),
+      [VERSIONS_ROUTE]: THREE,
+    });
+
+    // An answer's link names the version it cited; once that is the newest, the editor's own address takes over, so a
+    // save or restore (which reads the address again) shows the newest version, keeping "Personagens".
+    expect(await thrownDigest(() => page({ version: '3' }))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}/artifacts/${SWORD};`));
+    expect(await thrownDigest(() => page({ version: '3', via: 'versions', from: 'characters' }))).toMatch(
+      new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}/artifacts/${SWORD}\\?from=characters;`),
+    );
+    for (const version of ['0', 'x', '-1', '01']) {
+      const html = renderToStaticMarkup(await page({ version }));
+      expect(html, version).toMatch(new RegExp(`<button[^>]*>${ptBR.artifacts.edit.open}</button>`));
+      expect(html, version).not.toContain('Você está vendo');
+    }
+    expect(await thrownDigest(() => page({ version: '9' }))).toMatch(/^NEXT_HTTP_ERROR_FALLBACK;404/);
+  });
+
+  it('pages the versions, keeping the version shown in every page link; a list that cannot be read says why', async () => {
+    const many = {
+      status: 200,
+      body: { items: Array.from({ length: 10 }, (_, index) => ({ number: 25 - index, recordType: 'item', name: `V${25 - index}`, createdAt: '2026-11-26T12:00:00Z' })), total: 25 },
+    };
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...V1, currentVersion: 25 } },
+      [`GET ${ONE}/versions?limit=10&offset=10`]: many,
+    });
+    const html = renderToStaticMarkup(await page({ version: '1', page: '2' }));
+    expect(html).toContain(amp(`/campaigns/${CAMPAIGN}/artifacts/${SWORD}?version=1&page=3`));
+    // A row opens its version on the same page of "Versões"; the newest row too.
+    expect(html).toContain(amp(`/campaigns/${CAMPAIGN}/artifacts/${SWORD}?version=24&via=versions&page=2`));
+    expect(html).toContain(amp(`href="/campaigns/${CAMPAIGN}/artifacts/${SWORD}?page=2"`));
+    await backend?.close();
+
+    await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: V3 }, [VERSIONS_ROUTE]: problem(503, 'server.unavailable') });
+    const refused = renderToStaticMarkup(await page());
+    expect(refused).not.toContain(`>${ptBR.artifacts.versions.title}</h2>`);
+    expect(refused).toContain('data-status="danger"');
+  });
+});
+
+describe("an artifact's delete (Story 5.2 part B)", () => {
+  const ONE = `${ARTIFACTS}/${SWORD}`;
+
+  it('"Excluir" sits in the header on every version shown, and its dialog names the artifact and what goes, in both languages', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      for (const searchParams of [query(), query({ version: '1' })]) {
+        const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams }));
+        const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+        expect(header).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*aria-haspopup="dialog"[^>]*>${messages.artifacts.delete.action}</button>`));
+        expect(html).toContain(`>${messages.artifacts.delete.title.replace('{name}', 'Espada de Kael')}</h2>`);
+        expect(html).toContain(messages.artifacts.delete.consequence);
+        expect(html).toMatch(new RegExp(`<button[^>]*>${messages.artifacts.delete.cancel}</button>`));
+        expect(html).toMatch(new RegExp(`<button[^>]*data-variant="danger"[^>]*>${messages.artifacts.delete.confirm}</button>`));
+      }
+    }
+    expect(ptBR.artifacts.delete).toEqual({
+      action: 'Excluir',
+      title: 'Excluir «{name}»?',
+      consequence: 'Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.',
+      confirm: 'Excluir artefato',
+      cancel: 'Cancelar',
+    });
+    expect(ptBR.feedback.artifactDeleted).toBe('Artefato «{name}» excluído.');
+    expect(Object.keys(en.artifacts.delete)).toEqual(Object.keys(ptBR.artifacts.delete));
+  });
+
+  it('on an earlier version\'s page, "Excluir" names the artifact by its current name, not the version\'s', async () => {
+    const server = await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, name: 'Espada Rubra', version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+
+    // The page shows version 1 under its own name; the delete is about the artifact, named as it is now.
+    expect(html).toMatch(/<h1[^>]*>Espada de Kael<\/h1>/);
+    expect(html).toContain('>Excluir «Espada Rubra»?</h2>');
+    expect(html).not.toContain('Excluir «Espada de Kael»?');
+    expect(calls(server)).toContain(`GET ${ONE}`);
+
+    // The newest version's own page reads the artifact once.
+    server.calls.length = 0;
+    const newest = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+    expect(newest).toContain('>Excluir «Espada Rubra»?</h2>');
+    expect(calls(server).filter((call) => call === `GET ${ONE}`)).toHaveLength(1);
   });
 });
 

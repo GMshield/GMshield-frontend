@@ -115,10 +115,17 @@ export const ARTIFACT: {
   fields: { name: string; value: string }[];
   content: string | null;
   version: number;
+  currentVersion: number;
   createdAt: string;
 };
 export const ARTIFACT_PAGE: {
   items: { id: string; recordType: string; name: string; version: number; createdAt: string }[];
   total: number;
   types: { key: string; count: number }[];
+};
+/** Story 5.2: an edit's and a restore's answer (version 2), and an artifact's versions (its one version 1). */
+export const EDITED_ARTIFACT: typeof ARTIFACT;
+export const ARTIFACT_VERSIONS: {
+  items: { number: number; recordType: string; name: string; createdAt: string }[];
+  total: number;
 };

@@ -1,0 +1,84 @@
+/*
+ * Story 5.2: "Versões" on an artifact's page, under its sources: a heading in label type, as the page's other sections
+ * read (artifacts.module.css), then one row per version, modelled on a material's superseded versions
+ * (SupersededVersions.module.css): its line at the left, the tag "atual" or "Restaurar" at the right; the pill goes under
+ * the line on a narrow screen.
+ */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 72ch;
+  margin: 0;
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: var(--space-touch-target);
+}
+
+.link {
+  min-width: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* The version the page shows. */
+.link[aria-current='page'] {
+  font-weight: var(--font-label-weight);
+}
+
+.tag {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+/* A stale restore: said under the rows, with its two choices, as a stale edit says it. */
+.stale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-warning-soft);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.error {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+}

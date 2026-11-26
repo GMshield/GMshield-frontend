@@ -13,7 +13,12 @@ import { listPage, type ListPage } from './list-page';
  *   stored, version 1. A value outside its limits is `request.invalid` with `params.field` naming it.
  * - {@link listArtifacts}: the campaign's artifacts, newest first, a page at a time (`limit` and `offset`, or `cursor`),
  *   of one record type when `recordType` is given, with the list's `total` and the record types in use (`types`).
- * - {@link getArtifact}: one artifact with its newest version.
+ * - {@link getArtifact}: one artifact with its newest version, or (Story 5.2) one of its versions by number, as a
+ *   reference that cited it opens it; `currentVersion` names the newest either way.
+ * - Story 5.2 (contract 1.44.0): {@link updateArtifact} (the GM's edit) and {@link restoreArtifact} (an earlier version
+ *   copied as the newest) each store the next version and name the newest version the GM saw (`version`); a stale one
+ *   is `request.stale_version`. {@link artifactVersions} lists the versions newest first, a page at a time.
+ * - Story 5.2 part B (contract 1.45.0): {@link deleteArtifact} starts the artifact's deletion with every version.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -23,6 +28,10 @@ export type ArtifactPage = Schemas['ArtifactPage'];
 export type ArtifactTypeCount = Schemas['ArtifactTypeCount'];
 export type NewArtifact = Schemas['NewArtifact'];
 export type ArtifactQuery = NonNullable<operations['listArtifacts']['parameters']['query']>;
+export type ArtifactEdit = Schemas['ArtifactEdit'];
+export type ArtifactVersionSummary = Schemas['ArtifactVersionSummary'];
+export type ArtifactVersionPage = Schemas['ArtifactVersionPage'];
+export type ArtifactVersionQuery = NonNullable<operations['listArtifactVersions']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -48,13 +57,101 @@ export function listArtifacts(
   );
 }
 
-/** One artifact of one of the account's campaigns; `request.not_found` for any other campaign or artifact. */
-export function getArtifact(sessionToken: string, campaignId: string, artifactId: string, options: CallOptions = {}): Promise<Result<Artifact>> {
+/**
+ * One artifact of one of the account's campaigns, with its newest version, or with the version `version` when it is
+ * given (Story 5.2); `request.not_found` for any other campaign or artifact, and for a number the artifact lacks.
+ */
+export function getArtifact(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  version?: number | null,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  if (version !== undefined && version !== null) {
+    return call('artifacts.readVersion', options, (client) =>
+      client.GET('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}', {
+        params: { header: session(sessionToken), path: { campaignId, artifactId, number: version } },
+      }),
+    );
+  }
   return call('artifacts.read', options, (client) =>
     client.GET('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}', {
       params: { header: session(sessionToken), path: { campaignId, artifactId } },
     }),
   );
+}
+
+/** The GM's edit of one of the account's campaigns' artifacts (Story 5.2): its next version, as stored. */
+export function updateArtifact(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  body: ArtifactEdit,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.update', options, (client) =>
+    client.PATCH('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+      body,
+    }),
+  );
+}
+
+/** An earlier version `number` restored as the artifact's next version (Story 5.2), on the newest version `version`. */
+export function restoreArtifact(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  number: number,
+  version: number,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.restore', options, (client) =>
+    client.POST('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}/restore', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId, number } },
+      body: { version },
+    }),
+  );
+}
+
+/** An artifact's versions, newest first, a page at a time (Story 5.2); `request.not_found` for any other artifact. */
+export function artifactVersions(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  query: ArtifactVersionQuery = {},
+  options: CallOptions = {},
+): Promise<Result<ArtifactVersionPage>> {
+  return call('artifacts.versions', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId }, query },
+    }),
+  );
+}
+
+/**
+ * Deletes one of the account's campaigns' artifacts with every version (Story 5.2 part B; 202, no body: its versions,
+ * index rows and index points go in the backend). It leaves every list and every question at once; answers that cited
+ * it show "fonte removida". `request.not_found` for any other campaign or artifact, one already being deleted included.
+ */
+export function deleteArtifact(sessionToken: string, campaignId: string, artifactId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('artifacts.delete', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+    }),
+  );
+}
+
+/** Page `page` of an artifact's versions, `size` rows a page, as a screen shows it ({@link listPage}). */
+export function artifactVersionsPage(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  page: number,
+  size: number,
+): Promise<Result<ListPage<ArtifactVersionSummary>>> {
+  return listPage((ask) => artifactVersions(sessionToken, campaignId, artifactId, ask), page, size);
 }
 
 /**

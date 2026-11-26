@@ -4,9 +4,11 @@ import {
   ANSWER_DONE,
   ARTIFACT,
   ARTIFACT_PAGE,
+  ARTIFACT_VERSIONS,
   BOOK_VERSION,
   CONVERSATION,
   CONVERSATION_ID,
+  EDITED_ARTIFACT,
   STORED_TURN,
   NOTES_VERSION,
   RECORD,
@@ -499,6 +501,37 @@ describe('stand-in backend', () => {
     for (const path of [`/api/v1/systems/${system}/records/${RECORD_ID}`, `/api/v1/campaigns/${campaign}/records/${RECORD_ID}`]) {
       expect(answer(contract, 'DELETE', path, 't')).toMatchObject({ status: 204, type: null, body: null });
     }
+  });
+
+  it('answers an artifact\'s edit, its versions, one version and a restore (Story 5.2)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const artifact = `/api/v1/campaigns/${campaign}/artifacts/${ARTIFACT.id}`;
+    expect(answer(contract, 'PATCH', artifact, 't')).toMatchObject({ status: 200, body: EDITED_ARTIFACT });
+    expect(answer(contract, 'GET', `${artifact}/versions`, 't')).toMatchObject({ status: 200, body: ARTIFACT_VERSIONS });
+    expect(answer(contract, 'GET', `${artifact}/versions/1`, 't')).toMatchObject({ status: 200, body: ARTIFACT });
+    expect(answer(contract, 'POST', `${artifact}/versions/1/restore`, 't')).toMatchObject({ status: 200, body: EDITED_ARTIFACT });
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(EDITED_ARTIFACT, key).toHaveProperty(key);
+    }
+    for (const key of schemas.ArtifactVersionPage!.required ?? []) {
+      expect(ARTIFACT_VERSIONS, key).toHaveProperty(key);
+    }
+    for (const item of ARTIFACT_VERSIONS.items) {
+      for (const key of schemas.ArtifactVersionSummary!.required ?? []) {
+        expect(item, key).toHaveProperty(key);
+      }
+    }
+  });
+
+  it('answers an artifact\'s delete with 202 and no body (Story 5.2 part B)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    expect(answer(contract, 'DELETE', `/api/v1/campaigns/${campaign}/artifacts/${ARTIFACT.id}`, 't')).toEqual({
+      status: 202,
+      type: null,
+      body: null,
+    });
   });
 
   it('answers a campaign\'s artifacts, one artifact and a new one (Story 5.1)', () => {

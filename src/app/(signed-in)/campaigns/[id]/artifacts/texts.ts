@@ -1,5 +1,7 @@
 import { correctionTexts } from '@/app/(signed-in)/records/correction';
+import type { ArtifactEditorTexts } from '@/components/ArtifactEditor';
 import type { ArtifactFormTexts } from '@/components/ArtifactForm';
+import type { ArtifactVersionsTexts } from '@/components/ArtifactVersions';
 import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
 import type { Translate } from '@/messages';
 import { recordTypeName } from '@/record-types';
@@ -27,6 +29,56 @@ export function artifactFormTexts(t: Translate): ArtifactFormTexts {
     content: t('artifacts.form.content'),
     save: t('artifacts.form.save'),
     cancel: t('artifacts.form.cancel'),
+  };
+}
+
+/**
+ * Every text of an artifact's edit (Story 5.2), in the page's language: the editable body, the content and the stale
+ * notice say what a new artifact's form and a record's correction say; the edit adds its pills, its name and its
+ * saved line.
+ */
+export function artifactEditorTexts(t: Translate): ArtifactEditorTexts {
+  const record = correctionTexts(t);
+  const form = artifactFormTexts(t);
+  return {
+    name: form.name,
+    type: form.type,
+    fields: form.fields,
+    fieldName: form.fieldName,
+    fieldValue: form.fieldValue,
+    fieldNameOf: form.fieldNameOf,
+    fieldValueOf: form.fieldValueOf,
+    noFields: form.noFields,
+    addField: form.addField,
+    removeField: form.removeField,
+    removeFieldOf: form.removeFieldOf,
+    content: form.content,
+    open: t('artifacts.edit.open'),
+    form: t('artifacts.edit.form'),
+    save: t('artifacts.edit.save'),
+    cancel: t('artifacts.edit.cancel'),
+    stale: record.stale,
+    viewCurrent: record.viewCurrent,
+    keepMine: record.keepMine,
+    saved: t('artifacts.edit.saved'),
+  };
+}
+
+/**
+ * Every text of an artifact's "Versões" (Story 5.2), in the page's language: a stale restore says what a stale edit
+ * says, and its second choice restores the same version anyway (it has no draft of the GM's own to keep).
+ */
+export function artifactVersionsTexts(t: Translate): ArtifactVersionsTexts {
+  const record = correctionTexts(t);
+  return {
+    title: t('artifacts.versions.title'),
+    list: t('artifacts.versions.list'),
+    current: t('artifacts.versions.current'),
+    restore: t('artifacts.versions.restore'),
+    restoreOf: t('artifacts.versions.restoreOf'),
+    stale: record.stale,
+    viewCurrent: record.viewCurrent,
+    restoreAnyway: t('artifacts.versions.restoreAnyway'),
   };
 }
 
