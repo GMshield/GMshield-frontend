@@ -1,6 +1,164 @@
 {
   "components" : {
     "schemas" : {
+      "Artifact" : {
+        "description" : "An artifact with its newest version (contract 1.42.0)",
+        "properties" : {
+          "campaignId" : {
+            "description" : "Its campaign's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000002",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "content" : {
+            "description" : "Its free text, as written (trimmed); null for none",
+            "example" : "Forjada nas montanhas do norte.",
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "description" : "When it was written",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "fields" : {
+            "description" : "Its fields, in the order written; empty for none",
+            "items" : {
+              "$ref" : "#/components/schemas/ArtifactField"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "description" : "The artifact's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "Its name",
+            "example" : "Espada de Kael",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of its record type, one of its campaign's system's (core or approved)",
+            "example" : "item",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The number of the version shown, from 1",
+            "example" : 1,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "campaignId", "content", "createdAt", "fields", "id", "name", "recordType", "version" ],
+        "type" : "object"
+      },
+      "ArtifactField" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name, as the GM wrote it (trimmed)",
+            "example" : "Dano",
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "The field's value, as the GM wrote it (trimmed): nothing is calculated",
+            "example" : "1d8 cortante",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "value" ],
+        "type" : "object"
+      },
+      "ArtifactPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ArtifactSummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The cursor of the next page; absent on the last",
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many artifacts the list has in all (of its record type when filtered), whatever the page",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "types" : {
+            "description" : "The record types in use in the campaign's artifacts, whatever the filter, by key, each with its count; empty for a campaign without artifacts",
+            "items" : {
+              "$ref" : "#/components/schemas/ArtifactTypeCount"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "items", "total", "types" ],
+        "type" : "object"
+      },
+      "ArtifactSummary" : {
+        "description" : "An artifact in a list (contract 1.42.0)",
+        "properties" : {
+          "createdAt" : {
+            "description" : "When it was written",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The artifact's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "Its name, in its newest version",
+            "example" : "Espada de Kael",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of its record type",
+            "example" : "item",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The number of its newest version, from 1",
+            "example" : 1,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "createdAt", "id", "name", "recordType", "version" ],
+        "type" : "object"
+      },
+      "ArtifactTypeCount" : {
+        "description" : "A record type in use in a campaign's artifacts",
+        "properties" : {
+          "count" : {
+            "description" : "How many of the campaign's artifacts have it",
+            "example" : 2,
+            "format" : "int64",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "key" : {
+            "description" : "The record type's key",
+            "example" : "character_sheet",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "count", "key" ],
+        "type" : "object"
+      },
       "Campaign" : {
         "properties" : {
           "archived" : {
@@ -78,6 +236,13 @@
       },
       "CampaignDeletion" : {
         "properties" : {
+          "artifacts" : {
+            "description" : "How many artifacts of the campaign go with it (contract 1.42.0)",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
           "conversations" : {
             "description" : "How many conversations of the campaign go with it",
             "example" : 1,
@@ -93,7 +258,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "conversations", "materials" ],
+        "required" : [ "artifacts", "conversations", "materials" ],
         "type" : "object"
       },
       "CampaignPage" : {
@@ -1104,6 +1269,59 @@
           }
         },
         "required" : [ "username" ],
+        "type" : "object"
+      },
+      "NewArtifact" : {
+        "properties" : {
+          "content" : {
+            "description" : "The artifact's free text: at most 20,000 code points after trimming; absent, null or blank for none",
+            "example" : "Forjada nas montanhas do norte.",
+            "maxLength" : 20000,
+            "type" : [ "string", "null" ]
+          },
+          "fields" : {
+            "description" : "The artifact's fields in order, at most 64",
+            "items" : {
+              "$ref" : "#/components/schemas/NewArtifactField"
+            },
+            "maxItems" : 64,
+            "type" : "array"
+          },
+          "name" : {
+            "description" : "The artifact's name: 1 to 200 code points after trimming",
+            "example" : "Espada de Kael",
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of one of the campaign's system's record types, core or approved",
+            "example" : "item",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "fields", "name", "recordType" ],
+        "type" : "object"
+      },
+      "NewArtifactField" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name: 1 to 200 code points after trimming",
+            "example" : "Dano",
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "The field's value: 1 to 8,000 code points after trimming",
+            "example" : "1d8 cortante",
+            "maxLength" : 8000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "value" ],
         "type" : "object"
       },
       "NewCampaign" : {
@@ -2395,6 +2613,13 @@
       },
       "SystemDeletion" : {
         "properties" : {
+          "artifacts" : {
+            "description" : "How many artifacts of those campaigns go with it (contract 1.42.0)",
+            "example" : 4,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
           "campaigns" : {
             "description" : "How many campaigns of the system go with it",
             "example" : 2,
@@ -2417,7 +2642,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "campaigns", "conversations", "materials" ],
+        "required" : [ "artifacts", "campaigns", "conversations", "materials" ],
         "type" : "object"
       },
       "SystemPage" : {
@@ -2768,7 +2993,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.41.0"
+    "version" : "1.42.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -2980,6 +3205,199 @@
         },
         "summary" : "Makes one of the account's campaigns the current one and answers it; its version does not change. request.not_found (404) for an archived campaign or any other id (unknown, another account's or malformed), request.invalid (400) without a campaignId or for a malformed body; nothing changes then; session.required (401) without a session.",
         "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts" : {
+      "get" : {
+        "operationId" : "listArtifacts",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Only the artifacts of this record type key (a key no artifact has lists none)",
+          "in" : "query",
+          "name" : "recordType",
+          "schema" : {
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "How many of the newest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ArtifactPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One of the account's campaigns' artifacts (contract 1.42.0), newest first, of one record type when recordType is given. A page starts after a cursor or at an offset (a numbered page), and names the total of the list and the record types in use in the whole campaign with their counts. request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted); request.invalid (400) for a recordType that is not a key's text, a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      },
+      "post" : {
+        "operationId" : "createArtifact",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewArtifact"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A new artifact of one of the account's campaigns, written by hand (contract 1.42.0; 201): its record type, name, fields and optional content become its version 1, as getArtifact answers it. A character sheet stores what was written: nothing is calculated. request.invalid (400) with params.field naming the value outside its limits (and its min and max): recordType (not a key of the campaign's system's record types, core or approved), name (1 to 200 code points after trimming), fields (at most 64), fieldName or fieldValue (with index, from 0: a name of 1 to 200, a value of 1 to 8,000, after trimming) or content (at most 20,000 after trimming); request.invalid (400) without a field for a malformed body; request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted); nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}" : {
+      "get" : {
+        "operationId" : "getArtifact",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifact's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One artifact of one of the account's campaigns with its newest version (contract 1.42.0). request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
       }
     },
     "/api/v1/campaigns/{campaignId}/conversation" : {

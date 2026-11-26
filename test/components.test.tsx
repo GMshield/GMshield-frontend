@@ -664,7 +664,7 @@ describe('SystemActions (Story 3.1 part B)', () => {
     const user = userEvent.setup();
     const { posted, action } = recorder();
     const { container } = render(
-      <SystemActions id={ID} counts={{ campaigns: 2, conversations: 3, materials: 1 }} language="pt-BR" action={action} />,
+      <SystemActions id={ID} counts={{ campaigns: 2, conversations: 3, materials: 1, artifacts: 4 }} language="pt-BR" action={action} />,
     );
     const opener = screen.getByRole('button', { name: 'Excluir' });
     expect(opener.dataset.variant).toBe('danger');
@@ -675,7 +675,7 @@ describe('SystemActions (Story 3.1 part B)', () => {
     await user.keyboard('{Enter}');
     const dialog = screen.getByRole('dialog', { name: 'Excluir este sistema?' });
     expect(dialog.textContent).toContain(
-      'Vão junto: 2 campanhas, 3 conversas e 1 material ligado só a ele. Isso não pode ser desfeito.',
+      'Vão junto: 2 campanhas, 3 conversas, 1 material ligado só a ele e 4 artefatos. Isso não pode ser desfeito.',
     );
     await user.keyboard('{Escape}');
     expect(container.querySelector('dialog')?.open).toBe(false);
@@ -700,30 +700,30 @@ describe('SystemActions (Story 3.1 part B)', () => {
     const user = userEvent.setup();
     const { action } = recorder();
     const { rerender } = render(
-      <SystemActions id={ID} counts={{ campaigns: 1, conversations: 1, materials: 1 }} language="pt-BR" action={action} />,
+      <SystemActions id={ID} counts={{ campaigns: 1, conversations: 1, materials: 1, artifacts: 1 }} language="pt-BR" action={action} />,
     );
     await user.click(screen.getByRole('button', { name: 'Excluir' }));
-    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 campanha, 1 conversa e 1 material ligado só a ele.');
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 campanha, 1 conversa, 1 material ligado só a ele e 1 artefato.');
     await user.keyboard('{Escape}');
-    rerender(<SystemActions id={ID} counts={{ campaigns: 0, conversations: 0, materials: 0 }} language="en" action={action} />);
+    rerender(<SystemActions id={ID} counts={{ campaigns: 0, conversations: 0, materials: 0, artifacts: 0 }} language="en" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = screen.getByRole('dialog', { name: 'Delete this system?' });
     expect(dialog.textContent).toContain(
-      'Going with it: 0 campaigns, 0 conversations and 0 materials linked only to it. This cannot be undone.',
+      'Going with it: 0 campaigns, 0 conversations, 0 materials linked only to it and 0 artifacts. This cannot be undone.',
     );
     expect(within(dialog).getByRole('button', { name: 'Delete system' })).toBeTruthy();
     await user.keyboard('{Escape}');
     rerender(<SystemActions id={ID} counts={null} language="pt-BR" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Excluir' }));
     expect(screen.getByRole('dialog').textContent).toContain(
-      'Vão junto as campanhas deste sistema, as conversas delas e os materiais ligados só a ele.',
+      'Vão junto as campanhas deste sistema, as conversas e os artefatos delas e os materiais ligados só a ele.',
     );
   });
 
   it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
     const user = userEvent.setup();
     const { action } = recorder({ error: 'Não encontrado.' });
-    render(<SystemActions id={ID} counts={{ campaigns: 1, conversations: 0, materials: 0 }} language="pt-BR" action={action} />);
+    render(<SystemActions id={ID} counts={{ campaigns: 1, conversations: 0, materials: 0, artifacts: 0 }} language="pt-BR" action={action} />);
     const opener = screen.getByRole('button', { name: 'Excluir' });
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir sistema' }));
@@ -748,7 +748,7 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
   it('Excluir is a danger pill that opens the confirmation with the counts; Cancelar or Esc closes it and focus goes back', async () => {
     const user = userEvent.setup();
     const { posted, action } = recorder();
-    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 3, materials: 2 }} language="pt-BR" action={action} />);
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 3, materials: 2, artifacts: 5 }} language="pt-BR" action={action} />);
     const opener = screen.getByRole('button', { name: 'Excluir' });
     expect(opener.dataset.variant).toBe('danger');
     expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
@@ -757,7 +757,7 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     expect(document.activeElement).toBe(opener);
     await user.keyboard('{Enter}');
     const dialog = screen.getByRole('dialog', { name: 'Excluir esta campanha?' });
-    expect(dialog.textContent).toContain('Vão junto: 3 conversas e 2 materiais desta campanha. Isso não pode ser desfeito.');
+    expect(dialog.textContent).toContain('Vão junto: 3 conversas, 2 materiais e 5 artefatos desta campanha. Isso não pode ser desfeito.');
     await user.keyboard('{Escape}');
     expect(container.querySelector('dialog')?.open).toBe(false);
     expect(document.activeElement).toBe(opener);
@@ -780,27 +780,27 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
   it('names one of each, none, and what goes in words when the counts are missing, in both languages', async () => {
     const user = userEvent.setup();
     const { action } = recorder();
-    const { rerender } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 1 }} language="pt-BR" action={action} />);
+    const { rerender } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 1, artifacts: 1 }} language="pt-BR" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Excluir' }));
-    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 conversa e 1 material desta campanha.');
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 conversa, 1 material e 1 artefato desta campanha.');
     await user.keyboard('{Escape}');
-    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 0, materials: 0 }} language="en" action={action} />);
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 0, materials: 0, artifacts: 0 }} language="en" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = screen.getByRole('dialog', { name: 'Delete this campaign?' });
-    expect(dialog.textContent).toContain('Going with it: 0 conversations and 0 materials of this campaign. This cannot be undone.');
+    expect(dialog.textContent).toContain('Going with it: 0 conversations, 0 materials and 0 artifacts of this campaign. This cannot be undone.');
     expect(within(dialog).getByRole('button', { name: 'Delete campaign' })).toBeTruthy();
     await user.keyboard('{Escape}');
-    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 4 }} language="en" action={action} />);
+    rerender(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 4, artifacts: 1 }} language="en" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 conversation and 4 materials of this campaign.');
+    expect(screen.getByRole('dialog').textContent).toContain('Going with it: 1 conversation, 4 materials and 1 artifact of this campaign.');
     await user.keyboard('{Escape}');
     rerender(<CampaignDeleteAction id={ID} counts={null} language="pt-BR" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Excluir' }));
-    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.');
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as conversas, os materiais e os artefatos desta campanha. Isso não pode ser desfeito.');
     await user.keyboard('{Escape}');
     rerender(<CampaignDeleteAction id={ID} counts={null} language="en" action={action} />);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this campaign's conversations and materials. This cannot be undone.");
+    expect(screen.getByRole('dialog').textContent).toContain("Going with it: this campaign's conversations, materials and artifacts. This cannot be undone.");
   });
 
   it('"Excluir" ignores clicks while the delete runs, and takes them again once it ends', async () => {
@@ -812,7 +812,7 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
           finish = resolve;
         }),
     );
-    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    const { container } = render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0, artifacts: 0 }} language="pt-BR" action={action} />);
     const opener = screen.getByRole('button', { name: 'Excluir' });
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
@@ -831,7 +831,7 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
   it('shows a refusal as an alert under the pill, with focus back on "Excluir"', async () => {
     const user = userEvent.setup();
     const { action } = recorder({ error: 'Não encontrado.' });
-    render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0 }} language="pt-BR" action={action} />);
+    render(<CampaignDeleteAction id={ID} counts={{ conversations: 1, materials: 0, artifacts: 0 }} language="pt-BR" action={action} />);
     const opener = screen.getByRole('button', { name: 'Excluir' });
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));

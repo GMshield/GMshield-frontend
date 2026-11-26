@@ -18,8 +18,15 @@ vi.mock('next/navigation', async (importOriginal) => ({
 const { createElement } = await import('react');
 const { renderToStaticMarkup } = await import('react-dom/server');
 const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
-// A page still to be built: the layout tests' plain page.
-const { default: CharactersPage } = await import('@/app/(signed-in)/characters/page');
+// The layout tests' plain page: a heading and one sentence in the interface's language (from Story 5.1 "Personagens"
+// lists the campaign's character sheets, in test/artifacts.test.tsx, and no entry page is a placeholder any more).
+const { PageHeader } = await import('@/components/PageHeader');
+const { translator } = await import('@/messages');
+const { currentPreferences } = await import('@/preferences');
+async function PlainPage() {
+  const t = translator((await currentPreferences()).language);
+  return createElement('div', null, createElement(PageHeader, { title: t('shell.entries.characters') }), createElement('p', null, t('characters.empty')));
+}
 const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { default: MaterialPage } = await import('@/app/(signed-in)/files/[id]/page');
 const { default: PageRoute } = await import('@/app/(signed-in)/files/[id]/pages/[page]/page');
@@ -89,7 +96,7 @@ describe('the signed-in layout (Story 1.11)', () => {
   it('loads the account and its current campaign with the session, and shows them in the shell', async () => {
     const server = await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN });
     cookieJar['__Host-gmshield-lang'] = 'en';
-    const html = await layoutHtml(await CharactersPage());
+    const html = await layoutHtml(await PlainPage());
 
     expect(html).toContain('Untitled system');
     expect(html).toContain('First campaign');
@@ -98,7 +105,7 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html).toContain('aria-label="Account of Mestre_Ana"');
     expect(html).toContain('<main');
     expect(html).toContain('<h1');
-    expect(html).toContain('Here you will keep the characters of your campaigns.');
+    expect(html).toContain('This campaign has no character sheets yet.');
     expect(html).not.toMatch(/<[^>]+\sstyle=/);
     // The sidebar, then the context bar, then the main column.
     expect(html.indexOf('data-testid="sidebar"')).toBeLessThan(html.indexOf('aria-label="System and campaign"'));
@@ -154,10 +161,10 @@ describe('the signed-in layout (Story 1.11)', () => {
 
   it('no campaign: the shell says so; a campaign that cannot be loaded: a notice in the main column', async () => {
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(404, 'request.not_found') });
-    let html = await layoutHtml(await CharactersPage());
+    let html = await layoutHtml(await PlainPage());
     expect(html).toContain('Nenhuma campanha');
     expect(html).not.toContain('role="status"');
-    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
+    expect(html).toContain('Esta campanha ainda não tem fichas de personagem.');
     await backend!.close();
 
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': problem(503, 'server.unavailable') });
@@ -165,25 +172,6 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
     expect(html).toContain('Nenhuma campanha');
-  });
-
-  it('every entry page still to be built names itself and says what will be there, in both languages', async () => {
-    // Story 3.10: Criação de Regras is no longer a placeholder (its list is in test/conversations.test.tsx).
-    const pages = {
-      characters: CharactersPage,
-    } as const;
-    const ptBR = (await import('@/messages/pt-BR.json')).default;
-    const en = (await import('@/messages/en.json')).default;
-    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
-      cookieJar = { '__Host-gmshield-lang': language };
-      for (const [key, Page] of Object.entries(pages) as [keyof typeof pages, (typeof pages)[keyof typeof pages]][]) {
-        const html = renderToStaticMarkup(await Page());
-        expect(html, `${language} ${key}`).toContain(`<h1`);
-        expect(html, `${language} ${key}`).toContain(messages.shell.entries[key]);
-        expect(html, `${language} ${key}`).toContain(messages.placeholder[key]);
-        expect(messages.placeholder[key], `${language} ${key}`).not.toMatch(/!|\p{Extended_Pictographic}/u);
-      }
-    }
   });
 
   it('a new conversation (Story 2.4, from Story 3.10 at /questions/new) is the composer, and with no source the empty state', async () => {
@@ -297,12 +285,12 @@ describe("the context bar's scope summary (Story 3.6)", () => {
 
   it('a scope that cannot be read: system › campaign without a summary, and the page still renders', async () => {
     await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN, [SCOPE]: problem(503, 'server.unavailable') });
-    const html = await layoutHtml(await CharactersPage());
+    const html = await layoutHtml(await PlainPage());
     expect(summaryOf(html)).toBeNull();
     expect(html).not.toContain('conhecimento do modelo');
     expect(html).toContain('Untitled system');
     expect(html).toContain('First campaign');
-    expect(html).toContain('Aqui você vai guardar os personagens das suas campanhas.');
+    expect(html).toContain('Esta campanha ainda não tem fichas de personagem.');
   });
 
   it('no current campaign: no summary, and no scope is asked for', async () => {
@@ -953,7 +941,7 @@ describe('the indexing notice', () => {
       [CONVERSATION]: conversation({ remaining: 2000 }),
     };
     const server = await useBackend(routes);
-    let html = await layoutHtml(await CharactersPage());
+    let html = await layoutHtml(await PlainPage());
 
     // Matrix row "Indexing": the SRD's 2,000 passages pending.
     expect(notices(html)).toEqual([['warning', 'Atenção Preparando as fontes para busca: faltam 2.000 trechos', false]]);

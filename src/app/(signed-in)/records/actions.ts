@@ -3,70 +3,19 @@
 import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import type { CorrectionField, CorrectionValues, RecordCorrectionState, RecordDeleteState } from '@/components/RecordCorrection';
+import type { CorrectionField, RecordCorrectionState, RecordDeleteState } from '@/components/RecordCorrection';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { flash } from '@/server/flash';
 import { correctCampaignRecord, correctRecord, deleteCampaignRecord, deleteRecord, getCampaignRecord, getRecord } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
+import { fieldOf, valuesOf } from './form-values';
+
 /** An id as the backend mints it; anything else is an item nowhere. */
 const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
 /** At most 15 digits: always a safe integer. */
 const VERSION = /^(?:0|[1-9]\d{0,14})$/;
-/**
- * Far past every limit (past twice the 8,000 code points of a field's value, each up to two UTF-16 units), so the
- * backend still sees a value too long and names it; only a runaway post is cut.
- */
-const MOST = 20_000;
-/** Far past the 64 fields a record may have, so the backend still names too many; only a runaway post is cut. */
-const MOST_FIELDS = 200;
-
-/** A text as typed, its line breaks as LF: a textarea posts CRLF, which the backend would count and store twice. */
-function text(value: FormDataEntryValue | null): string | null {
-  return typeof value === 'string' ? value.replaceAll('\r\n', '\n').slice(0, MOST) : null;
-}
-
-/** The values the form posted, or null when they are not what the form posts (a name and a value per field). */
-function valuesOf(form: FormData): CorrectionValues | null {
-  const name = text(form.get('name'));
-  const recordType = text(form.get('recordType'));
-  const names = form.getAll('fieldName').slice(0, MOST_FIELDS + 1);
-  const values = form.getAll('fieldValue').slice(0, MOST_FIELDS + 1);
-  if (name === null || recordType === null || names.length !== values.length) {
-    return null;
-  }
-  const fields: { name: string; value: string }[] = [];
-  for (let index = 0; index < names.length; index++) {
-    const fieldName = text(names[index] ?? null);
-    const value = text(values[index] ?? null);
-    if (fieldName === null || value === null) {
-      return null;
-    }
-    fields.push({ name: fieldName, value });
-  }
-  return { name, recordType, fields };
-}
-
-/** The part of the form a backend problem is about, or null for one about the whole form. */
-function fieldOf(problem: unknown): CorrectionField | null {
-  const { code, params } = problemFields(problem);
-  const index = typeof params.index === 'number' && Number.isInteger(params.index) && params.index >= 0 ? params.index : null;
-  switch (code) {
-    case 'record.name_invalid':
-      return 'name';
-    case 'record.type_invalid':
-      return 'recordType';
-    case 'record.fields_invalid':
-      return 'fields';
-    case 'record.field_name_invalid':
-      return index === null ? 'fields' : `fieldName:${index}`;
-    case 'record.field_value_invalid':
-      return index === null ? 'fields' : `fieldValue:${index}`;
-    default:
-      return null;
-  }
-}
 
 function refused(serial: number, error: string, field: CorrectionField | null): RecordCorrectionState {
   return { serial, saved: false, error, field, stale: false, currentVersion: null };

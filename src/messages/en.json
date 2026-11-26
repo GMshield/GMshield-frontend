@@ -57,7 +57,6 @@
     "rules": "Here you will write your own rules and content, by hand or with an agent.",
     "campaigns": "Here you will see and organise your campaigns.",
     "systems": "Here you will see and organise your game systems.",
-    "characters": "Here you will keep the characters of your campaigns.",
     "files": "Here you will see the files you have sent and the state of each one."
   },
   "systems": {
@@ -146,14 +145,16 @@
     },
     "delete": {
       "title": "Delete this system?",
-      "consequence": "Going with it: {campaigns}, {conversations} and {materials}. This cannot be undone.",
-      "unknown": "Going with it: this system's campaigns, their conversations and the materials linked only to it. This cannot be undone.",
+      "consequence": "Going with it: {campaigns}, {conversations}, {materials} and {artifacts}. This cannot be undone.",
+      "unknown": "Going with it: this system's campaigns, their conversations and artifacts, and the materials linked only to it. This cannot be undone.",
       "campaignsOne": "1 campaign",
       "campaignsOther": "{count} campaigns",
       "conversationsOne": "1 conversation",
       "conversationsOther": "{count} conversations",
       "materialsOne": "1 material linked only to it",
       "materialsOther": "{count} materials linked only to it",
+      "artifactsOne": "1 artifact",
+      "artifactsOther": "{count} artifacts",
       "confirm": "Delete system"
     },
     "proposals": {
@@ -191,7 +192,7 @@
     "filters": "Which campaigns",
     "inUse": "In use",
     "archived": "Archived",
-    "empty": "A campaign holds the conversations and materials of one game table.",
+    "empty": "A campaign holds the conversations, materials and artifacts of one game table.",
     "emptyArchived": "No archived campaign.",
     "systemEdition": "{name} {edition}",
     "form": {
@@ -218,6 +219,7 @@
       "overview": "Overview",
       "scope": "Scope",
       "conversations": "Conversations",
+      "artifacts": "Artifacts",
       "name": "Name",
       "system": "System",
       "state": "State",
@@ -230,12 +232,14 @@
     },
     "delete": {
       "title": "Delete this campaign?",
-      "consequence": "Going with it: {conversations} and {materials} of this campaign. This cannot be undone.",
-      "unknown": "Going with it: this campaign's conversations and materials. This cannot be undone.",
+      "consequence": "Going with it: {conversations}, {materials} and {artifacts} of this campaign. This cannot be undone.",
+      "unknown": "Going with it: this campaign's conversations, materials and artifacts. This cannot be undone.",
       "conversationsOne": "1 conversation",
       "conversationsOther": "{count} conversations",
       "materialsOne": "1 material",
       "materialsOther": "{count} materials",
+      "artifactsOne": "1 artifact",
+      "artifactsOther": "{count} artifacts",
       "confirm": "Delete campaign"
     },
     "scope": {
@@ -251,6 +255,40 @@
       "noMaterials": "No ready material.",
       "stale": "The scope was changed elsewhere. The switches now show the current scope: make your change again."
     }
+  },
+  "artifacts": {
+    "list": "Artifacts of this campaign",
+    "new": "New artifact",
+    "empty": "This campaign has no artifacts yet, such as the characters, items or notes you write.",
+    "types": "Record types",
+    "all": "All",
+    "form": {
+      "title": "New artifact",
+      "content": "Content",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "errors": {
+      "name": "The name needs {min} to {max} characters.",
+      "recordType": "Choose a record type of this campaign's system.",
+      "fields": "An artifact can have up to {max} fields.",
+      "fieldName": "The field's name needs {min} to {max} characters.",
+      "fieldValue": "The field's value needs {min} to {max} characters.",
+      "content": "The content can have up to {max} characters."
+    },
+    "page": {
+      "content": "Content",
+      "sources": "Sources",
+      "noSources": "No sources: this artifact was written by hand."
+    }
+  },
+  "characters": {
+    "list": "Character sheets of {campaign}",
+    "campaign": "Campaign {name}",
+    "noCampaign": "Choose a campaign to see its character sheets.",
+    "campaigns": "See campaigns",
+    "empty": "This campaign has no character sheets yet.",
+    "new": "New sheet"
   },
   "files": {
     "list": "Your files",
@@ -386,7 +424,7 @@
         "core_record_type": "The core record types are the same in every system and cannot be renamed or removed.",
         "record_type_name_invalid": "The name must have {min} to {max} characters.",
         "record_type_name_taken": "This system already has a record type with this name.",
-        "record_type_in_use": "This record type has records and cannot be removed.",
+        "record_type_in_use": "This record type is used by records or artifacts and cannot be removed.",
         "name_taken": "This system already has a record type, a term or a core type with this name.",
         "name_invalid": "The name must have {min} to {max} characters.",
         "merge_target_invalid": "Choose an item of this system of the same kind as the proposal."
@@ -838,7 +876,8 @@
       "termApproved": "Term «{name}» approved.",
       "merged": "«{name}» merged.",
       "rejected": "«{name}» rejected. This material will not propose it again."
-    }
+    },
+    "artifactSaved": "Artifact saved."
   },
   "notifications": {
     "title": "Notifications",

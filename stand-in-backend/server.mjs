@@ -34,7 +34,8 @@
 // delete of it answers 202 with no body. Story 3.12: its stored turn is not saved (`bookmarked: false`), a bookmark and
 // its removal answer 204 (as the contract declares), and the saved answers are two: the stored turn's answer in the
 // starter campaign and one in another campaign ("A Coroa Partida"). Story 4.1: every system has the eight core record
-// types, in their fixed order, none with records yet; one of them reads as the rule type.
+// types, in their fixed order, none with records yet; one of them reads as the rule type. Story 5.1: the starter campaign
+// has three artifacts (two character sheets and an item), and a new artifact answers as stored, version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -283,7 +284,8 @@ export const EXAMPLES = {
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
   'GET /api/v1/conversations/{conversationId}/deletion': { questions: 1 },
-  'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0 },
+  // Story 5.1: the starter campaign's three artifacts go with it.
+  'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
   'PUT /api/v1/campaigns/{id}/scope': { ...STARTING_SCOPE, version: 1 },
   'GET /api/v1/systems': { items: [STARTER_SYSTEM], total: 1 },
@@ -296,7 +298,7 @@ export const EXAMPLES = {
     version: 0,
   },
   'PATCH /api/v1/systems/{id}': { ...STARTER_SYSTEM, version: 1 },
-  'GET /api/v1/systems/{id}/deletion': { campaigns: 1, conversations: 1, materials: 0 },
+  'GET /api/v1/systems/{id}/deletion': { campaigns: 1, conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/materials': { items: [], total: 0 },
   'GET /api/v1/materials/{id}': {
     id: '0190a0b0-0000-7000-8000-000000000003',
@@ -715,6 +717,39 @@ export const CORRECTED_RECORD = { ...RECORD, fields: RECORD.fields.slice(0, 3), 
 EXAMPLES['PATCH /api/v1/systems/{systemId}/records/{recordId}'] = CORRECTED_RECORD;
 EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/records/{recordId}'] = CORRECTED_RECORD;
 // Story 4.5 part B (contract 1.41.0): a record's delete on either page answers 204 with no body, as its contract says.
+
+/**
+ * Story 5.1 (contract 1.42.0): the starter campaign's artifacts written by hand, newest first: two character sheets and
+ * an item, with the types in use; one of them as its page reads it; and a new artifact answered as stored, version 1.
+ */
+export const ARTIFACT = {
+  id: '0190a0b0-0000-7000-8000-000000000900',
+  campaignId: STARTER_CAMPAIGN.id,
+  recordType: 'item',
+  name: 'Espada de Kael',
+  fields: [
+    { name: 'Dano', value: '1d8 cortante' },
+    { name: 'Peso', value: '1,5 kg' },
+  ],
+  content: 'Forjada nas montanhas do norte.',
+  version: 1,
+  createdAt: '2026-11-26T12:00:00Z',
+};
+export const ARTIFACT_PAGE = {
+  items: [
+    { id: '0190a0b0-0000-7000-8000-000000000902', recordType: 'character_sheet', name: 'Lyra', version: 1, createdAt: '2026-11-26T12:02:00Z' },
+    { id: '0190a0b0-0000-7000-8000-000000000901', recordType: 'character_sheet', name: 'Kael', version: 1, createdAt: '2026-11-26T12:01:00Z' },
+    { id: ARTIFACT.id, recordType: ARTIFACT.recordType, name: ARTIFACT.name, version: 1, createdAt: ARTIFACT.createdAt },
+  ],
+  total: 3,
+  types: [
+    { key: 'character_sheet', count: 2 },
+    { key: 'item', count: 1 },
+  ],
+};
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts'] = ARTIFACT_PAGE;
+EXAMPLES['POST /api/v1/campaigns/{campaignId}/artifacts'] = ARTIFACT;
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}'] = ARTIFACT;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

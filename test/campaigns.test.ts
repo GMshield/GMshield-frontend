@@ -189,7 +189,7 @@ describe('Minhas Mesas (Story 3.2)', () => {
     cookieJar['__Host-gmshield-lang'] = 'en';
     html = renderToStaticMarkup(await CampaignsPage({ searchParams: query({ archived: 'true' }) }));
     expect(html).toContain('No archived campaign.');
-    expect(ptBR.campaigns.empty).toBe('Uma campanha reúne as conversas e os materiais de uma mesa de jogo.');
+    expect(ptBR.campaigns.empty).toBe('Uma campanha reúne as conversas, os materiais e os artefatos de uma mesa de jogo.');
   });
 
   it('a long list is paged within its filter: the page links keep "Arquivadas", and each page is one call', async () => {
@@ -566,7 +566,7 @@ describe('deleting a campaign (Story 3.2 part B)', () => {
     const routes: Record<string, { status: number; body: unknown }> = {
       [`GET /api/v1/campaigns/${ID}`]: { status: 200, body: THURSDAY },
       'GET /api/v1/campaigns/current': { status: 200, body: FIRST },
-      [`GET /api/v1/campaigns/${ID}/deletion`]: { status: 200, body: { conversations: 1, materials: 2 } },
+      [`GET /api/v1/campaigns/${ID}/deletion`]: { status: 200, body: { conversations: 1, materials: 2, artifacts: 3 } },
     };
     const server = await useBackend(routes);
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
@@ -576,7 +576,7 @@ describe('deleting a campaign (Story 3.2 part B)', () => {
       expect(html).toMatch(pill);
       expect(html).toMatch(new RegExp(`<button[^>]*aria-haspopup="dialog"[^>]*>${messages.campaigns.page.delete}</button>`));
       // The dialog is rendered closed, already naming the counts of this campaign.
-      expect(html).toContain(language === 'en' ? 'Going with it: 1 conversation and 2 materials of this campaign.' : 'Vão junto: 1 conversa e 2 materiais desta campanha.');
+      expect(html).toContain(language === 'en' ? 'Going with it: 1 conversation, 2 materials and 3 artifacts of this campaign.' : 'Vão junto: 1 conversa, 2 materiais e 3 artefatos desta campanha.');
       expect(html.indexOf(`>${messages.campaigns.page.archive}</button>`)).toBeLessThan(html.indexOf(`>${messages.campaigns.page.delete}</button>`));
       expect(solids(html)).toEqual([messages.campaigns.page.use]);
     }
@@ -596,7 +596,7 @@ describe('deleting a campaign (Story 3.2 part B)', () => {
       [`GET /api/v1/campaigns/${ID}/deletion`]: problem(503, 'backend.unavailable'),
     });
     const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
-    expect(html).toContain('Vão junto as conversas e os materiais desta campanha. Isso não pode ser desfeito.');
+    expect(html).toContain('Vão junto as conversas, os materiais e os artefatos desta campanha. Isso não pode ser desfeito.');
     expect(html).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
   });
 

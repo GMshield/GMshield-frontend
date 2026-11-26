@@ -106,3 +106,19 @@ export const RECORD: {
 };
 /** Story 4.5: a record's correction as both routes answer it, its version raised by one. */
 export const CORRECTED_RECORD: typeof RECORD;
+/** Story 5.1: the starter campaign's artifacts (two character sheets and an item), and one of them. */
+export const ARTIFACT: {
+  id: string;
+  campaignId: string;
+  recordType: string;
+  name: string;
+  fields: { name: string; value: string }[];
+  content: string | null;
+  version: number;
+  createdAt: string;
+};
+export const ARTIFACT_PAGE: {
+  items: { id: string; recordType: string; name: string; version: number; createdAt: string }[];
+  total: number;
+  types: { key: string; count: number }[];
+};
