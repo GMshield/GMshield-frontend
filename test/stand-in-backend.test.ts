@@ -478,6 +478,14 @@ describe('stand-in backend', () => {
     expect(schemas.RecordCorrection!.required).toEqual(['fields', 'name', 'recordType', 'version']);
   });
 
+  it('answers a record\'s delete on both pages with 204 and no body (Story 4.5 part B)', () => {
+    const system = '0190a0b0-0000-7000-8000-000000000001';
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    for (const path of [`/api/v1/systems/${system}/records/${RECORD_ID}`, `/api/v1/campaigns/${campaign}/records/${RECORD_ID}`]) {
+      expect(answer(contract, 'DELETE', path, 't')).toMatchObject({ status: 204, type: null, body: null });
+    }
+  });
+
   it('answers any other path with a 404 problem detail', async () => {
     running = await startStandIn();
     const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';

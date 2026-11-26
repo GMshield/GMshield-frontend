@@ -1,4 +1,4 @@
-import type { RecordCorrectionTexts, RecordTypeOption } from '@/components/RecordCorrection';
+import type { RecordCorrectionTexts, RecordDeleteTexts, RecordTypeOption } from '@/components/RecordCorrection';
 import type { Translate } from '@/messages';
 import { recordTypeName } from '@/record-types';
 import type { RecordType } from '@/server/library';
@@ -25,6 +25,16 @@ export function correctionTexts(t: Translate): RecordCorrectionTexts {
     stale: text('stale'),
     viewCurrent: text('viewCurrent'),
     keepMine: text('keepMine'),
+  };
+}
+
+/** Every text of a record's delete (Story 4.5 part B), in the page's language. */
+export function deletionTexts(t: Translate): RecordDeleteTexts {
+  return {
+    open: t('systems.records.delete.open'),
+    title: t('systems.records.delete.title'),
+    consequence: t('systems.records.delete.consequence'),
+    confirm: t('systems.records.delete.confirm'),
   };
 }
 

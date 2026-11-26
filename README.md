@@ -1073,6 +1073,19 @@ they sit in `src/`.
   - The stand-in answers both `PATCH` routes with the record at version 1; the demo backend
     (`docs/tools/frontend-demo-backend.mjs`) corrects its records in memory, refuses the limits as the backend does, and
     answers a save on an old version (two tabs) as stale; a name with "outra aba" in it plays another tab saving first.
+- **Delete a record (Story 4.5 part B).** Public contract 1.41.0 (the minimum backend contract too: the two `DELETE`
+  routes are new; deploy the worker, then the backend, then this frontend).
+  - `RecordCorrection` takes `deletion`: "Excluir", a danger `PillButton`, sits beside "Corrigir" on both record pages
+    and opens `ConfirmationDialog` as a campaign's delete does ("Excluir «{name}»?", what the delete does, "Excluir
+    registro"; "Cancelar" or Esc closes it and the focus goes back to "Excluir", which stays focusable with
+    `aria-disabled` while the delete runs). A refusal shows as an alert under the pills.
+  - `deleteRecordAction` (`src/app/(signed-in)/records/actions.ts`) sends no version (`deleteRecord`,
+    `deleteCampaignRecord`), then `flash()` "Registro excluído.", `revalidatePath('/', 'layout')` and `redirect`: to the
+    record type's list on a system's page (the type's id posted with it), back to the search on a search's page (its
+    posted address kept only when it is `/search?…`, else `/search`). A `request.not_found` (already deleted in another
+    tab) moves the page on the same way, without the toast. Messages `systems.records.delete.*`.
+  - The stand-in answers both `DELETE` routes with 204 from the contract; the demo backend deletes its records in
+    memory (lists, counts, record pages and search follow) and refuses a record named "Falha ao excluir" with 404.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

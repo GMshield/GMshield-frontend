@@ -135,6 +135,13 @@
         "viewCurrent": "Ver a versão atual",
         "keepMine": "Manter a minha como nova versão",
         "toast": "Registro corrigido."
+      },
+      "delete": {
+        "open": "Excluir",
+        "title": "Excluir «{name}»?",
+        "consequence": "O registro sai das listas, das contagens e da busca agora, e das respostas assim que o índice for atualizado. As respostas já dadas continuam como estão. Isso não pode ser desfeito.",
+        "confirm": "Excluir registro",
+        "toast": "Registro excluído."
       }
     },
     "delete": {

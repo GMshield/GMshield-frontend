@@ -1,12 +1,13 @@
 'use server';
 
 import { refresh, revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
-import type { CorrectionField, CorrectionValues, RecordCorrectionState } from '@/components/RecordCorrection';
+import type { CorrectionField, CorrectionValues, RecordCorrectionState, RecordDeleteState } from '@/components/RecordCorrection';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { flash } from '@/server/flash';
-import { correctCampaignRecord, correctRecord, getCampaignRecord, getRecord } from '@/server/library';
+import { correctCampaignRecord, correctRecord, deleteCampaignRecord, deleteRecord, getCampaignRecord, getRecord } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -126,4 +127,64 @@ export async function correctRecordAction(previous: RecordCorrectionState, form:
     return refused(serial, errorText(current.problem, language), null);
   }
   return refused(serial, errorText(result.problem, language), fieldOf(result.problem));
+}
+
+/** A search's address as a record page posts it (`/search?…`), kept only when it is one; else the search itself. */
+function searchBack(value: FormDataEntryValue | null): string {
+  if (typeof value !== 'string' || !value.startsWith('/search')) {
+    return '/search';
+  }
+  try {
+    const base = 'http://frontend.invalid';
+    const url = new URL(value, base);
+    return url.origin === base && url.pathname === '/search' ? `/search${url.search}` : '/search';
+  } catch {
+    return '/search';
+  }
+}
+
+/**
+ * "Excluir" confirmed in a record's page (Story 4.5 part B), on its system's page (`ground` `system`, `owner` the
+ * system's id, `recordTypeId` the type whose list it goes back to) or on a search's record page (`ground` `campaign`,
+ * `owner` the current campaign's id, `back` the search's address). No version is sent. Once the backend has deleted it,
+ * a toast says "Registro excluído.", the whole signed-in layout is revalidated (the record's counts and lists change),
+ * and the page goes to the record type's list or back to the search. A record not found (already deleted in another
+ * tab, or no longer shown) moves the page on the same way, without the toast. Another refusal comes back as its text,
+ * never a code. A
+ * malformed form never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before
+ * this runs.
+ */
+export async function deleteRecordAction(_previous: RecordDeleteState, form: FormData): Promise<RecordDeleteState> {
+  const { language } = await currentPreferences();
+  const ground = form.get('ground');
+  const owner = form.get('owner');
+  const recordId = form.get('recordId');
+  const recordTypeId = form.get('recordTypeId');
+  if (
+    (ground !== 'system' && ground !== 'campaign') ||
+    typeof owner !== 'string' ||
+    !ID.test(owner) ||
+    typeof recordId !== 'string' ||
+    !ID.test(recordId) ||
+    (ground === 'system' && (typeof recordTypeId !== 'string' || !ID.test(recordTypeId)))
+  ) {
+    return { error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = ground === 'system' ? await deleteRecord(token, owner, recordId) : await deleteCampaignRecord(token, owner, recordId);
+  // Not found: already deleted (another tab) or no longer shown here; the page is dead either way, so it moves on too.
+  const gone = !result.ok && problemFields(result.problem).code === 'request.not_found';
+  if (!result.ok && !gone) {
+    return { error: errorText(result.problem, language) };
+  }
+  if (result.ok) {
+    await flash('success', translator(language)('systems.records.delete.toast'));
+  }
+  revalidatePath('/', 'layout');
+  redirect(
+    ground === 'system'
+      ? `/systems/${encodeURIComponent(owner)}/record-types/${encodeURIComponent(String(recordTypeId))}`
+      : searchBack(form.get('back')),
+  );
 }
