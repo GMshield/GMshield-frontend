@@ -2986,3 +2986,156 @@ describe('records in answers (Story 4.3 part C)', () => {
     ]);
   });
 });
+
+describe('artifacts in answers (Story 5.1 part B)', () => {
+  const ARTIFACT = '0190a0b0-0000-7000-8000-000000000900';
+  const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
+  type Stored = import('@/client/conversation').StoredTurn;
+
+  /** A cited artifact's reference as the done event carries it: "Espada de Kael", version 1, in the campaign's tier. */
+  function artifactReference(number: number, more: Record<string, unknown> = {}) {
+    return {
+      number,
+      kind: 'artifact' as const,
+      artifactId: ARTIFACT,
+      artifactVersion: 1,
+      recordType: 'item',
+      name: 'Espada de Kael',
+      fields: [{ name: 'Dano', value: '1d8 cortante' }],
+      removed: false,
+      tier: 'campaign',
+      ...more,
+    };
+  }
+
+  /** The events of an answer citing passage B (reference 1), then the artifact (reference 2), then passage A (3). */
+  const EVENTS: [string, unknown][] = [
+    ['delta', { text: 'Um. Dois. Três.' }],
+    ['citation', { passageId: PASSAGE_B, offset: 3 }],
+    ['citation', { recordId: ARTIFACT, offset: 9 }],
+    ['citation', { passageId: PASSAGE_A, offset: 15 }],
+    [
+      'done',
+      {
+        stopped: false,
+        silent: false,
+        references: [reference(1, [PASSAGE_B], { page: 12 }), artifactReference(2), reference(3, [PASSAGE_A])],
+      },
+    ],
+  ];
+
+  async function answered(language: 'pt-BR' | 'en' = 'pt-BR'): Promise<void> {
+    const stream = await ask('O que faz a Espada de Kael?', language);
+    EVENTS.forEach(([type, data], index) => stream.emit(type, data, index + 1));
+  }
+
+  function list(): HTMLElement {
+    return screen.getAllByRole('list', { name: /^(Fontes|Sources)$/ })[0]!;
+  }
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    localStorage.clear();
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('numbers an artifact citation with its entry, and keeps the numbering whole', async () => {
+    view();
+    await answered();
+
+    expect(superscripts()).toEqual(['1', '2', '3']);
+    expect(within(list()).getAllByRole('listitem').map((item) => item.getAttribute('value'))).toEqual(['1', '2', '3']);
+  });
+
+  it('shows an artifact like a record, under "Campanha", with a link to its page in the conversation\'s campaign', async () => {
+    const load = vi.fn<LoadPage>();
+    view({ loadPage: load });
+    await answered();
+
+    const artifact = within(list()).getAllByRole('listitem')[1]!;
+    expect(artifact.getAttribute('data-kind')).toBe('artifact');
+    expect(artifact.textContent).toContain('Campanha');
+    expect(within(artifact).getByText('Espada de Kael').className).toMatch(/recordName/);
+    expect(within(artifact).getByText('Item').className).toMatch(/recordType/);
+    expect([...artifact.querySelectorAll('dt')].map((term) => term.textContent)).toEqual(['Dano']);
+    expect([...artifact.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(['1d8 cortante']);
+    // Its source line is a link to the artifact's page, never a button that opens the source view.
+    const link = within(artifact).getByRole('link', { name: 'Artefato da campanha, versão 1' });
+    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`);
+    expect(artifact.querySelector('button')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(load).not.toHaveBeenCalled();
+    // The places keep their buttons.
+    expect(within(list()).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Livro do Jogador.pdf, Magias › Fire Bolt, p. 12',
+      'Livro do Jogador.pdf, Magias › Fire Bolt, p. 3',
+    ]);
+  });
+
+  it('says an artifact\'s tier, name, type and line in the polite region, in English too', async () => {
+    view({ language: 'en' });
+    await answered('en');
+
+    const spoken = [...screen.getByTestId('conversation-polite').querySelectorAll('li')].map((item) => item.textContent);
+    expect(spoken[1]).toBe('Campaign: Espada de Kael, Item. Campaign artifact, version 1');
+    expect(within(list()).getByRole('link', { name: 'Campaign artifact, version 1' })).toBeTruthy();
+  });
+
+  it('keeps the artifact, its number and its superscript in a reopened conversation', () => {
+    const turn: Stored = {
+      id: TURN,
+      question: 'O que faz a Espada de Kael?',
+      language: 'pt-BR',
+      createdAt: '2026-11-26T12:00:00Z',
+      events: EVENTS.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
+      bookmarked: false,
+    };
+    render(
+      <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+        <Conversation
+          language="pt-BR"
+          campaignId={CAMPAIGN}
+          hasSources
+          review={null}
+          conversationId={CONVERSATION}
+          name="Espada"
+          stored={[turn]}
+          openStream={(url) => {
+            const stream = new FakeStream(url);
+            streams.push(stream);
+            return stream as unknown as EventSource;
+          }}
+        />
+      </UploadsProvider>,
+    );
+
+    expect(superscripts()).toEqual(['1', '2', '3']);
+    const artifact = within(list()).getAllByRole('listitem')[1]!;
+    expect(artifact.getAttribute('data-kind')).toBe('artifact');
+    expect(within(artifact).getByRole('link').getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`);
+  });
+
+  it('leaves out an artifact reference that is not well formed', async () => {
+    view();
+    const stream = await ask('O que faz a Espada?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { recordId: ARTIFACT, offset: 3 });
+    stream.emit('done', {
+      silent: false,
+      references: [
+        reference(1, [PASSAGE_A]),
+        artifactReference(2, { artifactId: '' }),
+        artifactReference(3, { artifactVersion: 0 }),
+        artifactReference(4, { fields: [{ name: 'x' }] }),
+      ],
+    });
+
+    expect(within(list()).getAllByRole('listitem')).toHaveLength(1);
+    expect(superscripts()).toEqual([]);
+  });
+});

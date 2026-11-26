@@ -295,12 +295,13 @@ describe('stand-in backend', () => {
       }
     };
     expectShape('TurnDoneEvent', ANSWER_DONE as unknown as Record<string, unknown>);
-    // Story 2.7: a second reference, into a text page; Story 4.3 part C: a third, a cited record with its fields.
-    expect(ANSWER_DONE.references).toHaveLength(3);
+    // Story 2.7: a second reference, into a text page; Story 4.3 part C: a third, a cited record with its fields;
+    // Story 5.1 part B: a fourth, a cited artifact.
+    expect(ANSWER_DONE.references).toHaveLength(4);
     for (const reference of ANSWER_DONE.references) {
       expectShape('TurnSourceReference', reference as Record<string, unknown>);
     }
-    expect(ANSWER_DONE.references.map((reference) => reference.kind)).toEqual(['passage', 'passage', 'record']);
+    expect(ANSWER_DONE.references.map((reference) => reference.kind)).toEqual(['passage', 'passage', 'record', 'artifact']);
     const record = ANSWER_DONE.references[2]! as Record<string, unknown>;
     const properties = schemas.TurnSourceReference!.properties as Record<string, { type?: string; enum?: string[]; pattern?: string }>;
     for (const key of ['recordId', 'recordType', 'name', 'fields']) {
@@ -317,7 +318,19 @@ describe('stand-in backend', () => {
     expect(citations.every((citation) => (typeof citation.passageId === 'string') !== (typeof citation.recordId === 'string'))).toBe(true);
     // Story 3.7: a tier event opens each version, the campaign's first, and each reference carries its tier.
     const tierEnum = properties.tier?.enum;
-    expect(ANSWER_DONE.references.map((reference) => reference.tier)).toEqual(['campaign', 'system', 'system']);
+    expect(ANSWER_DONE.references.map((reference) => reference.tier)).toEqual(['campaign', 'system', 'system', 'campaign']);
+    // Story 5.1 part B (contract 1.43.0): the artifact's reference names its artifact and version, and no place; the
+    // answer cites it by its id, as a record.
+    const artifact = ANSWER_DONE.references[3]! as Record<string, unknown>;
+    expect(properties.kind?.enum).toContain('artifact');
+    for (const key of ['artifactId', 'artifactVersion', 'recordType', 'name', 'fields', 'removed']) {
+      expect(jsonType(artifact[key]), key).toBe(properties[key]?.type);
+    }
+    for (const key of ['materialName', 'sectionPath', 'page', 'passageIds', 'recordId']) {
+      expect(artifact, key).not.toHaveProperty(key);
+    }
+    expect(artifact.artifactId).toBe(ARTIFACT.id);
+    expect(citations.filter((citation) => citation.recordId === artifact.artifactId)).toHaveLength(1);
     for (const reference of ANSWER_DONE.references) {
       expect(tierEnum).toContain(reference.tier);
     }
@@ -425,8 +438,8 @@ describe('stand-in backend', () => {
       expect(STORED_TURN, key).toHaveProperty(key);
     }
     // The stored events are the streamed answer's, by sequence, ending with its done.
-    expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 9, type: 'done', data: ANSWER_DONE });
+    expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 10, type: 'done', data: ANSWER_DONE });
   });
 
   it('answers a record type\'s records, a record and its version\'s pages (Story 4.3)', async () => {

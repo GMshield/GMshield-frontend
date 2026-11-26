@@ -432,13 +432,17 @@ export const EXAMPLES = {
 /** Story 4.3 part C: the record the stand-in answer cites (the Fire Bolt record of Story 4.3). */
 export const ANSWER_RECORD_ID = '0190a0b0-0000-7000-8000-000000000700';
 
+/** Story 5.1 part B: the starter campaign's artifact the stand-in answer cites ("Espada de Kael", `ARTIFACT`). */
+export const ANSWER_ARTIFACT_ID = '0190a0b0-0000-7000-8000-000000000900';
+
 /**
  * Story 2.5: the data of the stand-in answer's `done` event, with its source references: Story 2.7 adds one into a
  * Markdown material (a text page). Story 3.7: the answer is the campaign's house rule, then the book's rule; each
  * reference carries its tier, the campaign's (1, the text page) first, then the system's (2, the picture page). Story
  * 3.8: the turn's model knowledge, frozen with it, was off (the starting scope's). Story 4.3 part C: the book's rule
  * also cites the Fire Bolt spell record, reference 3, with its name, type and fields as written, placed at the picture
- * page whose passage it was read from.
+ * page whose passage it was read from. Story 5.1 part B (contract 1.43.0): the book's rule then cites the campaign's
+ * artifact "Espada de Kael", reference 4, with its version, type, name and fields and no place.
  */
 export const ANSWER_DONE = {
   stopped: false,
@@ -482,6 +486,20 @@ export const ANSWER_DONE = {
       removed: false,
       tier: 'system',
     },
+    {
+      number: 4,
+      kind: 'artifact',
+      artifactId: ANSWER_ARTIFACT_ID,
+      artifactVersion: 1,
+      recordType: 'item',
+      name: 'Espada de Kael',
+      fields: [
+        { name: 'Dano', value: '1d8 cortante' },
+        { name: 'Peso', value: '1,5 kg' },
+      ],
+      removed: false,
+      tier: 'campaign',
+    },
   ],
 };
 
@@ -513,7 +531,8 @@ const BOOK_AT = Array.from(HOUSE_RULE).length + 2;
 /**
  * Story 2.4: a turn's answer as server-sent events, each with its sequence, ending with `done` (Story 2.5: its
  * references; Story 2.6: not stopped). Story 3.7: the sources disagree, so a `tier` event opens each version: the
- * campaign's at 0, the system's after the blank line. Story 4.3 part C: the book's rule cites a record too.
+ * campaign's at 0, the system's after the blank line. Story 4.3 part C: the book's rule cites a record too. Story 5.1
+ * part B: then the campaign's artifact, after the record in the text and in order, so it is reference 4.
  * `POST /api/v1/turns/{id}/stop` (Story 2.6) answers 204, as the contract declares.
  */
 export const ANSWER_EVENTS = [
@@ -525,6 +544,7 @@ export const ANSWER_EVENTS = [
   ['delta', { text: BOOK_RULE }],
   ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
   ['citation', { recordId: ANSWER_RECORD_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+  ['citation', { recordId: ANSWER_ARTIFACT_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
   ['done', ANSWER_DONE],
 ]
   .map(([name, data], index) => `id:${index + 1}\nevent:${name}\ndata:${JSON.stringify(data)}\n\n`)
@@ -545,6 +565,7 @@ export const STORED_TURN = {
     ['delta', { text: BOOK_RULE }],
     ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000009', offset: BOOK_AT + Array.from(BOOK_RULE).length }],
     ['citation', { recordId: ANSWER_RECORD_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
+    ['citation', { recordId: ANSWER_ARTIFACT_ID, offset: BOOK_AT + Array.from(BOOK_RULE).length }],
     ['done', ANSWER_DONE],
   ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
   bookmarked: false,
@@ -723,7 +744,7 @@ EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/records/{recordId}'] = CORRECTED_
  * an item, with the types in use; one of them as its page reads it; and a new artifact answered as stored, version 1.
  */
 export const ARTIFACT = {
-  id: '0190a0b0-0000-7000-8000-000000000900',
+  id: ANSWER_ARTIFACT_ID,
   campaignId: STARTER_CAMPAIGN.id,
   recordType: 'item',
   name: 'Espada de Kael',
