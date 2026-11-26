@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
@@ -39,8 +40,11 @@ function versionOf(value: unknown): number | null {
   return typeof value === 'string' && VERSION.test(value) ? Number(value) : null;
 }
 
-/** The address of the artifact's page, on version `version` (null: the newest), keeping where it was opened from. */
-function artifactHref(campaignId: string, artifactId: string, from: string | null, version: number | null): string {
+/**
+ * The address of the artifact's page, on version `version` (null: the newest), keeping where it was opened from and,
+ * above 1, the page of "Versões" shown (`page`).
+ */
+function artifactHref(campaignId: string, artifactId: string, from: string | null, version: number | null, page = 1): string {
   const query = new URLSearchParams();
   if (from !== null) {
     query.set('from', from);
@@ -48,6 +52,9 @@ function artifactHref(campaignId: string, artifactId: string, from: string | nul
   if (version !== null) {
     query.set('version', String(version));
     query.set('via', VIA_VERSIONS);
+  }
+  if (page > 1) {
+    query.set('page', String(page));
   }
   const text = query.toString();
   return `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(artifactId)}${text === '' ? '' : `?${text}`}`;
@@ -86,7 +93,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * - `?version=N` (a positive number; anything else is ignored) shows that version read-only, as a reference that cited
  *   it opens it: a notice says which version is shown ("citada numa resposta", or only its number when it was opened
  *   from "Versões", `via=versions`) with a link to the newest, and there is no editor. A number the artifact does not
- *   have is "Não encontrado.". The newest version's number shows the newest version, editor included.
+ *   have is "Não encontrado.". The newest version's number leads to the page's own address (without `version`), so
+ *   the editor always lives there and a save or restore, which reads the address again, shows the newest.
  * - "Versões" ({@link ArtifactVersions}) lists the versions newest first, paged (`?page=`): each row opens its version,
  *   the newest is tagged "atual", and the others have "Restaurar".
  */
@@ -110,10 +118,14 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
   const { name, recordType, fields, content, version, currentVersion, campaignId } = artifact.data;
   const from = fromOf(query.from);
   const older = version !== currentVersion;
+  if (!older && versionOf(query.version) !== null) {
+    redirect(artifactHref(campaignId, artifact.data.id, from, null));
+  }
+  const versionsPage = pageParam(query.page);
   // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
   const [types, versions] = await Promise.all([
     campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
-    artifactVersionsPage(token ?? '', campaignId, artifact.data.id, pageParam(query.page), VERSIONS_PAGE_SIZE),
+    artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
   ]);
   const shownFields = (
     <>
@@ -143,7 +155,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     ? versions.data.rows.map((row) => ({
         number: row.number,
         label: versionLabel(row, t, language),
-        href: artifactHref(campaignId, artifact.data.id, from, row.number === currentVersion ? null : row.number),
+        href: artifactHref(campaignId, artifact.data.id, from, row.number === currentVersion ? null : row.number, versionsPage),
         current: row.number === currentVersion,
         shown: row.number === version,
       }))

@@ -32,7 +32,8 @@ export type ArtifactVersionsTexts = {
   readonly restoreOf: string;
   readonly stale: string;
   readonly viewCurrent: string;
-  readonly keepMine: string;
+  /** A stale restore's second choice: the same version restored on the newest one; holds `{number}`. */
+  readonly restoreAnyway: string;
 };
 
 export type ArtifactVersionsProps = {
@@ -63,7 +64,7 @@ function fill(text: string, params: Readonly<Record<string, string | number>>): 
  * newest carries the tag "atual", and every other row has "Restaurar", which copies that version as the newest (nothing
  * is deleted, so nothing asks for confirmation); the toast "Versão N restaurada." says it is done. A restore the backend
  * finds stale says "Este item mudou em outra aba." under the rows with "Ver a versão atual" (the page read again) and
- * "Manter a minha como nova versão" (the same restore sent again on the newest version); another refusal shows as an
+ * "Restaurar a versão N mesmo assim" (the same restore sent again on the newest version); another refusal shows as an
  * alert there. While a restore runs every "Restaurar" stays focusable but ignores clicks (`aria-disabled`), and the one
  * pressed shows the spinner.
  */
@@ -146,7 +147,7 @@ export function ArtifactVersions({
               disabled={pending || state.currentVersion === null || state.number === null}
               onClick={() => state.currentVersion !== null && state.number !== null && send(state.number, state.currentVersion)}
             >
-              {texts.keepMine}
+              {fill(texts.restoreAnyway, { number: state.number ?? '' })}
             </PillButton>
           </div>
         </div>

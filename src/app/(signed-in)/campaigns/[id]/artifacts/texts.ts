@@ -34,8 +34,8 @@ export function artifactFormTexts(t: Translate): ArtifactFormTexts {
 
 /**
  * Every text of an artifact's edit (Story 5.2), in the page's language: the editable body, the content and the stale
- * notice say what a new artifact's form and a record's correction say; the edit adds its pills and its name, and its
- * saved line is the one every "from the next question" change says.
+ * notice say what a new artifact's form and a record's correction say; the edit adds its pills, its name and its
+ * saved line.
  */
 export function artifactEditorTexts(t: Translate): ArtifactEditorTexts {
   const record = correctionTexts(t);
@@ -60,11 +60,14 @@ export function artifactEditorTexts(t: Translate): ArtifactEditorTexts {
     stale: record.stale,
     viewCurrent: record.viewCurrent,
     keepMine: record.keepMine,
-    saved: t('material.belonging.saved'),
+    saved: t('artifacts.edit.saved'),
   };
 }
 
-/** Every text of an artifact's "Versões" (Story 5.2), in the page's language; a stale restore says what an edit says. */
+/**
+ * Every text of an artifact's "Versões" (Story 5.2), in the page's language: a stale restore says what a stale edit
+ * says, and its second choice restores the same version anyway (it has no draft of the GM's own to keep).
+ */
 export function artifactVersionsTexts(t: Translate): ArtifactVersionsTexts {
   const record = correctionTexts(t);
   return {
@@ -75,7 +78,7 @@ export function artifactVersionsTexts(t: Translate): ArtifactVersionsTexts {
     restoreOf: t('artifacts.versions.restoreOf'),
     stale: record.stale,
     viewCurrent: record.viewCurrent,
-    keepMine: record.keepMine,
+    restoreAnyway: t('artifacts.versions.restoreAnyway'),
   };
 }
 

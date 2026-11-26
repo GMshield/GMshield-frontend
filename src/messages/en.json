@@ -272,7 +272,8 @@
       "open": "Edit",
       "form": "Edit «{name}»",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "saved": "It applies from the next question."
     },
     "errors": {
       "name": "The name needs {min} to {max} characters.",
@@ -297,6 +298,7 @@
       "restore": "Restore",
       "restoreOf": "Restore version {number}",
       "viewCurrent": "See the current version",
+      "restoreAnyway": "Restore version {number} anyway",
       "typeGone": "This version's record type no longer exists in this campaign's system."
     }
   },

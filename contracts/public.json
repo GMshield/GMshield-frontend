@@ -220,6 +220,7 @@
         "type" : "object"
       },
       "ArtifactVersionPage" : {
+        "description" : "A page of an artifact's versions, newest first (contract 1.44.0)",
         "properties" : {
           "items" : {
             "items" : {
@@ -3586,7 +3587,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "The GM's edit of one of the account's campaigns' artifacts (contract 1.44.0): its record type, name, fields and optional content become its next version, and every earlier version is kept. The edit applies from the next question (the new version is indexed). version names the newest version the GM saw. request.invalid (400) with params.field naming the value outside its limits (and its min and max): recordType (not a key of the campaign's system's record types, core or approved), name (1 to 200 code points after trimming), fields (at most 64), fieldName or fieldValue (with index, from 0: a name of 1 to 200, a value of 1 to 8,000, after trimming) or content (at most 20,000 after trimming); request.invalid (400) without a field for a malformed body; request.stale_version (409) when version is not the artifact's newest (it changed elsewhere, as in another tab); nothing is stored then; request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; session.required (401) without a session.",
+        "summary" : "The GM's edit of one of the account's campaigns' artifacts (contract 1.44.0): its record type, name, fields and optional content become its next version, and every earlier version is kept. The edit applies from the next question (the new version is indexed). version names the newest version the GM saw. An edit that changes nothing (the same record type, name, fields and content, after trimming) answers that version as it is and stores nothing. request.invalid (400) with params.field naming the value outside its limits (and its min and max): recordType (not a key of the campaign's system's record types, core or approved), name (1 to 200 code points after trimming), fields (at most 64), fieldName or fieldValue (with index, from 0: a name of 1 to 200, a value of 1 to 8,000, after trimming) or content (at most 20,000 after trimming); request.invalid (400) without a field for a malformed body; request.stale_version (409) when version is not the artifact's newest (it changed elsewhere, as in another tab); nothing is stored then; request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; session.required (401) without a session.",
         "tags" : [ "artifacts" ]
       }
     },

@@ -397,7 +397,7 @@ describe("an artifact's versions (Story 5.2)", () => {
     expect(linkTo(listed, '/characters')).not.toBe('');
   });
 
-  it('the newest version\'s number shows the page as it is; a malformed one is ignored; an unknown one is not found', async () => {
+  it('the newest version\'s number leads to the page\'s own address; a malformed one is ignored; an unknown one is not found', async () => {
     await useBackend({
       ...BASE,
       [`GET ${ONE}`]: { status: 200, body: V3 },
@@ -406,7 +406,13 @@ describe("an artifact's versions (Story 5.2)", () => {
       [VERSIONS_ROUTE]: THREE,
     });
 
-    for (const version of ['3', '0', 'x', '-1', '01']) {
+    // An answer's link names the version it cited; once that is the newest, the editor's own address takes over, so a
+    // save or restore (which reads the address again) shows the newest version, keeping "Personagens".
+    expect(await thrownDigest(() => page({ version: '3' }))).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}/artifacts/${SWORD};`));
+    expect(await thrownDigest(() => page({ version: '3', via: 'versions', from: 'characters' }))).toMatch(
+      new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}/artifacts/${SWORD}\\?from=characters;`),
+    );
+    for (const version of ['0', 'x', '-1', '01']) {
       const html = renderToStaticMarkup(await page({ version }));
       expect(html, version).toMatch(new RegExp(`<button[^>]*>${ptBR.artifacts.edit.open}</button>`));
       expect(html, version).not.toContain('Você está vendo');
@@ -426,6 +432,9 @@ describe("an artifact's versions (Story 5.2)", () => {
     });
     const html = renderToStaticMarkup(await page({ version: '1', page: '2' }));
     expect(html).toContain(amp(`/campaigns/${CAMPAIGN}/artifacts/${SWORD}?version=1&page=3`));
+    // A row opens its version on the same page of "Versões"; the newest row too.
+    expect(html).toContain(amp(`/campaigns/${CAMPAIGN}/artifacts/${SWORD}?version=24&via=versions&page=2`));
+    expect(html).toContain(amp(`href="/campaigns/${CAMPAIGN}/artifacts/${SWORD}?page=2"`));
     await backend?.close();
 
     await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: V3 }, [VERSIONS_ROUTE]: problem(503, 'server.unavailable') });

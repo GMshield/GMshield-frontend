@@ -272,7 +272,8 @@
       "open": "Editar",
       "form": "Editar «{name}»",
       "save": "Salvar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "saved": "Vale a partir da próxima pergunta."
     },
     "errors": {
       "name": "O nome precisa ter de {min} a {max} caracteres.",
@@ -297,6 +298,7 @@
       "restore": "Restaurar",
       "restoreOf": "Restaurar a versão {number}",
       "viewCurrent": "Ver a versão atual",
+      "restoreAnyway": "Restaurar a versão {number} mesmo assim",
       "typeGone": "O tipo de registro desta versão não existe mais no sistema desta campanha."
     }
   },

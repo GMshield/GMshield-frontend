@@ -271,7 +271,9 @@ describe('an artifact\'s "Versões" (Story 5.2)', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Este item mudou em outra aba.');
-    await user.click(within(alert).getByRole('button', { name: 'Manter a minha como nova versão' }));
+    // A restore has no draft of the GM's own: its second choice restores the same version anyway.
+    expect(within(alert).queryByRole('button', { name: 'Manter a minha como nova versão' })).toBeNull();
+    await user.click(within(alert).getByRole('button', { name: 'Restaurar a versão 1 mesmo assim' }));
     expect(Object.fromEntries(action.mock.calls[1]![1].entries())).toEqual({
       campaignId: CAMPAIGN,
       artifactId: ARTIFACT,
