@@ -11,15 +11,23 @@ import type { components } from '@/server/backend/generated/public';
  * new one it starts. Story 3.11: a finished answer is dismissed with `PUT /api/v1/turns/{id}/dismissal`, and its
  * dismissal undone with `DELETE` on the same path. Story 3.12: a done answer is saved with
  * `PUT /api/v1/turns/{id}/bookmark` and removed with `DELETE` there, and the saved answers are read a page at a time
- * from `GET /api/v1/saved-answers`. The relays reach the backend; the browser never does.
+ * from `GET /api/v1/saved-answers`. Story 5.3 part A: a question names its kind, a question or a draft. The relays
+ * reach the backend; the browser never does.
  */
 
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
 export const AREAS = ['questions', 'rules'] as const;
 export type Area = (typeof AREAS)[number];
 
-/** Where a question goes (Story 3.10): the conversation it continues, else a new one of `area`. */
-export type QuestionTarget = { readonly conversationId?: string | null; readonly area?: Area };
+/** What the GM asks for in a turn (Story 5.3 part A): a question, or a draft written from the sources. */
+export const TURN_KINDS = ['question', 'draft'] as const;
+export type TurnKind = (typeof TURN_KINDS)[number];
+
+/**
+ * Where a question goes (Story 3.10): the conversation it continues, else a new one of `area`. Story 5.3 part A: and
+ * what it asks for (`kind`; absent: a question).
+ */
+export type QuestionTarget = { readonly conversationId?: string | null; readonly area?: Area; readonly kind?: TurnKind };
 
 /** A conversation's stored turn with its events, as the server read it (Story 3.10). */
 export type StoredTurn = components['schemas']['StoredTurn'];
@@ -44,14 +52,16 @@ function isTurn(value: unknown): value is AskedTurn {
 /**
  * Posts a question on the campaign; answers the turn, or the problem the relay answered. Story 3.10: in the
  * conversation `target` names, else in a new one of its area (without either, the campaign's latest questions one).
+ * Story 5.3 part A: with the target's `kind` when it has one (a draft is asked only in the questions area).
  */
 export async function postQuestion(campaignId: string, question: string, target: QuestionTarget = {}): Promise<AskResult> {
   const where = target.conversationId ? { conversationId: target.conversationId } : target.area === undefined ? {} : { area: target.area };
+  const kind = target.kind === undefined ? {} : { kind: target.kind };
   try {
     const response = await fetch(`/api/v1/campaigns/${encodeURIComponent(campaignId)}/turns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, ...where }),
+      body: JSON.stringify({ question, ...where, ...kind }),
       credentials: 'same-origin',
       cache: 'no-store',
     });

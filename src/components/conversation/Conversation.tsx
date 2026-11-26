@@ -22,6 +22,7 @@ import {
   type TurnReference,
   type StoredTurn,
   type TierStart,
+  type TurnKind,
 } from '@/client/conversation';
 import { errorText, translator, type Language, type Translate } from '@/messages';
 import { type NamedRecordType } from '@/record-types';
@@ -51,6 +52,12 @@ export const COMPOSER_MAX_LINES = 6;
  * `<campaign>:<conversation>`, or `<campaign>:new:<area>` before a new conversation has its id.
  */
 export const DRAFT_PREFIX = 'gmshield:draft:';
+
+/**
+ * Where the composer's mode (Story 5.3 part A: "Perguntar" or "Criar rascunho") is kept in this browser, beside the
+ * unsent text: the same key after this prefix as the draft's ({@link draftKey}).
+ */
+export const MODE_PREFIX = 'gmshield:mode:';
 
 /** The key of a conversation's draft after {@link DRAFT_PREFIX} (Story 3.10). */
 export function draftKey(campaignId: string, conversationId: string | null, area: Area): string {
@@ -104,12 +111,13 @@ type Dismissal = 'shown' | 'undoable' | 'gone';
  * on, as frozen with it (from its `done` event), which decides the offer under a silent answer. Story 3.11: whether the GM
  * dismissed it, why its dismissal was refused (shown under its actions), why its undo was (shown in its line), and
  * whether its undo is under way. Story 3.12: whether its answer is saved, and why the last change of that was refused
- * (shown under its actions).
+ * (shown under its actions). Story 5.3 part A: what it asked for, a question or a draft (labelled "Rascunho").
  */
 type ShownTurn = {
   readonly key: number;
   readonly id: string | null;
   readonly question: string;
+  readonly kind: TurnKind;
   readonly status: TurnStatus;
   readonly language: string | null;
   readonly text: string;
@@ -260,6 +268,28 @@ function readDraft(key: string): string {
   }
 }
 
+/** The composer's mode kept for this key (Story 5.3 part A); null when none is kept. */
+function readMode(key: string): TurnKind | null {
+  try {
+    const kept = globalThis.localStorage?.getItem(`${MODE_PREFIX}${key}`);
+    return kept === 'draft' || kept === 'question' ? kept : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMode(key: string, mode: TurnKind | null): void {
+  try {
+    if (mode === null) {
+      globalThis.localStorage?.removeItem(`${MODE_PREFIX}${key}`);
+    } else {
+      globalThis.localStorage?.setItem(`${MODE_PREFIX}${key}`, mode);
+    }
+  } catch {
+    // A browser that keeps nothing: the mode lives as long as the page.
+  }
+}
+
 function writeDraft(key: string, text: string): void {
   try {
     if (text === '') {
@@ -285,12 +315,13 @@ function dataOf(event: Event): Record<string, unknown> | null {
   }
 }
 
-/** A new turn of `question`, waiting for its id. */
-function newTurn(key: number, question: string): ShownTurn {
+/** A new turn of `question` (Story 5.3 part A: of `kind`), waiting for its id. */
+function newTurn(key: number, question: string, kind: TurnKind = 'question'): ShownTurn {
   return {
     key,
     id: null,
     question,
+    kind,
     status: 'sending',
     language: null,
     text: '',
@@ -328,6 +359,11 @@ type FollowStart = {
   readonly lastId: string | null;
 };
 
+/** A stored turn's kind (Story 5.3 part A); a draft only when it says so. */
+function kindOf(stored: StoredTurn): TurnKind {
+  return stored.kind === 'draft' ? 'draft' : 'question';
+}
+
 /** The data of a stored event, as an object; null when it is not one. */
 function storedData(data: unknown): Record<string, unknown> | null {
   return typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
@@ -343,7 +379,12 @@ export function shownFromStored(stored: StoredTurn, key: number): { readonly tur
   const citations: Citation[] = [];
   const tiers: TierStart[] = [];
   let lastId: string | null = null;
-  const base = { ...newTurn(key, stored.question), id: stored.id, language: stored.language ?? null, bookmarked: stored.bookmarked === true };
+  const base = {
+    ...newTurn(key, stored.question, kindOf(stored)),
+    id: stored.id,
+    language: stored.language ?? null,
+    bookmarked: stored.bookmarked === true,
+  };
   for (const event of stored.events) {
     lastId = String(event.sequence);
     const data = storedData(event.data);
@@ -496,6 +537,12 @@ export function NoCampaignConversation({ language, area = 'questions' }: { reado
  *   it back and shows its text under the actions. The saved items panel, when open, reads its list again. Each turn's
  *   `<li>` is `turn-<id>`, and a conversation opened at a turn (`focusTurn`, a saved item's "Ir") shows that one instead
  *   of the last, with focus on it; a turn not loaded leaves it at the last turn.
+ * - Story 5.3 part A, drafts: in the questions area only, a segmented control above the composer chooses "Perguntar"
+ *   or "Criar rascunho" (two buttons, the chosen one pressed in words, each reached with Tab). The question is sent with
+ *   that kind; nothing classifies its words. The mode is kept beside the unsent text (per conversation, under
+ *   {@link MODE_PREFIX}); an opened conversation with none kept starts in its last turn's kind. A draft streams as an
+ *   answer does (citations, tiers, references, stop, bookmark, dismiss) and is labelled "Rascunho" above its request,
+ *   while written and when stored. "Tentar de novo" asks again in the failed turn's kind.
  */
 export function Conversation({
   language,
@@ -518,6 +565,10 @@ export function Conversation({
   const uploads = useUploads();
   const scopePopover = useOptionalScopePopover();
   const [draft, setDraft] = useState('');
+  // Story 5.3 part A: the composer's mode, in the questions area only; it starts as the last stored turn's kind, then
+  // as kept beside the unsent text.
+  const drafts = area === 'questions';
+  const [mode, setMode] = useState<TurnKind>(() => (drafts && stored.length > 0 ? kindOf(stored[stored.length - 1]!) : 'question'));
   // Story 3.10: the stored turns of an opened conversation, folded once; those still being written are followed below.
   const [opening] = useState(() => stored.map((turn, index) => shownFromStored(turn, index + 1)));
   const [turns, setTurns] = useState<readonly ShownTurn[]>(() => opening.map((shown) => shown.turn));
@@ -567,11 +618,15 @@ export function Conversation({
       if (current && kept !== '') {
         setDraft((typed) => (typed === '' ? kept : typed));
       }
+      const keptMode = drafts ? readMode(key) : null;
+      if (current && keptMode !== null) {
+        setMode(keptMode);
+      }
     });
     return () => {
       current = false;
     };
-  }, [key]);
+  }, [key, drafts]);
 
   // Story 3.10: a new conversation opens with the cursor in the composer.
   useEffect(() => {
@@ -1011,17 +1066,21 @@ export function Conversation({
   }, [turns]);
 
   const ask = useCallback(
-    async (question: string, replacing?: number) => {
+    async (question: string, kind: TurnKind, replacing?: number) => {
       if (replacing !== undefined) {
         turnIds.current.delete(replacing);
         pendingStops.current.delete(replacing);
       }
       counter.current += 1;
       const key = counter.current;
-      const added = newTurn(key, question);
+      const added = newTurn(key, question, kind);
       setTurns((all) => (replacing === undefined ? [...all, added] : all.map((turn) => (turn.key === replacing ? added : turn))));
       const known = conversationRef.current;
-      const asked = await postQuestion(campaignId, question, known === null ? { area } : { conversationId: known });
+      // Story 5.3 part A: a draft names its kind (asked in the questions area only); a question is the default.
+      const asked = await postQuestion(campaignId, question, {
+        ...(known === null ? { area } : { conversationId: known }),
+        ...(kind === 'draft' ? { kind } : {}),
+      });
       if (!asked.ok) {
         pendingStops.current.delete(key);
         // A refused question is not lost: it goes back to the composer unless the GM has started another.
@@ -1035,6 +1094,12 @@ export function Conversation({
         // Story 3.10: the first question made the conversation; the address becomes its own, without leaving the page.
         const id = asked.turn.conversationId;
         conversationRef.current = id;
+        if (drafts) {
+          // Story 5.3 part A: the mode stays as chosen for the conversation, now under its own key; the next new
+          // conversation starts as a question again.
+          writeMode(draftKey(campaignId, id, area), kind);
+          writeMode(draftKey(campaignId, null, area), null);
+        }
         setConversation({ id, name: defaultName(question) });
         globalThis.history?.replaceState(null, '', `/${area}/${encodeURIComponent(id)}`);
       }
@@ -1045,7 +1110,7 @@ export function Conversation({
         void sendStop(key, asked.turn.id);
       }
     },
-    [area, campaignId, change, follow, language, restore, say, sendStop, t],
+    [area, campaignId, change, drafts, follow, language, restore, say, sendStop, t],
   );
 
   const active = turns.find((turn) => RUNNING.has(turn.status));
@@ -1164,8 +1229,14 @@ export function Conversation({
     }
     setDraft('');
     writeDraft(key, '');
-    await ask(question);
-  }, [ask, key, draft, running]);
+    await ask(question, drafts ? mode : 'question');
+  }, [ask, key, draft, drafts, mode, running]);
+
+  /** Story 5.3 part A: the composer's mode, kept beside the unsent text. */
+  const chooseMode = (chosen: TurnKind) => {
+    setMode(chosen);
+    writeMode(key, chosen);
+  };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1302,6 +1373,11 @@ export function Conversation({
                   // Story 3.12: the turn a saved item opened takes focus once, from the page; never from the keyboard.
                   tabIndex={target ? -1 : undefined}
                 >
+                  {turn.kind === 'draft' ? (
+                    <p className={styles.kindLabel} data-testid="draft-label">
+                      {t('conversation.draftLabel')}
+                    </p>
+                  ) : null}
                   <p className={styles.question}>
                     <span className={styles.visuallyHidden}>{`${t('conversation.question')}: `}</span>
                     {turn.question}
@@ -1361,7 +1437,7 @@ export function Conversation({
                     <p className={styles.failed}>
                       <span>{t(`conversation.${turn.failure}`)}</span>
                       {REFUSALS.has(turn.failure) ? null : (
-                        <button type="button" className={styles.retry} disabled={running} onClick={() => void ask(turn.question, turn.key)}>
+                        <button type="button" className={styles.retry} disabled={running} onClick={() => void ask(turn.question, turn.kind, turn.key)}>
                           {t('conversation.retry')}
                         </button>
                       )}
@@ -1433,6 +1509,22 @@ export function Conversation({
                 )}
               </p>
             )}
+            {drafts ? (
+              // Story 5.3 part A: ask a question or have the agent write a draft; each choice is a button pressed in words.
+              <div className={styles.modes} role="group" aria-label={t('conversation.mode.label')} data-testid="conversation-mode">
+                {(['question', 'draft'] as const).map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    className={styles.modeChoice}
+                    aria-pressed={mode === choice}
+                    onClick={() => chooseMode(choice)}
+                  >
+                    {t(`conversation.mode.${choice}`)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <form className={styles.composer} onSubmit={onSubmit}>
               <label className={styles.visuallyHidden} htmlFor="conversation-question">
                 {t('conversation.composer.label')}
@@ -1443,7 +1535,7 @@ export function Conversation({
                 className={styles.field}
                 rows={lines}
                 value={draft}
-                placeholder={t('conversation.composer.placeholder')}
+                placeholder={t(drafts && mode === 'draft' ? 'conversation.composer.draftPlaceholder' : 'conversation.composer.placeholder')}
                 maxLength={4000}
                 onChange={(event) => {
                   setDraft(event.target.value);

@@ -813,8 +813,15 @@
     "composer": {
       "label": "Sua pergunta",
       "placeholder": "Pergunte sobre as regras da campanha",
+      "draftPlaceholder": "Descreva o que o agente deve escrever",
       "send": "Enviar"
     },
+    "mode": {
+      "label": "Modo",
+      "question": "Perguntar",
+      "draft": "Criar rascunho"
+    },
+    "draftLabel": "Rascunho",
     "searching": "Procurando nas fontes…",
     "answering": "Respondendo…",
     "answerIn": "Resposta em {language}",

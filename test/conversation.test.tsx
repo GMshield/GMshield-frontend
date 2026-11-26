@@ -23,7 +23,7 @@ vi.mock('@/client/conversation', async (importOriginal) => ({
   setBookmark,
 }));
 
-const { Conversation, DRAFT_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
+const { Conversation, DRAFT_PREFIX, MODE_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
 const { UploadsProvider, useUploads } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { errorText } = await import('@/messages');
@@ -1981,6 +1981,7 @@ describe('conversations by area (Story 3.10)', () => {
     events: [string, unknown][],
     language: Stored['language'] = 'pt-BR',
     bookmarked = false,
+    kind: Stored['kind'] = 'question',
   ): Stored => ({
     id,
     question,
@@ -1988,6 +1989,7 @@ describe('conversations by area (Story 3.10)', () => {
     createdAt: '2026-11-22T12:00:00Z',
     events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
     bookmarked,
+    kind,
   });
 
   type DeleteAction = NonNullable<import('@/components/conversation/Conversation').ConversationProps['deleteAction']>;
@@ -3095,6 +3097,7 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
       createdAt: '2026-11-26T12:00:00Z',
       events: EVENTS.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
       bookmarked: false,
+      kind: 'question',
     };
     render(
       <UploadsProvider texts={uploadTexts('pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
@@ -3178,5 +3181,213 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
 
     const link = within(list()).getByRole('link', { name: 'Artefato da campanha, versão 3' });
     expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}?version=3`);
+  });
+});
+
+describe('draft content with an agent (Story 5.3 part A)', () => {
+  const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
+  const DRAFT_TURN = '0190a0b0-0000-7000-8000-000000000022';
+  type Stored = import('@/client/conversation').StoredTurn;
+
+  function stored(id: string, question: string, kind: Stored['kind'], events: [string, unknown][]): Stored {
+    return {
+      id,
+      question,
+      language: 'pt-BR',
+      createdAt: '2026-11-26T12:00:00Z',
+      events: events.map(([type, data], index) => ({ sequence: index + 1, type, data })) as Stored['events'],
+      bookmarked: false,
+      kind,
+    };
+  }
+
+  function screenOf(props: { area?: 'questions' | 'rules'; conversationId?: string | null; stored?: readonly Stored[]; language?: 'pt-BR' | 'en' } = {}) {
+    return render(
+      <UploadsProvider texts={uploadTexts(props.language ?? 'pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+        <Conversation
+          language={props.language ?? 'pt-BR'}
+          campaignId={CAMPAIGN}
+          hasSources
+          review={null}
+          area={props.area}
+          conversationId={props.conversationId}
+          stored={props.stored}
+          openStream={(url) => {
+            const stream = new FakeStream(url);
+            streams.push(stream);
+            return stream as unknown as EventSource;
+          }}
+        />
+      </UploadsProvider>,
+    );
+  }
+
+  function mode() {
+    return screen.getByRole('group', { name: 'Modo' });
+  }
+
+  function pressed(name: string): string | null {
+    return within(mode()).getByRole('button', { name }).getAttribute('aria-pressed');
+  }
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    setDismissal.mockReset();
+    setBookmark.mockReset();
+    localStorage.clear();
+    window.history.replaceState(null, '', '/questions/new');
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('offers "Perguntar" or "Criar rascunho" in Consultas only, a question by default', () => {
+    screenOf();
+    expect(within(mode()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Perguntar', 'Criar rascunho']);
+    expect(pressed('Perguntar')).toBe('true');
+    expect(pressed('Criar rascunho')).toBe('false');
+    cleanup();
+
+    screenOf({ area: 'rules' });
+    expect(screen.queryByRole('group', { name: 'Modo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Criar rascunho' })).toBeNull();
+    cleanup();
+
+    screenOf({ language: 'en' });
+    const english = screen.getByRole('group', { name: 'Mode' });
+    expect(within(english).getAllByRole('button').map((button) => button.textContent)).toEqual(['Ask', 'Create a draft']);
+  });
+
+  it('posts a draft with its kind, labels it "Rascunho" while it streams and once done, and a question with none', async () => {
+    screenOf();
+    const user = userEvent.setup();
+    expect(composer().placeholder).toBe('Pergunte sobre as regras da campanha');
+    await user.click(within(mode()).getByRole('button', { name: 'Criar rascunho' }));
+    expect(pressed('Criar rascunho')).toBe('true');
+    expect(pressed('Perguntar')).toBe('false');
+    expect(composer().placeholder).toBe('Descreva o que o agente deve escrever');
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'Um encontro para a cripta');
+    await user.keyboard('{Enter}');
+
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Um encontro para a cripta', { area: 'questions', kind: 'draft' });
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(turns().getAllByTestId('draft-label').map((label) => label.textContent)).toEqual(['Rascunho']);
+    const stream = streams[0]!;
+    stream.emit('delta', { text: '## Encontro na cripta\n\nTrês esqueletos guardam a porta.' }, 1);
+    expect(turns().getByTestId('draft-label')).toBeTruthy();
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 54 }, 2);
+    stream.emit('done', doneWith(PASSAGE_A), 3);
+    expect(turns().getByRole('heading', { name: 'Encontro na cripta' })).toBeTruthy();
+    expect(turns().getAllByTestId('draft-label')).toHaveLength(1);
+    expect(superscripts()).toEqual(['1']);
+    // An answer like any other: saved and dismissed from under its rule.
+    expect(turns().getByRole('button', { name: 'Salvar resposta' })).toBeTruthy();
+    expect(turns().getByRole('button', { name: 'Dispensar resposta' })).toBeTruthy();
+
+    // The mode stays as chosen for the next turn, until the GM changes it.
+    expect(pressed('Criar rascunho')).toBe('true');
+    await user.click(within(mode()).getByRole('button', { name: 'Perguntar' }));
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'Quantos esqueletos?');
+    await user.keyboard('{Enter}');
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Quantos esqueletos?', { conversationId: CONVERSATION });
+    await waitFor(() => expect(streams).toHaveLength(2));
+    expect(turns().getAllByTestId('draft-label')).toHaveLength(1);
+  });
+
+  it('keeps the chosen mode beside the unsent text, and under the conversation once it has an id', async () => {
+    screenOf();
+    const user = userEvent.setup();
+    await user.click(within(mode()).getByRole('button', { name: 'Criar rascunho' }));
+    await user.type(composer(), 'Uma criatura');
+    expect(localStorage.getItem(`${MODE_PREFIX}${CAMPAIGN}:new:questions`)).toBe('draft');
+    cleanup();
+
+    screenOf();
+    await waitFor(() => expect(composer().value).toBe('Uma criatura'));
+    expect(pressed('Criar rascunho')).toBe('true');
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.click(composer());
+    await user.keyboard('{Enter}');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Uma criatura', { area: 'questions', kind: 'draft' });
+    await waitFor(() => expect(localStorage.getItem(`${MODE_PREFIX}${CAMPAIGN}:${CONVERSATION}`)).toBe('draft'));
+    // The new conversation's entry goes with its first send: the next new conversation opens as a question.
+    expect(localStorage.getItem(`${MODE_PREFIX}${CAMPAIGN}:new:questions`)).toBeNull();
+    cleanup();
+    screenOf();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(pressed('Perguntar')).toBe('true');
+    expect(composer().placeholder).toBe('Pergunte sobre as regras da campanha');
+  });
+
+  it('keeps a reopened draft\'s label and references, and the composer starts in its kind', async () => {
+    const question = stored(TURN, 'Quanto dano causa Fire Bolt?', 'question', [
+      ['delta', { text: 'Fire Bolt causa 1d10.' }],
+      ['citation', { passageId: PASSAGE_B, offset: 21 }],
+      ['done', { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_B])] }],
+    ]);
+    const draft = stored(DRAFT_TURN, 'Um encontro para a cripta', 'draft', [
+      ['delta', { text: '## Encontro na cripta\n\nTrês esqueletos.' }],
+      ['citation', { passageId: PASSAGE_A, offset: 39 }],
+      ['done', { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A], { tier: 'campaign' })] }],
+    ]);
+    screenOf({ conversationId: CONVERSATION, stored: [question, draft] });
+
+    const labels = turns().getAllByTestId('draft-label');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]!.closest('li')?.id).toBe(`turn-${DRAFT_TURN}`);
+    const drafted = within(labels[0]!.closest('li')!);
+    expect(drafted.getByRole('heading', { name: 'Encontro na cripta' })).toBeTruthy();
+    expect(drafted.getByRole('list', { name: 'Fontes' })).toBeTruthy();
+    expect(pressed('Criar rascunho')).toBe('true');
+
+    // A mode kept beside the unsent text wins over the last turn's kind.
+    cleanup();
+    localStorage.setItem(`${MODE_PREFIX}${CAMPAIGN}:${CONVERSATION}`, 'question');
+    screenOf({ conversationId: CONVERSATION, stored: [question, draft] });
+    await waitFor(() => expect(pressed('Perguntar')).toBe('true'));
+  });
+
+  it('is reached with Tab, says its state, and Enter in the composer sends in the chosen mode', async () => {
+    screenOf();
+    const user = userEvent.setup();
+    composer().focus();
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(within(mode()).getByRole('button', { name: 'Perguntar' }));
+    await user.tab();
+    const draftButton = within(mode()).getByRole('button', { name: 'Criar rascunho' });
+    expect(document.activeElement).toBe(draftButton);
+    await user.keyboard('{Enter}');
+    expect(draftButton.getAttribute('aria-pressed')).toBe('true');
+    await user.tab();
+    expect(document.activeElement).toBe(composer());
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.keyboard('Um item{Enter}');
+    expect(postQuestion).toHaveBeenCalledWith(CAMPAIGN, 'Um item', { area: 'questions', kind: 'draft' });
+  });
+
+  it('asks a failed draft again as a draft', async () => {
+    screenOf();
+    const user = userEvent.setup();
+    await user.click(within(mode()).getByRole('button', { name: 'Criar rascunho' }));
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'Uma masmorra{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]!.emit('error', { code: 'job.attempts_exhausted' }, 1);
+    await user.click(within(mode()).getByRole('button', { name: 'Perguntar' }));
+
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.click(turns().getByRole('button', { name: 'Tentar de novo' }));
+
+    await waitFor(() => expect(streams).toHaveLength(2));
+    expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Uma masmorra', { conversationId: CONVERSATION, kind: 'draft' });
+    expect(turns().getAllByTestId('draft-label')).toHaveLength(1);
   });
 });

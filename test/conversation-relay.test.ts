@@ -252,6 +252,38 @@ describe('the question relay (Story 2.4)', () => {
     expect(backend.calls).toHaveLength(3);
   });
 
+  it('passes on the kind of a turn, a question or a draft, and refuses any other (Story 5.3 part A)', async () => {
+    const conversationId = '0190a0b0-0000-7000-8000-000000000020';
+    const turn = { id: TURN, conversationId, language: 'pt-BR' };
+    const backend = await useBackend({ [`POST /api/v1/campaigns/${CAMPAIGN}/turns`]: { status: 201, body: turn } });
+    const headers = { origin: 'http://gm.test', cookie: `__Host-gmshield-session=${SESSION}.4102444800` };
+    expect((await post(headers, JSON.stringify({ question: 'Um encontro', area: 'questions', kind: 'draft' }))).status).toBe(201);
+    expect((await post(headers, JSON.stringify({ question: 'Outro', conversationId, kind: 'draft' }))).status).toBe(201);
+    expect((await post(headers, JSON.stringify({ question: 'Quanto?', kind: 'question' }))).status).toBe(201);
+    expect((await post(headers, JSON.stringify({ question: 'Nulo?', kind: null }))).status).toBe(201);
+    expect(backend.calls.map((call) => JSON.parse(call.body))).toEqual([
+      { question: 'Um encontro', area: 'questions', kind: 'draft' },
+      { question: 'Outro', conversationId, kind: 'draft' },
+      { question: 'Quanto?', kind: 'question' },
+      { question: 'Nulo?' },
+    ]);
+    for (const body of [{ question: 'x', kind: 'proposal' }, { question: 'x', kind: 7 }, { question: 'x', kind: 'DRAFT' }]) {
+      expect((await post(headers, JSON.stringify(body))).status).toBe(400);
+    }
+    expect(backend.calls).toHaveLength(4);
+  });
+
+  it('passes on the backend refusal of a draft outside the questions area with its field (Story 5.3 part A)', async () => {
+    const problem = { status: 400, category: 'request', code: 'request.invalid', params: { field: 'kind' } };
+    await useBackend({ [`POST /api/v1/campaigns/${CAMPAIGN}/turns`]: { status: 400, body: problem } });
+    const refused = await post(
+      { origin: 'http://gm.test', cookie: `__Host-gmshield-session=${SESSION}.4102444800` },
+      JSON.stringify({ question: 'Um item', area: 'rules', kind: 'draft' }),
+    );
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: 'request.invalid', params: { field: 'kind' } });
+  });
+
   it('passes the backend refusal on with its status', async () => {
     await useBackend({
       [`POST /api/v1/campaigns/${CAMPAIGN}/turns`]: { status: 400, body: { status: 400, category: 'request', code: 'request.invalid', params: {} } },
@@ -287,6 +319,14 @@ describe("the browser's question call (Story 2.4)", () => {
     expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ body: '{"question":"E agora?","conversationId":"c"}' }));
     await postQuestion(CAMPAIGN, 'Nova?', { conversationId: null, area: 'rules' });
     expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ body: '{"question":"Nova?","area":"rules"}' }));
+    // Story 5.3 part A: a draft names its kind.
+    await postQuestion(CAMPAIGN, 'Um encontro', { area: 'questions', kind: 'draft' });
+    expect(send).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: '{"question":"Um encontro","area":"questions","kind":"draft"}' }),
+    );
+    await postQuestion(CAMPAIGN, 'Outro', { conversationId: 'c', kind: 'draft' });
+    expect(send).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ body: '{"question":"Outro","conversationId":"c","kind":"draft"}' }));
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 502 })));
     expect(await postQuestion(CAMPAIGN, 'Quanto?')).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
