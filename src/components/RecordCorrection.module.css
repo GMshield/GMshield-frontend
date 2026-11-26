@@ -106,3 +106,13 @@
     border-bottom: 1px solid var(--color-border);
   }
 }
+
+/* Story 5.2: an artifact's edit, once saved, says from when it applies, in muted text under "Editar". */
+.status {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.status:empty {
+  display: none;
+}

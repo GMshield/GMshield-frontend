@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useId, useState } from 'react';
 
+import { uploadDay } from '@/dates';
 import { translator, type Language, type Translate } from '@/messages';
 
 import { ConfirmationDialog } from './ConfirmationDialog';
@@ -32,14 +33,8 @@ export type SupersededVersionsProps = {
   readonly action: (previous: VersionRemoveState, form: FormData) => Promise<VersionRemoveState>;
 };
 
-/** The day a version was uploaded, in the interface's language ("21 de nov. de 2026"); UTC, so server and browser agree. */
-export function uploadDay(createdAt: string, language: Language): string {
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) {
-    return createdAt;
-  }
-  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
-}
+/** The day a version was uploaded (Story 5.2: moved to `@/dates`, which a server page can call too). */
+export { uploadDay };
 
 /** A version's row: "Enviada em {date} · {pages} páginas · {size}", each part only once it is known. */
 export function versionRow(version: SupersededVersion, t: Translate, language: Language): string {

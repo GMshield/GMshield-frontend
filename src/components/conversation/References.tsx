@@ -45,9 +45,12 @@ export function artifactLine(reference: ArtifactReference, t: Translate): string
   return t('conversation.artifactSource', { version: reference.artifactVersion });
 }
 
-/** Story 5.1 part B: the address of a cited artifact's page, in the conversation's own campaign. */
+/**
+ * Story 5.1 part B: the address of a cited artifact's page, in the conversation's own campaign. Story 5.2: on the
+ * version the answer cited (`?version=`), which the page shows as it was, with a link to the newest.
+ */
 export function artifactHref(campaignId: string, reference: ArtifactReference): string {
-  return `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(reference.artifactId)}`;
+  return `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(reference.artifactId)}?version=${encodeURIComponent(String(reference.artifactVersion))}`;
 }
 
 export type ReferencesProps = {

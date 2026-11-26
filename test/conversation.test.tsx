@@ -3064,9 +3064,10 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
     expect(within(artifact).getByText('Item').className).toMatch(/recordType/);
     expect([...artifact.querySelectorAll('dt')].map((term) => term.textContent)).toEqual(['Dano']);
     expect([...artifact.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(['1d8 cortante']);
-    // Its source line is a link to the artifact's page, never a button that opens the source view.
+    // Its source line is a link to the artifact's page, never a button that opens the source view; Story 5.2: on the
+    // version the answer cited.
     const link = within(artifact).getByRole('link', { name: 'Artefato da campanha, versão 1' });
-    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`);
+    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}?version=1`);
     expect(artifact.querySelector('button')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(load).not.toHaveBeenCalled();
@@ -3117,7 +3118,7 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
     expect(superscripts()).toEqual(['1', '2', '3']);
     const artifact = within(list()).getAllByRole('listitem')[1]!;
     expect(artifact.getAttribute('data-kind')).toBe('artifact');
-    expect(within(artifact).getByRole('link').getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`);
+    expect(within(artifact).getByRole('link').getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}?version=1`);
   });
 
   it('leaves out an artifact reference that is not well formed', async () => {
@@ -3137,5 +3138,16 @@ describe('artifacts in answers (Story 5.1 part B)', () => {
 
     expect(within(list()).getAllByRole('listitem')).toHaveLength(1);
     expect(superscripts()).toEqual([]);
+  });
+
+  it('links an artifact to the version the answer cited, whatever its newest version is (Story 5.2)', async () => {
+    view();
+    const stream = await ask('O que faz a Espada?');
+    stream.emit('delta', { text: 'Um.' });
+    stream.emit('citation', { recordId: ARTIFACT, offset: 3 });
+    stream.emit('done', { silent: false, references: [artifactReference(1, { artifactVersion: 3 })] });
+
+    const link = within(list()).getByRole('link', { name: 'Artefato da campanha, versão 3' });
+    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}?version=3`);
   });
 });

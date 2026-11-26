@@ -22,3 +22,36 @@ export type ArtifactFormState = {
   readonly error: string | null;
   readonly field: ArtifactFormField | null;
 };
+
+/**
+ * What an artifact's edit answered (Story 5.2); `serial` counts the answers. `saved`: the backend stored the next
+ * version, `currentVersion`. `stale`: the artifact changed in another tab and its newest version, `currentVersion`, was
+ * read again, so "Manter a minha como nova versão" sends the GM's draft (still in the form) again on that version.
+ * Otherwise `error` is a refusal's text and `field` its part (null for one about the whole form).
+ */
+export type ArtifactEditState = {
+  readonly serial: number;
+  readonly saved: boolean;
+  readonly error: string | null;
+  readonly field: ArtifactFormField | null;
+  readonly stale: boolean;
+  readonly currentVersion: number | null;
+};
+
+export const NO_ARTIFACT_EDIT: ArtifactEditState = { serial: 0, saved: false, error: null, field: null, stale: false, currentVersion: null };
+
+/**
+ * What a restore of an earlier version answered (Story 5.2), as an edit's answer reads: `saved` with the new
+ * `currentVersion`, or `stale` with the newest version read again (the same restore may be sent again on it), or a
+ * refusal's `error`. `number` is the version the restore was about.
+ */
+export type ArtifactRestoreState = {
+  readonly serial: number;
+  readonly number: number | null;
+  readonly saved: boolean;
+  readonly error: string | null;
+  readonly stale: boolean;
+  readonly currentVersion: number | null;
+};
+
+export const NO_ARTIFACT_RESTORE: ArtifactRestoreState = { serial: 0, number: null, saved: false, error: null, stale: false, currentVersion: null };

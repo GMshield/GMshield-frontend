@@ -268,6 +268,12 @@
       "save": "Save",
       "cancel": "Cancel"
     },
+    "edit": {
+      "open": "Edit",
+      "form": "Edit «{name}»",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
     "errors": {
       "name": "The name needs {min} to {max} characters.",
       "recordType": "Choose a record type of this campaign's system.",
@@ -279,7 +285,19 @@
     "page": {
       "content": "Content",
       "sources": "Sources",
-      "noSources": "No sources: this artifact was written by hand."
+      "noSources": "No sources: this artifact was written by hand.",
+      "citedVersion": "You are viewing version {version}, cited in an answer.",
+      "olderVersion": "You are viewing version {version}."
+    },
+    "versions": {
+      "title": "Versions",
+      "list": "Versions of this artifact",
+      "row": "Version {number} · {name} · {date}",
+      "current": "current",
+      "restore": "Restore",
+      "restoreOf": "Restore version {number}",
+      "viewCurrent": "See the current version",
+      "typeGone": "This version's record type no longer exists in this campaign's system."
     }
   },
   "characters": {
@@ -878,7 +896,9 @@
       "merged": "«{name}» merged.",
       "rejected": "«{name}» rejected. This material will not propose it again."
     },
-    "artifactSaved": "Artifact saved."
+    "artifactSaved": "Artifact saved.",
+    "artifactUpdated": "Artifact updated.",
+    "artifactRestored": "Version {number} restored."
   },
   "notifications": {
     "title": "Notifications",

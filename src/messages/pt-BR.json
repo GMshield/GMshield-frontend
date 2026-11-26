@@ -268,6 +268,12 @@
       "save": "Salvar",
       "cancel": "Cancelar"
     },
+    "edit": {
+      "open": "Editar",
+      "form": "Editar «{name}»",
+      "save": "Salvar",
+      "cancel": "Cancelar"
+    },
     "errors": {
       "name": "O nome precisa ter de {min} a {max} caracteres.",
       "recordType": "Escolha um tipo de registro do sistema desta campanha.",
@@ -279,7 +285,19 @@
     "page": {
       "content": "Conteúdo",
       "sources": "Fontes",
-      "noSources": "Nenhuma fonte: este artefato foi escrito à mão."
+      "noSources": "Nenhuma fonte: este artefato foi escrito à mão.",
+      "citedVersion": "Você está vendo a versão {version}, citada numa resposta.",
+      "olderVersion": "Você está vendo a versão {version}."
+    },
+    "versions": {
+      "title": "Versões",
+      "list": "Versões deste artefato",
+      "row": "Versão {number} · {name} · {date}",
+      "current": "atual",
+      "restore": "Restaurar",
+      "restoreOf": "Restaurar a versão {number}",
+      "viewCurrent": "Ver a versão atual",
+      "typeGone": "O tipo de registro desta versão não existe mais no sistema desta campanha."
     }
   },
   "characters": {
@@ -878,7 +896,9 @@
       "merged": "«{name}» mesclado.",
       "rejected": "«{name}» rejeitado. Ele não volta a ser proposto por este material."
     },
-    "artifactSaved": "Artefato salvo."
+    "artifactSaved": "Artefato salvo.",
+    "artifactUpdated": "Artefato atualizado.",
+    "artifactRestored": "Versão {number} restaurada."
   },
   "notifications": {
     "title": "Notificações",

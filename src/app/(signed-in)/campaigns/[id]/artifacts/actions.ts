@@ -1,20 +1,22 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { refresh, revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { fieldOf, typedText, valuesOf } from '@/app/(signed-in)/records/form-values';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { createArtifact } from '@/server/artifacts';
+import { createArtifact, getArtifact, restoreArtifact, updateArtifact } from '@/server/artifacts';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import type { ArtifactFormField, ArtifactFormState, ArtifactFormValues } from './form-state';
+import type { ArtifactEditState, ArtifactFormField, ArtifactFormState, ArtifactFormValues, ArtifactRestoreState } from './form-state';
 import { fromOf } from './texts';
 
 /** An id as the backend mints it; anything else is an item nowhere. */
 const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
+/** A version's number, from 1, as the backend takes it (at most nine digits). */
+const NUMBER = /^[1-9]\d{0,8}$/;
 /**
  * Far past the content's limit (past twice its 20,000 code points, each up to two UTF-16 units), so the backend still
  * sees a content too long and names it; only a runaway post is cut.
@@ -78,4 +80,128 @@ export async function createArtifactAction(previous: ArtifactFormState, form: Fo
     redirect(`/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(result.data.id)}${from === null ? '' : `?from=${from}`}`);
   }
   return { serial, values, error: refusalText(result.problem, language), field: artifactFieldOf(result.problem) };
+}
+
+function editRefused(serial: number, error: string, field: ArtifactFormField | null): ArtifactEditState {
+  return { serial, saved: false, error, field, stale: false, currentVersion: null };
+}
+
+/**
+ * "Salvar" in an artifact's edit (Story 5.2): the campaign's and the artifact's ids, the newest version the page read,
+ * and the record type's key, name, fields in order and content as typed (the backend trims and checks every value).
+ * Once the backend has stored the next version, a toast says "Artefato atualizado.", the whole signed-in layout is
+ * revalidated (the campaign's lists and "Personagens" show the new name and type) and the page is read again, which
+ * shows the new version. A stale version (another tab saved first) reads the artifact again and answers
+ * `{stale, currentVersion}`: the GM's draft stays in the form, and "Manter a minha como nova versão" sends it again on
+ * that version. Any other refusal comes back as its text under the part of the form it is about, never a code. A
+ * malformed form never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before
+ * this runs.
+ */
+export async function updateArtifactAction(previous: ArtifactEditState, form: FormData): Promise<ArtifactEditState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const version = form.get('version');
+  const record = valuesOf(form);
+  const content = typedText(form.get('content'), MOST_CONTENT);
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof version !== 'string' ||
+    !NUMBER.test(version) ||
+    record === null ||
+    content === null
+  ) {
+    return editRefused(serial, errorText({ category: 'request', code: 'request.invalid' }, language), null);
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await updateArtifact(token, campaignId, artifactId, {
+    version: Number(version),
+    recordType: record.recordType,
+    name: record.name,
+    fields: [...record.fields],
+    content: content === '' ? null : content,
+  });
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.artifactUpdated'));
+    revalidatePath('/', 'layout');
+    refresh();
+    return { serial, saved: true, error: null, field: null, stale: false, currentVersion: result.data.version };
+  }
+  if (problemFields(result.problem).code === 'request.stale_version') {
+    const current = await getArtifact(token, campaignId, artifactId);
+    if (current.ok) {
+      return { serial, saved: false, error: null, field: null, stale: true, currentVersion: current.data.currentVersion };
+    }
+    return editRefused(serial, errorText(current.problem, language), null);
+  }
+  return editRefused(serial, refusalText(result.problem, language), artifactFieldOf(result.problem));
+}
+
+/**
+ * "Restaurar" on a row of an artifact's versions (Story 5.2): the campaign's and the artifact's ids, the version to
+ * restore (`number`) and the newest version the page read (`version`). Once the backend has copied it as the next
+ * version, a toast says "Versão N restaurada." and the whole signed-in layout is revalidated; a page that showed the
+ * newest version is read again, and one that showed an earlier version (`view` `older`) moves on to the artifact's
+ * page, which shows the newest (keeping `from=characters`). A stale version reads the artifact again and answers
+ * `{stale, currentVersion}`, so "Manter a minha como nova versão" sends the same restore again on it. A version whose
+ * type the system no longer has, and any other refusal, come back as their text, never a code. A malformed form never
+ * reaches the backend.
+ */
+export async function restoreArtifactAction(previous: ArtifactRestoreState, form: FormData): Promise<ArtifactRestoreState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const number = form.get('number');
+  const version = form.get('version');
+  const refused = (error: string, restored: number | null): ArtifactRestoreState => ({
+    serial,
+    number: restored,
+    saved: false,
+    error,
+    stale: false,
+    currentVersion: null,
+  });
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof number !== 'string' ||
+    !NUMBER.test(number) ||
+    typeof version !== 'string' ||
+    !NUMBER.test(version)
+  ) {
+    return refused(errorText({ category: 'request', code: 'request.invalid' }, language), null);
+  }
+  const restored = Number(number);
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await restoreArtifact(token, campaignId, artifactId, restored, Number(version));
+  if (result.ok) {
+    await flash('success', translator(language)('feedback.artifactRestored', { number: restored }));
+    revalidatePath('/', 'layout');
+    if (form.get('view') === 'older') {
+      const from = fromOf(form.get('from'));
+      redirect(`/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(artifactId)}${from === null ? '' : `?from=${from}`}`);
+    }
+    refresh();
+    return { serial, number: restored, saved: true, error: null, stale: false, currentVersion: result.data.version };
+  }
+  if (problemFields(result.problem).code === 'request.stale_version') {
+    const current = await getArtifact(token, campaignId, artifactId);
+    if (current.ok) {
+      return { serial, number: restored, saved: false, error: null, stale: true, currentVersion: current.data.currentVersion };
+    }
+    return refused(errorText(current.problem, language), restored);
+  }
+  const { code, params } = problemFields(result.problem);
+  // The version's type is no longer one of the system's: said as such, not as a choice to make in a form.
+  const typeGone = code === 'request.invalid' && params.field === 'recordType';
+  return refused(typeGone ? translator(language)('artifacts.versions.typeGone') : errorText(result.problem, language), restored);
 }

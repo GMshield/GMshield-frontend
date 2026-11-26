@@ -35,7 +35,8 @@
 // its removal answer 204 (as the contract declares), and the saved answers are two: the stored turn's answer in the
 // starter campaign and one in another campaign ("A Coroa Partida"). Story 4.1: every system has the eight core record
 // types, in their fixed order, none with records yet; one of them reads as the rule type. Story 5.1: the starter campaign
-// has three artifacts (two character sheets and an item), and a new artifact answers as stored, version 1.
+// has three artifacts (two character sheets and an item), and a new artifact answers as stored, version 1. Story 5.2:
+// an edit or a restore answers version 2, and an artifact's versions are its one version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -754,6 +755,7 @@ export const ARTIFACT = {
   ],
   content: 'Forjada nas montanhas do norte.',
   version: 1,
+  currentVersion: 1,
   createdAt: '2026-11-26T12:00:00Z',
 };
 export const ARTIFACT_PAGE = {
@@ -771,6 +773,20 @@ export const ARTIFACT_PAGE = {
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts'] = ARTIFACT_PAGE;
 EXAMPLES['POST /api/v1/campaigns/{campaignId}/artifacts'] = ARTIFACT;
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}'] = ARTIFACT;
+
+/**
+ * Story 5.2 part A (contract 1.44.0): an edit and a restore each answer the artifact's next version, 2; its versions
+ * list its one version 1; and that version opens as the artifact does.
+ */
+export const EDITED_ARTIFACT = { ...ARTIFACT, name: 'Espada de Kael, a Rubra', version: 2, currentVersion: 2 };
+export const ARTIFACT_VERSIONS = {
+  items: [{ number: 1, recordType: ARTIFACT.recordType, name: ARTIFACT.name, createdAt: ARTIFACT.createdAt }],
+  total: 1,
+};
+EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/artifacts/{artifactId}'] = EDITED_ARTIFACT;
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions'] = ARTIFACT_VERSIONS;
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}'] = ARTIFACT;
+EXAMPLES['POST /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}/restore'] = EDITED_ARTIFACT;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
