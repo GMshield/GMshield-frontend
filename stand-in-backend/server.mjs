@@ -714,6 +714,7 @@ EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = RECORD;
 export const CORRECTED_RECORD = { ...RECORD, fields: RECORD.fields.slice(0, 3), version: 1 };
 EXAMPLES['PATCH /api/v1/systems/{systemId}/records/{recordId}'] = CORRECTED_RECORD;
 EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/records/{recordId}'] = CORRECTED_RECORD;
+// Story 4.5 part B (contract 1.41.0): a record's delete on either page answers 204 with no body, as its contract says.
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

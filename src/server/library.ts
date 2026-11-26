@@ -204,6 +204,32 @@ export function correctCampaignRecord(
 }
 
 /**
+ * Deletes one record as one of the account's systems shows it (Story 4.5 part B; 204, no body, no version sent): it
+ * leaves the lists, the counts, the record pages and the search at once, and the answers once its index point is
+ * removed. There is no undo. `request.not_found` for a record the system does not show, one already deleted included.
+ */
+export function deleteRecord(sessionToken: string, systemId: string, recordId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('ontology.record_delete', options, (client) =>
+    client.DELETE('/api/v1/systems/{systemId}/records/{recordId}', { params: { header: session(sessionToken), path: { systemId, recordId } } }),
+  );
+}
+
+/**
+ * The same delete of one record as one of the account's campaigns shows it (Story 4.5 part B, a search's record
+ * result); `request.not_found` for a record outside the campaign's scope.
+ */
+export function deleteCampaignRecord(
+  sessionToken: string,
+  campaignId: string,
+  recordId: string,
+  options: CallOptions = {},
+): Promise<Result<undefined>> {
+  return call('ontology.campaign_record_delete', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{campaignId}/records/{recordId}', { params: { header: session(sessionToken), path: { campaignId, recordId } } }),
+  );
+}
+
+/**
  * One page of the version a record was read from, on the record's ground (Story 4.3): the same shape as a material's
  * page; `request.not_found` for a record the system does not show or a page that is not one.
  */

@@ -2768,7 +2768,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.40.0"
+    "version" : "1.41.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3106,6 +3106,52 @@
       }
     },
     "/api/v1/campaigns/{campaignId}/records/{recordId}" : {
+      "delete" : {
+        "operationId" : "deleteCampaignRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The record was deleted"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one record as one of the account's campaigns shows it (contract 1.41.0, a search's record result; 204, no body). The record stays deleted: there is no undo. From then on it leaves the type's list, the counts, the record pages, corrections and searches at once, and leaves answers once its index point is removed by a job; an answer already stored keeps it as it was cited. A reprocessed version that reads it again deletes it too when accepted. No version is sent. request.not_found (404) for a campaign that is not the account's, and for a record that getCampaignRecord does not answer; none is told apart, and nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
       "get" : {
         "operationId" : "getCampaignRecord",
         "parameters" : [ {
@@ -6120,6 +6166,52 @@
       }
     },
     "/api/v1/systems/{systemId}/records/{recordId}" : {
+      "delete" : {
+        "operationId" : "deleteRecord",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The system's id",
+          "in" : "path",
+          "name" : "systemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The record was deleted"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one record as one of the account's systems shows it (contract 1.41.0; 204, no body). The record stays deleted: there is no undo. From then on it leaves the type's list, the counts, the record pages, corrections and searches at once, and leaves answers once its index point is removed by a job; an answer already stored keeps it as it was cited. A reprocessed version that reads it again deletes it too when accepted. No version is sent. Only the records of the system's accepted versions are read: those of the ready versions of the materials attached to the system and of those of its campaigns. request.not_found (404) for a system that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of another system's materials): none is told apart, and no name or field is answered then; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "ontology" ]
+      },
       "get" : {
         "operationId" : "getRecord",
         "parameters" : [ {

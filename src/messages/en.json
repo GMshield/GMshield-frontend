@@ -135,6 +135,13 @@
         "viewCurrent": "See the current version",
         "keepMine": "Keep mine as a new version",
         "toast": "Record corrected."
+      },
+      "delete": {
+        "open": "Delete",
+        "title": "Delete «{name}»?",
+        "consequence": "The record leaves the lists, the counts and the search now, and the answers as soon as the index is updated. Answers already given stay as they are. This cannot be undone.",
+        "confirm": "Delete record",
+        "toast": "Record deleted."
       }
     },
     "delete": {

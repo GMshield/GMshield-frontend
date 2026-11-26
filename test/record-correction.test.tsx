@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const routerRefresh = vi.fn();
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -10,7 +10,9 @@ vi.mock('next/navigation', async (importOriginal) => ({
 
 const { RecordCorrection, NO_CORRECTION } = await import('@/components/RecordCorrection');
 type RecordCorrectionState = import('@/components/RecordCorrection').RecordCorrectionState;
-const { correctionTexts, typeOptions } = await import('@/app/(signed-in)/records/correction');
+type RecordDeleteState = import('@/components/RecordCorrection').RecordDeleteState;
+type RecordDeletion = import('@/components/RecordCorrection').RecordDeletion;
+const { correctionTexts, deletionTexts, typeOptions } = await import('@/app/(signed-in)/records/correction');
 const { translator } = await import('@/messages');
 
 const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
@@ -257,5 +259,110 @@ describe("a record's correction (Story 4.5)", () => {
       { key: 'talento', label: 'Talento' },
     ]);
     expect(typeOptions([], { key: 'item', name: 'item', core: 'item' }, t)).toEqual([{ key: 'item', label: 'Item' }]);
+  });
+});
+
+describe("a record's delete (Story 4.5 part B)", () => {
+  // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
+  beforeAll(() => {
+    if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+      HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      };
+      HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute('open');
+      };
+    }
+  });
+
+  type DeleteAction = (previous: RecordDeleteState, form: FormData) => Promise<RecordDeleteState>;
+
+  function deletable(action: DeleteAction, then: RecordDeletion['then'], language: 'pt-BR' | 'en' = 'pt-BR', campaign = false) {
+    const t = translator(language);
+    return render(
+      <RecordCorrection
+        ground={campaign ? { kind: 'campaign', campaignId: '0190a0b0-0000-7000-8000-000000000002' } : { kind: 'system', systemId: SYSTEM }}
+        recordId={RECORD}
+        version={3}
+        values={VALUES}
+        types={TYPES}
+        texts={correctionTexts(t)}
+        action={vi.fn()}
+        deletion={{ texts: deletionTexts(t), language, action, then }}
+      />,
+    );
+  }
+
+  it('"Excluir" is a danger pill beside "Corrigir" that asks first; "Cancelar" or Esc closes and sends nothing', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<DeleteAction>(async () => ({ error: null }));
+    const { container } = deletable(action, { recordTypeId: '0190a0b0-0000-7000-8000-000000000601' });
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(opener.previousElementSibling).toBe(screen.getByRole('button', { name: 'Corrigir' }));
+
+    // From the keyboard: Tab past "Corrigir" to "Excluir", Enter opens the dialog.
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Fire Boll»?' });
+    expect(dialog.textContent).toContain('Isso não pode ser desfeito.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it("confirmed, it posts the record with the type's list to go to on a system's page, or the search on a campaign's", async () => {
+    const user = userEvent.setup();
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn<DeleteAction>(async (_previous, form) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return { error: null };
+    });
+    deletable(action, { recordTypeId: '0190a0b0-0000-7000-8000-000000000601' });
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir registro' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await waitFor(() =>
+      expect(posted).toEqual([{ ground: 'system', owner: SYSTEM, recordId: RECORD, recordTypeId: '0190a0b0-0000-7000-8000-000000000601' }]),
+    );
+    cleanup();
+
+    deletable(action, { back: '/search?q=fogo' }, 'en', true);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog', { name: 'Delete «Fire Boll»?' }).textContent).toContain('This cannot be undone.');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete record' }));
+    await waitFor(() =>
+      expect(posted[1]).toEqual({ ground: 'campaign', owner: '0190a0b0-0000-7000-8000-000000000002', recordId: RECORD, back: '/search?q=fogo' }),
+    );
+  });
+
+  it('a refusal shows as an alert under the pills, with the focus still on "Excluir"', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<DeleteAction>(async () => ({ error: 'Não encontrado.' }));
+    deletable(action, { recordTypeId: '0190a0b0-0000-7000-8000-000000000601' });
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir registro' }));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Não encontrado.'));
+    expect(document.activeElement).toBe(opener);
+    expect(opener.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('a page without a delete shows "Corrigir" alone', () => {
+    correction(vi.fn());
+    expect(screen.queryByRole('button', { name: 'Excluir' })).toBeNull();
+    expect(screen.queryByRole('dialog', { hidden: true })).toBeNull();
   });
 });

@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
+import type { Language } from '@/messages';
+
+import { ConfirmationDialog } from './ConfirmationDialog';
 import { PillButton, SolidPillButton } from './PillButton';
 import styles from './RecordCorrection.module.css';
 import formStyles from './SystemForm.module.css';
@@ -76,6 +79,37 @@ export type RecordCorrectionTexts = {
   readonly keepMine: string;
 };
 
+/** What a record's delete left to say (Story 4.5 part B): the text of the backend's refusal, or nothing (the page moved on). */
+export type RecordDeleteState = { readonly error: string | null };
+
+export const NO_DELETE: RecordDeleteState = { error: null };
+
+/** The texts of a record's delete, in the interface's language: `title` holds `{name}`. */
+export type RecordDeleteTexts = {
+  readonly open: string;
+  readonly title: string;
+  readonly consequence: string;
+  readonly confirm: string;
+};
+
+/**
+ * "Excluir" beside "Corrigir" (Story 4.5 part B): its texts, its Server Action, and where the page goes once the record
+ * is deleted, posted with it: the record type's list on a system's page (`recordTypeId`), the search on a search's page
+ * (`back`, its address).
+ */
+export type RecordDeletion = {
+  readonly texts: RecordDeleteTexts;
+  /** The interface's language (the dialog's own words). */
+  readonly language: Language;
+  readonly action: (previous: RecordDeleteState, form: FormData) => Promise<RecordDeleteState>;
+  readonly then: { readonly recordTypeId: string } | { readonly back: string };
+};
+
+/** The page that offers no delete: never called. */
+async function noDelete(previous: RecordDeleteState): Promise<RecordDeleteState> {
+  return previous;
+}
+
 export type RecordCorrectionProps = {
   readonly ground: CorrectionGround;
   readonly recordId: string;
@@ -89,6 +123,8 @@ export type RecordCorrectionProps = {
   readonly action: (previous: RecordCorrectionState, form: FormData) => Promise<RecordCorrectionState>;
   /** The record's fields as the page draws them, shown until the GM chooses "Corrigir". */
   readonly children?: ReactNode;
+  /** "Excluir" beside "Corrigir" (Story 4.5 part B); none when absent. */
+  readonly deletion?: RecordDeletion;
 };
 
 /** A field row of the form, with a key of its own: two rows may hold the same name and value. */
@@ -113,10 +149,18 @@ function fill(text: string, params: Readonly<Record<string, string | number>>): 
  * a versão atual" (the page read again, the form closed) and "Manter a minha como nova versão" (the GM's edits sent
  * again on the current version). Every part is reachable from the keyboard: the form takes the focus on the name, a new
  * field on its name, and "Corrigir" gets it back when the form closes.
+ *
+ * Story 4.5 part B: with `deletion`, "Excluir" (a danger pill) sits beside "Corrigir" and opens the confirmation the way
+ * a campaign's delete does ({@link ConfirmationDialog}: "Cancelar" or Esc closes it and focus goes back to "Excluir").
+ * Confirmed, the record goes to the Server Action, which deletes it and moves the page on with the toast "Registro
+ * excluído."; a refusal shows as an alert under the pills, and "Excluir" stays focusable (`aria-disabled`) while the
+ * delete runs.
  */
-export function RecordCorrection({ ground, recordId, version, values, types, texts, action, children }: RecordCorrectionProps) {
+export function RecordCorrection({ ground, recordId, version, values, types, texts, action, children, deletion }: RecordCorrectionProps) {
   const router = useRouter();
   const [state, dispatch, pending] = useActionState(action, NO_CORRECTION);
+  const [deleteState, deleteDispatch, deleting] = useActionState(deletion?.action ?? noDelete, NO_DELETE);
+  const [confirming, setConfirming] = useState(false);
   // The answer the form opened after (null: closed): a correction saved since then closes it.
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft>({ name: '', recordType: '', rows: [] });
@@ -189,15 +233,64 @@ export function RecordCorrection({ ground, recordId, version, values, types, tex
     setDraft({ ...draft, rows });
   };
 
+  const confirmDelete = () => {
+    setConfirming(false);
+    if (deletion === undefined) {
+      return;
+    }
+    const data = new FormData();
+    data.set('ground', ground.kind);
+    data.set('owner', ground.kind === 'system' ? ground.systemId : ground.campaignId);
+    data.set('recordId', recordId);
+    if ('recordTypeId' in deletion.then) {
+      data.set('recordTypeId', deletion.then.recordTypeId);
+    } else {
+      data.set('back', deletion.then.back);
+    }
+    startTransition(() => deleteDispatch(data));
+  };
+
   if (!open) {
     return (
       <>
         {children}
         <div className={styles.toolbar}>
-          <PillButton ref={opener} onClick={start}>
+          <PillButton ref={opener} onClick={start} disabled={deleting}>
             {texts.open}
           </PillButton>
+          {deletion === undefined ? null : (
+            // aria-disabled, not disabled, while the delete runs: the dialog gives focus back here, and a refusal keeps it.
+            <PillButton
+              variant="danger"
+              aria-haspopup="dialog"
+              aria-disabled={deleting}
+              pending={deleting}
+              onClick={() => {
+                if (!deleting) {
+                  setConfirming(true);
+                }
+              }}
+            >
+              {deletion.texts.open}
+            </PillButton>
+          )}
         </div>
+        {deletion === undefined || deleteState.error === null ? null : (
+          <p role="alert" className={styles.deleteError}>
+            {deleteState.error}
+          </p>
+        )}
+        {deletion === undefined ? null : (
+          <ConfirmationDialog
+            open={confirming}
+            title={fill(deletion.texts.title, { name: values.name })}
+            consequence={deletion.texts.consequence}
+            confirmLabel={deletion.texts.confirm}
+            onConfirm={confirmDelete}
+            language={deletion.language}
+            onCancel={() => setConfirming(false)}
+          />
+        )}
       </>
     );
   }

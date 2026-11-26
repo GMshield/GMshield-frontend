@@ -1,5 +1,5 @@
-import { correctRecordAction } from '@/app/(signed-in)/records/actions';
-import { correctionTexts, typeOptions } from '@/app/(signed-in)/records/correction';
+import { correctRecordAction, deleteRecordAction } from '@/app/(signed-in)/records/actions';
+import { correctionTexts, deletionTexts, typeOptions } from '@/app/(signed-in)/records/correction';
 import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
 import { Notice } from '@/components/Notice';
@@ -20,7 +20,8 @@ import { currentSessionToken } from '@/server/session-cookies';
  * which opens the source view at that page of the record's version ({@link RecordReferences}). A record without
  * fields shows no empty list and no rule. Story 4.5: "Corrigir" under the fields opens the record's correction in their
  * place ({@link RecordCorrection}): its name, its type among the system's record types (core and approved) and its
- * fields, saved on the version read. A record the system
+ * fields, saved on the version read. Story 4.5 part B: "Excluir" beside it asks for confirmation, deletes the record and
+ * goes to its record type's list with the toast "Registro excluído.". A record the system
  * does not show (another owner's, of a version that is not accepted or is superseded, of another system, unknown or
  * malformed) shows the single "Não encontrado." page; another failure is a notice.
  */
@@ -46,6 +47,7 @@ export default async function RecordPage({ params }: { readonly params: Promise<
         types={typeOptions(types, recordType, t)}
         texts={correctionTexts(t)}
         action={correctRecordAction}
+        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, then: { recordTypeId: recordType.id } }}
       >
         <RecordFields fields={fields} t={t} />
       </RecordCorrection>

@@ -9,6 +9,14 @@
   gap: var(--space-3);
 }
 
+/* Story 4.5 part B: a refused delete, under the pills. */
+.deleteError {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: var(--font-label-weight);
+}
+
 .stale {
   display: flex;
   flex-direction: column;

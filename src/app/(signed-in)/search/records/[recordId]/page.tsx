@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
-import { correctRecordAction } from '@/app/(signed-in)/records/actions';
-import { correctionTexts, typeOptions } from '@/app/(signed-in)/records/correction';
+import { correctRecordAction, deleteRecordAction } from '@/app/(signed-in)/records/actions';
+import { correctionTexts, deletionTexts, typeOptions } from '@/app/(signed-in)/records/correction';
 import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
 import { Notice } from '@/components/Notice';
@@ -38,6 +38,8 @@ type Props = {
  * search's title. A record outside the scope (switched off, not accepted, another account's, unknown or malformed), or
  * no current campaign, shows the single "Não encontrado." page; another failure is a notice. Story 4.5: "Corrigir" opens
  * the record's correction there too ({@link RecordCorrection}), its type among the campaign's system's record types.
+ * Story 4.5 part B: "Excluir" beside it asks for confirmation, deletes the record as the campaign shows it and goes back
+ * to the search it was opened from with the toast "Registro excluído.".
  */
 export default async function SearchRecordPage({ params, searchParams }: Props) {
   const [{ recordId }, query, { language }, token] = await Promise.all([
@@ -81,6 +83,7 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
         types={typeOptions(types, recordType, t)}
         texts={correctionTexts(t)}
         action={correctRecordAction}
+        deletion={{ texts: deletionTexts(t), language, action: deleteRecordAction, then: { back: back.href } }}
       >
         <RecordFields fields={fields} t={t} />
       </RecordCorrection>

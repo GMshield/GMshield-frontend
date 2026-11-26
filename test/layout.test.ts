@@ -1529,12 +1529,18 @@ describe("a record type's records and a record's page (Story 4.3)", () => {
     expect(html.indexOf('<hr')).toBeLessThan(html.indexOf('Fontes'));
     expect(html).toContain('Livro do Jogador.pdf, Magias › Bola de Fogo, p. 241</button>');
     expect(html).toContain('Livro do Jogador.pdf, p. 242</button>');
-    expect(html.match(/aria-haspopup="dialog"/g)).toHaveLength(2);
+    // The two references' source views, and "Excluir"'s confirmation (Story 4.5 part B).
+    expect(html.match(/aria-haspopup="dialog"/g)).toHaveLength(3);
     // Story 4.5: "Corrigir" under the fields, before the references; the form opens only when chosen.
     expect(html).toMatch(/<button[^>]*>Corrigir<\/button>/);
     expect(html.indexOf('<hr')).toBeLessThan(html.indexOf('>Corrigir<'));
     expect(html.indexOf('>Corrigir<')).toBeLessThan(html.indexOf('Fontes'));
     expect(html).not.toContain('<form');
+    // Story 4.5 part B: "Excluir", a danger pill, beside "Corrigir"; its confirmation is closed.
+    expect(html).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
+    expect(html.indexOf('>Corrigir<')).toBeLessThan(html.indexOf('>Excluir<'));
+    expect(html.indexOf('>Excluir<')).toBeLessThan(html.indexOf('Fontes'));
+    expect(html).not.toMatch(/<dialog[^>]* open/);
     // The system's record types are read for the form's type select.
     expect(server.calls.some((call) => call.url.startsWith(`/api/v1/systems/${SYSTEM_ID}/record-types`))).toBe(true);
     html = await page('en');
@@ -1626,8 +1632,9 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
     expect(html).toMatch(/<\/dl><hr class="[^"]*rule[^"]*"\/>/);
     expect(html).toContain('Guia do Mestre.pdf, Itens mágicos, p. 209</button>');
     expect(html).toContain('aria-haspopup="dialog"');
-    // Story 4.5: the record is corrected here too, its types the campaign's system's.
+    // Story 4.5: the record is corrected here too, its types the campaign's system's; part B: and deleted.
     expect(html).toMatch(/<button[^>]*>Corrigir<\/button>/);
+    expect(html).toMatch(/<button[^>]*data-variant="danger"[^>]*>Excluir<\/button>/);
     expect(server.calls.some((call) => call.url.startsWith(`/api/v1/systems/${CAMPAIGN.body.system.id}/record-types`))).toBe(true);
     // In English.
     html = await page(query, 'en');
