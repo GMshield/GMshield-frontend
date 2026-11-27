@@ -1738,6 +1738,19 @@
         "required" : [ "query" ],
         "type" : "object"
       },
+      "NewShield" : {
+        "properties" : {
+          "name" : {
+            "description" : "1 to 120 code points after trimming; unique within the campaign, whatever the case",
+            "example" : "Combate",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
       "NewSystem" : {
         "properties" : {
           "description" : {
@@ -2972,6 +2985,73 @@
         "required" : [ "expiresInSeconds", "renewAfterSeconds", "sessionToken" ],
         "type" : "object"
       },
+      "Shield" : {
+        "properties" : {
+          "id" : {
+            "description" : "The Shield's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000003",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The Shield's name; null for the campaign's first Shield until the GM renames it (the frontend shows it as \"Escudo do Mestre\" or \"GM's Shield\")",
+            "example" : "Combate",
+            "type" : [ "string", "null" ]
+          },
+          "version" : {
+            "description" : "The Shield's version: a rename names it and raises it by one",
+            "example" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "id", "name", "version" ],
+        "type" : "object"
+      },
+      "ShieldPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Shield"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The cursor of the next page; absent on the last",
+            "example" : "0190a0b0-0000-7000-8000-000000000003",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many Shields the campaign has in all, whatever the page",
+            "example" : 2,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "ShieldRename" : {
+        "properties" : {
+          "name" : {
+            "description" : "The new name, 1 to 120 code points after trimming; unique within the campaign, whatever the case",
+            "example" : "Exploração",
+            "maxLength" : 120,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The version the rename was made on, as the Shield was read",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "name", "version" ],
+        "type" : "object"
+      },
       "SignInOutcome" : {
         "properties" : {
           "outcome" : {
@@ -3584,7 +3664,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.54.0"
+    "version" : "1.55.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -5712,6 +5792,254 @@
         },
         "summary" : "Changes one of the account's campaigns' scope settings on the version it names, from the next question on: the switches replaced, the materials off exactly those listed. Answers the settings as stored, their version raised by one. request.stale_version (409) when the settings have left that version, scope.material_unknown (400) for a material id that is not the account's or in none of the campaign's tiers, request.invalid (400) for a missing field, a null or malformed id, more than 1000 ids or a malformed body, request.not_found (404) for any other campaign id; nothing changes then; session.required (401) without a session",
         "tags" : [ "scope" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/shields" : {
+      "get" : {
+        "operationId" : "listShields",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "How many of the oldest to skip, 0 to 100000, for a numbered page; not together with cursor",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ShieldPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The Shields of one of the account's campaigns, oldest first; the first one has a null name until it is renamed. A page starts after a cursor or at an offset (a numbered page), and names the total of the list. request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted); request.invalid (400) for a limit outside 1 to 50, a malformed cursor, an offset outside 0 to 100000 or a cursor together with an offset above 0; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "operationId" : "createShield",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewShield"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Shield"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "A new Shield of one of the account's campaigns (201). request.shield_name_invalid (400) for a name outside its limits (params min and max), request.shield_name_taken (409) when the campaign has a Shield with the same name (trimmed, whatever the case), request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted), request.invalid (400) for a malformed body; nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/shields/{shieldId}" : {
+      "get" : {
+        "operationId" : "getShield",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Shield"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One Shield of one of the account's campaigns; its name is null while it is the campaign's unnamed first Shield. request.not_found (404) for any other id (unknown, another account's, malformed, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "patch" : {
+        "operationId" : "renameShield",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ShieldRename"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Shield"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Renames one Shield of one of the account's campaigns on the version it names: the Shield as stored, its version raised by one. request.stale_version (409) when the Shield has left that version, request.shield_name_taken (409) when another Shield of the campaign has the new name, request.shield_name_invalid (400) for a name outside its limits, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id (unknown, another account's, malformed, a Shield of another campaign or of a campaign being deleted); nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
       }
     },
     "/api/v1/conversations/current" : {

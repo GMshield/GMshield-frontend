@@ -218,6 +218,7 @@
       "sections": "Campaign sections",
       "overview": "Overview",
       "scope": "Scope",
+      "shields": "Shields",
       "conversations": "Conversations",
       "artifacts": "Artifacts",
       "name": "Name",
@@ -398,6 +399,22 @@
       "tickedOther": "{count} of {total} ticked"
     }
   },
+  "shields": {
+    "defaultName": "GM's Shield",
+    "list": "This campaign's Shields",
+    "new": "New Shield",
+    "rename": "Rename",
+    "empty": "This Shield has no notes yet.",
+    "form": {
+      "newTitle": "New Shield",
+      "renameTitle": "Rename Shield",
+      "name": "Name",
+      "create": "Create Shield",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This Shield was changed elsewhere. The field now shows its current name: make your change again and save."
+    }
+  },
   "characters": {
     "list": "Character sheets of {campaign}",
     "campaign": "Campaign {name}",
@@ -482,6 +499,8 @@
         "system_name_taken": "You already have a system with this name and edition.",
         "campaign_name_invalid": "The name needs {min} to {max} characters.",
         "campaign_name_taken": "This system already has a campaign with this name, perhaps an archived one.",
+        "shield_name_invalid": "The name needs {min} to {max} characters.",
+        "shield_name_taken": "This campaign already has a Shield with this name.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
         "conversation_name_invalid": "The name needs {min} to {max} characters."
       },
@@ -1027,7 +1046,9 @@
     "artifactOverrideRemoved": "Override removed.",
     "artifactRelationSet": "Relation saved.",
     "artifactRelationRemoved": "Relation removed.",
-    "artifactShared": "Sharing saved."
+    "artifactShared": "Sharing saved.",
+    "shieldCreated": "Shield «{name}» created.",
+    "shieldRenamed": "Shield renamed to «{name}»."
   },
   "notifications": {
     "title": "Notifications",

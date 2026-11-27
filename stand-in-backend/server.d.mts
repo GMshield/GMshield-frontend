@@ -164,6 +164,12 @@ export const ARTIFACT_PAGE: {
   total: number;
   types: { key: string; count: number }[];
 };
+/** Story 6.1 part A: the starter campaign's Shields (its unnamed first one, then "Combate") and a rename's answer. */
+export type StandInShield = { id: string; name: string | null; version: number };
+export const FIRST_SHIELD: StandInShield;
+export const COMBAT_SHIELD: StandInShield;
+export const SHIELD_PAGE: { items: StandInShield[]; total: number };
+export const RENAMED_SHIELD: StandInShield;
 /** Story 5.2: an edit's and a restore's answer (version 2), and an artifact's versions (its one version 1). */
 export const EDITED_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_VERSIONS: {

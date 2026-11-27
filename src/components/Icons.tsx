@@ -77,7 +77,8 @@ export type IconName =
   | 'fullScreen'
   | 'fullScreenExit'
   | 'zoomIn'
-  | 'zoomOut';
+  | 'zoomOut'
+  | 'shield';
 
 const PATHS: Readonly<Record<IconName, string>> = {
   questions: 'M4 5h16v11H9l-5 4z',
@@ -119,6 +120,8 @@ const PATHS: Readonly<Record<IconName, string>> = {
   /** 2026-11-23: a page's zoom: a magnifier with a plus, and with a minus. */
   zoomIn: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6M11 8v6',
   zoomOut: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6',
+  // Story 6.1: a Shield (Escudo do Mestre).
+  shield: 'M12 3l8 3v6c0 4.5-3.4 7.8-8 9-4.6-1.2-8-4.5-8-9V6z',
 };
 
 /** Story 3.12: the icons drawn filled as well as stroked. */

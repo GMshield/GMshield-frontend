@@ -5,6 +5,7 @@ import type { Translate } from '@/messages';
 import { typeLabel, type NamedRecordType } from '@/record-types';
 import type { ArtifactSummary } from '@/server/artifacts';
 import type { CampaignSummary } from '@/server/library';
+import type { Shield } from '@/server/shields';
 
 /** A campaign's system as a row shows it: its name, and its edition after it when it has one. */
 export function systemLabel(system: CampaignSummary['system'], t: Translate): string {
@@ -47,6 +48,25 @@ export function artifactRow(
     label: artifact.name,
     detail: shared === null ? type : type === null ? shared : `${type} · ${shared}`,
     href: `${campaignPath}/artifacts/${encodeURIComponent(artifact.id)}${from === undefined ? '' : `?from=${from}`}`,
+    state: null,
+  };
+}
+
+/**
+ * A Shield's name as the screens show it (Story 6.1): its own, or for the campaign's first Shield, unnamed until the GM
+ * renames it, "Escudo do Mestre" / "GM's Shield" in the interface's language.
+ */
+export function shieldName(shield: Pick<Shield, 'name'>, t: Translate): string {
+  return shield.name ?? t('shields.defaultName');
+}
+
+/** A row of a campaign's Shields (Story 6.1): the Shield's name; it opens the Shield's screen under `campaignPath`. */
+export function shieldRow(shield: Shield, campaignPath: string, t: Translate): ListRow {
+  return {
+    id: shield.id,
+    label: shieldName(shield, t),
+    detail: null,
+    href: `${campaignPath}/shields/${encodeURIComponent(shield.id)}`,
     state: null,
   };
 }

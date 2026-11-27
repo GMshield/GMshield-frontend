@@ -1145,6 +1145,21 @@ they sit in `src/`.
   - Messages `conversation.save.*`, `artifacts.page.conversation`, `errors.codes.conversation.turn_not_saveable` and
     `turn_saved`. The stand-in answers the save (a saved draft artifact) and both decline routes, its stored draft is
     offered with its proposal; the demo backend keeps each draft's save state.
+- **Shields in a campaign (Story 6.1 part A).** Public contract 1.55.0 (the minimum backend contract too: the Shield
+  routes are new; deploy the backend, then this frontend). `src/server/shields.ts` calls them: `listShields` (oldest
+  first) with `shieldsPage`, `getShield`, `createShield`, `renameShield`.
+  - A campaign's page gains the tab "Escudos" (`?tab=shields`, after "Escopo"): "Novo escudo" (a solid pill), then the
+    Shields in `ItemList` (`viewKey="shields"`, a new list of the view cookie, paged with `?page=`), each opening its
+    screen. The first Shield is unnamed (`name: null`) until renamed, and is shown as "Escudo do Mestre" / "GM's Shield"
+    (`shieldName` in `campaigns/rows.ts`).
+  - Three routes: `/campaigns/[id]/shields/new`, `/campaigns/[id]/shields/[shieldId]` (`PageHeader` back to the tab,
+    "Renomear", and the `EmptyState` "Este escudo ainda não tem notas.") and `/campaigns/[id]/shields/[shieldId]/edit`.
+    Both forms are `ShieldForm` (a bordered name field; the rename starts from the stored name, the default name only
+    as the placeholder). `createShieldAction` and `renameShieldAction` (`campaigns/[id]/shields/actions.ts`) `flash()`,
+    `revalidatePath('/', 'layout')` and open the Shield's screen; `request.shield_name_invalid` and
+    `request.shield_name_taken` show under the name, and a stale rename brings the current name and version back.
+  - Messages `campaigns.page.shields`, `shields.*`, `feedback.shieldCreated` and `shieldRenamed`. The stand-in answers
+    the four routes (an unnamed first Shield and "Combate"); the demo backend keeps each campaign's Shields.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

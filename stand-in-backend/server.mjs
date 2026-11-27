@@ -60,6 +60,8 @@
 // after the stand-in artifact for one id and "artefatos" ("artifacts" with language=en) for several, as an attachment:
 // a one-page PDF, the artifact as text or Markdown, an 8 x 8 JPEG, or for several JPG ids a zip of one JPEG each; an
 // unknown format is request.invalid. Without a query it answers the PDF of one artifact.
+// Story 6.1 part A: the starter campaign has two Shields, its first one unnamed (`name: null`) and "Combate"; a new
+// Shield answers "Combate", one Shield reads as the unnamed first one, and a rename answers it as "Exploração", version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -966,6 +968,20 @@ export const EXPORT_JPEG = Buffer.from(
     'AAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpAB//Z',
   'base64',
 );
+
+/**
+ * Story 6.1 part A: the starter campaign's Shields, oldest first: its first one, unnamed (the screens name it "Escudo do
+ * Mestre"), then "Combate". A new Shield answers "Combate" as stored (201, version 0), and a rename answers the first
+ * one renamed "Exploração" at version 1.
+ */
+export const FIRST_SHIELD = { id: '0190a0b0-0000-7000-8000-000000000a01', name: null, version: 0 };
+export const COMBAT_SHIELD = { id: '0190a0b0-0000-7000-8000-000000000a02', name: 'Combate', version: 0 };
+export const SHIELD_PAGE = { items: [FIRST_SHIELD, COMBAT_SHIELD], total: 2 };
+export const RENAMED_SHIELD = { ...FIRST_SHIELD, name: 'Exploração', version: 1 };
+EXAMPLES['GET /api/v1/campaigns/{id}/shields'] = SHIELD_PAGE;
+EXAMPLES['POST /api/v1/campaigns/{id}/shields'] = COMBAT_SHIELD;
+EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}'] = FIRST_SHIELD;
+EXAMPLES['PATCH /api/v1/campaigns/{id}/shields/{shieldId}'] = RENAMED_SHIELD;
 
 /** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
 export function tinyPdf(text) {

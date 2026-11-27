@@ -17,6 +17,7 @@ import { isRecordTypeKey, typeLabel } from '@/record-types';
 import { artifactsPage, type ArtifactSummary, type ArtifactTypeCount } from '@/server/artifacts';
 import { AREAS, listConversations } from '@/server/conversations';
 import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
+import { shieldsPage, type Shield } from '@/server/shields';
 import type { ListPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
 import type { ListView } from '@/view-cookie';
@@ -24,9 +25,9 @@ import type { ListView } from '@/view-cookie';
 import { systemRecordTypes } from '../../systems/rows';
 import styles from '../../systems/systems.module.css';
 import { archiveCampaignAction, changeScopeAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
-import { artifactRow, systemLabel } from '../rows';
+import { artifactRow, shieldRow, systemLabel } from '../rows';
 
-const TABS = ['overview', 'scope', 'conversations', 'artifacts'] as const;
+const TABS = ['overview', 'scope', 'shields', 'conversations', 'artifacts'] as const;
 type Tab = (typeof TABS)[number];
 
 function tabOf(value: unknown): Tab {
@@ -48,6 +49,9 @@ function tabOf(value: unknown): Tab {
  *   menu), each opening its page and named by its name with its record type under it; the type chips ("Todos", then
  *   each record type in use, with its count) narrow the list (`?type=`); "Novo artefato" (a solid pill) opens the form.
  *   A campaign without artifacts says so in one sentence with "Novo artefato"; a type with none leads back to all.
+ * - shields (Story 6.1): the campaign's Shields, oldest first, paged (`?page=`, rows a page from the "Exibição" menu),
+ *   each opening its screen and named by its name (the first one, unnamed until renamed, as "Escudo do Mestre");
+ *   "Novo escudo" (a solid pill) opens the form. Every campaign has at least one Shield.
  * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
  * "Não encontrado." page.
  *
@@ -86,7 +90,7 @@ export default async function CampaignPage({
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
   const type = typeof query.type === 'string' && isRecordTypeKey(query.type) ? query.type : null;
-  const [areas, scope, artifacts, recordTypes] = await Promise.all([
+  const [areas, scope, artifacts, recordTypes, shields] = await Promise.all([
     tab === 'conversations'
       ? Promise.all(AREAS.map(async (area) => ({ area, list: await listConversations(token ?? '', campaignId, area, { limit: 1 }) })))
       : null,
@@ -94,6 +98,7 @@ export default async function CampaignPage({
     tab === 'artifacts' ? artifactsPage(token ?? '', campaignId, type, pageParam(query.page), views.artifacts.size) : null,
     // The record types name the rows' types and the chips (an approved type by the name its system gives it).
     tab === 'artifacts' ? systemRecordTypes(token ?? '', system.id) : [],
+    tab === 'shields' ? shieldsPage(token ?? '', campaignId, pageParam(query.page), views.shields.size) : null,
   ]);
   const refused = areas?.map(({ list }) => list).find((list) => !list.ok);
   const counted = areas?.map(({ area, list }) => ({ area, total: list.ok ? list.data.total : 0 })) ?? [];
@@ -190,6 +195,18 @@ export default async function CampaignPage({
           ))}
         </ul>
       )}
+      {shields === null ? null : !shields.ok ? (
+        <Notice status="danger" language={language} message={errorText(shields.problem, language)} dismissible={false} />
+      ) : (
+        <ShieldsTab
+          here={here}
+          page={shields.data}
+          labels={{ list: t('shields.list'), new: t('shields.new') }}
+          rows={shields.data.rows.map((shield) => shieldRow(shield, here, t))}
+          view={views.shields}
+          language={language}
+        />
+      )}
       {artifacts === null ? null : !artifacts.ok ? (
         <Notice status="danger" language={language} message={errorText(artifacts.problem, language)} dismissible={false} />
       ) : (
@@ -207,6 +224,45 @@ export default async function CampaignPage({
           language={language}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * The Shields tab (Story 6.1): "Novo escudo", then the list with its pages. A campaign always has a Shield (the backend
+ * gives one to a campaign that has none when the list is read), so there is no empty state.
+ */
+function ShieldsTab({
+  here,
+  page,
+  labels,
+  rows,
+  view,
+  language,
+}: {
+  readonly here: string;
+  readonly page: ListPage<Shield>;
+  readonly labels: { readonly list: string; readonly new: string };
+  readonly rows: readonly ListRow[];
+  readonly view: ListView;
+  readonly language: Language;
+}) {
+  return (
+    <>
+      <div className={styles.tabActions}>
+        <PillLink href={`${here}/shields/new`} solid>
+          {labels.new}
+        </PillLink>
+      </div>
+      <ItemList
+        label={labels.list}
+        rows={rows}
+        pages={{ paging: page.paging, path: here, query: { tab: 'shields' } }}
+        icon="shield"
+        viewKey="shields"
+        view={view}
+        language={language}
+      />
     </>
   );
 }

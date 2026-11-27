@@ -1599,6 +1599,66 @@ describe('SystemForm (Story 3.1)', () => {
   });
 });
 
+type ShieldFormState = import('@/app/(signed-in)/campaigns/[id]/shields/form-state').ShieldFormState;
+
+describe('ShieldForm (Story 6.1)', () => {
+  const labels = { name: 'Nome', submit: 'Salvar', cancel: 'Cancelar', placeholder: 'Escudo do Mestre' };
+  const start: ShieldFormState = { values: { name: '' }, version: 3, error: null, field: null, stale: false };
+
+  it('labels its field, starts an unnamed Shield empty with its default name as the placeholder, and posts campaign, id, version and name', async () => {
+    const { ShieldForm } = await import('@/components/ShieldForm');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: ShieldFormState, form: FormData) => Promise<ShieldFormState>>(async () => start);
+    const { container } = render(
+      <ShieldForm labels={labels} initial={start} campaignId="c1" id="s1" cancelHref="/campaigns/c1/shields/s1" action={action} />,
+    );
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    expect(name.value).toBe('');
+    expect(name.placeholder).toBe('Escudo do Mestre');
+    expect(name.getAttribute('aria-required')).toBe('true');
+    expect(container.querySelectorAll('[maxlength]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Salvar' }).dataset.variant).toBe('solid');
+    expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/campaigns/c1/shields/s1');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.type(name, 'Exploração');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const sent = action.mock.calls[0]![1];
+    expect(sent.get('campaign')).toBe('c1');
+    expect(sent.get('id')).toBe('s1');
+    expect(sent.get('version')).toBe('3');
+    expect(sent.get('name')).toBe('Exploração');
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a refusal under the name and keeps what was typed; a stale rename shows the current name and posts its version next', async () => {
+    const { ShieldForm } = await import('@/components/ShieldForm');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ values: { name: 'combate' }, version: 3, error: 'Esta campanha já tem um escudo com este nome.', field: 'name', stale: false })
+      .mockResolvedValueOnce({ values: { name: 'Viagem' }, version: 5, error: 'Este escudo foi alterado em outro lugar.', field: null, stale: true })
+      .mockResolvedValueOnce({ values: { name: 'Viagem' }, version: 5, error: null, field: null, stale: false });
+    render(<ShieldForm labels={labels} initial={start} campaignId="c1" id="s1" cancelHref="/campaigns/c1/shields/s1" action={action} />);
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    await user.type(name, 'combate');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Esta campanha já tem um escudo com este nome.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe(alert.id);
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('combate');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const stale = await screen.findByText('Este escudo foi alterado em outro lugar.');
+    expect(stale.getAttribute('role')).toBe('alert');
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('Viagem');
+    expect(screen.getByLabelText('Nome').getAttribute('aria-invalid')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
+  });
+});
+
 describe('TierLabel (Story 3.7)', () => {
   afterEach(cleanup);
 
