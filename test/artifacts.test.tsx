@@ -76,6 +76,8 @@ const ARTIFACT = {
   version: 1,
   currentVersion: 1,
   createdAt: '2026-11-26T12:00:00Z',
+  conversationId: null,
+  references: [],
 };
 /** Story 5.2: an artifact's versions as the page reads their first page. */
 const VERSIONS_ROUTE = `GET /api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}/versions?limit=10`;
@@ -272,7 +274,7 @@ describe("a new artifact's form (Story 5.1)", () => {
 });
 
 describe("an artifact's page (Story 5.1)", () => {
-  it('shows the name, the type as the subtitle, the fields as a two-column list, the content as plain text and no sources', async () => {
+  it('shows the name, the type as the subtitle, the fields as a two-column list, the content as Markdown with its lines and no sources', async () => {
     await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
       cookieJar['__Host-gmshield-lang'] = language;
@@ -285,9 +287,11 @@ describe("an artifact's page (Story 5.1)", () => {
       expect(html).toMatch(/<dt>Dano<\/dt><dd>1d8 cortante<\/dd>/);
       expect(html.indexOf('Peso')).toBeGreaterThan(html.indexOf('Dano'));
       expect(html).toContain(`>${messages.artifacts.page.content}</h2>`);
-      // Plain text: the markup the GM typed is shown as text, never as HTML.
-      expect(html).toContain('Forjada nas montanhas do norte.\n&lt;b&gt;Brilha&lt;/b&gt; perto de orcs.');
-      expect(html).not.toContain('<b>Brilha');
+      // Story 5.4 part A: sanitized Markdown (raw HTML skipped, never rendered), its single line break kept.
+      expect(html).toMatch(/<p>Forjada nas montanhas do norte\.<br\/>\s*Brilha perto de orcs\.<\/p>/);
+      expect(html).not.toContain('<b>');
+      // Written by hand: no conversation to open.
+      expect(html).not.toContain(messages.artifacts.page.conversation);
       expect(html).toContain(`>${messages.artifacts.page.sources}</h2>`);
       expect(html).toContain(messages.artifacts.page.noSources);
       expect(html.indexOf(messages.artifacts.page.content)).toBeLessThan(html.indexOf(messages.artifacts.page.noSources));
@@ -301,6 +305,40 @@ describe("an artifact's page (Story 5.1)", () => {
     expect(linkTo(fromCharacters, '/characters')).not.toBe('');
     expect(fromCharacters).toContain(`>${ptBR.shell.entries.characters}</a>`);
     expect(linkTo(fromCharacters, `/campaigns/${CAMPAIGN}?tab=artifacts`)).toBe('');
+  });
+
+  it('Story 5.4 part A: a saved draft renders its Markdown, lists its sources (a removed one unlinked) and opens its conversation', async () => {
+    const conversation = '0190a0b0-0000-7000-8000-000000000020';
+    const saved = {
+      ...ARTIFACT,
+      recordType: 'encounter',
+      name: 'Emboscada na Cripta',
+      fields: [],
+      content: '## Cripta\n\n- Três esqueletos\n- Um carniçal\n\n```\nlinha um\nlinha dois\n```',
+      conversationId: conversation,
+      references: [
+        { number: 1, kind: 'passage', materialName: 'Notas da campanha.md', sectionPath: ['Cripta'], page: 2, passageIds: ['0190a0b0-0000-7000-8000-000000000010'], removed: false, tier: 'campaign' },
+        { number: 2, kind: 'passage', materialName: 'Livro apagado.pdf', sectionPath: [], page: 9, passageIds: ['0190a0b0-0000-7000-8000-000000000011'], removed: true, tier: 'system' },
+        { number: 3, kind: 'artifact', artifactId: KAEL, artifactVersion: 1, recordType: 'character_sheet', name: 'Kael', fields: [], removed: false, tier: 'campaign' },
+      ],
+    };
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: saved }, [VERSIONS_ROUTE]: ONE_VERSION });
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+    expect(html).toMatch(/<h2>Cripta<\/h2>/);
+    expect(html).toMatch(/<li>Três esqueletos<\/li>/);
+    // A fenced block keeps its lines as written, with no break added inside it.
+    expect(html).toContain('linha um\nlinha dois');
+    expect(html).not.toContain('linha um<br');
+    // "Fontes": each reference, numbered; the removed one struck through, with "fonte removida" and no link.
+    expect(html).toContain(`aria-label="${ptBR.conversation.references}"`);
+    expect(html).toContain('Notas da campanha.md, Cripta, p. 2');
+    expect(html).toMatch(/<s[^>]*>Livro apagado\.pdf, p\. 9<\/s> — fonte removida/);
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${KAEL}?version=1`)).not.toBe('');
+    expect(html).not.toContain(ptBR.artifacts.page.noSources);
+    // The conversation it came from.
+    expect(linkTo(html, `/questions/${conversation}`)).not.toBe('');
+    expect(html).toContain(ptBR.artifacts.page.conversation);
   });
 
   it('an artifact without fields or content shows neither; another owner\'s or another campaign\'s is not found', async () => {

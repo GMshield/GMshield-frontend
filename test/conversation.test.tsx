@@ -6,7 +6,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { NO_PLACES } from '@/components/uploads/types';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/questions' }));
+const navigation = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: navigation.refresh }), usePathname: () => '/questions' }));
 
 type Ask = (campaignId: string, question: string) => Promise<unknown>;
 const postQuestion = vi.fn<Ask>();
@@ -15,15 +16,22 @@ type SetDismissal = typeof import('@/client/conversation').setDismissal;
 const setDismissal = vi.fn<SetDismissal>();
 type SetBookmark = typeof import('@/client/conversation').setBookmark;
 const setBookmark = vi.fn<SetBookmark>();
+type SaveDraft = typeof import('@/client/conversation').saveDraft;
+const saveDraft = vi.fn<SaveDraft>();
+type SetSaveDecline = typeof import('@/client/conversation').setSaveDecline;
+const setSaveDecline = vi.fn<SetSaveDecline>();
 vi.mock('@/client/conversation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/client/conversation')>()),
   postQuestion,
   stopTurn,
   setDismissal,
   setBookmark,
+  saveDraft,
+  setSaveDecline,
 }));
 
-const { Conversation, DRAFT_PREFIX, MODE_PREFIX, RECONNECT_GIVE_UP_MS, UNDO_MS } = await import('@/components/conversation/Conversation');
+const { Conversation, DRAFT_PREFIX, MODE_PREFIX, RECONNECT_GIVE_UP_MS, SAVE_PREFIX, UNDO_MS } = await import('@/components/conversation/Conversation');
+const { NotificationsProvider } = await import('@/components/notifications/NotificationsProvider');
 const { UploadsProvider, useUploads } = await import('@/components/uploads/UploadsProvider');
 const { uploadTexts } = await import('@/components/uploads/upload-texts');
 const { errorText } = await import('@/messages');
@@ -127,7 +135,12 @@ function view(
 }
 
 function composer(): HTMLTextAreaElement {
-  return screen.getByRole('textbox') as HTMLTextAreaElement;
+  // Story 5.4 part A: a draft's save card has fields of its own; the composer is the one under the turns.
+  const field = document.getElementById('conversation-question');
+  if (!(field instanceof HTMLTextAreaElement)) {
+    throw new Error('no composer');
+  }
+  return field;
 }
 
 /** The turns as the screen shows them (the live region repeats some of their words): the first list on the page. */
@@ -3389,5 +3402,373 @@ describe('draft content with an agent (Story 5.3 part A)', () => {
     await waitFor(() => expect(streams).toHaveLength(2));
     expect(postQuestion).toHaveBeenLastCalledWith(CAMPAIGN, 'Uma masmorra', { conversationId: CONVERSATION, kind: 'draft' });
     expect(turns().getAllByTestId('draft-label')).toHaveLength(1);
+  });
+});
+
+describe('save a draft through the save confirmation (Story 5.4 part A)', () => {
+  const CONVERSATION = '0190a0b0-0000-7000-8000-000000000020';
+  const DRAFT_TURN = '0190a0b0-0000-7000-8000-000000000022';
+  const ARTIFACT = '0190a0b0-0000-7000-8000-000000000903';
+  const DRAFT_TEXT = '## Emboscada na cripta\n\nTrês esqueletos guardam a porta.';
+  const PROPOSAL = { name: 'Emboscada na Cripta', recordType: 'encounter' };
+  const TYPES = [
+    { key: 'rule', label: 'Regra' },
+    { key: 'creature', label: 'Criatura' },
+    { key: 'encounter', label: 'Encontro' },
+    { key: 'talento', label: 'Talento' },
+  ];
+  type Stored = import('@/client/conversation').StoredTurn;
+
+  /** A stored draft, done with its proposal and one reference, offered (or as `saving` says). */
+  function storedDraft(saving: Stored['saving'] = { state: 'offered', artifactId: null }, id = DRAFT_TURN): Stored {
+    return {
+      id,
+      question: 'Um encontro para a cripta',
+      language: 'pt-BR',
+      createdAt: '2026-11-26T12:00:00Z',
+      events: [
+        { sequence: 1, type: 'delta', data: { text: DRAFT_TEXT } },
+        { sequence: 2, type: 'citation', data: { passageId: PASSAGE_A, offset: 22 } },
+        { sequence: 3, type: 'done', data: { stopped: false, silent: false, modelKnowledge: false, references: [reference(1, [PASSAGE_A])], proposal: PROPOSAL } },
+      ] as Stored['events'],
+      bookmarked: false,
+      kind: 'draft',
+      ...(saving === undefined ? {} : { saving }),
+    };
+  }
+
+  function conversation(props: { stored?: readonly Stored[]; savedNames?: Record<string, string>; language?: 'pt-BR' | 'en' } = {}) {
+    return (
+      <NotificationsProvider language={props.language ?? 'pt-BR'}>
+        <UploadsProvider texts={uploadTexts(props.language ?? 'pt-BR')} belonging={NO_PLACES} urlStorage={memoryStorage()}>
+          <Conversation
+            language={props.language ?? 'pt-BR'}
+            campaignId={CAMPAIGN}
+            hasSources
+            review={null}
+            conversationId={props.stored === undefined ? null : CONVERSATION}
+            stored={props.stored}
+            saveTypes={TYPES}
+            savedNames={props.savedNames}
+            openStream={(url) => {
+              const stream = new FakeStream(url);
+              streams.push(stream);
+              return stream as unknown as EventSource;
+            }}
+          />
+        </UploadsProvider>
+      </NotificationsProvider>
+    );
+  }
+
+  function screenOf(props: Parameters<typeof conversation>[0] = {}) {
+    return render(conversation(props));
+  }
+
+  function card() {
+    return within(screen.getByTestId('save-card'));
+  }
+
+  /** Asks a draft and streams it to its end: `done` as given (by default with its proposal and a reference). */
+  async function drafted(done: Record<string, unknown> = { stopped: false, silent: false, references: [reference(1, [PASSAGE_A])], proposal: PROPOSAL }) {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Criar rascunho' }));
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: DRAFT_TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'Um encontro para a cripta{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(1));
+    const stream = streams[0]!;
+    stream.emit('delta', { text: DRAFT_TEXT }, 1);
+    // Streaming: no card, no action.
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salvar como artefato' })).toBeNull();
+    stream.emit('citation', { passageId: PASSAGE_A, offset: 22 }, 2);
+    stream.emit('done', done, 3);
+    return user;
+  }
+
+  beforeEach(() => {
+    streams = [];
+    postQuestion.mockReset();
+    stopTurn.mockReset();
+    stopTurn.mockResolvedValue(true);
+    setDismissal.mockReset();
+    setBookmark.mockReset();
+    saveDraft.mockReset();
+    setSaveDecline.mockReset();
+    setSaveDecline.mockResolvedValue({ ok: true });
+    navigation.refresh.mockReset();
+    localStorage.clear();
+    window.history.replaceState(null, '', '/questions/new');
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows no card while a draft streams; once done, the card with the proposal, said politely, focus kept in the composer', async () => {
+    screenOf();
+    await drafted();
+
+    const name = card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement;
+    expect(name.value).toBe('Emboscada na Cripta');
+    const type = card().getByRole('combobox', { name: 'Tipo de registro' }) as HTMLSelectElement;
+    expect(type.value).toBe('encounter');
+    // Every core and approved type of the system, after the empty choice.
+    expect([...type.options].map((option) => option.textContent)).toEqual(['Escolha um tipo', 'Regra', 'Criatura', 'Encontro', 'Talento']);
+    expect(card().getByRole('heading', { name: 'Salvar como artefato?' })).toBeTruthy();
+    expect(card().getByRole('button', { name: 'Editar conteúdo' }).getAttribute('aria-pressed')).toBe('false');
+    expect(card().getByRole('button', { name: 'Salvar' })).toBeTruthy();
+    expect(card().getByRole('button', { name: 'Agora não' })).toBeTruthy();
+    // The card comes after the draft's actions, and the polite region says it after the draft.
+    const turn = screen.getByTestId('save-card').closest('li')!;
+    expect(within(turn).getByRole('button', { name: 'Dispensar resposta' }).compareDocumentPosition(screen.getByTestId('save-card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(polite()).toContain('Você pode salvar este rascunho como artefato');
+    expect(document.activeElement).toBe(composer());
+  });
+
+  it('offers no card under a stopped draft, a silent one or an answer', async () => {
+    screenOf();
+    const user = await drafted({ stopped: true, silent: false, references: [reference(1, [PASSAGE_A])], proposal: PROPOSAL });
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    cleanup();
+    streams = [];
+
+    screenOf();
+    await drafted({ stopped: false, silent: true, references: [], proposal: PROPOSAL });
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    cleanup();
+    streams = [];
+
+    screenOf();
+    postQuestion.mockResolvedValueOnce({ ok: true, turn: { id: TURN, conversationId: CONVERSATION, language: 'pt-BR' } });
+    await user.type(composer(), 'Quanto dano causa Fire Bolt?{Enter}');
+    await waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]!.emit('delta', { text: 'Fire Bolt causa 1d10.' }, 1);
+    streams[0]!.emit('citation', { passageId: PASSAGE_A, offset: 21 }, 2);
+    // Even a proposal on an answer's done offers nothing: only a draft is ever offered.
+    streams[0]!.emit('done', { ...doneWith(PASSAGE_A), proposal: PROPOSAL }, 3);
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salvar como artefato' })).toBeNull();
+  });
+
+  it('starts the type empty when the proposal has none', async () => {
+    screenOf();
+    await drafted({ stopped: false, silent: false, references: [reference(1, [PASSAGE_A])], proposal: { name: 'Cripta', recordType: null } });
+    expect((card().getByRole('combobox', { name: 'Tipo de registro' }) as HTMLSelectElement).value).toBe('');
+    expect((card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement).value).toBe('Cripta');
+  });
+
+  it('"Salvar" saves the proposal unchanged: a toast, the card becomes the link, and focus moves to it', async () => {
+    screenOf();
+    const user = await drafted();
+    saveDraft.mockResolvedValueOnce({ ok: true, artifactId: ARTIFACT, name: 'Emboscada na Cripta' });
+
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+
+    // Unchanged content is not sent: the backend takes the draft as stored.
+    expect(saveDraft).toHaveBeenCalledWith(DRAFT_TURN, { name: 'Emboscada na Cripta', recordType: 'encounter' });
+    const link = await screen.findByRole('link', { name: 'Salvo como artefato: «Emboscada na Cripta»' });
+    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`);
+    await waitFor(() => expect(document.activeElement).toBe(link));
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Avisos' }).textContent).toContain('Artefato salvo.');
+    expect(localStorage.getItem(`${SAVE_PREFIX}${DRAFT_TURN}`)).toBeNull();
+  });
+
+  it('"Editar conteúdo" turns the draft into a textarea in place, and an edited save sends the edits', async () => {
+    screenOf();
+    const user = await drafted();
+    expect(turns().getByRole('heading', { name: /^Emboscada na cripta/ })).toBeTruthy();
+
+    await user.click(card().getByRole('button', { name: 'Editar conteúdo' }));
+
+    expect(card().getByRole('button', { name: 'Editar conteúdo' }).getAttribute('aria-pressed')).toBe('true');
+    const content = screen.getByRole('textbox', { name: 'Conteúdo do rascunho' }) as HTMLTextAreaElement;
+    expect(content.value).toBe(DRAFT_TEXT);
+    // Pressed again, it keeps the editor open: what "Salvar" sends always stays on screen.
+    await user.click(card().getByRole('button', { name: 'Editar conteúdo' }));
+    expect(screen.getByRole('textbox', { name: 'Conteúdo do rascunho' })).toBe(content);
+    expect(card().getByRole('button', { name: 'Editar conteúdo' }).getAttribute('aria-pressed')).toBe('true');
+    // In place: no dialog, and the rendered draft gives way to it.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(turns().queryByRole('heading', { name: /^Emboscada na cripta/ })).toBeNull();
+    await user.clear(content);
+    await user.type(content, '## Cripta');
+    const name = card().getByRole('textbox', { name: 'Nome' });
+    await user.clear(name);
+    await user.type(name, 'Cripta');
+    await user.selectOptions(card().getByRole('combobox', { name: 'Tipo de registro' }), 'creature');
+    saveDraft.mockResolvedValueOnce({ ok: true, artifactId: ARTIFACT, name: 'Cripta' });
+
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+
+    expect(saveDraft).toHaveBeenCalledWith(DRAFT_TURN, { name: 'Cripta', recordType: 'creature', content: '## Cripta' });
+    expect(await screen.findByRole('link', { name: 'Salvo como artefato: «Cripta»' })).toBeTruthy();
+    // The turn keeps the agent's text.
+    expect(turns().getByRole('heading', { name: /^Emboscada na cripta/ })).toBeTruthy();
+  });
+
+  it('shows a refusal on its field, says it, and keeps what was typed', async () => {
+    screenOf();
+    const user = await drafted({ stopped: false, silent: false, references: [reference(1, [PASSAGE_A])], proposal: { name: 'Cripta', recordType: null } });
+    saveDraft.mockResolvedValueOnce({ ok: false, problem: { status: 400, category: 'request', code: 'request.invalid', params: { field: 'recordType' } } });
+
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+
+    const type = card().getByRole('combobox', { name: 'Tipo de registro' });
+    await waitFor(() => expect(type.getAttribute('aria-invalid')).toBe('true'));
+    const said = 'Escolha um tipo de registro do sistema desta campanha.';
+    expect(document.getElementById(type.getAttribute('aria-describedby') ?? '')?.textContent).toBe(said);
+    expect(polite()).toContain(said);
+    expect((card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement).value).toBe('Cripta');
+
+    // Too long: the content opens in place with the refusal under it.
+    saveDraft.mockResolvedValueOnce({ ok: false, problem: { status: 400, category: 'request', code: 'request.invalid', params: { field: 'content', min: 0, max: 20000 } } });
+    await user.selectOptions(type, 'encounter');
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+    const content = await screen.findByRole('textbox', { name: 'Conteúdo do rascunho' });
+    expect(content.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(content.getAttribute('aria-describedby') ?? '')?.textContent).toBe('O conteúdo pode ter até 20000 caracteres.');
+    expect(type.getAttribute('aria-invalid')).toBeNull();
+
+    // Any other refusal shows under the buttons.
+    saveDraft.mockResolvedValueOnce({ ok: false, problem: { status: 409, category: 'conversation', code: 'conversation.turn_not_saveable', params: {} } });
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+    expect((await card().findByTestId('save-problem')).textContent).toContain('Só um rascunho concluído');
+  });
+
+  it('"Agora não" hides the card and moves focus to "Salvar como artefato", which brings the card back', async () => {
+    screenOf();
+    const user = await drafted();
+
+    await user.click(card().getByRole('button', { name: 'Agora não' }));
+
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    const again = turns().getByRole('button', { name: 'Salvar como artefato' });
+    await waitFor(() => expect(document.activeElement).toBe(again));
+    expect(setSaveDecline).toHaveBeenCalledWith(DRAFT_TURN, 'decline');
+    expect(polite()).toContain('Rascunho não salvo.');
+
+    await user.click(again);
+
+    expect(setSaveDecline).toHaveBeenLastCalledWith(DRAFT_TURN, 'reopen');
+    const name = card().getByRole('textbox', { name: 'Nome' });
+    await waitFor(() => expect(document.activeElement).toBe(name));
+    expect(turns().queryByRole('button', { name: 'Salvar como artefato' })).toBeNull();
+  });
+
+  it('brings the card back with the refusal when "Agora não" is refused', async () => {
+    screenOf();
+    const user = await drafted();
+    setSaveDecline.mockResolvedValueOnce({ ok: false, problem: { status: 503, category: 'server', code: 'server.unavailable', params: {} } });
+    await user.click(card().getByRole('button', { name: 'Agora não' }));
+    expect(await card().findByTestId('save-problem')).toBeTruthy();
+  });
+
+  it('keeps unsaved edits in this browser per turn until declined; reopened, they show, and without them the proposal', async () => {
+    screenOf({ stored: [storedDraft()] });
+    const user = userEvent.setup();
+    const name = card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement;
+    expect(name.value).toBe('Emboscada na Cripta');
+    await user.clear(name);
+    await user.type(name, 'Cripta Velha');
+    expect(JSON.parse(localStorage.getItem(`${SAVE_PREFIX}${DRAFT_TURN}`) ?? '{}')).toEqual({ name: 'Cripta Velha', recordType: 'encounter', content: DRAFT_TEXT });
+    cleanup();
+
+    screenOf({ stored: [storedDraft()] });
+    await waitFor(() => expect((card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement).value).toBe('Cripta Velha'));
+    // A content edit kept opens the content in place.
+    cleanup();
+    localStorage.setItem(`${SAVE_PREFIX}${DRAFT_TURN}`, JSON.stringify({ name: 'Cripta', recordType: 'creature', content: '## Outra' }));
+    screenOf({ stored: [storedDraft()] });
+    expect(((await screen.findByRole('textbox', { name: 'Conteúdo do rascunho' })) as HTMLTextAreaElement).value).toBe('## Outra');
+    expect((card().getByRole('combobox', { name: 'Tipo de registro' }) as HTMLSelectElement).value).toBe('creature');
+    await user.click(card().getByRole('button', { name: 'Agora não' }));
+    await waitFor(() => expect(localStorage.getItem(`${SAVE_PREFIX}${DRAFT_TURN}`)).toBeNull());
+    cleanup();
+
+    // Storage that throws: the proposal.
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      screenOf({ stored: [storedDraft()] });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect((card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement).value).toBe('Emboscada na Cripta');
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it('shows a reopened conversation as the GM left it: offered, declined, or saved with its name', async () => {
+    const declined = storedDraft({ state: 'declined', artifactId: null }, '0190a0b0-0000-7000-8000-000000000023');
+    const saved = storedDraft({ state: 'saved', artifactId: ARTIFACT }, '0190a0b0-0000-7000-8000-000000000024');
+    const unnamed = storedDraft({ state: 'saved', artifactId: '0190a0b0-0000-7000-8000-000000000904' }, '0190a0b0-0000-7000-8000-000000000025');
+    screenOf({ stored: [storedDraft(), declined, saved, unnamed], savedNames: { [ARTIFACT]: 'Emboscada na Cripta' } });
+
+    expect(screen.getAllByTestId('save-card')).toHaveLength(1);
+    expect(within(document.getElementById(`turn-${declined.id}`)!).getByRole('button', { name: 'Salvar como artefato' })).toBeTruthy();
+    expect(within(document.getElementById(`turn-${saved.id}`)!).getByRole('link', { name: 'Salvo como artefato: «Emboscada na Cripta»' }).getAttribute('href')).toBe(
+      `/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`,
+    );
+    expect(within(document.getElementById(`turn-${unnamed.id}`)!).getByRole('link', { name: 'Salvo como artefato' })).toBeTruthy();
+  });
+
+  it('a draft saved from another tab first: the link shows and the page reads the turns again', async () => {
+    const view = screenOf({ stored: [storedDraft()] });
+    const user = userEvent.setup();
+    saveDraft.mockResolvedValueOnce({ ok: false, problem: { status: 409, category: 'conversation', code: 'conversation.turn_saved', params: {} } });
+
+    await user.click(card().getByRole('button', { name: 'Salvar' }));
+
+    const link = await screen.findByRole('link', { name: 'Salvo como artefato' });
+    expect(link.getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}?tab=artifacts`);
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+    // The page read again: the turn's stored state and its artifact's name.
+    view.rerender(conversation({ stored: [storedDraft({ state: 'saved', artifactId: ARTIFACT })], savedNames: { [ARTIFACT]: 'Emboscada na Cripta' } }));
+    expect(screen.getByRole('link', { name: 'Salvo como artefato: «Emboscada na Cripta»' }).getAttribute('href')).toBe(
+      `/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`,
+    );
+  });
+
+  it('reaches every control of the card with Tab, in order', async () => {
+    screenOf({ stored: [storedDraft()] });
+    const user = userEvent.setup();
+    card().getByRole('textbox', { name: 'Nome' }).focus();
+    const order = [
+      card().getByRole('combobox', { name: 'Tipo de registro' }),
+      card().getByRole('button', { name: 'Editar conteúdo' }),
+      card().getByRole('button', { name: 'Salvar' }),
+      card().getByRole('button', { name: 'Agora não' }),
+    ];
+    for (const control of order) {
+      await user.tab();
+      expect(document.activeElement).toBe(control);
+    }
+  });
+
+  it('offers the card once a stored draft still being written ends on its resumed stream', async () => {
+    const running = storedDraft(undefined);
+    screenOf({ stored: [{ ...running, events: running.events.slice(0, 2) }] });
+    expect(screen.queryByTestId('save-card')).toBeNull();
+    await waitFor(() => expect(streams).toHaveLength(1));
+    expect(streams[0]!.url).toContain('lastEventId=2');
+
+    streams[0]!.emit('done', { stopped: false, silent: false, references: [reference(1, [PASSAGE_A])], proposal: PROPOSAL }, 3);
+
+    expect((card().getByRole('textbox', { name: 'Nome' }) as HTMLInputElement).value).toBe('Emboscada na Cripta');
+    expect((card().getByRole('combobox', { name: 'Tipo de registro' }) as HTMLSelectElement).value).toBe('encounter');
+    expect(polite()).toContain('Você pode salvar este rascunho como artefato');
+  });
+
+  it('has the card\'s strings in English too', async () => {
+    screenOf({ stored: [storedDraft()], language: 'en' });
+    expect(card().getByRole('heading', { name: 'Save as an artifact?' })).toBeTruthy();
+    expect(card().getByRole('textbox', { name: 'Name' })).toBeTruthy();
+    expect(card().getByRole('combobox', { name: 'Record type' })).toBeTruthy();
+    expect(card().getByRole('button', { name: 'Edit content' })).toBeTruthy();
+    expect(card().getByRole('button', { name: 'Save' })).toBeTruthy();
+    expect(card().getByRole('button', { name: 'Not now' })).toBeTruthy();
   });
 });

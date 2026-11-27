@@ -11,8 +11,10 @@ import type { components } from '@/server/backend/generated/public';
  * new one it starts. Story 3.11: a finished answer is dismissed with `PUT /api/v1/turns/{id}/dismissal`, and its
  * dismissal undone with `DELETE` on the same path. Story 3.12: a done answer is saved with
  * `PUT /api/v1/turns/{id}/bookmark` and removed with `DELETE` there, and the saved answers are read a page at a time
- * from `GET /api/v1/saved-answers`. Story 5.3 part A: a question names its kind, a question or a draft. The relays
- * reach the backend; the browser never does.
+ * from `GET /api/v1/saved-answers`. Story 5.3 part A: a question names its kind, a question or a draft. Story 5.4 part A:
+ * a finished draft's `done` carries its proposal, a stored turn its save state, a draft is saved as an artifact with
+ * `POST /api/v1/turns/{id}/artifact`, and its save is declined with `PUT /api/v1/turns/{id}/save-decline` and offered
+ * again with `DELETE` there. The relays reach the backend; the browser never does.
  */
 
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
@@ -134,6 +136,87 @@ export async function setBookmark(turnId: string, action: 'save' | 'remove'): Pr
   try {
     const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/bookmark`, {
       method: action === 'save' ? 'PUT' : 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (response.status === 204) {
+      return { ok: true };
+    }
+    const body: unknown = await response.json().catch(() => null);
+    return { ok: false, problem: body ?? UNAVAILABLE };
+  } catch {
+    return { ok: false, problem: UNAVAILABLE };
+  }
+}
+
+/**
+ * Where a draft's save confirmation stands (Story 5.4 part A, `TurnSaving`): offered (the card shows), declined ("Agora
+ * não": "Salvar como artefato" stays on the turn), or saved as the artifact `artifactId`.
+ */
+export type SaveState = components['schemas']['TurnSaving']['state'];
+export type Saving = { readonly state: SaveState; readonly artifactId: string | null };
+
+const SAVE_STATES: readonly SaveState[] = ['offered', 'declined', 'saved'];
+
+/** A stored turn's save state (Story 5.4 part A); null when it has none (not an offered draft) or it is not one. */
+export function savingOf(stored: StoredTurn): Saving | null {
+  const saving = (stored as { saving?: unknown }).saving;
+  if (typeof saving !== 'object' || saving === null) {
+    return null;
+  }
+  const { state, artifactId } = saving as Record<string, unknown>;
+  const known = SAVE_STATES.find((word) => word === state);
+  if (known === undefined) {
+    return null;
+  }
+  const id = typeof artifactId === 'string' && artifactId !== '' ? artifactId : null;
+  return known === 'saved' && id === null ? null : { state: known, artifactId: known === 'saved' ? id : null };
+}
+
+/** What a draft is saved as (Story 5.4 part A): its name, its record type's key, and its content when it was edited. */
+export type DraftSave = { readonly name: string; readonly recordType: string; readonly content?: string };
+
+/** What a save gave (Story 5.4 part A): the artifact's id and name (201), or the problem the relay answered. */
+export type DraftSaveResult =
+  | { readonly ok: true; readonly artifactId: string; readonly name: string }
+  | { readonly ok: false; readonly problem: unknown };
+
+/**
+ * Saves a done draft as an artifact of its conversation's campaign (Story 5.4 part A): its name and type, and its
+ * content only when the GM edited it (absent, the backend takes the draft's text as stored). The artifact's id and name
+ * when the relay answered 201; otherwise the problem it answered, or the generic "unavailable" one.
+ */
+export async function saveDraft(turnId: string, save: DraftSave): Promise<DraftSaveResult> {
+  try {
+    const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/artifact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(save),
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const body: unknown = await response.json().catch(() => null);
+    if (response.status === 201 && typeof body === 'object' && body !== null) {
+      const { id, name } = body as Record<string, unknown>;
+      if (typeof id === 'string' && typeof name === 'string') {
+        return { ok: true, artifactId: id, name };
+      }
+    }
+    return { ok: false, problem: response.status === 201 ? UNAVAILABLE : (body ?? UNAVAILABLE) };
+  } catch {
+    return { ok: false, problem: UNAVAILABLE };
+  }
+}
+
+/**
+ * "Agora não" on a draft's save confirmation (`decline`, PUT) or "Salvar como artefato", which offers it again
+ * (`reopen`, DELETE) (Story 5.4 part A). Done when the relay answered 204 (also when nothing changed); otherwise the
+ * problem it answered, or the generic "unavailable" one.
+ */
+export async function setSaveDecline(turnId: string, action: 'decline' | 'reopen'): Promise<DismissalResult> {
+  try {
+    const response = await fetch(`/api/v1/turns/${encodeURIComponent(turnId)}/save-decline`, {
+      method: action === 'decline' ? 'PUT' : 'DELETE',
       credentials: 'same-origin',
       cache: 'no-store',
     });
@@ -272,16 +355,36 @@ function isTurnTier(value: unknown): value is TurnTier {
 }
 
 /**
+ * A finished draft's proposal (Story 5.4 part A, `TurnDraftProposal`, contract 1.47.0): the name and record type key the
+ * worker suggested (null for none), which the save confirmation offers.
+ */
+export type Proposal = { readonly name: string; readonly recordType: string | null };
+
+/**
  * The `done` event's data: its references, whether the GM stopped the answer (Story 2.6), whether the sources say
  * nothing (no reference, no part from the model's knowledge, and not stopped), and (Story 3.8) whether the turn's model
- * knowledge was on, as frozen when the question was asked.
+ * knowledge was on, as frozen when the question was asked. Story 5.4 part A: a finished draft's proposal, null when it
+ * has none (and always on a stopped or silent turn).
  */
 export type Done = {
   readonly stopped: boolean;
   readonly silent: boolean;
   readonly modelKnowledge: boolean;
   readonly references: readonly TurnReference[];
+  readonly proposal: Proposal | null;
 };
+
+/** A `done` event's proposal (Story 5.4 part A): a name that is a string, not blank, and a key or null; else none. */
+function proposalOf(value: unknown): Proposal | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const { name, recordType } = value as Record<string, unknown>;
+  if (typeof name !== 'string' || name.trim() === '') {
+    return null;
+  }
+  return { name, recordType: typeof recordType === 'string' && recordType !== '' ? recordType : null };
+}
 
 function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -330,6 +433,14 @@ function withKind(reference: TurnReference): TurnReference {
 }
 
 /**
+ * Well-formed references, each with its kind (Story 2.5's rules): a reference that is not well formed is left out. Story
+ * 5.4 part A: an artifact page's "Fontes" (a saved draft's references, in the same shape) reads them this way too.
+ */
+export function parseReferences(value: unknown): TurnReference[] {
+  return Array.isArray(value) ? value.filter(isReference).map(withKind) : [];
+}
+
+/**
  * The data of a `done` event. Only what it carries is shown: a reference that is not well formed is left out, and an
  * answer with no reference left is silent, whatever the event said (no uncited text stays on screen), unless (Story 3.8)
  * the turn had a `model` tier event (`modelPart`): that part is marked, so it stays. A stopped answer (Story 2.6) is
@@ -339,14 +450,15 @@ function withKind(reference: TurnReference): TurnReference {
 export function parseDone(data: Record<string, unknown> | null, modelPart = false): Done {
   const stopped = data?.stopped === true;
   const modelKnowledge = data?.modelKnowledge === true;
-  const references = Array.isArray(data?.references) ? data.references.filter(isReference).map(withKind) : [];
+  const references = parseReferences(data?.references);
   if (stopped) {
-    return { stopped, silent: false, modelKnowledge, references };
+    return { stopped, silent: false, modelKnowledge, references, proposal: null };
   }
   if (data?.silent === true) {
-    return { stopped, silent: true, modelKnowledge, references: [] };
+    return { stopped, silent: true, modelKnowledge, references: [], proposal: null };
   }
-  return { stopped, silent: references.length === 0 && !modelPart, modelKnowledge, references };
+  const silent = references.length === 0 && !modelPart;
+  return { stopped, silent, modelKnowledge, references, proposal: silent ? null : proposalOf(data?.proposal) };
 }
 
 /** The data of a `citation` event, or null when it is not one: a passage id or (Story 4.3 part C) a record id. */

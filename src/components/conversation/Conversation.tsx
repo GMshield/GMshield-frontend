@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import {
@@ -12,21 +13,28 @@ import {
   parseDone,
   parseTier,
   postQuestion,
+  saveDraft,
+  savingOf,
   setBookmark,
   setDismissal,
+  setSaveDecline,
   stopTurn,
   turnEventsUrl,
   type Area,
   type Citation,
+  type Proposal,
+  type Saving,
   type SourceReference,
   type TurnReference,
   type StoredTurn,
   type TierStart,
   type TurnKind,
 } from '@/client/conversation';
-import { errorText, translator, type Language, type Translate } from '@/messages';
+import { errorText, problemFields, translator, type Language, type Translate } from '@/messages';
 import { type NamedRecordType } from '@/record-types';
 
+import { useNotifications } from '../notifications/NotificationsProvider';
+import type { EditorTypeOption } from '../RecordFieldsEditor';
 import { useSavedItems } from '../saved/SavedItems';
 import { useOptionalScopePopover } from '../ScopePopoverContext';
 import { ShellPanel } from '../ShellPanel';
@@ -44,6 +52,7 @@ import { PillLink } from '../PillLink';
 
 import styles from './Conversation.module.css';
 import { artifactLine, References, recordHeading, referenceLine } from './References';
+import { SaveConfirmation, SaveContentField, SavedLink, saveFieldOf, saveRefusalText, type SaveValues } from './SaveConfirmation';
 
 /** The most lines the composer grows to; past them it scrolls. */
 export const COMPOSER_MAX_LINES = 6;
@@ -58,6 +67,12 @@ export const DRAFT_PREFIX = 'gmshield:draft:';
  * unsent text: the same key after this prefix as the draft's ({@link draftKey}).
  */
 export const MODE_PREFIX = 'gmshield:mode:';
+
+/**
+ * Story 5.4 part A: where a draft's save card keeps what the GM changed and did not save yet (its name, type and
+ * content), in this browser, per turn: this prefix, then the turn's id. Cleared once the draft is saved or declined.
+ */
+export const SAVE_PREFIX = 'gmshield:save:';
 
 /** The key of a conversation's draft after {@link DRAFT_PREFIX} (Story 3.10). */
 export function draftKey(campaignId: string, conversationId: string | null, area: Area): string {
@@ -112,6 +127,9 @@ type Dismissal = 'shown' | 'undoable' | 'gone';
  * dismissed it, why its dismissal was refused (shown under its actions), why its undo was (shown in its line), and
  * whether its undo is under way. Story 3.12: whether its answer is saved, and why the last change of that was refused
  * (shown under its actions). Story 5.3 part A: what it asked for, a question or a draft (labelled "Rascunho").
+ * Story 5.4 part A: a finished draft's proposal, its save state (null unless it is offered for saving) and the saved
+ * artifact's name when known, the card's unsaved values (null: the proposal and the draft as written), whether its
+ * content is open for editing, whether "Salvar" is under way, and the last refusal of the card.
  */
 type ShownTurn = {
   readonly key: number;
@@ -135,6 +153,13 @@ type ShownTurn = {
   readonly undoPending: boolean;
   readonly bookmarked: boolean;
   readonly bookmarkProblem: unknown;
+  readonly proposal: Proposal | null;
+  readonly saving: Saving | null;
+  readonly savedName: string | null;
+  readonly saveValues: SaveValues | null;
+  readonly contentEditing: boolean;
+  readonly savePending: boolean;
+  readonly saveProblem: unknown;
 };
 
 /**
@@ -216,6 +241,12 @@ function languageOf(turnLanguage: string | null, fallback: Language): Language {
 
 /** No record type read: a cited record's core key is translated, any other shown as it is. */
 const NO_RECORD_TYPES: readonly NamedRecordType[] = [];
+/** Story 5.4 part A: no type offered on the save card (the list could not be read). */
+const NO_SAVE_TYPES: readonly EditorTypeOption[] = [];
+/** No stored turn: a new conversation (one value, so a re-render never reads it as changed). */
+const NO_STORED: readonly StoredTurn[] = [];
+/** Story 5.4 part A: no saved artifact's name read. */
+const NO_SAVED_NAMES: Readonly<Record<string, string>> = {};
 
 export type ConversationProps = {
   readonly language: Language;
@@ -252,6 +283,13 @@ export type ConversationProps = {
    * approved by its name); absent, a core key is translated and any other shows as it is.
    */
   readonly recordTypes?: readonly NamedRecordType[];
+  /**
+   * Story 5.4 part A: every core and approved record type of the campaign's system, as the save card offers them; absent,
+   * the card offers none.
+   */
+  readonly saveTypes?: readonly EditorTypeOption[];
+  /** Story 5.4 part A: the names of the artifacts the stored drafts were saved as, by id, for their links. */
+  readonly savedNames?: Readonly<Record<string, string>>;
 };
 
 /**
@@ -288,6 +326,69 @@ function writeMode(key: string, mode: TurnKind | null): void {
   } catch {
     // A browser that keeps nothing: the mode lives as long as the page.
   }
+}
+
+/** The save card's unsaved values kept for this turn (Story 5.4 part A); null when none is kept or one is malformed. */
+function readSave(turnId: string): SaveValues | null {
+  try {
+    const kept = globalThis.localStorage?.getItem(`${SAVE_PREFIX}${turnId}`);
+    if (kept === null || kept === undefined) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(kept);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null;
+    }
+    const { name, recordType, content } = parsed as Record<string, unknown>;
+    return typeof name === 'string' && typeof recordType === 'string' && typeof content === 'string' ? { name, recordType, content } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSave(turnId: string, values: SaveValues | null): void {
+  try {
+    if (values === null) {
+      globalThis.localStorage?.removeItem(`${SAVE_PREFIX}${turnId}`);
+    } else {
+      globalThis.localStorage?.setItem(`${SAVE_PREFIX}${turnId}`, JSON.stringify(values));
+    }
+  } catch {
+    // A browser that keeps nothing: the changes live as long as the page.
+  }
+}
+
+/** Story 5.4 part A: the save card's values: the GM's unsaved ones, else the proposal and the draft as written. */
+function saveValuesOf(turn: ShownTurn): SaveValues {
+  return turn.saveValues ?? { name: turn.proposal?.name ?? '', recordType: turn.proposal?.recordType ?? '', content: turn.text };
+}
+
+/**
+ * Story 5.4 part A: the turns with the save states the stored turns read now (the page read again), each saved one named
+ * from `savedNames` when it was read; the same list when nothing changed.
+ */
+function withStoredSaving(
+  all: readonly ShownTurn[],
+  stored: readonly StoredTurn[],
+  savedNames: Readonly<Record<string, string>>,
+): readonly ShownTurn[] {
+  let changed = false;
+  const next = all.map((turn) => {
+    const fresh = turn.id === null ? undefined : stored.find((item) => item.id === turn.id);
+    const saving = fresh === undefined ? null : savingOf(fresh);
+    const savedName = saving === null || saving.artifactId === null ? turn.savedName : (savedNames[saving.artifactId] ?? turn.savedName);
+    if (saving === null || (saving.state === turn.saving?.state && saving.artifactId === turn.saving.artifactId && savedName === turn.savedName)) {
+      return turn;
+    }
+    changed = true;
+    return { ...turn, saving, savedName, savePending: false };
+  });
+  return changed ? next : all;
+}
+
+/** Story 5.4 part A: the save state a finished turn starts with: offered for a draft that is neither stopped nor silent. */
+function offeredSaving(kind: TurnKind, stopped: boolean, silent: boolean): Saving | null {
+  return kind === 'draft' && !stopped && !silent ? { state: 'offered', artifactId: null } : null;
 }
 
 function writeDraft(key: string, text: string): void {
@@ -339,6 +440,13 @@ function newTurn(key: number, question: string, kind: TurnKind = 'question'): Sh
     undoPending: false,
     bookmarked: false,
     bookmarkProblem: null,
+    proposal: null,
+    saving: null,
+    savedName: null,
+    saveValues: null,
+    contentEditing: false,
+    savePending: false,
+    saveProblem: null,
   };
 }
 
@@ -348,6 +456,7 @@ type Resume = {
   readonly turnId: string;
   readonly language: string | null;
   readonly question: string;
+  readonly kind: TurnKind;
   readonly initial: FollowStart;
 };
 
@@ -373,8 +482,14 @@ function storedData(data: unknown): Record<string, unknown> | null {
  * A stored turn as the screen shows it (Story 3.10), its events folded as the stream's would be: deltas make its text,
  * citations and tiers are kept, and its last event ends it (done: finished or stopped, with its references; error: its
  * failure). One with no final event is still being written: it shows what it has and is followed from its last event.
+ * Story 5.4 part A: a finished draft keeps its proposal and its stored save state; a saved one is named from
+ * `savedNames` when its artifact's name was read.
  */
-export function shownFromStored(stored: StoredTurn, key: number): { readonly turn: ShownTurn; readonly resume: Resume | null } {
+export function shownFromStored(
+  stored: StoredTurn,
+  key: number,
+  savedNames: Readonly<Record<string, string>> = NO_SAVED_NAMES,
+): { readonly turn: ShownTurn; readonly resume: Resume | null } {
   let text = '';
   const citations: Citation[] = [];
   const tiers: TierStart[] = [];
@@ -408,6 +523,7 @@ export function shownFromStored(stored: StoredTurn, key: number): { readonly tur
       }
       case 'done': {
         const done = parseDone(data, tiers.some((start) => start.tier === MODEL_TIER));
+        const saving = done.stopped || done.silent ? null : savingOf(stored);
         const turn: ShownTurn = {
           ...base,
           status: done.stopped ? 'stopped' : 'done',
@@ -417,6 +533,9 @@ export function shownFromStored(stored: StoredTurn, key: number): { readonly tur
           references: done.references,
           silent: done.silent,
           modelKnowledge: done.modelKnowledge,
+          proposal: done.proposal,
+          saving,
+          savedName: saving?.artifactId === null || saving === null ? null : (savedNames[saving.artifactId] ?? null),
         };
         return { turn, resume: null };
       }
@@ -429,7 +548,10 @@ export function shownFromStored(stored: StoredTurn, key: number): { readonly tur
     }
   }
   const turn: ShownTurn = { ...base, status: text === '' ? 'searching' : 'answering', text };
-  return { turn, resume: { key, turnId: stored.id, language: base.language, question: stored.question, initial: { text, citations, tiers, lastId } } };
+  return {
+    turn,
+    resume: { key, turnId: stored.id, language: base.language, question: stored.question, kind: base.kind, initial: { text, citations, tiers, lastId } },
+  };
 }
 
 /** A numeric event id, or null for one that is not a sequence. */
@@ -543,6 +665,17 @@ export function NoCampaignConversation({ language, area = 'questions' }: { reado
  *   {@link MODE_PREFIX}); an opened conversation with none kept starts in its last turn's kind. A draft streams as an
  *   answer does (citations, tiers, references, stop, bookmark, dismiss) and is labelled "Rascunho" above its request,
  *   while written and when stored. "Tentar de novo" asks again in the failed turn's kind.
+ * - Story 5.4 part A, the save confirmation: under a draft that is done and neither stopped nor silent (never while it
+ *   is written), after its actions, a card ({@link SaveConfirmation}) offers it for saving: its name and record type
+ *   (the proposal's, both editable; the type list is every core and approved type of the system), "Editar conteúdo"
+ *   (the draft becomes a bordered textarea in place), "Salvar" and "Agora não". When a streamed draft completes the
+ *   card appears and the polite region says so after the draft; focus stays in the composer. What the GM changed and
+ *   did not save is kept in this browser per turn ({@link SAVE_PREFIX}) until it is saved or declined, and shows again
+ *   on reopening. "Salvar" saves it ("Artefato salvo."), and the card becomes the link "Salvo como artefato: «name»",
+ *   which takes focus; a refusal shows on its field (or under the buttons) and keeps what was typed; a draft saved
+ *   from another tab meanwhile shows its link and the page reads the turns again. "Agora não" hides the card and puts
+ *   "Salvar como artefato" in the turn's actions, which takes focus and brings the card back. A reopened conversation
+ *   shows each draft as the GM left it.
  */
 export function Conversation({
   language,
@@ -554,14 +687,18 @@ export function Conversation({
   area = 'questions',
   conversationId = null,
   name = null,
-  stored = [],
+  stored = NO_STORED,
   questions = null,
   deleteAction,
   focusTurn = null,
   recordTypes = NO_RECORD_TYPES,
+  saveTypes = NO_SAVE_TYPES,
+  savedNames = NO_SAVED_NAMES,
 }: ConversationProps) {
   const t = translator(language);
   const savedItems = useSavedItems();
+  const { notify } = useNotifications();
+  const router = useRouter();
   const uploads = useUploads();
   const scopePopover = useOptionalScopePopover();
   const [draft, setDraft] = useState('');
@@ -570,7 +707,7 @@ export function Conversation({
   const drafts = area === 'questions';
   const [mode, setMode] = useState<TurnKind>(() => (drafts && stored.length > 0 ? kindOf(stored[stored.length - 1]!) : 'question'));
   // Story 3.10: the stored turns of an opened conversation, folded once; those still being written are followed below.
-  const [opening] = useState(() => stored.map((turn, index) => shownFromStored(turn, index + 1)));
+  const [opening] = useState(() => stored.map((turn, index) => shownFromStored(turn, index + 1, savedNames)));
   const [turns, setTurns] = useState<readonly ShownTurn[]>(() => opening.map((shown) => shown.turn));
   /** Story 3.10: the conversation, once it has an id (an opened one, or a new one after its first question). */
   const [conversation, setConversation] = useState<{ readonly id: string; readonly name: string } | null>(
@@ -602,7 +739,25 @@ export function Conversation({
   const lapsed = useRef(new Set<number>());
   const dismissButtons = useRef(new Map<number, HTMLButtonElement>());
   const undoButtons = useRef(new Map<number, HTMLButtonElement>());
-  const pendingFocus = useRef<{ readonly key: number; readonly to: 'undo' | 'dismiss' } | 'composer' | null>(null);
+  const pendingFocus = useRef<{ readonly key: number; readonly to: 'undo' | 'dismiss' | 'saved' | 'saveAs' | 'saveName' } | 'composer' | null>(null);
+  /** Story 5.4 part A: the saved links, "Salvar como artefato" pills and the cards' name fields, by turn key. */
+  const savedLinks = useRef(new Map<number, HTMLAnchorElement>());
+  const saveAsButtons = useRef(new Map<number, HTMLButtonElement>());
+  const saveNames = useRef(new Map<number, HTMLInputElement>());
+  /** Story 5.4 part A: the turns as last rendered, which a save reads its values from. */
+  const turnsNow = useRef<readonly ShownTurn[]>(turns);
+  useEffect(() => {
+    turnsNow.current = turns;
+  }, [turns]);
+  /**
+   * Story 5.4 part A: the stored turns and saved names last merged. The page read again (after a draft saved from
+   * another tab) brings new ones: each stored save state then holds, as the render adjusts to them.
+   */
+  const [merged, setMerged] = useState({ stored, savedNames });
+  if (merged.stored !== stored || merged.savedNames !== savedNames) {
+    setMerged({ stored, savedNames });
+    setTurns((all) => withStoredSaving(all, stored, savedNames));
+  }
   /**
    * Story 3.12: each turn's bookmark changes, sent one after the other (so the last press is the one that holds), and
    * the number of the latest press, whose refusal alone puts the button back.
@@ -627,6 +782,34 @@ export function Conversation({
       current = false;
     };
   }, [key, drafts]);
+
+  // Story 5.4 part A: each offered draft's unsaved card values, read after the first render (as the composer's draft is).
+  useEffect(() => {
+    let current = true;
+    void Promise.resolve().then(() => {
+      if (!current) {
+        return;
+      }
+      setTurns((all) => {
+        let changed = false;
+        const next = all.map((turn) => {
+          if (turn.saving?.state !== 'offered' || turn.id === null || turn.saveValues !== null) {
+            return turn;
+          }
+          const kept = readSave(turn.id);
+          if (kept === null) {
+            return turn;
+          }
+          changed = true;
+          return { ...turn, saveValues: kept, contentEditing: kept.content !== turn.text };
+        });
+        return changed ? next : all;
+      });
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
 
   // Story 3.10: a new conversation opens with the cursor in the composer.
   useEffect(() => {
@@ -688,7 +871,7 @@ export function Conversation({
   );
 
   const follow = useCallback(
-    (key: number, turnId: string, turnLanguage: string | null, question: string, initial?: FollowStart) => {
+    (key: number, turnId: string, turnLanguage: string | null, question: string, kind: TurnKind, initial?: FollowStart) => {
       const open = openStream ?? ((url: string) => new EventSource(url));
       // Story 3.10: a stored turn still being written resumes after what it already has.
       let text = initial?.text ?? '';
@@ -816,6 +999,8 @@ export function Conversation({
             }
             return;
           }
+          // Story 5.4 part A: a draft that is neither stopped nor silent is offered for saving, with its proposal.
+          const saving = offeredSaving(kind, false, done.silent);
           change(key, (turn) => ({
             ...turn,
             status: 'done',
@@ -825,13 +1010,16 @@ export function Conversation({
             references: done.references,
             silent: done.silent,
             modelKnowledge: done.modelKnowledge,
+            proposal: done.proposal,
+            saving,
           }));
           if (done.silent) {
             const turnT = translator(languageOf(turnLanguage, language));
             // Story 3.8: with model knowledge off, the offer under it is said too, in the same language.
             say(done.modelKnowledge ? turnT('conversation.silent') : `${turnT('conversation.silent')} ${turnT('conversation.offer')}.`);
           } else {
-            say(text, true, done.references, '', tierMarksOf(opened, t));
+            // Story 5.4 part A: the card is said after the draft and its references; focus stays where it is.
+            say(text, true, done.references, saving === null ? '' : t('conversation.save.offered'), tierMarksOf(opened, t));
           }
         });
         stream.addEventListener('error', (event) => {
@@ -1060,10 +1248,133 @@ export function Conversation({
     pendingFocus.current = null;
     if (target === 'composer') {
       composer.current?.focus();
+    } else if (target.to === 'saved') {
+      savedLinks.current.get(target.key)?.focus();
+    } else if (target.to === 'saveAs') {
+      saveAsButtons.current.get(target.key)?.focus();
+    } else if (target.to === 'saveName') {
+      saveNames.current.get(target.key)?.focus();
     } else {
       (target.to === 'undo' ? undoButtons : dismissButtons).current.get(target.key)?.focus();
     }
   }, [turns]);
+
+  /** Story 5.4 part A: the GM changed the card's name, type or content: kept here and in this browser until saved. */
+  const changeSave = useCallback(
+    (key: number, turnId: string, values: SaveValues) => {
+      writeSave(turnId, values);
+      change(key, (turn) => ({ ...turn, saveValues: values }));
+    },
+    [change],
+  );
+
+  /**
+   * Story 5.4 part A: "Salvar": the card's name and type, and its content when the GM edited it, saved as an artifact.
+   * Saved, the card becomes the link to it (which takes focus) and a toast says so; refused on a field, the refusal shows
+   * there and what was typed stays; refused as saved already (another tab), the link shows and the page reads the turns
+   * again, for the artifact's id and name.
+   */
+  const save = useCallback(
+    async (key: number, turnId: string) => {
+      const turn = turnsNow.current.find((item) => item.key === key);
+      if (turn === undefined || turn.savePending) {
+        return;
+      }
+      const values = saveValuesOf(turn);
+      change(key, (shown) => ({ ...shown, savePending: true, saveProblem: null }));
+      const result = await saveDraft(turnId, {
+        name: values.name,
+        recordType: values.recordType,
+        ...(values.content === turn.text ? {} : { content: values.content }),
+      });
+      if (result.ok) {
+        writeSave(turnId, null);
+        pendingFocus.current = { key, to: 'saved' };
+        change(key, (shown) => ({
+          ...shown,
+          savePending: false,
+          saving: { state: 'saved', artifactId: result.artifactId },
+          savedName: result.name,
+          saveValues: null,
+          contentEditing: false,
+        }));
+        notify({ status: 'success', message: t('feedback.artifactSaved') });
+        return;
+      }
+      if (problemFields(result.problem).code === 'conversation.turn_saved') {
+        writeSave(turnId, null);
+        pendingFocus.current = { key, to: 'saved' };
+        change(key, (shown) => ({
+          ...shown,
+          savePending: false,
+          saving: { state: 'saved', artifactId: null },
+          savedName: null,
+          saveValues: null,
+          contentEditing: false,
+        }));
+        say(errorText(result.problem, language));
+        router.refresh();
+        return;
+      }
+      const field = saveFieldOf(result.problem);
+      change(key, (shown) => ({
+        ...shown,
+        savePending: false,
+        saveProblem: result.problem,
+        contentEditing: field === 'content' ? true : shown.contentEditing,
+      }));
+      say(saveRefusalText(result.problem, t, language));
+    },
+    [change, language, notify, router, say, t],
+  );
+
+  /**
+   * Story 5.4 part A: "Agora não": the card goes at once, "Salvar como artefato" takes focus in the turn's actions, and
+   * the decline is sent; once it is recorded the unsaved values go too. A refusal brings the card back with its text.
+   */
+  const declineSave = useCallback(
+    (key: number, turnId: string) => {
+      pendingFocus.current = { key, to: 'saveAs' };
+      change(key, (turn) => ({ ...turn, saving: { state: 'declined', artifactId: null }, contentEditing: false, saveProblem: null }));
+      say(t('conversation.save.declined'));
+      void setSaveDecline(turnId, 'decline').then((result) => {
+        if (result.ok) {
+          writeSave(turnId, null);
+          change(key, (turn) => (turn.saving?.state === 'declined' ? { ...turn, saveValues: null } : turn));
+          return;
+        }
+        if (problemFields(result.problem).code === 'conversation.turn_saved') {
+          router.refresh();
+        }
+        change(key, (turn) => ({ ...turn, saving: { state: 'offered', artifactId: null }, saveProblem: result.problem }));
+        say(errorText(result.problem, language));
+      });
+    },
+    [change, language, router, say, t],
+  );
+
+  /**
+   * Story 5.4 part A: "Salvar como artefato" on a declined draft: the card comes back at once, with focus on its name,
+   * and the change is sent; a refusal puts "Salvar como artefato" back with its text.
+   */
+  const reopenSave = useCallback(
+    (key: number, turnId: string) => {
+      pendingFocus.current = { key, to: 'saveName' };
+      change(key, (turn) => ({ ...turn, saving: { state: 'offered', artifactId: null }, saveProblem: null }));
+      say(t('conversation.save.reopened'));
+      void setSaveDecline(turnId, 'reopen').then((result) => {
+        if (result.ok) {
+          return;
+        }
+        if (problemFields(result.problem).code === 'conversation.turn_saved') {
+          router.refresh();
+        }
+        change(key, (turn) => ({ ...turn, saving: { state: 'declined', artifactId: null }, saveProblem: result.problem }));
+        say(errorText(result.problem, language));
+      });
+    },
+    [change, language, router, say, t],
+  );
 
   const ask = useCallback(
     async (question: string, kind: TurnKind, replacing?: number) => {
@@ -1105,7 +1416,7 @@ export function Conversation({
       }
       change(key, (turn) => ({ ...turn, id: asked.turn.id, status: 'searching', language: asked.turn.language }));
       say(t('conversation.answering'));
-      follow(key, asked.turn.id, asked.turn.language, question);
+      follow(key, asked.turn.id, asked.turn.language, question, kind);
       if (pendingStops.current.delete(key)) {
         void sendStop(key, asked.turn.id);
       }
@@ -1162,7 +1473,7 @@ export function Conversation({
     for (const { resume } of opening) {
       if (resume !== null) {
         turnIds.current.set(resume.key, resume.turnId);
-        follow(resume.key, resume.turnId, resume.language, resume.question, resume.initial);
+        follow(resume.key, resume.turnId, resume.language, resume.question, resume.kind, resume.initial);
       }
     }
     // Once, when the screen opens: the followers' own effect closes them when it leaves.
@@ -1363,6 +1674,11 @@ export function Conversation({
                 );
               }
               const target = turnId !== null && turnId === focusTurn;
+              // Story 5.4 part A: the save card's state, values and refusal on this turn.
+              const offered = finished && turnId !== null && turn.saving?.state === 'offered';
+              const saveValues = saveValuesOf(turn);
+              const saveField = turn.saveProblem === null ? null : saveFieldOf(turn.saveProblem);
+              const editingContent = offered && turn.contentEditing;
               return (
                 <li
                   key={turn.key}
@@ -1400,7 +1716,17 @@ export function Conversation({
                       ) : null}
                     </p>
                   ) : null}
-                  {silent || hidden || turn.text === '' ? null : (
+                  {editingContent && turnId !== null ? (
+                    // Story 5.4 part A: "Editar conteúdo": the draft as a textarea in its place.
+                    <SaveContentField
+                      idPrefix={`save-${turn.key}`}
+                      value={saveValues.content}
+                      error={saveField === 'content' ? saveRefusalText(turn.saveProblem, t, language) : null}
+                      t={t}
+                      onChange={(content) => changeSave(turn.key, turnId, { ...saveValues, content })}
+                    />
+                  ) : null}
+                  {silent || hidden || turn.text === '' || editingContent ? null : (
                     <div className={styles.answer} lang={foreign ? (turn.language ?? undefined) : undefined}>
                       {foreign ? <p className={styles.languageLabel}>{t('conversation.answerIn', { language: languageName ?? '' })}</p> : null}
                       <AnswerMarkdown
@@ -1447,6 +1773,22 @@ export function Conversation({
                   {/* Story 3.11: the answer's actions, right-aligned under its rule; Story 3.12: bookmark (done answers only), then dismiss. */}
                   {finished && turnId !== null ? (
                     <div className={styles.actions}>
+                      {/* Story 5.4 part A: a declined draft keeps "Salvar como artefato", which brings its card back. */}
+                      {turn.saving?.state === 'declined' ? (
+                        <PillButton
+                          className={styles.saveAs}
+                          ref={(button) => {
+                            if (button === null) {
+                              saveAsButtons.current.delete(turn.key);
+                            } else {
+                              saveAsButtons.current.set(turn.key, button);
+                            }
+                          }}
+                          onClick={() => reopenSave(turn.key, turnId)}
+                        >
+                          {t('conversation.save.saveAs')}
+                        </PillButton>
+                      ) : null}
                       {/* A silent answer (the sources said nothing) is not saved (Story 3.12 review). */}
                       {turn.status === 'done' && !turn.silent ? (
                         <button
@@ -1480,6 +1822,53 @@ export function Conversation({
                         </span>
                       </button>
                     </div>
+                  ) : null}
+                  {offered && turnId !== null ? (
+                    <SaveConfirmation
+                      idPrefix={`save-${turn.key}`}
+                      values={saveValues}
+                      types={saveTypes}
+                      editing={turn.contentEditing}
+                      pending={turn.savePending}
+                      problem={saveField === 'content' ? null : turn.saveProblem}
+                      t={t}
+                      language={language}
+                      nameRef={(input) => {
+                        if (input === null) {
+                          saveNames.current.delete(turn.key);
+                        } else {
+                          saveNames.current.set(turn.key, input);
+                        }
+                      }}
+                      onChange={(values) => changeSave(turn.key, turnId, values)}
+                      // Opens only: the editor stays until the draft is saved or declined, so the text "Salvar" sends is shown.
+                      onEdit={() => change(turn.key, (shown) => (shown.contentEditing ? shown : { ...shown, contentEditing: true }))}
+                      onSave={() => void save(turn.key, turnId)}
+                      onDecline={() => declineSave(turn.key, turnId)}
+                    />
+                  ) : null}
+                  {finished && turn.saving?.state === 'saved' ? (
+                    <SavedLink
+                      href={
+                        turn.saving.artifactId === null
+                          ? `/campaigns/${encodeURIComponent(campaignId)}?tab=artifacts`
+                          : `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(turn.saving.artifactId)}`
+                      }
+                      name={turn.savedName}
+                      t={t}
+                      linkRef={(link) => {
+                        if (link === null) {
+                          savedLinks.current.delete(turn.key);
+                        } else {
+                          savedLinks.current.set(turn.key, link);
+                        }
+                      }}
+                    />
+                  ) : null}
+                  {turn.saving?.state === 'declined' && turn.saveProblem !== null ? (
+                    <p className={styles.failed} data-testid="save-problem">
+                      {errorText(turn.saveProblem, language)}
+                    </p>
                   ) : null}
                   {turn.dismissProblem === null ? null : (
                     <p className={styles.failed} data-testid="dismiss-problem">

@@ -1119,6 +1119,32 @@ they sit in `src/`.
   - Messages `campaigns.page.artifacts`, `artifacts.*`, `characters.*`, `feedback.artifactSaved`. The stand-in
     answers the three routes (two character sheets and an item); the demo backend (`docs/tools/frontend-demo-backend.mjs`)
     keeps artifacts in memory with the backend's checks.
+- **Save a draft through the save confirmation (Story 5.4 part A).** Public contract 1.48.0 (the minimum backend
+  contract too: the save routes and `saving` are new; deploy the backend, then this frontend).
+  - **The card.** `SaveConfirmation` (`src/components/conversation/SaveConfirmation.tsx`) under a draft that is done and
+    neither stopped nor silent (never while it streams), after the turn's actions: a surface card with a 1px accent
+    outline, "Salvar como artefato?", the bordered name and record type fields (`SystemForm.module.css`; the type list is
+    every core and approved type of the system, `saveTypes` from `conversation-pages.tsx` through
+    `artifactTypeOptions`, starting empty without a proposed type), then "Editar conteúdo" (`aria-pressed`; the draft
+    becomes a bordered textarea in place, `SaveContentField`), "Salvar" (solid, with its spinner) and "Agora não". The
+    proposal comes from `done.proposal` (`parseDone`), the state from a stored turn's `saving` (`savingOf`). A streamed
+    draft's card is said after the draft in the polite region; focus stays in the composer.
+  - **Saving.** `saveDraft` posts `{name, recordType, content?}` (the content only when edited) to the relay
+    `src/app/api/v1/turns/[id]/artifact/route.ts`. Saved: the toast "Artefato salvo." (`notify`), and the card becomes
+    the link "Salvo como artefato: «name»", which takes focus. A refusal naming a field shows on it (`artifacts.errors.*`),
+    the content one under the textarea, with what was typed kept; `conversation.turn_saved` (another tab) shows the link
+    and calls `router.refresh()`, whose new `stored` and `savedNames` the conversation merges.
+  - **Declining.** "Agora não" (`setSaveDecline(turnId, 'decline')`, relay `.../save-decline/route.ts`, `PUT`) hides the
+    card and puts "Salvar como artefato" in the actions, which takes focus and brings the card back (`DELETE`).
+  - **Unsaved edits** are kept per turn under `gmshield:save:<turnId>` (`SAVE_PREFIX`, every access in try/catch) until
+    saved or declined; reopened, they show (a kept content edit opens the textarea).
+  - **The artifact page.** The content is rendered by `AnswerMarkdown` with `hardBreaks` (a small remark step turns
+    single line breaks outside code into `br`; no package), "Fontes" lists a saved draft's references with `References`
+    (a removed source struck through, "fonte removida", no link; `noSources` when there are none), and a saved draft
+    links to its conversation. The conversation page reads the saved drafts' artifact names for their links.
+  - Messages `conversation.save.*`, `artifacts.page.conversation`, `errors.codes.conversation.turn_not_saveable` and
+    `turn_saved`. The stand-in answers the save (a saved draft artifact) and both decline routes, its stored draft is
+    offered with its proposal; the demo backend keeps each draft's save state.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

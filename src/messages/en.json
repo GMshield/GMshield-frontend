@@ -287,6 +287,7 @@
       "content": "Content",
       "sources": "Sources",
       "noSources": "No sources: this artifact was written by hand.",
+      "conversation": "Open the conversation it came from",
       "citedVersion": "You are viewing version {version}, cited in an answer.",
       "olderVersion": "You are viewing version {version}."
     },
@@ -445,7 +446,9 @@
       },
       "conversation": {
         "turn_running": "This answer is still being written. Wait for it to finish before dismissing it.",
-        "turn_not_done": "Only a finished answer can be saved."
+        "turn_not_done": "Only a finished answer can be saved.",
+        "turn_not_saveable": "Only a finished draft, neither stopped nor without sources, can be saved as an artifact.",
+        "turn_saved": "This draft was already saved as an artifact."
       },
       "ontology": {
         "core_record_type": "The core record types are the same in every system and cannot be renamed or removed.",
@@ -881,7 +884,23 @@
         "three": "What house rules does this campaign have?"
       }
     },
-    "rename": "Rename"
+    "rename": "Rename",
+    "save": {
+      "title": "Save as an artifact?",
+      "name": "Name",
+      "type": "Record type",
+      "noType": "Choose a type",
+      "editContent": "Edit content",
+      "content": "Draft content",
+      "save": "Save",
+      "decline": "Not now",
+      "saveAs": "Save as artifact",
+      "saved": "Saved as artifact: «{name}»",
+      "savedPlain": "Saved as artifact",
+      "offered": "You can save this draft as an artifact: the card is right below it.",
+      "declined": "Draft not saved. «Save as artifact» stays under it.",
+      "reopened": "Save card opened again."
+    }
   },
   "feedback": {
     "systemCreated": "System «{name}» created.",

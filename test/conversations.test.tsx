@@ -330,6 +330,55 @@ describe('a new and an opened conversation (Story 3.10)', () => {
     expect(html).not.toMatch(/>talento</);
   });
 
+  it('Story 5.4 part A: an opened conversation offers the system\'s core and approved types on a draft\'s card and names a saved draft\'s artifact', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+    const ARTIFACT = '0190a0b0-0000-7000-8000-000000000903';
+    const talent = { id: '0190a0b0-0000-7000-8000-000000000608', name: 'Talento', core: null, key: 'talento', origin: { kind: 'proposal' }, records: 3, version: 0 };
+    const encounter = { id: '0190a0b0-0000-7000-8000-000000000606', name: 'encounter', core: 'encounter', key: 'encounter', origin: { kind: 'core' }, records: 0, version: 0 };
+    const draft = (id: string, saving: Record<string, unknown>) => ({
+      id,
+      question: 'Um encontro para a cripta',
+      language: 'pt-BR',
+      createdAt: '2026-11-26T12:00:00Z',
+      events: [
+        { sequence: 1, type: 'delta', data: { text: '## Cripta' } },
+        { sequence: 2, type: 'citation', data: { passageId: PASSAGE, offset: 9 } },
+        {
+          sequence: 3,
+          type: 'done',
+          data: { ...STORED.events[2]!.data, proposal: { name: 'Emboscada na Cripta', recordType: 'encounter' } },
+        },
+      ],
+      bookmarked: false,
+      kind: 'draft',
+      saving,
+    });
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${FIRST}`]: { status: 200, body: { id: FIRST, campaignId: CAMPAIGN, area: 'questions', name: 'Cripta', version: 0 } },
+      [`GET /api/v1/conversations/${FIRST}/turns`]: {
+        status: 200,
+        body: { items: [draft(TURN, { state: 'offered', artifactId: null }), draft(SECOND, { state: 'saved', artifactId: ARTIFACT })] },
+      },
+      [`GET /api/v1/campaigns/${CAMPAIGN}`]: {
+        status: 200,
+        body: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 0 },
+      },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [encounter, talent], total: 2 } },
+      [`GET /api/v1/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`]: { status: 200, body: { id: ARTIFACT, name: 'Emboscada Salva' } },
+    });
+
+    const html = inShell(await QuestionsConversationPage({ params: params(FIRST) }));
+
+    // The offered draft's card: every core and approved type, by the names this interface gives them.
+    const options = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((match) => `${match[1]}=${match[2]}`);
+    expect(options).toEqual(['=Escolha um tipo', `encounter=${ptBR.systems.recordTypes.encounter}`, 'talento=Talento']);
+    // The saved draft's link names its artifact, read with the page.
+    expect(html).toContain('Salvo como artefato: «Emboscada Salva»');
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`)).not.toBe('');
+  });
+
   it('a conversation of the other area opens under its own address; another account\'s is "Não encontrado."', async () => {
     await useBackend({
       'GET /api/v1/conversations/current': CURRENT,

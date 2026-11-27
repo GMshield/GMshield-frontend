@@ -19,10 +19,58 @@
   line-height: var(--font-label-line-height);
 }
 
+/* Story 5.4 part A: the content as Markdown (the answers' renderer), its single line breaks kept by the renderer. */
 .content {
   margin: 0;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.content p,
+.content ul,
+.content ol,
+.content blockquote,
+.content pre {
+  margin: 0 0 var(--space-3);
+}
+
+.content > :last-child {
+  margin-block-end: 0;
+}
+
+.content pre {
+  white-space: pre-wrap;
+}
+
+.content h1,
+.content h2,
+.content h3,
+.content h4,
+.content h5,
+.content h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.content > :first-child {
+  margin-block-start: 0;
+}
+
+/* Story 5.4 part A: the link to the conversation a saved draft came from, under the header. */
+.origin {
+  margin: 0;
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.originLink {
+  display: inline-block;
+  min-block-size: var(--space-touch-target);
+  padding-block: var(--space-2);
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .none {
