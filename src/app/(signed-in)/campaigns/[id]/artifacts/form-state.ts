@@ -69,3 +69,5 @@ export type ArtifactRelationState = OverrideActionState;
 /** How many records a page of the related mode's picker holds (Story 5.5 part B), as the override picker's. */
 export const RELATION_PAGE_SIZE = OVERRIDE_PAGE_SIZE;
 
+/** What a sharing's change left to say (Story 5.6 part A): whether it was stored, else the refusal's text. */
+export type ArtifactSharingState = OverrideActionState;

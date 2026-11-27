@@ -49,7 +49,10 @@
 // the stand-in record "Fire Bolt", its removal (DELETE) answers 204, and the records it can override are that one record.
 // Story 5.5 part B: an artifact is related to nothing (`related: []`); a relation (POST .../relations) answers it related
 // to "Fire Bolt", its removal (DELETE .../relations/{recordId}) answers 204, the records it can be related to are that
-// one record, and the campaign's read of a record lists the stand-in artifact as related to it.
+// one record, and the campaign's read of a record lists the stand-in artifact as related to it. Story 5.6 part A: an
+// artifact is shared with no campaign (`sharedWith: []`, `sharedFrom: null`); a sharing (PUT .../sharing) answers it
+// shared with "Mesa de quinta"; and an artifact read under any campaign but the starter one (and a version of it) reads
+// as shared from the starter campaign, read-only.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -801,6 +804,9 @@ export const ARTIFACT = {
   overrides: null,
   // Story 5.5 part B (contract 1.51.0): it is related to no record.
   related: [],
+  // Story 5.6 part A (contract 1.52.0): it is shared with no campaign, and read in its own.
+  sharedWith: [],
+  sharedFrom: null,
 };
 export const ARTIFACT_PAGE = {
   items: [
@@ -850,6 +856,8 @@ export const SAVED_DRAFT = {
   references: [ANSWER_DONE.references[0]],
   overrides: null,
   related: [],
+  sharedWith: [],
+  sharedFrom: null,
 };
 EXAMPLES['POST /api/v1/turns/{turnId}/artifact'] = SAVED_DRAFT;
 
@@ -888,6 +896,29 @@ EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = {
   related: [{ artifactId: ARTIFACT.id, name: ARTIFACT.name, recordType: ARTIFACT.recordType }],
 };
 // "Agora não" (PUT) and "Salvar como artefato" (DELETE) on /api/v1/turns/{turnId}/save-decline answer 204, as declared.
+
+/** Story 5.6 part A (contract 1.52.0): "Mesa de quinta", the new campaign of the starter system (`POST /campaigns`). */
+export const SECOND_CAMPAIGN_ID = '0190a0b0-0000-7000-8000-000000000040';
+/** A sharing answers the artifact shared with "Mesa de quinta". */
+export const SHARED_ARTIFACT = {
+  ...ARTIFACT,
+  sharedWith: [{ campaignId: SECOND_CAMPAIGN_ID, name: 'Mesa de quinta', archived: false }],
+};
+EXAMPLES['PUT /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/sharing'] = SHARED_ARTIFACT;
+/**
+ * The artifact as another campaign of the system reads it (shared into it): read-only, naming the starter campaign it
+ * is shared from, with no mark, relation, sharing or conversation.
+ */
+export const SHARED_FROM_ARTIFACT = {
+  ...ARTIFACT,
+  overrides: null,
+  related: [],
+  sharedWith: [],
+  conversationId: null,
+  sharedFrom: { campaignId: STARTER_CAMPAIGN.id, name: STARTER_CAMPAIGN.name },
+};
+/** An artifact's page or one of its versions, under the campaign of the first group. */
+const ARTIFACT_READ_PATH = /^\/api\/v1\/campaigns\/([^/]+)\/artifacts\/[^/]+(?:\/versions\/[^/]+)?$/;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
@@ -932,6 +963,11 @@ export function answer(contract, method, pathname, traceId) {
     }
     if (RECORD_PAGE_PATH.test(pathname) && method.toUpperCase() === 'GET') {
       return { status: 200, type, body: REFERENCE_TEXT_PAGE, ...headers };
+    }
+    // Story 5.6 part A: under another campaign than the starter one, an artifact reads as shared from the starter one.
+    const readIn = ARTIFACT_READ_PATH.exec(pathname)?.[1];
+    if (readIn !== undefined && readIn !== STARTER_CAMPAIGN.id && method.toUpperCase() === 'GET' && !pathname.endsWith('/versions')) {
+      return { status: 200, type, body: SHARED_FROM_ARTIFACT, ...headers };
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});

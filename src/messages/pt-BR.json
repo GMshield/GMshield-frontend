@@ -354,6 +354,18 @@
       "pick": "Escolha um registro da lista.",
       "target": "Esse registro não pode ser relacionado: escolha outro da lista.",
       "full": "Este artefato, ou o outro, já tem 50 relações: remova uma antes."
+    },
+    "share": {
+      "title": "Compartilhamento",
+      "intro": "Marque as outras campanhas deste sistema que usam este artefato. Nelas, ele vale como material do sistema e é citado sob «Sistema». Continua um só artefato: só se edita aqui.",
+      "legend": "Campanhas do sistema com este artefato",
+      "none": "Este sistema não tem outra campanha com quem compartilhar este artefato.",
+      "newCampaign": "Nova campanha",
+      "archived": "Arquivada",
+      "save": "Salvar",
+      "target": "Uma das campanhas marcadas não pode mais receber este artefato. Recarregue a página e tente de novo.",
+      "sharedFrom": "Compartilhado da campanha {campaign}.",
+      "openIn": "Abrir na campanha {campaign}"
     }
   },
   "characters": {
@@ -984,7 +996,8 @@
     "artifactOverrideSet": "Substituição salva.",
     "artifactOverrideRemoved": "Substituição removida.",
     "artifactRelationSet": "Relação salva.",
-    "artifactRelationRemoved": "Relação removida."
+    "artifactRelationRemoved": "Relação removida.",
+    "artifactShared": "Compartilhamento salvo."
   },
   "notifications": {
     "title": "Notificações",

@@ -24,6 +24,7 @@ const {
   removeOverrideAction,
   restoreArtifactAction,
   setOverrideAction,
+  shareAction,
   unrelateAction,
   updateArtifactAction,
 } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
@@ -573,5 +574,82 @@ describe("an artifact's relation Server Actions (Story 5.5 part B)", () => {
     expect(await relationTargetsAction(CAMPAIGN, 'x', 'creature', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
     expect(await relationTargetsAction(CAMPAIGN, ARTIFACT, 'Creature', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
     expect(server.calls).toHaveLength(1);
+  });
+});
+
+describe("an artifact's sharing Server Action (Story 5.6 part A)", () => {
+  const SHARING = `${ARTIFACTS}/${ARTIFACT}/sharing`;
+  const THURSDAY = '0190a0b0-0000-7000-8000-000000000041';
+  const SUNDAY = '0190a0b0-0000-7000-8000-000000000042';
+  const START_SHARING = { serial: 0, done: false, error: null };
+  const SHARED = {
+    ...STORED,
+    conversationId: null,
+    references: [],
+    overrides: null,
+    related: [],
+    sharedWith: [{ campaignId: THURSDAY, name: 'Mesa de quinta', archived: false }],
+    sharedFrom: null,
+  };
+  /** The sharing form: the two ids, then each campaign ticked. */
+  const ticked = (...campaigns: string[]) => {
+    const data = form({ campaignId: CAMPAIGN, artifactId: ARTIFACT });
+    campaigns.forEach((campaign) => data.append('campaignIds', campaign));
+    return data;
+  };
+
+  it('sends the whole set ticked, then the toast that it applies from the next question, the layout and the page', async () => {
+    const server = await withBackend({ [`PUT ${SHARING}`]: { status: 200, body: SHARED } });
+
+    expect(await shareAction(START_SHARING, ticked(THURSDAY, SUNDAY, THURSDAY))).toEqual({ serial: 1, done: true, error: null });
+
+    expect(calls(server)).toEqual([`PUT ${SHARING}`]);
+    // Each campaign once, in the order ticked.
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignIds: [THURSDAY, SUNDAY] });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual(['flash success Compartilhamento salvo. Vale a partir da próxima pergunta.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('nothing ticked unshares it from every campaign; the toast is in the interface\'s language', async () => {
+    const server = await withBackend({ [`PUT ${SHARING}`]: { status: 200, body: { ...SHARED, sharedWith: [] } } });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+
+    expect(await shareAction(START_SHARING, ticked())).toEqual({ serial: 1, done: true, error: null });
+
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ campaignIds: [] });
+    expect(steps).toEqual(['flash success Sharing saved. It applies from the next question.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('a campaign that is no target says so in words; another refusal as every refusal reads; nothing is announced', async () => {
+    await withBackend({ [`PUT ${SHARING}`]: problemOf(400, 'artifact.share_target') });
+    expect(await shareAction(START_SHARING, ticked(THURSDAY))).toEqual({
+      serial: 1,
+      done: false,
+      error: 'Uma das campanhas marcadas não pode mais receber este artefato. Recarregue a página e tente de novo.',
+    });
+    await backend?.close();
+    await withBackend({ [`PUT ${SHARING}`]: problemOf(404, 'request.not_found') });
+    const refused = await shareAction({ serial: 3, done: false, error: null }, ticked(THURSDAY));
+    expect(refused.serial).toBe(4);
+    expect(refused.done).toBe(false);
+    expect(refused.error).not.toContain('request.');
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed form', async () => {
+    const server = await withBackend({});
+    const tooMany = ticked(...Array.from({ length: 201 }, () => THURSDAY));
+    const malformed = [
+      ticked('x'),
+      ticked(THURSDAY, '../x'),
+      form({ campaignId: CAMPAIGN, artifactId: 'x' }),
+      form({ artifactId: ARTIFACT }),
+      tooMany,
+    ];
+    for (const data of malformed) {
+      expect((await shareAction(START_SHARING, data)).error).toBe('O pedido não é válido.');
+    }
+    expect(server.calls).toEqual([]);
+    expect(steps).toEqual([]);
   });
 });

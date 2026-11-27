@@ -19,6 +19,7 @@ import {
   removeOverride,
   restoreArtifact,
   setOverride,
+  share,
   unrelate,
   updateArtifact,
 } from '@/server/artifacts';
@@ -33,6 +34,7 @@ import type {
   ArtifactOverrideState,
   ArtifactRelationState,
   ArtifactRestoreState,
+  ArtifactSharingState,
 } from './form-state';
 import { OVERRIDE_PAGE_SIZE, RELATION_PAGE_SIZE } from './form-state';
 import { artifactBack, fromOf } from './texts';
@@ -462,6 +464,47 @@ export async function unrelateAction(previous: ArtifactRelationState, form: Form
     return { serial, done: false, error: errorText(result.problem, language) };
   }
   await flash('success', translator(language)('feedback.artifactRelationRemoved'));
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/** The most campaigns one sharing names, as the backend takes them (Story 5.6 part A). */
+const MOST_SHARES = 200;
+
+/**
+ * "Salvar" in an artifact's "Compartilhamento" (Story 5.6 part A): the campaign's and the artifact's ids and the ids of
+ * the campaigns ticked (`campaignIds`, any number, none to unshare it from all). Once the backend has stored the set, a
+ * toast says "Compartilhamento salvo. Vale a partir da próxima pergunta.", the whole signed-in layout is revalidated
+ * and the page is read again, which shows the boxes as stored. A campaign that is no longer a target (deleted or moved
+ * meanwhile) comes back as its own text; any other refusal as every refusal reads, never a code. A malformed form never
+ * reaches the backend.
+ */
+export async function shareAction(previous: ArtifactSharingState, form: FormData): Promise<ArtifactSharingState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const campaignIds = form.getAll('campaignIds');
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    campaignIds.length > MOST_SHARES ||
+    campaignIds.some((id) => typeof id !== 'string' || !ID.test(id))
+  ) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await share(token, campaignId, artifactId, [...new Set(campaignIds as string[])]);
+  const t = translator(language);
+  if (!result.ok) {
+    const { code } = problemFields(result.problem);
+    return { serial, done: false, error: code === 'artifact.share_target' ? t('artifacts.share.target') : errorText(result.problem, language) };
+  }
+  await flash('success', `${t('feedback.artifactShared')} ${t('artifacts.edit.saved')}`);
   revalidatePath('/', 'layout');
   refresh();
   return { serial, done: true, error: null };

@@ -8,6 +8,7 @@ import { ArtifactDeleteAction } from '@/components/ArtifactDeleteAction';
 import { ArtifactEditor } from '@/components/ArtifactEditor';
 import { ArtifactOverride } from '@/components/artifacts/ArtifactOverride';
 import { ArtifactRelations, type ShownRelation } from '@/components/artifacts/ArtifactRelations';
+import { ArtifactSharing, type SharingCampaign } from '@/components/artifacts/ArtifactSharing';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
 import { AnswerMarkdown } from '@/components/conversation/AnswerMarkdown';
 import { References } from '@/components/conversation/References';
@@ -21,7 +22,7 @@ import { currentPreferences } from '@/preferences';
 import { typeLabel } from '@/record-types';
 import { artifactVersionsPage, getArtifact, type ArtifactVersionSummary } from '@/server/artifacts';
 import { parseReferences } from '@/client/conversation';
-import { getCampaign } from '@/server/library';
+import { everyCampaign, getCampaign, type RecordType } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
 import {
@@ -32,6 +33,7 @@ import {
   removeOverrideAction,
   restoreArtifactAction,
   setOverrideAction,
+  shareAction,
   unrelateAction,
   updateArtifactAction,
 } from '../actions';
@@ -41,6 +43,7 @@ import {
   artifactEditorTexts,
   artifactOverrideTexts,
   artifactRelationsTexts,
+  artifactSharingTexts,
   artifactTypeOptions,
   artifactVersionsTexts,
   fromOf,
@@ -143,6 +146,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * records the artifact is related to, from either side, each linking to its page (an artifact's, or
  * `/search/records/{id}`) with its type and tier and "Remover", and "Relacionar um registro" (the picker's related
  * mode).
+ *
+ * Story 5.6 part A:
+ * - "Compartilhamento" ({@link ArtifactSharing}), after "Relacionados", on every version shown: the other campaigns of
+ *   the artifact's system (those in use, and an archived one only while the artifact is shared with it, marked
+ *   "Arquivada") as checkboxes, ticked when it is shared with them, and "Salvar"; with no other campaign, one sentence
+ *   and "Nova campanha" (on the artifact's system).
+ * - An artifact shared into this campaign from another (`sharedFrom`) reads read-only here: its name, type, fields,
+ *   content and "Fontes", under the line "Compartilhado da campanha {A}." with "Abrir na campanha {A}" (its own page).
+ *   Nothing that calls an own-campaign route shows: no editor, "Excluir", "Versões", "Substituição", "Relacionados" or
+ *   "Compartilhamento". A cited version (`?version=`) still says which one it is, with a link to the newest here.
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -161,7 +174,11 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     notFoundFor(artifact.problem);
     return <Notice status="danger" language={language} message={errorText(artifact.problem, language)} dismissible={false} />;
   }
-  const { name, recordType, fields, content, version, currentVersion, campaignId, conversationId, overrides } = artifact.data;
+  const { name, recordType, fields, content, version, currentVersion, conversationId, overrides } = artifact.data;
+  // Story 5.6 part A: shared into this campaign from its own (absent from a backend before contract 1.52.0: never).
+  const sharedFrom = artifact.data.sharedFrom ?? null;
+  // A shared artifact's page stays in this campaign (the address's); every other is its own campaign's.
+  const campaignId = sharedFrom === null ? artifact.data.campaignId : id;
   const references = parseReferences(artifact.data.references);
   const linkText = (text: string, address: string) => t('conversation.link', { text, address });
   const from = fromOf(query.from);
@@ -169,26 +186,6 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
   if (!older && versionOf(query.version) !== null) {
     redirect(artifactHref(campaignId, artifact.data.id, from, null));
   }
-  const versionsPage = pageParam(query.page);
-  // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
-  const [types, versions, newest] = await Promise.all([
-    campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
-    artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
-    // Story 5.2 part B: "Excluir" names the artifact by its current name, also on an earlier version's page.
-    older ? getArtifact(token ?? '', campaignId, artifact.data.id) : null,
-  ]);
-  const currentName = newest?.ok ? newest.data.name : name;
-  // Absent from a backend before contract 1.51.0: no relation then.
-  const related: readonly ShownRelation[] = (artifact.data.related ?? []).map((row) => ({
-    recordId: row.recordId,
-    name: row.name,
-    typeLabel: typeLabel(row.recordType, types, t),
-    tier: row.tier === 'campaign' || row.tier === 'system' || row.tier === 'other' ? row.tier : null,
-    href: row.artifact
-      ? `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(row.recordId)}`
-      : `/search/records/${encodeURIComponent(row.recordId)}`,
-    removed: row.removed,
-  }));
   const shownFields = (
     <>
       <RecordFields fields={fields} t={t} />
@@ -204,6 +201,84 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       )}
     </>
   );
+  const sources = (types: readonly RecordType[]) => (
+    <section className={styles.section} aria-labelledby="artifact-sources">
+      <h2 id="artifact-sources" className={styles.heading}>
+        {t('artifacts.page.sources')}
+      </h2>
+      {references.length === 0 ? (
+        <p className={styles.none}>{t('artifacts.page.noSources')}</p>
+      ) : (
+        <References references={references} campaignId={campaignId} t={t} recordTypes={types} />
+      )}
+    </section>
+  );
+  const citedNotice = older ? (
+    <Notice
+      status="warning"
+      language={language}
+      message={t(query.via === VIA_VERSIONS ? 'artifacts.page.olderVersion' : 'artifacts.page.citedVersion', { version })}
+      link={{ href: artifactHref(campaignId, artifact.data.id, from, null), label: t('artifacts.versions.viewCurrent') }}
+      dismissible={false}
+    />
+  ) : null;
+  if (sharedFrom !== null) {
+    // Story 5.6 part A: read-only, with no call to a route of the artifact's own campaign.
+    const types = campaign.ok ? await systemRecordTypes(token ?? '', campaign.data.system.id) : [];
+    const ownPage = `/campaigns/${encodeURIComponent(sharedFrom.campaignId)}/artifacts/${encodeURIComponent(artifact.data.id)}`;
+    return (
+      <>
+        <PageHeader title={name} back={artifactBack(campaignId, from, t)}>
+          <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
+        </PageHeader>
+        <p className={styles.origin}>
+          {t('artifacts.share.sharedFrom', { campaign: sharedFrom.name })}{' '}
+          <Link className={styles.originLink} href={ownPage}>
+            {t('artifacts.share.openIn', { campaign: sharedFrom.name })}
+          </Link>
+        </p>
+        {citedNotice}
+        {shownFields}
+        {sources(types)}
+      </>
+    );
+  }
+  const versionsPage = pageParam(query.page);
+  // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
+  const [types, versions, newest, others] = await Promise.all([
+    campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
+    artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
+    // Story 5.2 part B: "Excluir" names the artifact by its current name, also on an earlier version's page.
+    older ? getArtifact(token ?? '', campaignId, artifact.data.id) : null,
+    // Story 5.6 part A: the system's campaigns in use, for "Compartilhamento".
+    campaign.ok ? everyCampaign(token ?? '', { system: campaign.data.system.id }) : null,
+  ]);
+  const currentName = newest?.ok ? newest.data.name : name;
+  // Absent from a backend before contract 1.51.0: no relation then.
+  const related: readonly ShownRelation[] = (artifact.data.related ?? []).map((row) => ({
+    recordId: row.recordId,
+    name: row.name,
+    typeLabel: typeLabel(row.recordType, types, t),
+    tier: row.tier === 'campaign' || row.tier === 'system' || row.tier === 'other' ? row.tier : null,
+    href: row.artifact
+      ? `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(row.recordId)}`
+      : `/search/records/${encodeURIComponent(row.recordId)}`,
+    removed: row.removed,
+  }));
+  // Story 5.6 part A: the other campaigns of the system in use, by name, then the archived ones it is shared with
+  // (absent from a backend before contract 1.52.0: shared with none).
+  const sharedWith = artifact.data.sharedWith ?? [];
+  const sharedIds = new Set(sharedWith.map((row) => row.campaignId));
+  const inUse: SharingCampaign[] = (others?.ok ? others.data.items : [])
+    .filter((row) => row.id !== campaignId)
+    .map((row) => ({ id: row.id, name: row.name, archived: false, shared: sharedIds.has(row.id) }));
+  const listed = new Set(inUse.map((row) => row.id));
+  const sharing: SharingCampaign[] = [
+    ...[...inUse].sort((a, b) => a.name.localeCompare(b.name, language)),
+    ...sharedWith
+      .filter((row) => !listed.has(row.campaignId) && row.campaignId !== campaignId)
+      .map((row) => ({ id: row.campaignId, name: row.name, archived: row.archived, shared: true })),
+  ];
   // Every page link of "Versões" keeps the version shown and where the page was opened from.
   const pageQuery: Record<string, string> = {};
   if (from !== null) {
@@ -251,13 +326,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       ) : null}
       {older ? (
         <>
-          <Notice
-            status="warning"
-            language={language}
-            message={t(query.via === VIA_VERSIONS ? 'artifacts.page.olderVersion' : 'artifacts.page.citedVersion', { version })}
-            link={{ href: artifactHref(campaignId, artifact.data.id, from, null), label: t('artifacts.versions.viewCurrent') }}
-            dismissible={false}
-          />
+          {citedNotice}
           {shownFields}
         </>
       ) : (
@@ -307,16 +376,17 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
         unrelateAction={unrelateAction}
         load={relationTargetsAction}
       />
-      <section className={styles.section} aria-labelledby="artifact-sources">
-        <h2 id="artifact-sources" className={styles.heading}>
-          {t('artifacts.page.sources')}
-        </h2>
-        {references.length === 0 ? (
-          <p className={styles.none}>{t('artifacts.page.noSources')}</p>
-        ) : (
-          <References references={references} campaignId={campaignId} t={t} recordTypes={types} />
-        )}
-      </section>
+      <ArtifactSharing
+        // Read back after a save, the boxes start again from what is stored.
+        key={sharing.map((row) => `${row.id}:${row.shared ? 1 : 0}`).join(',')}
+        campaignId={campaignId}
+        artifactId={artifact.data.id}
+        campaigns={sharing}
+        newCampaignHref={campaign.ok ? `/campaigns/new?system=${encodeURIComponent(campaign.data.system.id)}` : '/campaigns/new'}
+        texts={artifactSharingTexts(t)}
+        action={shareAction}
+      />
+      {sources(types)}
       {versions.ok ? (
         <ArtifactVersions
           campaignId={campaignId}

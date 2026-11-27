@@ -354,6 +354,18 @@
       "pick": "Pick a record from the list.",
       "target": "That record cannot be related: pick another from the list.",
       "full": "This artifact, or the other one, has 50 relations already: remove one first."
+    },
+    "share": {
+      "title": "Sharing",
+      "intro": "Tick the other campaigns of this system that use this artifact. In those campaigns, it counts as system material and is cited under «System». It stays one artifact: it is edited only here.",
+      "legend": "Campaigns of the system with this artifact",
+      "none": "This system has no other campaign to share this artifact with.",
+      "newCampaign": "New campaign",
+      "archived": "Archived",
+      "save": "Save",
+      "target": "One of the ticked campaigns can no longer take this artifact. Reload the page and try again.",
+      "sharedFrom": "Shared from the campaign {campaign}.",
+      "openIn": "Open in the campaign {campaign}"
     }
   },
   "characters": {
@@ -984,7 +996,8 @@
     "artifactOverrideSet": "Override saved.",
     "artifactOverrideRemoved": "Override removed.",
     "artifactRelationSet": "Relation saved.",
-    "artifactRelationRemoved": "Relation removed."
+    "artifactRelationRemoved": "Relation removed.",
+    "artifactShared": "Sharing saved."
   },
   "notifications": {
     "title": "Notifications",
