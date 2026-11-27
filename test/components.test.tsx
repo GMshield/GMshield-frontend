@@ -147,9 +147,49 @@ describe('ConfirmationDialog', () => {
     await user.click(opener);
     const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir' });
     expect(confirm.dataset.variant).toBe('danger');
+    expect(confirm.hasAttribute('aria-describedby')).toBe(false);
     await user.click(confirm);
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('Story 5.7 part B: a confirmation not available yet says so, keeps its focus and ignores presses; a solid one removes nothing', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const { rerender } = render(
+      <ConfirmationDialog
+        open
+        title="t"
+        consequence="c"
+        confirmLabel="Exportar"
+        confirmTone="solid"
+        confirmDisabled
+        confirmDescribedBy="why"
+        language="pt-BR"
+        onConfirm={onConfirm}
+        onCancel={() => {}}
+      >
+        <p id="why">Marque ao menos um.</p>
+      </ConfirmationDialog>,
+    );
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Exportar' });
+    expect(confirm.getAttribute('aria-describedby')).toBe('why');
+    expect(confirm.dataset.variant).toBe('solid');
+    expect(confirm.getAttribute('aria-disabled')).toBe('true');
+    expect(confirm.hasAttribute('disabled')).toBe(false);
+    await user.click(confirm);
+    await user.tab({ shift: true });
+    await user.tab();
+    expect(document.activeElement).toBe(confirm);
+    await user.keyboard('{Enter}');
+    expect(onConfirm).not.toHaveBeenCalled();
+
+    rerender(
+      <ConfirmationDialog open title="t" consequence="c" confirmLabel="Exportar" confirmTone="solid" language="pt-BR" onConfirm={onConfirm} onCancel={() => {}} />,
+    );
+    expect(confirm.hasAttribute('aria-disabled')).toBe(false);
+    await user.click(confirm);
+    expect(onConfirm).toHaveBeenCalledOnce();
   });
 
   it('routes the browser close request (cancel event) to onCancel', () => {

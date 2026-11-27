@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { ArtifactExportDialog } from '@/components/artifacts/ArtifactExportDialog';
 import { ItemList } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { EmptyState, PageHeader, PageSubtitle } from '@/components/PageHeader';
@@ -30,6 +31,9 @@ export function generateMetadata(): Promise<Metadata> {
  * the form's "Cancelar" and the artifact page's way back (after a save too) lead back here. The campaign is named under the
  * title. A campaign without sheets says so in one sentence with "Nova ficha"; with no current campaign, one sentence
  * says a campaign is needed and links to the campaigns. A list that cannot be loaded says why.
+ *
+ * Story 5.7 part B: beside "Nova ficha", "Exportar" ({@link ArtifactExportDialog}) offers the sheets of the page shown,
+ * in list order, from the current campaign; it is left out while the list is empty.
  */
 export default async function CharactersPage({
   searchParams,
@@ -76,9 +80,26 @@ export default async function CharactersPage({
     views.artifacts.size,
   );
   const empty = list.ok && list.data.paging.total === 0;
+  const rows = list.ok ? list.data.rows.map((artifact) => artifactRow(artifact, here, null, t, 'characters')) : [];
   return (
     <>
-      <PageHeader title={title} actions={list.ok && !empty ? newSheet : undefined}>
+      <PageHeader
+        title={title}
+        actions={
+          list.ok && !empty ? (
+            <>
+              {newSheet}
+              {rows.length > 0 ? (
+                <ArtifactExportDialog
+                  campaignId={campaign.data.id}
+                  rows={rows.map((row) => ({ id: row.id, label: row.label, detail: row.detail }))}
+                  language={language}
+                />
+              ) : null}
+            </>
+          ) : undefined
+        }
+      >
         <PageSubtitle>{t('characters.campaign', { name: campaign.data.name })}</PageSubtitle>
       </PageHeader>
       {!list.ok ? (
@@ -90,7 +111,7 @@ export default async function CharactersPage({
       ) : (
         <ItemList
           label={t('characters.list', { campaign: campaign.data.name })}
-          rows={list.data.rows.map((artifact) => artifactRow(artifact, here, null, t, 'characters'))}
+          rows={rows}
           pages={{ paging: list.data.paging, path: '/characters' }}
           icon="characters"
           viewKey="artifacts"
