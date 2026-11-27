@@ -16,7 +16,8 @@ import { outgoingTraceparent, traceFrom } from './trace';
  * same list), one conversation with its stored turns,
  * its rename, and a question that continues a conversation or starts one in an area; from Story 3.10 part B what goes
  * with a conversation and its deletion; from Story 3.11 a turn's dismissal and its undo; from Story 3.12 a turn's
- * bookmark, its removal and the account's saved answers. The backend takes the owner from
+ * bookmark, its removal and the account's saved answers; from Story 5.4 part A a draft saved as an artifact, its save
+ * declined and offered again. The backend takes the owner from
  * the session token alone; another owner's campaign or turn answers `request.not_found`. Nothing here logs a question
  * or an answer's text.
  */
@@ -40,6 +41,10 @@ export type ConversationTurns = Schemas['ConversationTurns'];
 export type ConversationChange = Schemas['ConversationChange'];
 /** Story 3.10 part B: what goes with a conversation if it is deleted (its questions). */
 export type ConversationDeletion = Schemas['ConversationDeletion'];
+export type ConversationDeletionArtifact = Schemas['ConversationDeletionArtifact'];
+/** Story 5.4 part A: what a draft is saved as, and the artifact it becomes. */
+export type SavedDraft = Schemas['SavedDraft'];
+export type SavedArtifact = Schemas['Artifact'];
 /** Story 3.12: a saved answer, and a page of them. */
 export type SavedAnswer = Schemas['SavedAnswer'];
 export type SavedAnswerPage = Schemas['SavedAnswerPage'];
@@ -150,7 +155,10 @@ export function renameConversation(
   );
 }
 
-/** What goes with one of the account's conversations if it is deleted (Story 3.10 part B); `request.not_found` otherwise. */
+/**
+ * What goes with one of the account's conversations if it is deleted (Story 3.10 part B): its questions, and (Story 5.4
+ * part B) the artifacts saved from it that are not being deleted, oldest first; `request.not_found` otherwise.
+ */
 export function conversationDeletion(
   sessionToken: string,
   conversationId: string,
@@ -165,12 +173,21 @@ export function conversationDeletion(
 
 /**
  * Deletes one of the account's conversations with its questions, answers and references (Story 3.10 part B; 202, no
- * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included. From Story
+ * 5.4 part B the artifacts saved from it among `artifactIds` (0 to 64; none keeps them all) go with it, in the same
+ * request (`POST /api/v1/conversations/{id}/deletion`); an id that is not one of them is ignored by the backend, and a
+ * malformed list is `request.invalid` on `artifactIds`.
  */
-export function deleteConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+export function deleteConversation(
+  sessionToken: string,
+  conversationId: string,
+  artifactIds: readonly string[] = [],
+  options: CallOptions = {},
+): Promise<Result<undefined>> {
   return call('conversations.delete', options, (client) =>
-    client.DELETE('/api/v1/conversations/{conversationId}', {
+    client.POST('/api/v1/conversations/{conversationId}/deletion', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+      body: { artifactIds: [...artifactIds] },
     }),
   );
 }
@@ -221,6 +238,38 @@ export function bookmarkTurn(sessionToken: string, turnId: string, options: Call
 export function unbookmarkTurn(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('conversations.unbookmark', options, (client) =>
     client.DELETE('/api/v1/turns/{turnId}/bookmark', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/**
+ * Saves a done draft as an artifact of its conversation's campaign (Story 5.4 part A): 201 with the artifact;
+ * `request.invalid` naming the field outside its limits (`recordType`, `name`, `content`),
+ * `conversation.turn_not_saveable` for a turn that is not offered, `conversation.turn_saved` for one saved already, and
+ * `request.not_found` for a turn that is not the account's or is of a conversation being deleted.
+ */
+export function saveDraft(sessionToken: string, turnId: string, body: SavedDraft, options: CallOptions = {}): Promise<Result<SavedArtifact>> {
+  return call('conversations.save_draft', options, (client) =>
+    client.POST('/api/v1/turns/{turnId}/artifact', {
+      params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } },
+      body,
+    }),
+  );
+}
+
+/**
+ * "Agora não" on a draft's save confirmation (Story 5.4 part A): 204, also for a draft declined already;
+ * `conversation.turn_not_saveable` and `conversation.turn_saved` as {@link saveDraft}, not found as above.
+ */
+export function declineDraftSave(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.save_decline', options, (client) =>
+    client.PUT('/api/v1/turns/{turnId}/save-decline', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
+  );
+}
+
+/** "Salvar como artefato" (Story 5.4 part A): the draft offered again; 204, also for one offered already. */
+export function reopenDraftSave(sessionToken: string, turnId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('conversations.save_reopen', options, (client) =>
+    client.DELETE('/api/v1/turns/{turnId}/save-decline', { params: { header: { 'X-Session-Token': sessionToken }, path: { turnId } } }),
   );
 }
 

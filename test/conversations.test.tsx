@@ -51,6 +51,9 @@ const FIRST = '0190a0b0-0000-7000-8000-000000000020';
 const SECOND = '0190a0b0-0000-7000-8000-000000000022';
 const RULES_ID = '0190a0b0-0000-7000-8000-000000000023';
 const TURN = '0190a0b0-0000-7000-8000-000000000021';
+/** Story 5.4 part B: two artifacts saved from a conversation. */
+const ARTIFACT_A = '0190a0b0-0000-7000-8000-000000000903';
+const ARTIFACT_B = '0190a0b0-0000-7000-8000-000000000904';
 const PASSAGE = '0190a0b0-0000-7000-8000-000000000009';
 const CURRENT = { status: 200, body: { campaignId: CAMPAIGN, hasSources: true, indexing: null, indexingFailed: null } };
 const NO_REVIEW = { status: 200, body: { items: [], total: 0 } };
@@ -330,6 +333,55 @@ describe('a new and an opened conversation (Story 3.10)', () => {
     expect(html).not.toMatch(/>talento</);
   });
 
+  it('Story 5.4 part A: an opened conversation offers the system\'s core and approved types on a draft\'s card and names a saved draft\'s artifact', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+    const ARTIFACT = '0190a0b0-0000-7000-8000-000000000903';
+    const talent = { id: '0190a0b0-0000-7000-8000-000000000608', name: 'Talento', core: null, key: 'talento', origin: { kind: 'proposal' }, records: 3, version: 0 };
+    const encounter = { id: '0190a0b0-0000-7000-8000-000000000606', name: 'encounter', core: 'encounter', key: 'encounter', origin: { kind: 'core' }, records: 0, version: 0 };
+    const draft = (id: string, saving: Record<string, unknown>) => ({
+      id,
+      question: 'Um encontro para a cripta',
+      language: 'pt-BR',
+      createdAt: '2026-11-26T12:00:00Z',
+      events: [
+        { sequence: 1, type: 'delta', data: { text: '## Cripta' } },
+        { sequence: 2, type: 'citation', data: { passageId: PASSAGE, offset: 9 } },
+        {
+          sequence: 3,
+          type: 'done',
+          data: { ...STORED.events[2]!.data, proposal: { name: 'Emboscada na Cripta', recordType: 'encounter' } },
+        },
+      ],
+      bookmarked: false,
+      kind: 'draft',
+      saving,
+    });
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${FIRST}`]: { status: 200, body: { id: FIRST, campaignId: CAMPAIGN, area: 'questions', name: 'Cripta', version: 0 } },
+      [`GET /api/v1/conversations/${FIRST}/turns`]: {
+        status: 200,
+        body: { items: [draft(TURN, { state: 'offered', artifactId: null }), draft(SECOND, { state: 'saved', artifactId: ARTIFACT })] },
+      },
+      [`GET /api/v1/campaigns/${CAMPAIGN}`]: {
+        status: 200,
+        body: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 0 },
+      },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [encounter, talent], total: 2 } },
+      [`GET /api/v1/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`]: { status: 200, body: { id: ARTIFACT, name: 'Emboscada Salva' } },
+    });
+
+    const html = inShell(await QuestionsConversationPage({ params: params(FIRST) }));
+
+    // The offered draft's card: every core and approved type, by the names this interface gives them.
+    const options = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((match) => `${match[1]}=${match[2]}`);
+    expect(options).toEqual(['=Escolha um tipo', `encounter=${ptBR.systems.recordTypes.encounter}`, 'talento=Talento']);
+    // The saved draft's link names its artifact, read with the page.
+    expect(html).toContain('Salvo como artefato: «Emboscada Salva»');
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${ARTIFACT}`)).not.toBe('');
+  });
+
   it('a conversation of the other area opens under its own address; another account\'s is "Não encontrado."', async () => {
     await useBackend({
       'GET /api/v1/conversations/current': CURRENT,
@@ -444,7 +496,7 @@ describe('delete a conversation (Story 3.10 part B)', () => {
       [REVIEW]: NO_REVIEW,
       [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
       [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [STORED] } },
-      [`GET /api/v1/conversations/${RULES_ID}/deletion`]: { status: 200, body: { questions: 2 } },
+      [`GET /api/v1/conversations/${RULES_ID}/deletion`]: { status: 200, body: { questions: 2, artifacts: [] } },
     };
     const server = await useBackend(routes);
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
@@ -491,7 +543,7 @@ describe('delete a conversation (Story 3.10 part B)', () => {
   it('"Excluir conversa" deletes it, names it in a toast, revalidates the layout and opens its area; a refusal comes back as its text', async () => {
     const routes: Record<string, { status: number; body?: unknown }> = {
       [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
-      [`DELETE /api/v1/conversations/${RULES_ID}`]: { status: 202 },
+      [`POST /api/v1/conversations/${RULES_ID}/deletion`]: { status: 202 },
     };
     const server = await useBackend(routes);
 
@@ -500,15 +552,17 @@ describe('delete a conversation (Story 3.10 part B)', () => {
     const [name, value] = setCookie.mock.calls[0] as [string, string];
     expect(name).toBe(FLASH_COOKIE);
     expect(flashFrom(value)).toEqual({ status: 'success', message: 'Conversa «Fabricar itens» excluída.' });
-    const deleted = server.calls.find((call) => call.method === 'DELETE')!;
-    expect(deleted.url).toBe(`/api/v1/conversations/${RULES_ID}`);
+    // Story 5.4 part B: one request, with the ticked artifacts (none here: all kept).
+    const deleted = server.calls.find((call) => call.method === 'POST')!;
+    expect(deleted.url).toBe(`/api/v1/conversations/${RULES_ID}/deletion`);
     expect(deleted.headers['x-session-token']).toBe(SESSION);
+    expect(JSON.parse(deleted.body)).toEqual({ artifactIds: [] });
     revalidatePath.mockClear();
     setCookie.mockClear();
 
     // A questions conversation opens Consultas, and the toast is in the interface's language.
     routes[`GET /api/v1/conversations/${FIRST}`] = { status: 200, body: { ...RULES, id: FIRST, area: 'questions', name: 'Fire Bolt' } };
-    routes[`DELETE /api/v1/conversations/${FIRST}`] = { status: 202 };
+    routes[`POST /api/v1/conversations/${FIRST}/deletion`] = { status: 202 };
     cookieJar['__Host-gmshield-lang'] = 'en';
     expect(await thrownDigest(() => deleteConversationAction({ error: null }, form({ id: FIRST })))).toMatch(/^NEXT_REDIRECT;[a-z]+;\/questions;/);
     expect(flashFrom((setCookie.mock.calls[0] as [string, string])[1])).toEqual({ status: 'success', message: 'Conversation «Fire Bolt» deleted.' });
@@ -517,12 +571,12 @@ describe('delete a conversation (Story 3.10 part B)', () => {
     // Matrix row "Twice": already deleting, or another owner's: the read refuses, and nothing is deleted.
     cookieJar['__Host-gmshield-lang'] = 'pt-BR';
     routes[`GET /api/v1/conversations/${RULES_ID}`] = problem(404, 'request.not_found');
-    const before = server.calls.filter((call) => call.method === 'DELETE').length;
+    const before = server.calls.filter((call) => call.method === 'POST').length;
     expect(await deleteConversationAction({ error: null }, form({ id: RULES_ID }))).toEqual({ error: 'Não encontrado.' });
-    expect(server.calls.filter((call) => call.method === 'DELETE')).toHaveLength(before);
+    expect(server.calls.filter((call) => call.method === 'POST')).toHaveLength(before);
     // Gone between the read and the delete.
     routes[`GET /api/v1/conversations/${RULES_ID}`] = { status: 200, body: RULES };
-    routes[`DELETE /api/v1/conversations/${RULES_ID}`] = problem(404, 'request.not_found');
+    routes[`POST /api/v1/conversations/${RULES_ID}/deletion`] = problem(404, 'request.not_found');
     expect(await deleteConversationAction({ error: null }, form({ id: RULES_ID }))).toEqual({ error: 'Não encontrado.' });
     expect(revalidatePath).not.toHaveBeenCalled();
     // A malformed id never reaches the backend.
@@ -531,5 +585,77 @@ describe('delete a conversation (Story 3.10 part B)', () => {
       expect(await deleteConversationAction({ error: null }, form(fields))).toEqual({ error: 'O pedido não é válido.' });
     }
     expect(server.calls).toHaveLength(count);
+  });
+
+  it('Story 5.4 part B: the page hands the dialog the saved artifacts, oldest first, each named with its record type', async () => {
+    const SYSTEM = '0190a0b0-0000-7000-8000-000000000001';
+    const talent = { id: '0190a0b0-0000-7000-8000-000000000608', name: 'Talento', core: null, key: 'talento', origin: { kind: 'proposal' }, records: 3, version: 0 };
+    await useBackend({
+      'GET /api/v1/conversations/current': CURRENT,
+      [REVIEW]: NO_REVIEW,
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`GET /api/v1/conversations/${RULES_ID}/turns`]: { status: 200, body: { items: [STORED] } },
+      [`GET /api/v1/conversations/${RULES_ID}/deletion`]: {
+        status: 200,
+        body: {
+          questions: 2,
+          artifacts: [
+            { id: ARTIFACT_A, name: 'Cripta', recordType: 'encounter' },
+            { id: ARTIFACT_B, name: 'Golpe', recordType: 'talento' },
+          ],
+        },
+      },
+      [`GET /api/v1/campaigns/${CAMPAIGN}`]: {
+        status: 200,
+        body: { id: CAMPAIGN, name: 'A Coroa Partida', system: { id: SYSTEM, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 0 },
+      },
+      [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: [talent], total: 1 } },
+    });
+
+    const page = await RulesConversationPage({ params: params(RULES_ID) });
+
+    expect((page as { props: { deleteArtifacts?: unknown } }).props.deleteArtifacts).toEqual([
+      { id: ARTIFACT_A, name: 'Cripta', typeLabel: ptBR.systems.recordTypes.encounter },
+      { id: ARTIFACT_B, name: 'Golpe', typeLabel: 'Talento' },
+    ]);
+    // The dialog is rendered closed with its list, nothing ticked, "Manter todos" pressed.
+    const html = inShell(page);
+    expect(html).toContain(ptBR.conversations.delete.artifactsLegend);
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>Manter todos<\/button>/);
+    expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*aria-label="Cripta, Encontro"/);
+    expect(html).not.toMatch(/<input[^>]*type="checkbox"[^>]*checked/);
+  });
+
+  it('Story 5.4 part B: "Excluir conversa" sends the ticked ids in the one request; a malformed id or too many never reach the backend', async () => {
+    const routes: Record<string, { status: number; body?: unknown }> = {
+      [`GET /api/v1/conversations/${RULES_ID}`]: { status: 200, body: RULES },
+      [`POST /api/v1/conversations/${RULES_ID}/deletion`]: { status: 202 },
+    };
+    const server = await useBackend(routes);
+    const ticked = (ids: string[]) => {
+      const data = form({ id: RULES_ID });
+      for (const id of ids) {
+        data.append('artifactIds', id);
+      }
+      return data;
+    };
+
+    expect(await thrownDigest(() => deleteConversationAction({ error: null }, ticked([ARTIFACT_A, ARTIFACT_B, ARTIFACT_A])))).toMatch(
+      /^NEXT_REDIRECT;[a-z]+;\/rules;/,
+    );
+    const posted = server.calls.find((call) => call.method === 'POST')!;
+    expect(JSON.parse(posted.body)).toEqual({ artifactIds: [ARTIFACT_A, ARTIFACT_B] });
+    expect(flashFrom((setCookie.mock.calls[0] as [string, string])[1])).toEqual({ status: 'success', message: 'Conversa «Fabricar itens» excluída.' });
+
+    // Matrix row "Bad body": refused before the backend, as 3.10's refusal.
+    const count = server.calls.length;
+    const many = Array.from({ length: 65 }, (_, index) => `0190a0b0-0000-7000-8000-${String(index).padStart(12, '0')}`);
+    for (const ids of [['nope'], [ARTIFACT_A, '../x'], many]) {
+      expect(await deleteConversationAction({ error: null }, ticked(ids))).toEqual({ error: 'O pedido não é válido.' });
+    }
+    expect(server.calls).toHaveLength(count);
+    // The backend's own refusal on artifactIds comes back as its text.
+    routes[`POST /api/v1/conversations/${RULES_ID}/deletion`] = problem(400, 'request.invalid', { max: 64 });
+    expect(await deleteConversationAction({ error: null }, ticked([ARTIFACT_A]))).toEqual({ error: 'O pedido não é válido.' });
   });
 });

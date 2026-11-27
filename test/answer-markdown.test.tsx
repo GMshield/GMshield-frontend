@@ -412,3 +412,25 @@ describe('the model\'s own knowledge opens with its pill and closes with its lin
     ]);
   });
 });
+
+describe('single line breaks kept (Story 5.4 part A)', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const linkText = (text: string, address: string) => `${text} (${address})`;
+
+  it('turns each single line break outside code into a hard break, only when asked', () => {
+    const text = 'Linha um\nLinha `dois`\n**três**\n\n```\ncódigo um\ncódigo dois\n```';
+    const { container } = render(<AnswerMarkdown text={text} linkText={linkText} hardBreaks />);
+    const paragraph = container.querySelector('p')!;
+    expect(paragraph.querySelectorAll('br')).toHaveLength(2);
+    expect(paragraph.textContent).toBe('Linha um\nLinha dois\ntrês');
+    expect(container.querySelector('pre')!.textContent).toBe('código um\ncódigo dois\n');
+    expect(container.querySelector('pre br')).toBeNull();
+    cleanup();
+
+    const plain = render(<AnswerMarkdown text={text} linkText={linkText} />).container;
+    expect(plain.querySelector('p br')).toBeNull();
+  });
+});

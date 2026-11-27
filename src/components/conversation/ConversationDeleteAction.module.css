@@ -14,3 +14,126 @@
   font-weight: var(--font-label-weight);
   text-align: end;
 }
+
+/*
+ * Story 5.4 part B: the artifacts saved from the conversation, in the dialog under its consequence. The two quick
+ * choices are a segmented control as in the preferences (bordered, the pressed one filled with the text colour); each
+ * artifact is a bordered row as in the place picker, its checkbox, name and record type on one line.
+ */
+.artifacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-body-line-height);
+}
+
+.controls {
+  display: inline-flex;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--space-touch-target);
+  min-block-size: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--motion-fade) ease-out;
+}
+
+.control:hover {
+  background-color: var(--color-hover);
+}
+
+.control[aria-pressed='true'] {
+  background-color: var(--color-solid);
+  color: var(--color-on-solid);
+}
+
+/* The rows: a long list scrolls inside the dialog, so its buttons stay in view. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-block-size: min(18rem, 40vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+}
+
+.row:has(input:checked) {
+  border-color: var(--color-text);
+  background-color: var(--color-surface-active);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-text);
+}
+
+.artifactName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--font-label-weight);
+}
+
+.artifactType {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+}

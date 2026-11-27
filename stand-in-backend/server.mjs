@@ -39,7 +39,12 @@
 // an edit or a restore answers version 2, and an artifact's versions are its one version 1. Story 5.2 part B: an
 // artifact's delete answers 202 with no body, as the contract declares. Story 5.3 part A: a question is recorded
 // whatever its kind (the body is never read), and the conversation holds two turns: the answered question
-// (`kind: question`) and a cited draft (`kind: draft`), so it counts two questions.
+// (`kind: question`) and a cited draft (`kind: draft`), so it counts two questions. Story 5.4 part A: the draft's done
+// carries its proposal ("Emboscada na Cripta", an encounter) and its stored turn is offered for saving
+// (`saving: offered`); a save answers 201 with the draft saved as an artifact of the conversation (its content the
+// draft's text, its one reference copied), "Agora não" and "Salvar como artefato" answer 204, and an artifact written by
+// hand has no conversation and no references. Story 5.4 part B: the conversation's deletion lists no saved artifact (its
+// draft is offered, not saved), and its deletion with the ticked artifacts (POST .../deletion) answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -287,7 +292,8 @@ export const EXAMPLES = {
   },
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
-  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2 },
+  // Story 5.4 part B: nothing was saved from it (its draft is offered), so its deletion lists no artifact.
+  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2, artifacts: [] },
   // Story 5.1: the starter campaign's three artifacts go with it.
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
@@ -576,9 +582,13 @@ export const STORED_TURN = {
   kind: 'question',
 };
 
-/** Story 5.3 part A: a draft the GM asked for in the same conversation, cited and done, as a stored turn carries it. */
+/**
+ * Story 5.3 part A: a draft the GM asked for in the same conversation, cited and done, as a stored turn carries it.
+ * Story 5.4 part A: its done carries its proposal, and it is offered for saving.
+ */
 export const DRAFT_HEADING = '## Encontro na cripta';
-const DRAFT_TEXT = `${DRAFT_HEADING}\n\n- Inimigos: três esqueletos guardam a porta.`;
+export const DRAFT_TEXT = `${DRAFT_HEADING}\n\n- Inimigos: três esqueletos guardam a porta.`;
+export const DRAFT_PROPOSAL = { name: 'Emboscada na Cripta', recordType: 'encounter' };
 export const STORED_DRAFT = {
   id: '0190a0b0-0000-7000-8000-000000000022',
   question: 'Um encontro para a cripta',
@@ -587,10 +597,11 @@ export const STORED_DRAFT = {
   events: [
     ['delta', { text: DRAFT_TEXT }],
     ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000010', offset: Array.from(DRAFT_TEXT).length }],
-    ['done', { stopped: false, silent: false, modelKnowledge: false, references: [ANSWER_DONE.references[0]] }],
+    ['done', { stopped: false, silent: false, modelKnowledge: false, references: [ANSWER_DONE.references[0]], proposal: DRAFT_PROPOSAL }],
   ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
   bookmarked: false,
   kind: 'draft',
+  saving: { state: 'offered', artifactId: null },
 };
 EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN, STORED_DRAFT] };
 
@@ -778,6 +789,9 @@ export const ARTIFACT = {
   version: 1,
   currentVersion: 1,
   createdAt: '2026-11-26T12:00:00Z',
+  // Story 5.4 part A (contract 1.48.0): written by hand, so no conversation and no references.
+  conversationId: null,
+  references: [],
 };
 export const ARTIFACT_PAGE = {
   items: [
@@ -808,6 +822,26 @@ EXAMPLES['PATCH /api/v1/campaigns/{campaignId}/artifacts/{artifactId}'] = EDITED
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions'] = ARTIFACT_VERSIONS;
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}'] = ARTIFACT;
 EXAMPLES['POST /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions/{number}/restore'] = EDITED_ARTIFACT;
+
+/**
+ * Story 5.4 part A (contract 1.48.0): the stored draft saved as an artifact of the conversation's campaign: the
+ * proposal's name and type, the draft's text as its content, its one reference copied, and its conversation.
+ */
+export const SAVED_DRAFT = {
+  id: '0190a0b0-0000-7000-8000-000000000903',
+  campaignId: STARTER_CAMPAIGN.id,
+  recordType: DRAFT_PROPOSAL.recordType,
+  name: DRAFT_PROPOSAL.name,
+  fields: [],
+  content: DRAFT_TEXT,
+  version: 1,
+  currentVersion: 1,
+  createdAt: '2026-11-26T12:05:00Z',
+  conversationId: CONVERSATION_ID,
+  references: [ANSWER_DONE.references[0]],
+};
+EXAMPLES['POST /api/v1/turns/{turnId}/artifact'] = SAVED_DRAFT;
+// "Agora não" (PUT) and "Salvar como artefato" (DELETE) on /api/v1/turns/{turnId}/save-decline answer 204, as declared.
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');

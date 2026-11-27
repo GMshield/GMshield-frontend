@@ -776,3 +776,82 @@
   font-size: var(--font-body-size);
   line-height: var(--font-body-line-height);
 }
+
+/*
+ * Story 5.4 part A: the save confirmation under a finished draft (DESIGN.md): a surface card, rounded, with a 1px accent
+ * outline, holding the name and type fields side by side where there is room (one under the other on a phone), then
+ * its buttons. Its title is in label type, like the references' heading.
+ */
+.saveCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-block-start: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.saveTitle {
+  margin: 0;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.saveFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.saveField {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.saveActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* "Editar conteúdo": the draft as a bordered textarea in its place, as tall as a short draft. */
+.saveContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.saveTextarea {
+  min-block-size: calc(var(--space-touch-target) * 5);
+  font-family: inherit;
+}
+
+/* "Salvar como artefato" in the answer's actions, before its round buttons. */
+.saveAs {
+  align-self: center;
+  margin-inline-end: auto;
+}
+
+/* Once saved: the link to the artifact, where the card was, 24px high at least. */
+.savedLine {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.savedLink {
+  display: inline-block;
+  min-block-size: var(--space-touch-target);
+  padding-block: var(--space-1);
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

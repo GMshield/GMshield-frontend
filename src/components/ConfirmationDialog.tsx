@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode, type SyntheticEvent } from 'react';
 
 import { messagesFor, type Language } from '@/messages';
 
@@ -22,6 +22,11 @@ export type ConfirmationDialogProps = {
   readonly onConfirm: () => void;
   /** Called by the cancel button and by Esc. */
   readonly onCancel: () => void;
+  /**
+   * Story 5.4 part B: more of the dialog, under the consequence and above the buttons (a conversation's saved artifacts,
+   * to tick). Its controls are inside the Tab trap; focus still opens on the cancel button.
+   */
+  readonly children?: ReactNode;
 };
 
 /**
@@ -38,6 +43,7 @@ export function ConfirmationDialog({
   language,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmationDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -95,6 +101,7 @@ export function ConfirmationDialog({
       <p id={consequenceId} className={styles.consequence}>
         {consequence}
       </p>
+      {children === undefined || children === null ? null : <div className={styles.more}>{children}</div>}
       <div className={styles.actions}>
         <PillButton ref={cancelRef} onClick={onCancel}>
           {cancelLabel ?? messagesFor(language).dialog.cancel}

@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { StoredTurn } from '@/client/conversation';
 import { relayTurnEvents, type StreamRequest } from '@/server/conversations';
 
 import { closedAddress, startScripted, type Scripted } from './support/servers';
@@ -632,6 +633,163 @@ describe('the bookmark and saved answers relays (Story 3.12)', () => {
   });
 });
 
+describe('the draft save relays (Story 5.4 part A)', () => {
+  let scripted: Scripted | undefined;
+  afterEach(async () => {
+    await scripted?.close();
+    scripted = undefined;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function save(body: string, headers: Record<string, string>, id = TURN): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const route = await import('@/app/api/v1/turns/[id]/artifact/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/artifact`, {
+      method: 'POST',
+      body,
+      headers: { host: 'gm.test', 'content-type': 'application/json', ...headers },
+    });
+    return route.POST(request, { params: Promise.resolve({ id }) });
+  }
+
+  async function decline(method: 'PUT' | 'DELETE', headers: Record<string, string>, id = TURN): Promise<Response> {
+    const { NextRequest } = await import('next/server');
+    const route = await import('@/app/api/v1/turns/[id]/save-decline/route');
+    const request = new NextRequest(`http://gm.test/api/v1/turns/${id}/save-decline`, { method, headers: { host: 'gm.test', ...headers } });
+    return route[method](request, { params: Promise.resolve({ id }) });
+  }
+
+  function useBackend(routes: Parameters<typeof startScripted>[0]) {
+    return startScripted(routes).then((running) => {
+      scripted = running;
+      vi.stubEnv('GMSHIELD_MODE', '');
+      vi.stubEnv('GMSHIELD_BACKEND_URL', running.url);
+      vi.stubEnv('GMSHIELD_FRONTEND_CREDENTIAL', CREDENTIAL);
+      return running;
+    });
+  }
+
+  const cookie = `__Host-gmshield-session=${SESSION}.4102444800`;
+  const ARTIFACT = {
+    id: '0190a0b0-0000-7000-8000-000000000903',
+    campaignId: CAMPAIGN,
+    recordType: 'encounter',
+    name: 'Emboscada na Cripta',
+    fields: [],
+    content: '## Cripta',
+    version: 1,
+    currentVersion: 1,
+    createdAt: '2026-11-26T12:05:00Z',
+    conversationId: '0190a0b0-0000-7000-8000-000000000020',
+    references: [],
+  };
+
+  it('saves through the typed client with the session and the body as sent, answering 201 with the artifact', async () => {
+    const backend = await useBackend({ [`POST /api/v1/turns/${TURN}/artifact`]: { status: 201, body: ARTIFACT } });
+    const saved = await save(JSON.stringify({ name: 'Cripta', recordType: 'encounter', content: 'Editado.' }), { origin: 'http://gm.test', cookie });
+    expect(saved.status).toBe(201);
+    expect(saved.headers.get('cache-control')).toBe('no-store');
+    expect(await saved.json()).toEqual(ARTIFACT);
+    expect(backend.calls).toHaveLength(1);
+    expect(backend.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(backend.calls[0]!.headers.authorization).toBe(`Bearer ${CREDENTIAL}`);
+    expect(JSON.parse(backend.calls[0]!.body)).toEqual({ name: 'Cripta', recordType: 'encounter', content: 'Editado.' });
+    // Without content, none is sent: the backend takes the draft's text.
+    await save(JSON.stringify({ name: 'Cripta', recordType: 'encounter' }), { origin: 'http://gm.test', cookie });
+    expect(JSON.parse(backend.calls[1]!.body)).toEqual({ name: 'Cripta', recordType: 'encounter' });
+  });
+
+  it('refuses another origin, an id that is not one, no session and a malformed body without reaching the backend', async () => {
+    const backend = await useBackend({});
+    const body = JSON.stringify({ name: 'Cripta', recordType: 'encounter' });
+    expect((await save(body, { origin: 'http://evil.test', cookie })).status).toBe(403);
+    expect((await save(body, { origin: 'http://gm.test', cookie }, 'nope')).status).toBe(404);
+    expect((await save(body, { origin: 'http://gm.test' })).status).toBe(401);
+    for (const broken of ['nope', '[]', 'null', '{"name":"Cripta"}', '{"name":5,"recordType":"encounter"}', '{"name":"Cripta","recordType":"encounter","content":7}']) {
+      const refused = await save(broken, { origin: 'http://gm.test', cookie });
+      expect(refused.status, broken).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: 'request.invalid' });
+    }
+    for (const method of ['PUT', 'DELETE'] as const) {
+      expect((await decline(method, { origin: 'http://evil.test', cookie })).status).toBe(403);
+      expect((await decline(method, { origin: 'http://gm.test', cookie }, 'nope')).status).toBe(404);
+      expect((await decline(method, { origin: 'http://gm.test' })).status).toBe(401);
+    }
+    expect(backend.calls).toEqual([]);
+  });
+
+  it("passes the backend's refusals on as they are: a field, a draft not offered, one saved already", async () => {
+    await useBackend({
+      [`POST /api/v1/turns/${TURN}/artifact`]: {
+        status: 400,
+        body: { status: 400, category: 'request', code: 'request.invalid', params: { field: 'recordType' } },
+      },
+      [`PUT /api/v1/turns/${TURN}/save-decline`]: {
+        status: 409,
+        body: { status: 409, category: 'conversation', code: 'conversation.turn_saved', params: {} },
+      },
+      [`DELETE /api/v1/turns/${TURN}/save-decline`]: {
+        status: 409,
+        body: { status: 409, category: 'conversation', code: 'conversation.turn_not_saveable', params: {} },
+      },
+    });
+    const refused = await save(JSON.stringify({ name: 'Cripta', recordType: '' }), { origin: 'http://gm.test', cookie });
+    expect(refused.status).toBe(400);
+    expect(refused.headers.get('content-type')).toBe('application/problem+json');
+    expect(await refused.json()).toMatchObject({ params: { field: 'recordType' } });
+    expect(await (await decline('PUT', { origin: 'http://gm.test', cookie })).json()).toMatchObject({ code: 'conversation.turn_saved' });
+    const notOffered = await decline('DELETE', { origin: 'http://gm.test', cookie });
+    expect(notOffered.status).toBe(409);
+    expect(await notOffered.json()).toMatchObject({ code: 'conversation.turn_not_saveable' });
+  });
+
+  it('declines (PUT) and offers again (DELETE) through the typed client with the session, each answering 204', async () => {
+    const backend = await useBackend({
+      [`PUT /api/v1/turns/${TURN}/save-decline`]: { status: 204 },
+      [`DELETE /api/v1/turns/${TURN}/save-decline`]: { status: 204 },
+    });
+    for (const method of ['PUT', 'DELETE'] as const) {
+      const answered = await decline(method, { origin: 'http://gm.test', cookie });
+      expect(answered.status).toBe(204);
+      expect(await answered.text()).toBe('');
+    }
+    expect(backend.calls.map((call) => call.method)).toEqual(['PUT', 'DELETE']);
+    expect(backend.calls.every((call) => call.headers['x-session-token'] === SESSION)).toBe(true);
+  });
+
+  it("the browser's calls go to the relays on this site: the artifact or done, else the problem or the generic one", async () => {
+    const { saveDraft, setSaveDecline, savingOf, parseDone } = await import('@/client/conversation');
+    const send = vi.fn(async () => new Response(JSON.stringify(ARTIFACT), { status: 201 }));
+    vi.stubGlobal('fetch', send);
+    expect(await saveDraft(TURN, { name: 'Cripta', recordType: 'encounter' })).toEqual({ ok: true, artifactId: ARTIFACT.id, name: ARTIFACT.name });
+    expect(send).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/artifact`, expect.objectContaining({ method: 'POST', body: '{"name":"Cripta","recordType":"encounter"}' }));
+    const problem = { status: 400, category: 'request', code: 'request.invalid', params: { field: 'content', max: 20000 } };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), { status: 400 })));
+    expect(await saveDraft(TURN, { name: 'Cripta', recordType: 'encounter', content: 'x' })).toEqual({ ok: false, problem });
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))));
+    expect(await saveDraft(TURN, { name: 'Cripta', recordType: 'encounter' })).toMatchObject({ ok: false, problem: { code: 'server.unavailable' } });
+
+    const toggle = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', toggle);
+    expect(await setSaveDecline(TURN, 'decline')).toEqual({ ok: true });
+    expect(toggle).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/save-decline`, expect.objectContaining({ method: 'PUT' }));
+    expect(await setSaveDecline(TURN, 'reopen')).toEqual({ ok: true });
+    expect(toggle).toHaveBeenLastCalledWith(`/api/v1/turns/${TURN}/save-decline`, expect.objectContaining({ method: 'DELETE' }));
+
+    // A stored turn's save state, and a done's proposal: only what they carry, well formed.
+    const turn: StoredTurn = { id: TURN, question: 'q', language: 'pt-BR', createdAt: '2026-11-26T12:00:00Z', events: [], bookmarked: false, kind: 'draft' };
+    expect(savingOf({ ...turn, saving: { state: 'offered', artifactId: null } })).toEqual({ state: 'offered', artifactId: null });
+    expect(savingOf({ ...turn, saving: { state: 'saved', artifactId: ARTIFACT.id } })).toEqual({ state: 'saved', artifactId: ARTIFACT.id });
+    expect(savingOf({ ...turn, saving: { state: 'saved', artifactId: null } })).toBeNull();
+    expect(savingOf(turn)).toBeNull();
+    const reference = { number: 1, kind: 'passage', materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
+    expect(parseDone({ references: [reference], proposal: { name: 'Cripta', recordType: null } }).proposal).toEqual({ name: 'Cripta', recordType: null });
+    expect(parseDone({ references: [reference], proposal: { name: '  ', recordType: 'encounter' } }).proposal).toBeNull();
+    expect(parseDone({ silent: true, references: [], proposal: { name: 'Cripta', recordType: null } }).proposal).toBeNull();
+  });
+});
+
 describe("the browser's stop call and stream address (Story 2.6)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -659,10 +817,10 @@ describe("the browser's stop call and stream address (Story 2.6)", () => {
   it('reads a stopped done: never silent, its references kept', async () => {
     const { parseDone } = await import('@/client/conversation');
     const reference = { number: 1, kind: 'passage', materialName: 'Livro', sectionPath: [], page: 2, passageIds: ['p'], removed: false };
-    expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [] });
-    expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [reference] });
-    expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, modelKnowledge: false, references: [] });
-    expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, modelKnowledge: false, references: [reference] });
+    expect(parseDone({ stopped: true, silent: false, references: [] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [], proposal: null });
+    expect(parseDone({ stopped: true, silent: true, references: [reference] })).toEqual({ stopped: true, silent: false, modelKnowledge: false, references: [reference], proposal: null });
+    expect(parseDone({ stopped: false, silent: false, references: [] })).toEqual({ stopped: false, silent: true, modelKnowledge: false, references: [], proposal: null });
+    expect(parseDone({ silent: false, references: [reference] })).toEqual({ stopped: false, silent: false, modelKnowledge: false, references: [reference], proposal: null });
   });
 
   it('Story 4.3 part C: reads a record citation and a record reference, and a reference without a kind as a place', async () => {

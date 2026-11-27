@@ -429,6 +429,32 @@ function remarkCitations(text: string, marks: readonly CitationMark[], word: str
 }
 
 /**
+ * Story 5.4 part A: the remark step that keeps single line breaks as written: each line break inside a text node becomes
+ * a hard break (mdast `break`, an HTML `br`), so hand-written text keeps its lines. Code, fenced, indented or inline,
+ * holds no text node and is never touched. No package: a few lines over the parsed tree.
+ */
+function remarkHardBreaks() {
+  return (tree: { type: string }) => {
+    const walk = (parent: TreeNode): void => {
+      if (!Array.isArray(parent.children)) {
+        return;
+      }
+      parent.children = parent.children.flatMap((child): TreeNode[] => {
+        if (child.type !== 'text' || !(child.value ?? '').includes('\n')) {
+          walk(child);
+          return [child];
+        }
+        return (child.value ?? '').split('\n').flatMap((line, index): TreeNode[] => [
+          ...(index === 0 ? [] : [{ type: 'break' }]),
+          ...(line === '' ? [] : [{ type: 'text', value: line }]),
+        ]);
+      });
+    };
+    walk(tree as TreeNode);
+  };
+}
+
+/**
  * Story 2.8: a link's address is only ever shown as text (`a` renders a span, never an anchor), so it is kept as written,
  * a `javascript:` one included, and the GM sees where a link would go; every other URL (an image's) is dropped.
  */
@@ -444,6 +470,8 @@ export type AnswerMarkdownProps = {
   readonly citationWord?: string;
   /** Story 3.7: the tier pills of a finished answer, at code-point offsets of `text`, each with its word. */
   readonly tiers?: readonly TierMark[];
+  /** Story 5.4 part A: single line breaks kept as written (an artifact's content), outside code. */
+  readonly hardBreaks?: boolean;
 };
 
 /**
@@ -452,8 +480,9 @@ export type AnswerMarkdownProps = {
  * anchor. Nothing is set as HTML.
  * Story 2.5: each mark becomes a superscript with its reference's number at its code-point offset (`remarkCitations`).
  * Story 3.7: each tier mark becomes its tier pill at the start of the version it opens.
+ * Story 5.4 part A: with `hardBreaks`, each single line break outside code is kept (`remarkHardBreaks`).
  */
-export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '', tiers = [] }: AnswerMarkdownProps) {
+export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '', tiers = [], hardBreaks = false }: AnswerMarkdownProps) {
   const components: Components = {
     img: () => null,
     a: ({ href, children }) => {
@@ -468,7 +497,7 @@ export function AnswerMarkdown({ text, linkText, marks = [], citationWord = '', 
       disallowedElements={['img']}
       urlTransform={addressAsText}
       components={components}
-      remarkPlugins={[remarkCitations(text, marks, citationWord, tiers)]}
+      remarkPlugins={hardBreaks ? [remarkCitations(text, marks, citationWord, tiers), remarkHardBreaks] : [remarkCitations(text, marks, citationWord, tiers)]}
     >
       {text}
     </Markdown>

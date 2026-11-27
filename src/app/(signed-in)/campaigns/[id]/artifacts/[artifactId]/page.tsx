@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
@@ -6,6 +7,8 @@ import { notFoundFor } from '@/app/not-found';
 import { ArtifactDeleteAction } from '@/components/ArtifactDeleteAction';
 import { ArtifactEditor } from '@/components/ArtifactEditor';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
+import { AnswerMarkdown } from '@/components/conversation/AnswerMarkdown';
+import { References } from '@/components/conversation/References';
 import { Notice } from '@/components/Notice';
 import { PageHeader, PageSubtitle } from '@/components/PageHeader';
 import { RecordFields } from '@/components/RecordFields';
@@ -15,6 +18,7 @@ import { pageParam } from '@/paging';
 import { currentPreferences } from '@/preferences';
 import { typeLabel } from '@/record-types';
 import { artifactVersionsPage, getArtifact, type ArtifactVersionSummary } from '@/server/artifacts';
+import { parseReferences } from '@/client/conversation';
 import { getCampaign } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -102,6 +106,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * Story 5.2 part B: "Excluir" in the header ({@link ArtifactDeleteAction}), on every version shown, deletes the artifact
  * after a confirmation that names it by its current name (read again on an earlier version's page), and lands on the
  * artifacts tab (or "Personagens", `from=characters`) with a toast.
+ *
+ * Story 5.4 part A:
+ * - Every artifact's content is sanitized Markdown, through the answers' renderer ({@link AnswerMarkdown}) with no
+ *   citation mark, its single line breaks kept (so hand-written text keeps its lines).
+ * - "Fontes" lists a saved draft's references ({@link References}, as under an answer, without opening the source
+ *   view): a source deleted since shows "fonte removida" and no link. One written by hand keeps its sentence.
+ * - An artifact saved from a draft links to the conversation it came from, while that conversation exists.
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -120,7 +131,9 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     notFoundFor(artifact.problem);
     return <Notice status="danger" language={language} message={errorText(artifact.problem, language)} dismissible={false} />;
   }
-  const { name, recordType, fields, content, version, currentVersion, campaignId } = artifact.data;
+  const { name, recordType, fields, content, version, currentVersion, campaignId, conversationId } = artifact.data;
+  const references = parseReferences(artifact.data.references);
+  const linkText = (text: string, address: string) => t('conversation.link', { text, address });
   const from = fromOf(query.from);
   const older = version !== currentVersion;
   if (!older && versionOf(query.version) !== null) {
@@ -143,7 +156,9 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
           <h2 id="artifact-content" className={styles.heading}>
             {t('artifacts.page.content')}
           </h2>
-          <p className={styles.content}>{content}</p>
+          <div className={styles.content}>
+            <AnswerMarkdown text={content} linkText={linkText} hardBreaks />
+          </div>
         </section>
       )}
     </>
@@ -186,6 +201,13 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       >
         <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
       </PageHeader>
+      {conversationId ? (
+        <p className={styles.origin}>
+          <Link className={styles.originLink} href={`/questions/${encodeURIComponent(conversationId)}`}>
+            {t('artifacts.page.conversation')}
+          </Link>
+        </p>
+      ) : null}
       {older ? (
         <>
           <Notice
@@ -214,7 +236,11 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
         <h2 id="artifact-sources" className={styles.heading}>
           {t('artifacts.page.sources')}
         </h2>
-        <p className={styles.none}>{t('artifacts.page.noSources')}</p>
+        {references.length === 0 ? (
+          <p className={styles.none}>{t('artifacts.page.noSources')}</p>
+        ) : (
+          <References references={references} campaignId={campaignId} t={t} recordTypes={types} />
+        )}
       </section>
       {versions.ok ? (
         <ArtifactVersions

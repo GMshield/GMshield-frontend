@@ -19,13 +19,17 @@ import {
   listConversations,
   type Area,
   type ConversationSummary,
+  type StoredTurn,
 } from '@/server/conversations';
-import type { NamedRecordType } from '@/record-types';
+import { typeLabel, type NamedRecordType } from '@/record-types';
+import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
+import { getArtifact } from '@/server/artifacts';
 import { getCampaign } from '@/server/library';
 import { listPage } from '@/server/list-page';
 import { listMaterials } from '@/server/materials';
 import { currentSessionToken } from '@/server/session-cookies';
 
+import { artifactTypeOptions } from './campaigns/[id]/artifacts/texts';
 import { deleteConversationAction, renameConversationAction } from './conversation-actions';
 import { systemRecordTypes } from './systems/rows';
 
@@ -131,16 +135,41 @@ async function reviewLink(token: string): Promise<{ readonly href: string; reado
 }
 
 /**
- * The record types the GM approved in the campaign's system (Story 4.4 part B), which name a cited record's key: a core
- * key needs none (the interface translates it). None when the campaign or the list cannot be read: the key then shows.
+ * The record types of the campaign's system, read once: those the GM approved (Story 4.4 part B), which name a cited
+ * record's key (a core key needs none: the interface translates it); and (Story 5.4 part A) every core and approved type,
+ * named as here, which a draft's save card offers. None when the campaign or the list cannot be read: a key then shows
+ * as it is, and the card offers no type.
  */
-async function campaignRecordTypes(token: string, campaignId: string): Promise<NamedRecordType[]> {
+async function campaignRecordTypes(
+  token: string,
+  campaignId: string,
+  t: Translate,
+): Promise<{ readonly named: NamedRecordType[]; readonly options: EditorTypeOption[] }> {
   const campaign = await getCampaign(token, campaignId);
   if (!campaign.ok) {
-    return [];
+    return { named: [], options: [] };
   }
   const types = await systemRecordTypes(token, campaign.data.system.id);
-  return types.filter((type) => type.core === null).map((type) => ({ key: type.key, name: type.name }));
+  return {
+    named: types.filter((type) => type.core === null).map((type) => ({ key: type.key, name: type.name })),
+    options: artifactTypeOptions(types, t),
+  };
+}
+
+/**
+ * Story 5.4 part A: the names of the artifacts the stored drafts were saved as, by id, for their links ("Salvo como
+ * artefato: «name»"); one that cannot be read is left out (its link then says only "Salvo como artefato").
+ */
+async function savedArtifactNames(token: string, campaignId: string, turns: readonly StoredTurn[]): Promise<Record<string, string>> {
+  const ids = turns.flatMap((turn) => (turn.saving?.state === 'saved' && turn.saving.artifactId ? [turn.saving.artifactId] : []));
+  const read = await Promise.all(ids.map((id) => getArtifact(token, campaignId, id)));
+  const names: Record<string, string> = {};
+  read.forEach((artifact, index) => {
+    if (artifact.ok) {
+      names[ids[index]!] = artifact.data.name;
+    }
+  });
+  return names;
 }
 
 /**
@@ -151,12 +180,13 @@ async function campaignRecordTypes(token: string, campaignId: string): Promise<N
  */
 export async function newConversationPage(area: Area) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
+  const t = translator(language);
   // Story 4.4 part B: the campaign's record types are read as soon as its id is known, beside the other reads.
   const reading = currentConversation(token ?? '');
   const [current, review, recordTypes] = await Promise.all([
     reading,
     reviewLink(token ?? ''),
-    reading.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId) : [])),
+    reading.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId, t) : { named: [], options: [] })),
   ]);
   if (!current.ok && problemFields(current.problem).code === 'request.not_found') {
     return <NoCampaignConversation language={language} area={area} />;
@@ -171,7 +201,8 @@ export async function newConversationPage(area: Area) {
       campaignId={current.data.campaignId}
       hasSources={current.data.hasSources}
       review={review}
-      recordTypes={recordTypes}
+      recordTypes={recordTypes.named}
+      saveTypes={recordTypes.options}
       area={area}
       deleteAction={deleteConversationAction}
     />
@@ -182,24 +213,32 @@ export async function newConversationPage(area: Area) {
  * An opened conversation (Story 3.10): its stored turns with their answers and references, and the composer, which
  * continues it. Another account's id, an unknown one or a malformed one is the single "Não encontrado." page; a
  * conversation of the other area opens under its own area's address. Story 3.10 part B: how many questions its deletion
- * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words. Story 3.12: a
+ * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words. Story 5.4 part
+ * B: so are the artifacts saved from it, named with their record type's label, which the dialog lists to tick (none
+ * when the read failed: the plain dialog, which keeps them all). Story 3.12: a
  * `turn` (the `?turn=` of a saved item's "Ir") opens it scrolled to that answer, with focus on it; anything that is not
  * an id is ignored, and a turn not among those loaded leaves it at its last turn.
  */
 export async function openedConversationPage(area: Area, id: string, turn?: string | string[]) {
   const [{ language }, token] = await Promise.all([currentPreferences(), currentSessionToken()]);
+  const t = translator(language);
   if (!isId(id)) {
     notFoundFor({ code: 'request.not_found' });
   }
   // Story 4.4 part B: the campaign's record types are read as soon as the conversation names its campaign.
   const opened = getConversation(token ?? '', id);
-  const [conversation, turns, current, review, deletion, recordTypes] = await Promise.all([
+  const storedTurns = conversationTurns(token ?? '', id);
+  const [conversation, turns, current, review, deletion, recordTypes, savedNames] = await Promise.all([
     opened,
-    conversationTurns(token ?? '', id),
+    storedTurns,
     currentConversation(token ?? ''),
     reviewLink(token ?? ''),
     conversationDeletion(token ?? '', id),
-    opened.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId) : [])),
+    opened.then((found) => (found.ok ? campaignRecordTypes(token ?? '', found.data.campaignId, t) : { named: [], options: [] })),
+    // Story 5.4 part A: the saved drafts' artifacts, named for their links.
+    Promise.all([opened, storedTurns]).then(([found, read]) =>
+      found.ok && read.ok ? savedArtifactNames(token ?? '', found.data.campaignId, read.data.items) : {},
+    ),
   ]);
   if (!conversation.ok) {
     notFoundFor(conversation.problem);
@@ -229,7 +268,18 @@ export async function openedConversationPage(area: Area, id: string, turn?: stri
       stored={turns.data.items}
       questions={deletion.ok ? deletion.data.questions : null}
       deleteAction={deleteConversationAction}
-      recordTypes={recordTypes}
+      deleteArtifacts={
+        deletion.ok
+          ? deletion.data.artifacts.map((artifact) => ({
+              id: artifact.id,
+              name: artifact.name,
+              typeLabel: typeLabel(artifact.recordType, recordTypes.named, t),
+            }))
+          : []
+      }
+      recordTypes={recordTypes.named}
+      saveTypes={recordTypes.options}
+      savedNames={savedNames}
     />
   );
 }

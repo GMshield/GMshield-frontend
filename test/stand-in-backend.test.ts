@@ -8,7 +8,10 @@ import {
   BOOK_VERSION,
   CONVERSATION,
   CONVERSATION_ID,
+  DRAFT_PROPOSAL,
+  DRAFT_TEXT,
   EDITED_ARTIFACT,
+  SAVED_DRAFT,
   STORED_DRAFT,
   STORED_TURN,
   NOTES_VERSION,
@@ -432,9 +435,11 @@ describe('stand-in backend', () => {
     // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
     expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
       status: 200,
-      body: { questions: 2 },
+      body: { questions: 2, artifacts: [] },
     });
     expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
+    // Story 5.4 part B: the deletion with the ticked saved artifacts, one request (202, no body).
+    expect(answer(contract, 'POST', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toEqual({ status: 202, type: null, body: null });
     const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
     expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN, STORED_DRAFT] } });
     for (const key of schemas.StoredTurn!.required ?? []) {
@@ -530,6 +535,30 @@ describe('stand-in backend', () => {
       for (const key of schemas.ArtifactVersionSummary!.required ?? []) {
         expect(item, key).toHaveProperty(key);
       }
+    }
+  });
+
+  it('answers a draft\'s save with the artifact, and its decline and reopen with 204 (Story 5.4 part A)', () => {
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const turn = `/api/v1/turns/${STORED_DRAFT.id}`;
+    expect(answer(contract, 'POST', `${turn}/artifact`, 't')).toMatchObject({ status: 201, body: SAVED_DRAFT });
+    expect(answer(contract, 'PUT', `${turn}/save-decline`, 't')).toEqual({ status: 204, type: null, body: null });
+    expect(answer(contract, 'DELETE', `${turn}/save-decline`, 't')).toEqual({ status: 204, type: null, body: null });
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(SAVED_DRAFT, key).toHaveProperty(key);
+      expect(ARTIFACT, key).toHaveProperty(key);
+    }
+    // Saved from the stored draft: its proposal, its text and its conversation; one written by hand has neither.
+    expect(SAVED_DRAFT).toMatchObject({ name: DRAFT_PROPOSAL.name, recordType: DRAFT_PROPOSAL.recordType, content: DRAFT_TEXT });
+    expect(SAVED_DRAFT.conversationId).toBe(CONVERSATION_ID);
+    expect(SAVED_DRAFT.references).toHaveLength(1);
+    expect(ARTIFACT).toMatchObject({ conversationId: null, references: [] });
+    // The stored draft is offered, and its done carries the proposal.
+    expect(STORED_DRAFT.saving).toEqual({ state: 'offered', artifactId: null });
+    expect(STORED_DRAFT.events.at(-1)).toMatchObject({ type: 'done', data: { proposal: DRAFT_PROPOSAL } });
+    for (const key of schemas.TurnSaving!.required ?? []) {
+      expect(STORED_DRAFT.saving, key).toHaveProperty(key);
     }
   });
 

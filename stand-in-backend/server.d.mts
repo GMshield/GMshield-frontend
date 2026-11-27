@@ -94,9 +94,16 @@ export const STORED_TURN: {
   events: { sequence: number; type: string; data: unknown }[];
   bookmarked: boolean;
   kind: 'question' | 'draft';
+  /** Story 5.4 part A: present on an offered draft only. */
+  saving?: { state: 'offered' | 'declined' | 'saved'; artifactId: string | null };
 };
-/** Story 5.3 part A: a cited draft stored in the same conversation, and the heading its text opens with. */
+/**
+ * Story 5.3 part A: a cited draft stored in the same conversation, and the heading its text opens with. Story 5.4 part
+ * A: its text, its proposal, and its save state (offered).
+ */
 export const DRAFT_HEADING: string;
+export const DRAFT_TEXT: string;
+export const DRAFT_PROPOSAL: { name: string; recordType: string | null };
 export const STORED_DRAFT: typeof STORED_TURN;
 /** Story 4.3: a record type's records, one record as its system shows it, and that record's id. */
 export const RECORD_ID: string;
@@ -122,7 +129,12 @@ export const ARTIFACT: {
   version: number;
   currentVersion: number;
   createdAt: string;
+  /** Story 5.4 part A: the conversation a saved draft came from (null: written by hand), and its references. */
+  conversationId: string | null;
+  references: unknown[];
 };
+/** Story 5.4 part A: the stored draft saved as an artifact of its conversation. */
+export const SAVED_DRAFT: typeof ARTIFACT;
 export const ARTIFACT_PAGE: {
   items: { id: string; recordType: string; name: string; version: number; createdAt: string }[];
   total: number;
