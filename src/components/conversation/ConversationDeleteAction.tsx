@@ -15,14 +15,24 @@ const INITIAL: ConversationDeleteState = { error: null };
 
 /**
  * An artifact saved from the conversation, as its deletion's dialog lists it (Story 5.4 part B): its id, its name and its
- * record type's label as the page names it; from Story 5.5 part A whether it overrides a record (absent: it does not).
+ * record type's label as the page names it; from Story 5.5 part A whether it overrides a record, and from Story 5.6 part
+ * B whether it is shared with other campaigns (absent: it does not, it is not).
  */
 export type ConversationDeleteArtifact = {
   readonly id: string;
   readonly name: string;
   readonly typeLabel: string;
   readonly overrides?: boolean;
+  readonly shared?: boolean;
 };
+
+/** The checkbox's accessible name: the name and type, then each note the row shows ("substitui um registro", "compartilhado"). */
+function rowLabelKey(artifact: ConversationDeleteArtifact) {
+  if (artifact.overrides === true) {
+    return artifact.shared === true ? 'conversations.delete.artifactRowBoth' : 'conversations.delete.artifactRowOverrides';
+  }
+  return artifact.shared === true ? 'conversations.delete.artifactRowShared' : 'conversations.delete.artifactRow';
+}
 
 const NO_ARTIFACTS: readonly ConversationDeleteArtifact[] = [];
 
@@ -78,6 +88,9 @@ export function conversationDeletionConsequence(t: Translate, questions: number 
  * ticked; it clears every tick) and "Selecionar todos" (pressed while every row is ticked; it ticks them all). The
  * consequence counts the ticked artifacts too, and the confirmation posts their ids (`artifactIds`, repeated) with the
  * conversation's in one request. Focus still opens on "Cancelar", and every control is inside the Tab trap.
+ *
+ * Story 5.6 part B: a row whose artifact is shared with other campaigns adds the note "Compartilhado", after "Substitui um
+ * registro" when it has both, and its checkbox's name says each note it shows.
  */
 export function ConversationDeleteAction({ id, questions, language, action, artifacts = NO_ARTIFACTS }: ConversationDeleteActionProps) {
   const t = translator(language);
@@ -161,7 +174,7 @@ export function ConversationDeleteAction({ id, questions, language, action, arti
                       value={artifact.id}
                       checked={ticked.includes(artifact.id)}
                       onChange={(event) => toggle(artifact.id, event.target.checked)}
-                      aria-label={t(artifact.overrides === true ? 'conversations.delete.artifactRowOverrides' : 'conversations.delete.artifactRow', {
+                      aria-label={t(rowLabelKey(artifact), {
                         name: artifact.name,
                         type: artifact.typeLabel,
                       })}
@@ -170,6 +183,8 @@ export function ConversationDeleteAction({ id, questions, language, action, arti
                       <span className={styles.artifactName}>{artifact.name}</span>
                       {/* Story 5.5 part A: deleting it ends the override, so its row says it has one. */}
                       {artifact.overrides === true ? <span className={styles.artifactNote}>{t('conversations.delete.artifactOverrides')}</span> : null}
+                      {/* Story 5.6 part B: deleting it takes it out of the campaigns it is shared with too. */}
+                      {artifact.shared === true ? <span className={styles.artifactNote}>{t('conversations.delete.artifactShared')}</span> : null}
                     </span>
                     <span className={styles.artifactType}>{artifact.typeLabel}</span>
                   </label>

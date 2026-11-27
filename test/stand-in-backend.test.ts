@@ -25,6 +25,8 @@ import {
   SECOND_CAMPAIGN_ID,
   SHARED_ARTIFACT,
   SHARED_FROM_ARTIFACT,
+  SHARED_INTO_ARTIFACT,
+  SHARED_INTO_ID,
   STARTING_SCOPE,
   answer,
   exampleOf,
@@ -436,10 +438,15 @@ describe('stand-in backend', () => {
       body: { id: CONVERSATION_ID, name: 'Viagem ao norte', version: 1 },
     });
     // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
-    expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
+    // Story 5.6 part B: it lists one saved artifact, shared with another campaign.
+    const deletion = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't');
+    expect(deletion).toMatchObject({
       status: 200,
-      body: { questions: 2, artifacts: [] },
+      body: { questions: 2, artifacts: [{ id: SAVED_DRAFT.id, name: SAVED_DRAFT.name, recordType: SAVED_DRAFT.recordType, overrides: false, shared: true }] },
     });
+    for (const key of schemas.ConversationDeletionArtifact!.required ?? []) {
+      expect((deletion.body as { artifacts: unknown[] }).artifacts[0], key).toHaveProperty(key);
+    }
     expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
     // Story 5.4 part B: the deletion with the ticked saved artifacts, one request (202, no body).
     expect(answer(contract, 'POST', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toEqual({ status: 202, type: null, body: null });
@@ -621,6 +628,24 @@ describe('stand-in backend', () => {
     }
     for (const key of schemas.ArtifactSharedFrom!.required ?? []) {
       expect(SHARED_FROM_ARTIFACT.sharedFrom, key).toHaveProperty(key);
+    }
+  });
+
+  it('lists an artifact shared into the starter campaign, which reads there as shared from "Mesa de quinta" (Story 5.6 part B)', () => {
+    const starter = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    const shared = ARTIFACT_PAGE.items.filter((item) => item.sharedFrom !== null);
+    expect(shared).toEqual([expect.objectContaining({ id: SHARED_INTO_ID, sharedFrom: { campaignId: SECOND_CAMPAIGN_ID, name: 'Mesa de quinta' } })]);
+    // Newest first by id, the shared row among the own ones.
+    expect(ARTIFACT_PAGE.items.map((item) => item.id)).toEqual([...ARTIFACT_PAGE.items.map((item) => item.id)].sort().reverse());
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${starter}/artifacts/${SHARED_INTO_ID}`, 't')).toMatchObject({
+      status: 200,
+      body: SHARED_INTO_ARTIFACT,
+    });
+    expect(SHARED_INTO_ARTIFACT).toMatchObject({ id: SHARED_INTO_ID, campaignId: SECOND_CAMPAIGN_ID, sharedWith: [], related: [], overrides: null });
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(SHARED_INTO_ARTIFACT, key).toHaveProperty(key);
     }
   });
 

@@ -156,6 +156,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  *   content and "Fontes", under the line "Compartilhado da campanha {A}." with "Abrir na campanha {A}" (its own page).
  *   Nothing that calls an own-campaign route shows: no editor, "Excluir", "Versões", "Substituição", "Relacionados" or
  *   "Compartilhamento". A cited version (`?version=`) still says which one it is, with a link to the newest here.
+ *
+ * Story 5.6 part B: the artifacts tab and "Personagens" of the campaign it is shared into list it, marked "Compartilhado
+ * de {A}", and open this read-only page. In its own campaign, "Excluir" names the campaigns it is shared with ("Também
+ * sai de: …").
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -254,6 +258,8 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     campaign.ok ? everyCampaign(token ?? '', { system: campaign.data.system.id }) : null,
   ]);
   const currentName = newest?.ok ? newest.data.name : name;
+  // Story 5.6 part B: "Excluir" names the campaigns it also leaves, as the newest read has them (none: not shared).
+  const leaves = ((newest?.ok ? newest.data : artifact.data).sharedWith ?? []).map((row) => row.name);
   // Absent from a backend before contract 1.51.0: no relation then.
   const related: readonly ShownRelation[] = (artifact.data.related ?? []).map((row) => ({
     recordId: row.recordId,
@@ -312,6 +318,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
             from={from}
             language={language}
             action={deleteArtifactAction}
+            sharedWith={leaves}
           />
         }
       >

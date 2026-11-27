@@ -43,8 +43,9 @@
 // carries its proposal ("Emboscada na Cripta", an encounter) and its stored turn is offered for saving
 // (`saving: offered`); a save answers 201 with the draft saved as an artifact of the conversation (its content the
 // draft's text, its one reference copied), "Agora não" and "Salvar como artefato" answer 204, and an artifact written by
-// hand has no conversation and no references. Story 5.4 part B: the conversation's deletion lists no saved artifact (its
-// draft is offered, not saved), and its deletion with the ticked artifacts (POST .../deletion) answers 202 with no body.
+// hand has no conversation and no references. Story 5.4 part B: the conversation's deletion lists one saved artifact
+// (the stored draft as a save answers it; from Story 5.6 part B shared with another campaign), and its deletion with the
+// ticked artifacts (POST .../deletion) answers 202 with no body.
 // Story 5.5 part A: an artifact overrides no record (`overrides: null`); a mark (PUT .../override) answers it overriding
 // the stand-in record "Fire Bolt", its removal (DELETE) answers 204, and the records it can override are that one record.
 // Story 5.5 part B: an artifact is related to nothing (`related: []`); a relation (POST .../relations) answers it related
@@ -52,7 +53,9 @@
 // one record, and the campaign's read of a record lists the stand-in artifact as related to it. Story 5.6 part A: an
 // artifact is shared with no campaign (`sharedWith: []`, `sharedFrom: null`); a sharing (PUT .../sharing) answers it
 // shared with "Mesa de quinta"; and an artifact read under any campaign but the starter one (and a version of it) reads
-// as shared from the starter campaign, read-only.
+// as shared from the starter campaign, read-only. Story 5.6 part B: the starter campaign's artifacts list also holds
+// "Escudo de Lyra", an item of "Mesa de quinta" shared into it (`sharedFrom`), which reads there as shared from "Mesa de
+// quinta"; and the conversation's deletion lists one saved artifact, shared with another campaign (`shared: true`).
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -300,8 +303,12 @@ export const EXAMPLES = {
   },
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
-  // Story 5.4 part B: nothing was saved from it (its draft is offered), so its deletion lists no artifact.
-  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2, artifacts: [] },
+  // Story 5.4 part B: its deletion lists the artifacts saved from it; Story 5.6 part B: one, shared with another
+  // campaign (the stored draft, as a save answers it).
+  'GET /api/v1/conversations/{conversationId}/deletion': {
+    questions: 2,
+    artifacts: [{ id: '0190a0b0-0000-7000-8000-000000000903', name: 'Emboscada na Cripta', recordType: 'encounter', overrides: false, shared: true }],
+  },
   // Story 5.1: the starter campaign's three artifacts go with it.
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
@@ -808,16 +815,26 @@ export const ARTIFACT = {
   sharedWith: [],
   sharedFrom: null,
 };
+/** Story 5.6 part B (contract 1.53.0): an item of "Mesa de quinta" shared into the starter campaign. */
+export const SHARED_INTO_ID = '0190a0b0-0000-7000-8000-000000000904';
 export const ARTIFACT_PAGE = {
   items: [
-    { id: '0190a0b0-0000-7000-8000-000000000902', recordType: 'character_sheet', name: 'Lyra', version: 1, createdAt: '2026-11-26T12:02:00Z' },
-    { id: '0190a0b0-0000-7000-8000-000000000901', recordType: 'character_sheet', name: 'Kael', version: 1, createdAt: '2026-11-26T12:01:00Z' },
-    { id: ARTIFACT.id, recordType: ARTIFACT.recordType, name: ARTIFACT.name, version: 1, createdAt: ARTIFACT.createdAt },
+    {
+      id: SHARED_INTO_ID,
+      recordType: 'item',
+      name: 'Escudo de Lyra',
+      version: 1,
+      createdAt: '2026-11-26T12:03:00Z',
+      sharedFrom: { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta' },
+    },
+    { id: '0190a0b0-0000-7000-8000-000000000902', recordType: 'character_sheet', name: 'Lyra', version: 1, createdAt: '2026-11-26T12:02:00Z', sharedFrom: null },
+    { id: '0190a0b0-0000-7000-8000-000000000901', recordType: 'character_sheet', name: 'Kael', version: 1, createdAt: '2026-11-26T12:01:00Z', sharedFrom: null },
+    { id: ARTIFACT.id, recordType: ARTIFACT.recordType, name: ARTIFACT.name, version: 1, createdAt: ARTIFACT.createdAt, sharedFrom: null },
   ],
-  total: 3,
+  total: 4,
   types: [
     { key: 'character_sheet', count: 2 },
-    { key: 'item', count: 1 },
+    { key: 'item', count: 2 },
   ],
 };
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts'] = ARTIFACT_PAGE;
@@ -917,8 +934,22 @@ export const SHARED_FROM_ARTIFACT = {
   conversationId: null,
   sharedFrom: { campaignId: STARTER_CAMPAIGN.id, name: STARTER_CAMPAIGN.name },
 };
-/** An artifact's page or one of its versions, under the campaign of the first group. */
-const ARTIFACT_READ_PATH = /^\/api\/v1\/campaigns\/([^/]+)\/artifacts\/[^/]+(?:\/versions\/[^/]+)?$/;
+/**
+ * Story 5.6 part B: the shared row of the starter campaign's list, as the starter campaign reads it: an item of "Mesa de
+ * quinta", read-only there.
+ */
+export const SHARED_INTO_ARTIFACT = {
+  ...SHARED_FROM_ARTIFACT,
+  id: SHARED_INTO_ID,
+  campaignId: SECOND_CAMPAIGN_ID,
+  name: 'Escudo de Lyra',
+  fields: [{ name: 'Defesa', value: '+2' }],
+  content: null,
+  createdAt: '2026-11-26T12:03:00Z',
+  sharedFrom: { campaignId: SECOND_CAMPAIGN_ID, name: 'Mesa de quinta' },
+};
+/** An artifact's page or one of its versions, under the campaign of the first group, the artifact of the second. */
+const ARTIFACT_READ_PATH = /^\/api\/v1\/campaigns\/([^/]+)\/artifacts\/([^/]+)(?:\/versions\/[^/]+)?$/;
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
@@ -965,9 +996,15 @@ export function answer(contract, method, pathname, traceId) {
       return { status: 200, type, body: REFERENCE_TEXT_PAGE, ...headers };
     }
     // Story 5.6 part A: under another campaign than the starter one, an artifact reads as shared from the starter one.
-    const readIn = ARTIFACT_READ_PATH.exec(pathname)?.[1];
-    if (readIn !== undefined && readIn !== STARTER_CAMPAIGN.id && method.toUpperCase() === 'GET' && !pathname.endsWith('/versions')) {
-      return { status: 200, type, body: SHARED_FROM_ARTIFACT, ...headers };
+    const read = ARTIFACT_READ_PATH.exec(pathname);
+    if (read !== null && method.toUpperCase() === 'GET' && !pathname.endsWith('/versions')) {
+      if (read[1] !== STARTER_CAMPAIGN.id) {
+        return { status: 200, type, body: SHARED_FROM_ARTIFACT, ...headers };
+      }
+      // Story 5.6 part B: the starter campaign's shared row reads as shared from "Mesa de quinta".
+      if (read[2] === SHARED_INTO_ID) {
+        return { status: 200, type, body: SHARED_INTO_ARTIFACT, ...headers };
+      }
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];
     const body = chosen !== undefined ? chosen : media.example !== undefined ? media.example : exampleOf(contract, media.schema ?? {});

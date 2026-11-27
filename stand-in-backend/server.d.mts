@@ -142,8 +142,18 @@ export const SHARED_ARTIFACT: typeof ARTIFACT;
 export const SHARED_FROM_ARTIFACT: typeof ARTIFACT;
 /** Story 5.4 part A: the stored draft saved as an artifact of its conversation. */
 export const SAVED_DRAFT: typeof ARTIFACT;
+/** Story 5.6 part B: the starter campaign's shared row ("Escudo de Lyra" of "Mesa de quinta") and its read there. */
+export const SHARED_INTO_ID: string;
+export const SHARED_INTO_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_PAGE: {
-  items: { id: string; recordType: string; name: string; version: number; createdAt: string }[];
+  items: {
+    id: string;
+    recordType: string;
+    name: string;
+    version: number;
+    createdAt: string;
+    sharedFrom: { campaignId: string; name: string } | null;
+  }[];
   total: number;
   types: { key: string; count: number }[];
 };

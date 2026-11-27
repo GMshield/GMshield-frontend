@@ -306,6 +306,7 @@
       "action": "Delete",
       "title": "Delete «{name}»?",
       "consequence": "Every version of this artifact goes with it. Answers that cited it show «source removed». This cannot be undone.",
+      "consequenceShared": "Every version of this artifact goes with it. It also leaves: {campaigns}. Answers that cited it show «source removed». This cannot be undone.",
       "confirm": "Delete artifact",
       "cancel": "Cancel"
     },
@@ -365,7 +366,8 @@
       "save": "Save",
       "target": "One of the ticked campaigns can no longer take this artifact. Reload the page and try again.",
       "sharedFrom": "Shared from the campaign {campaign}.",
-      "openIn": "Open in the campaign {campaign}"
+      "openIn": "Open in the campaign {campaign}",
+      "listedFrom": "Shared from {campaign}"
     }
   },
   "characters": {
@@ -1134,6 +1136,9 @@
       "artifactRow": "{name}, {type}",
       "artifactOverrides": "Overrides a record",
       "artifactRowOverrides": "{name}, {type}, overrides a record",
+      "artifactShared": "Shared",
+      "artifactRowShared": "{name}, {type}, shared",
+      "artifactRowBoth": "{name}, {type}, overrides a record, shared",
       "confirm": "Delete conversation"
     }
   },

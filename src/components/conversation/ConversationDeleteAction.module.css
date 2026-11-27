@@ -126,7 +126,7 @@
   accent-color: var(--color-text);
 }
 
-/* The name, and under it (Story 5.5 part A) the note that the artifact overrides a record. */
+/* The name, and under it the notes: it overrides a record (Story 5.5 part A), it is shared (Story 5.6 part B). */
 .artifactText {
   display: flex;
   flex: 1 1 auto;

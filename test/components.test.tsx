@@ -900,6 +900,26 @@ describe('ArtifactDeleteAction (Story 5.2 part B)', () => {
     await vi.waitFor(() => expect(posted).toEqual([{ campaignId: CAMPAIGN, artifactId: ARTIFACT, name: 'Espada de Kael' }]));
   });
 
+  it('Story 5.6 part B: a shared artifact\'s consequence adds the campaigns it also leaves, in the order given, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(
+      <ArtifactDeleteAction {...props} from={null} language="pt-BR" action={action} sharedWith={['Mesa de quinta', 'Mesa de domingo']} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Todas as versões deste artefato vão junto. Também sai de: Mesa de quinta e Mesa de domingo. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.',
+    );
+    await user.keyboard('{Escape}');
+    rerender(<ArtifactDeleteAction {...props} from={null} language="en" action={action} sharedWith={['Mesa de quinta']} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('It also leaves: Mesa de quinta. Answers that cited it show «source removed». This cannot be undone.');
+    await user.keyboard('{Escape}');
+    rerender(<ArtifactDeleteAction {...props} from={null} language="en" action={action} sharedWith={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).not.toContain('It also leaves');
+  });
+
   it('"Excluir" ignores clicks while the delete runs, and takes them again once it ends', async () => {
     const user = userEvent.setup();
     let finish: (state: State) => void = () => undefined;
@@ -1191,6 +1211,43 @@ describe('ConversationDeleteAction rows of overriding artifacts (Story 5.5 part 
     dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('checkbox', { name: 'Bola de Fogo (mesa), Magia, overrides a record' })).toBeTruthy();
     expect(dialog.textContent).toContain('Overrides a record');
+  });
+});
+
+describe('ConversationDeleteAction rows of shared artifacts (Story 5.6 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000020';
+  const action = vi.fn(async () => ({ error: null }));
+
+  it('a shared row adds "Compartilhado", after the override note when it has both, and its name says each note, in both languages', async () => {
+    const user = userEvent.setup();
+    const artifacts = [
+      { id: '0190a0b0-0000-7000-8000-000000000903', name: 'Espada', typeLabel: 'Item', overrides: true, shared: true },
+      { id: '0190a0b0-0000-7000-8000-000000000904', name: 'Troll', typeLabel: 'Criatura', overrides: false, shared: true },
+      { id: '0190a0b0-0000-7000-8000-000000000905', name: 'Cripta', typeLabel: 'Encontro', shared: false },
+    ];
+    const { rerender, container } = render(<ConversationDeleteAction id={ID} questions={1} language="pt-BR" action={action} artifacts={artifacts} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    let dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+      'EspadaSubstitui um registroCompartilhadoItem',
+      'TrollCompartilhadoCriatura',
+      'CriptaEncontro',
+    ]);
+    expect(within(dialog).getByRole('checkbox', { name: 'Espada, Item, substitui um registro, compartilhado' })).toBeTruthy();
+    expect(within(dialog).getByRole('checkbox', { name: 'Troll, Criatura, compartilhado' })).toBeTruthy();
+    expect(within(dialog).getByRole('checkbox', { name: 'Cripta, Encontro' })).toBeTruthy();
+    // Every row's checkbox is in the Tab order.
+    for (const box of within(dialog).getAllByRole('checkbox')) {
+      expect(box.hasAttribute('disabled')).toBe(false);
+    }
+    expectNoStyleAttribute(container);
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={1} language="en" action={action} artifacts={artifacts} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: 'Espada, Item, overrides a record, shared' })).toBeTruthy();
+    expect(within(dialog).getByRole('checkbox', { name: 'Troll, Criatura, shared' })).toBeTruthy();
+    expect(dialog.textContent).toContain('Shared');
   });
 });
 

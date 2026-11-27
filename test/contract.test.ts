@@ -22,6 +22,8 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 5.6 part B: it lists the artifacts shared into a campaign with their `sharedFrom` (`ArtifactSummary`) and
+    // reads a conversation deletion's artifact `shared`, added in 1.53.0.
     // Story 5.6 part A: it shares an artifact with other campaigns of its system (`PUT …/sharing`), reads an artifact's
     // `sharedWith` and `sharedFrom`, and opens an artifact shared into the campaign read-only, added in 1.52.0.
     // Story 5.5 part B: it relates an artifact to a record (`POST …/relations`), removes a relation
@@ -60,10 +62,11 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.52.0');
-    expect(meetsMinimum('1.52.0')).toBe(true);
-    expect(meetsMinimum('1.52.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.53.0');
     expect(meetsMinimum('1.53.0')).toBe(true);
+    expect(meetsMinimum('1.53.1')).toBe(true);
+    expect(meetsMinimum('1.54.0')).toBe(true);
+    expect(meetsMinimum('1.52.0')).toBe(false);
     expect(meetsMinimum('1.51.0')).toBe(false);
     expect(meetsMinimum('1.50.0')).toBe(false);
     expect(meetsMinimum('1.49.0')).toBe(false);

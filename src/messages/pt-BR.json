@@ -306,6 +306,7 @@
       "action": "Excluir",
       "title": "Excluir «{name}»?",
       "consequence": "Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.",
+      "consequenceShared": "Todas as versões deste artefato vão junto. Também sai de: {campaigns}. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.",
       "confirm": "Excluir artefato",
       "cancel": "Cancelar"
     },
@@ -365,7 +366,8 @@
       "save": "Salvar",
       "target": "Uma das campanhas marcadas não pode mais receber este artefato. Recarregue a página e tente de novo.",
       "sharedFrom": "Compartilhado da campanha {campaign}.",
-      "openIn": "Abrir na campanha {campaign}"
+      "openIn": "Abrir na campanha {campaign}",
+      "listedFrom": "Compartilhado de {campaign}"
     }
   },
   "characters": {
@@ -1134,6 +1136,9 @@
       "artifactRow": "{name}, {type}",
       "artifactOverrides": "Substitui um registro",
       "artifactRowOverrides": "{name}, {type}, substitui um registro",
+      "artifactShared": "Compartilhado",
+      "artifactRowShared": "{name}, {type}, compartilhado",
+      "artifactRowBoth": "{name}, {type}, substitui um registro, compartilhado",
       "confirm": "Excluir conversa"
     }
   },
