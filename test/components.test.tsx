@@ -1166,6 +1166,34 @@ describe('ConversationDeleteAction with saved artifacts (Story 5.4 part B)', () 
   });
 });
 
+describe('ConversationDeleteAction rows of overriding artifacts (Story 5.5 part A)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000020';
+  const action = vi.fn(async () => ({ error: null }));
+
+  it('a row whose artifact overrides a record says so, in its text and its name, in both languages', async () => {
+    const user = userEvent.setup();
+    const artifacts = [
+      { id: '0190a0b0-0000-7000-8000-000000000903', name: 'Bola de Fogo (mesa)', typeLabel: 'Magia', overrides: true },
+      { id: '0190a0b0-0000-7000-8000-000000000904', name: 'Troll', typeLabel: 'Criatura', overrides: false },
+    ];
+    const { rerender } = render(<ConversationDeleteAction id={ID} questions={1} language="pt-BR" action={action} artifacts={artifacts} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    let dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+      'Bola de Fogo (mesa)Substitui um registroMagia',
+      'TrollCriatura',
+    ]);
+    expect(within(dialog).getByRole('checkbox', { name: 'Bola de Fogo (mesa), Magia, substitui um registro' })).toBeTruthy();
+    expect(within(dialog).getByRole('checkbox', { name: 'Troll, Criatura' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<ConversationDeleteAction id={ID} questions={1} language="en" action={action} artifacts={artifacts} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: 'Bola de Fogo (mesa), Magia, overrides a record' })).toBeTruthy();
+    expect(dialog.textContent).toContain('Overrides a record');
+  });
+});
+
 describe('MaterialDeleteAction (Story 3.4 part B)', () => {
   const ID = '0190a0b0-0000-7000-8000-000000000003';
   type State = { readonly error: string | null };

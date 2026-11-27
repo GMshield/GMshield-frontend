@@ -15,7 +15,15 @@ vi.mock('next/cache', () => ({ refresh: () => steps.push('refresh'), revalidateP
 const flashed = vi.fn((...args: unknown[]) => steps.push(`flash ${args.join(' ')}`));
 vi.mock('@/server/flash', () => ({ flash: async (...args: unknown[]) => flashed(...args) }));
 
-const { createArtifactAction, deleteArtifactAction, restoreArtifactAction, updateArtifactAction } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
+const {
+  createArtifactAction,
+  deleteArtifactAction,
+  overrideTargetsAction,
+  removeOverrideAction,
+  restoreArtifactAction,
+  setOverrideAction,
+  updateArtifactAction,
+} = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
 const { NO_ARTIFACT_EDIT, NO_ARTIFACT_RESTORE } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
@@ -383,3 +391,90 @@ describe("an artifact's delete Server Action (Story 5.2 part B)", () => {
   });
 });
 
+
+describe("an artifact's override Server Actions (Story 5.5 part A)", () => {
+  const OVERRIDE = `${ARTIFACTS}/${ARTIFACT}/override`;
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+  const MARK = { campaignId: CAMPAIGN, artifactId: ARTIFACT, recordId: RECORD };
+  const START_OVERRIDE = { serial: 0, done: false, error: null };
+  const MARKED = {
+    ...STORED,
+    conversationId: null,
+    references: [],
+    overrides: { recordId: RECORD, name: 'Bola de Fogo', recordType: 'spell', systemId: '0190a0b0-0000-7000-8000-000000000001', removed: false },
+  };
+
+  it('a mark sends the record, then the toast that it applies from the next question, the layout and the page', async () => {
+    const server = await withBackend({ [`PUT ${OVERRIDE}`]: { status: 200, body: MARKED } });
+
+    expect(await setOverrideAction(START_OVERRIDE, form(MARK))).toEqual({ serial: 1, done: true, error: null });
+
+    expect(calls(server)).toEqual([`PUT ${OVERRIDE}`]);
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ recordId: RECORD });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual(['flash success Substituição salva. Vale a partir da próxima pergunta.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('a record taken by another artifact, or no target any more, says so in words; nothing is announced', async () => {
+    await withBackend({ [`PUT ${OVERRIDE}`]: problemOf(409, 'artifact.override_taken', { artifactId: ARTIFACT }) });
+    expect(await setOverrideAction(START_OVERRIDE, form(MARK))).toEqual({
+      serial: 1,
+      done: false,
+      error: 'Outro artefato desta campanha já substitui esse registro.',
+    });
+    await backend?.close();
+    await withBackend({ [`PUT ${OVERRIDE}`]: problemOf(400, 'artifact.override_target') });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect((await setOverrideAction(START_OVERRIDE, form(MARK))).error).toBe('That record cannot be overridden: pick another from the list.');
+    expect(steps).toEqual([]);
+  });
+
+  it('a removal answers 204, then the toast, the layout and the page; a refusal comes back in words', async () => {
+    const server = await withBackend({ [`DELETE ${OVERRIDE}`]: { status: 204 } });
+
+    expect(await removeOverrideAction(START_OVERRIDE, form({ campaignId: CAMPAIGN, artifactId: ARTIFACT }))).toEqual({
+      serial: 1,
+      done: true,
+      error: null,
+    });
+    expect(calls(server)).toEqual([`DELETE ${OVERRIDE}`]);
+    expect(steps).toEqual(['flash success Substituição removida. Vale a partir da próxima pergunta.', 'revalidate / layout', 'refresh']);
+    await backend?.close();
+    steps.length = 0;
+    await withBackend({ [`DELETE ${OVERRIDE}`]: problemOf(404, 'request.not_found') });
+    expect((await removeOverrideAction(START_OVERRIDE, form({ campaignId: CAMPAIGN, artifactId: ARTIFACT }))).done).toBe(false);
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed mark or removal', async () => {
+    const server = await withBackend({});
+    for (const fields of [{ ...MARK, recordId: 'x' }, { ...MARK, artifactId: '../x' }, { campaignId: CAMPAIGN, artifactId: ARTIFACT }, {}] as Record<string, string>[]) {
+      expect((await setOverrideAction(START_OVERRIDE, form(fields))).error).toBe('O pedido não é válido.');
+    }
+    expect((await removeOverrideAction(START_OVERRIDE, form({ campaignId: 'x', artifactId: ARTIFACT }))).error).toBe('O pedido não é válido.');
+    expect(server.calls).toEqual([]);
+  });
+
+  it("the picker's page reads the targets by type, trimmed filter and offset, and answers its rows and paging", async () => {
+    const targets = `/api/v1/campaigns/${CAMPAIGN}/override-targets`;
+    const server = await withBackend({
+      [`GET ${targets}?recordType=spell&q=bola&offset=6&limit=6`]: {
+        status: 200,
+        body: { items: [{ id: RECORD, name: 'Bola de Fogo', recordType: 'spell', materialName: 'Livro' }], total: 9 },
+      },
+      [`GET ${targets}?recordType=spell&offset=0&limit=6`]: { status: 200, body: { items: [], total: 0 } },
+    });
+
+    expect(await overrideTargetsAction(CAMPAIGN, 'spell', '  bola ', 2)).toEqual({
+      ok: true,
+      rows: [{ id: RECORD, name: 'Bola de Fogo', materialName: 'Livro' }],
+      paging: { page: 2, pages: 2, total: 9, from: 7, to: 7 },
+    });
+    expect(await overrideTargetsAction(CAMPAIGN, 'spell', '', 1)).toEqual({ ok: true, rows: [], paging: { page: 1, pages: 1, total: 0, from: 0, to: 0 } });
+    expect(calls(server)).toEqual([`GET ${targets}?recordType=spell&q=bola&offset=6&limit=6`, `GET ${targets}?recordType=spell&offset=0&limit=6`]);
+    // A malformed request lists nothing and reaches nothing.
+    expect(await overrideTargetsAction('x', 'spell', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(await overrideTargetsAction(CAMPAIGN, 'Spell', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(server.calls).toHaveLength(2);
+  });
+});

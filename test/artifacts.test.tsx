@@ -380,6 +380,58 @@ describe("an artifact's page (Story 5.1)", () => {
   });
 });
 
+describe("an artifact's override (Story 5.5 part A)", () => {
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+  const MARK = { recordId: RECORD, name: 'Bola de Fogo', recordType: 'spell', systemId: SYSTEM, removed: false };
+  const sections = (html: string, messages: typeof ptBR) => ({
+    override: html.indexOf(`>${messages.artifacts.override.title}</h2>`),
+    sources: html.indexOf(`>${messages.artifacts.page.sources}</h2>`),
+    content: html.indexOf(`>${messages.artifacts.page.content}</h2>`),
+  });
+
+  it('"Substituição" sits between the fields and "Fontes": none, with "Substituir um registro", in both languages', async () => {
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...ARTIFACT, overrides: null } }, [VERSIONS_ROUTE]: ONE_VERSION });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+      const at = sections(html, messages);
+      expect(at.content).toBeGreaterThan(-1);
+      expect(at.override).toBeGreaterThan(at.content);
+      expect(at.sources).toBeGreaterThan(at.override);
+      expect(html).toContain(messages.artifacts.override.none);
+      expect(html).toMatch(new RegExp(`<button[^>]*aria-haspopup="dialog"[^>]*>${messages.artifacts.override.open}</button>`));
+      expect(html).not.toContain(messages.artifacts.override.remove);
+      // The picker is mounted only once it is opened.
+      expect(html).not.toContain(messages.artifacts.override.dialogIntro);
+    }
+  });
+
+  it('a mark names the record as a link to its page, with its type and "Remover substituição"; one with no effect says so, unlinked', async () => {
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...ARTIFACT, overrides: MARK } }, [VERSIONS_ROUTE]: ONE_VERSION });
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+    expect(html).toContain(ptBR.artifacts.override.replaces);
+    expect(linkTo(html, `/search/records/${RECORD}`)).not.toBe('');
+    expect(html).toMatch(/>Bola de Fogo<\/a><span[^>]*> · Magia<\/span>/);
+    expect(html).toContain(`>${ptBR.artifacts.override.remove}</button>`);
+    expect(html).not.toContain(ptBR.artifacts.override.none);
+    expect(html).not.toContain(ptBR.artifacts.override.removed);
+
+    await backend?.close();
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...ARTIFACT, overrides: { ...MARK, removed: true } } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    const gone = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+    expect(gone).toContain(ptBR.artifacts.override.removed);
+    expect(linkTo(gone, `/search/records/${RECORD}`)).toBe('');
+    expect(gone).toContain('Bola de Fogo');
+    expect(gone).toContain(`>${ptBR.artifacts.override.remove}</button>`);
+  });
+});
+
 describe("an artifact's versions (Story 5.2)", () => {
   const ONE = `${ARTIFACTS}/${SWORD}`;
   const V3 = { ...ARTIFACT, recordType: 'talento', name: 'Espada Rubra', content: 'Reforjada no vulcão.', version: 3, currentVersion: 3 };

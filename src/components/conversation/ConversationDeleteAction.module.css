@@ -126,10 +126,24 @@
   accent-color: var(--color-text);
 }
 
-.artifactName {
+/* The name, and under it (Story 5.5 part A) the note that the artifact overrides a record. */
+.artifactText {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  padding-block: var(--space-2);
+}
+
+.artifactName {
   min-width: 0;
   font-weight: var(--font-label-weight);
+}
+
+.artifactNote {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
 }
 
 .artifactType {

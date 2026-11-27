@@ -5,13 +5,32 @@ import { redirect } from 'next/navigation';
 
 import { fieldOf, typedText, valuesOf } from '@/app/(signed-in)/records/form-values';
 import { errorText, problemFields, translator, type Language } from '@/messages';
+import { pagingOf } from '@/paging';
 import { currentPreferences } from '@/preferences';
 import type { ArtifactDeleteState } from '@/components/ArtifactDeleteAction';
-import { createArtifact, deleteArtifact, getArtifact, restoreArtifact, updateArtifact } from '@/server/artifacts';
+import type { OverrideTargetsPage } from '@/components/artifacts/OverridePicker';
+import {
+  createArtifact,
+  deleteArtifact,
+  getArtifact,
+  overrideTargets,
+  removeOverride,
+  restoreArtifact,
+  setOverride,
+  updateArtifact,
+} from '@/server/artifacts';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import type { ArtifactEditState, ArtifactFormField, ArtifactFormState, ArtifactFormValues, ArtifactRestoreState } from './form-state';
+import type {
+  ArtifactEditState,
+  ArtifactFormField,
+  ArtifactFormState,
+  ArtifactFormValues,
+  ArtifactOverrideState,
+  ArtifactRestoreState,
+} from './form-state';
+import { OVERRIDE_PAGE_SIZE } from './form-state';
 import { artifactBack, fromOf } from './texts';
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -241,4 +260,122 @@ export async function deleteArtifactAction(_previous: ArtifactDeleteState, form:
   }
   revalidatePath('/', 'layout');
   redirect(artifactBack(campaignId, fromOf(form.get('from')), t).href);
+}
+
+/** A record type key, as the backend takes one; anything else lists nothing. */
+const KEY = /^[a-z][a-z0-9_]{0,31}$/;
+/** The longest name filter the backend takes, in code points (`RecordRelations.MAX_QUERY`). */
+const MOST_QUERY = 200;
+
+/** The text of a refused mark: the record taken by another artifact, or no target any more; else as every refusal. */
+function overrideRefusal(problem: unknown, language: Language): string {
+  const t = translator(language);
+  const { code } = problemFields(problem);
+  if (code === 'artifact.override_taken') {
+    return t('artifacts.override.taken');
+  }
+  if (code === 'artifact.override_target') {
+    return t('artifacts.override.target');
+  }
+  return errorText(problem, language);
+}
+
+/**
+ * "Substituir" in an artifact's override picker (Story 5.5 part A): the campaign's and the artifact's ids and the
+ * record picked. Once the backend has stored the mark, a toast says "Substituição salva. Vale a partir da próxima
+ * pergunta.", the whole signed-in layout is revalidated and the page is read again, which shows the record. A record
+ * another artifact of the campaign overrides already, or one that is no longer a target, comes back as its own text;
+ * any other refusal as every refusal reads, never a code. A malformed form never reaches the backend.
+ */
+export async function setOverrideAction(previous: ArtifactOverrideState, form: FormData): Promise<ArtifactOverrideState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const recordId = form.get('recordId');
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof recordId !== 'string' ||
+    !ID.test(recordId)
+  ) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await setOverride(token, campaignId, artifactId, recordId);
+  if (!result.ok) {
+    return { serial, done: false, error: overrideRefusal(result.problem, language) };
+  }
+  const t = translator(language);
+  await flash('success', `${t('feedback.artifactOverrideSet')} ${t('artifacts.edit.saved')}`);
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/**
+ * "Remover substituição" on an artifact's page (Story 5.5 part A): the campaign's and the artifact's ids. Once the
+ * backend has dropped the mark (also when another tab dropped it first), a toast says "Substituição removida. Vale a
+ * partir da próxima pergunta.", the layout is revalidated and the page is read again. A refusal comes back as its
+ * text, never a code. A malformed form never reaches the backend.
+ */
+export async function removeOverrideAction(previous: ArtifactOverrideState, form: FormData): Promise<ArtifactOverrideState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  if (typeof campaignId !== 'string' || !ID.test(campaignId) || typeof artifactId !== 'string' || !ID.test(artifactId)) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await removeOverride(token, campaignId, artifactId);
+  if (!result.ok) {
+    return { serial, done: false, error: errorText(result.problem, language) };
+  }
+  const t = translator(language);
+  await flash('success', `${t('feedback.artifactOverrideRemoved')} ${t('artifacts.edit.saved')}`);
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/**
+ * Page `page` of the records an artifact of the campaign can override (Story 5.5 part A), for the override picker:
+ * those of the type key `recordType` whose name contains `query` (case and accents ignored; blank for all),
+ * {@link OVERRIDE_PAGE_SIZE} a page, alphabetical. A malformed request lists nothing; a refusal comes back as its
+ * text. Nothing is written.
+ */
+export async function overrideTargetsAction(
+  campaignId: string,
+  recordType: string,
+  query: string,
+  page: number,
+): Promise<OverrideTargetsPage> {
+  const { language } = await currentPreferences();
+  const at = Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1;
+  if (!ID.test(campaignId) || !KEY.test(recordType) || typeof query !== 'string') {
+    return { ok: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  const q = [...query.trim()].slice(0, MOST_QUERY).join('');
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const offset = (at - 1) * OVERRIDE_PAGE_SIZE;
+  const result = await overrideTargets(token, campaignId, {
+    recordType,
+    ...(q === '' ? {} : { q }),
+    offset,
+    limit: OVERRIDE_PAGE_SIZE,
+  });
+  if (!result.ok) {
+    return { ok: false, error: errorText(result.problem, language) };
+  }
+  return {
+    ok: true,
+    rows: result.data.items.map((item) => ({ id: item.id, name: item.name, materialName: item.materialName })),
+    paging: pagingOf(result.data.total, offset, result.data.items.length, OVERRIDE_PAGE_SIZE),
+  };
 }

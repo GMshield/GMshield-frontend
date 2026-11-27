@@ -308,6 +308,28 @@
       "consequence": "Every version of this artifact goes with it. Answers that cited it show «source removed». This cannot be undone.",
       "confirm": "Delete artifact",
       "cancel": "Cancel"
+    },
+    "override": {
+      "title": "Override",
+      "none": "Overrides no record.",
+      "open": "Override a record",
+      "replaces": "In this campaign, it overrides:",
+      "removed": "This record left the campaign's scope or was deleted: the override has no effect.",
+      "remove": "Remove override",
+      "dialogTitle": "Override a record",
+      "dialogIntro": "In this campaign, answers read this artifact in place of the record you pick, which follows as an alternative under «System».",
+      "type": "Record type",
+      "filter": "Filter by name",
+      "list": "System records",
+      "empty": "No record of this type in this campaign's system.",
+      "emptyFiltered": "No record with that name.",
+      "loading": "Loading records…",
+      "pages": "Record pages",
+      "confirm": "Override",
+      "cancel": "Cancel",
+      "pick": "Pick a record from the list.",
+      "taken": "Another artifact of this campaign already overrides that record.",
+      "target": "That record cannot be overridden: pick another from the list."
     }
   },
   "characters": {
@@ -934,7 +956,9 @@
     "artifactSaved": "Artifact saved.",
     "artifactUpdated": "Artifact updated.",
     "artifactRestored": "Version {number} restored.",
-    "artifactDeleted": "Artifact «{name}» deleted."
+    "artifactDeleted": "Artifact «{name}» deleted.",
+    "artifactOverrideSet": "Override saved.",
+    "artifactOverrideRemoved": "Override removed."
   },
   "notifications": {
     "title": "Notifications",
@@ -1065,6 +1089,8 @@
       "keepAll": "Keep all",
       "selectAll": "Select all",
       "artifactRow": "{name}, {type}",
+      "artifactOverrides": "Overrides a record",
+      "artifactRowOverrides": "{name}, {type}, overrides a record",
       "confirm": "Delete conversation"
     }
   },

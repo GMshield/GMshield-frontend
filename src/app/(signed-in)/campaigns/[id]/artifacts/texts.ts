@@ -1,5 +1,6 @@
 import { correctionTexts } from '@/app/(signed-in)/records/correction';
 import type { ArtifactEditorTexts } from '@/components/ArtifactEditor';
+import type { ArtifactOverrideTexts } from '@/components/artifacts/ArtifactOverride';
 import type { ArtifactFormTexts } from '@/components/ArtifactForm';
 import type { ArtifactVersionsTexts } from '@/components/ArtifactVersions';
 import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
@@ -79,6 +80,30 @@ export function artifactVersionsTexts(t: Translate): ArtifactVersionsTexts {
     stale: record.stale,
     viewCurrent: record.viewCurrent,
     restoreAnyway: t('artifacts.versions.restoreAnyway'),
+  };
+}
+
+/** Every text of an artifact's "Substituição" and its picker (Story 5.5 part A), in the page's language. */
+export function artifactOverrideTexts(t: Translate): ArtifactOverrideTexts {
+  return {
+    heading: t('artifacts.override.title'),
+    none: t('artifacts.override.none'),
+    open: t('artifacts.override.open'),
+    replaces: t('artifacts.override.replaces'),
+    removed: t('artifacts.override.removed'),
+    remove: t('artifacts.override.remove'),
+    title: t('artifacts.override.dialogTitle'),
+    intro: t('artifacts.override.dialogIntro'),
+    type: t('artifacts.override.type'),
+    filter: t('artifacts.override.filter'),
+    list: t('artifacts.override.list'),
+    empty: t('artifacts.override.empty'),
+    emptyFiltered: t('artifacts.override.emptyFiltered'),
+    loading: t('artifacts.override.loading'),
+    pages: t('artifacts.override.pages'),
+    confirm: t('artifacts.override.confirm'),
+    cancel: t('artifacts.override.cancel'),
+    pick: t('artifacts.override.pick'),
   };
 }
 

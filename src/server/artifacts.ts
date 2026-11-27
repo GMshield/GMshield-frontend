@@ -19,6 +19,10 @@ import { listPage, type ListPage } from './list-page';
  *   copied as the newest) each store the next version and name the newest version the GM saw (`version`); a stale one
  *   is `request.stale_version`. {@link artifactVersions} lists the versions newest first, a page at a time.
  * - Story 5.2 part B (contract 1.45.0): {@link deleteArtifact} starts the artifact's deletion with every version.
+ * - Story 5.5 part A (contract 1.50.0): {@link setOverride} marks the artifact as overriding one record of its
+ *   campaign's system (or points its mark to another), {@link removeOverride} drops the mark (safe to repeat), and
+ *   {@link overrideTargets} lists the records it can override, alphabetical, by type and name. A record that is no
+ *   target is `artifact.override_target`; one another artifact of the campaign overrides is `artifact.override_taken`.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -32,6 +36,9 @@ export type ArtifactEdit = Schemas['ArtifactEdit'];
 export type ArtifactVersionSummary = Schemas['ArtifactVersionSummary'];
 export type ArtifactVersionPage = Schemas['ArtifactVersionPage'];
 export type ArtifactVersionQuery = NonNullable<operations['listArtifactVersions']['parameters']['query']>;
+export type ArtifactOverride = Schemas['ArtifactOverride'];
+export type OverrideTarget = Schemas['OverrideTarget'];
+export type OverrideTargetPage = Schemas['OverrideTargetPage'];
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -178,4 +185,49 @@ export async function artifactsPage(
     size,
   );
   return list.ok ? { ok: true, data: { list: list.data, types } } : list;
+}
+
+/**
+ * The GM marks one of the account's campaigns' artifacts as overriding the record `recordId` of its campaign's system
+ * (Story 5.5 part A): the artifact with its mark. It applies from the next question.
+ */
+export function setOverride(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  recordId: string,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.override', options, (client) =>
+    client.PUT('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/override', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+      body: { recordId },
+    }),
+  );
+}
+
+/** The GM removes an artifact's mark (Story 5.5 part A; 204, no body, also when it had none). */
+export function removeOverride(sessionToken: string, campaignId: string, artifactId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('artifacts.removeOverride', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/override', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+    }),
+  );
+}
+
+/**
+ * The records an artifact of the campaign can override (Story 5.5 part A): of the type key `recordType`, whose name
+ * contains `q` (case and accents ignored), from `offset`, at most `limit`, alphabetical, with how many match in all.
+ */
+export function overrideTargets(
+  sessionToken: string,
+  campaignId: string,
+  query: { readonly recordType: string; readonly q?: string; readonly offset?: number; readonly limit?: number },
+  options: CallOptions = {},
+): Promise<Result<OverrideTargetPage>> {
+  return call('artifacts.overrideTargets', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/override-targets', {
+      params: { header: session(sessionToken), path: { campaignId }, query: { ...query } },
+    }),
+  );
 }

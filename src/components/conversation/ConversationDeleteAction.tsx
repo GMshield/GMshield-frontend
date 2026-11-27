@@ -15,9 +15,14 @@ const INITIAL: ConversationDeleteState = { error: null };
 
 /**
  * An artifact saved from the conversation, as its deletion's dialog lists it (Story 5.4 part B): its id, its name and its
- * record type's label as the page names it.
+ * record type's label as the page names it; from Story 5.5 part A whether it overrides a record (absent: it does not).
  */
-export type ConversationDeleteArtifact = { readonly id: string; readonly name: string; readonly typeLabel: string };
+export type ConversationDeleteArtifact = {
+  readonly id: string;
+  readonly name: string;
+  readonly typeLabel: string;
+  readonly overrides?: boolean;
+};
 
 const NO_ARTIFACTS: readonly ConversationDeleteArtifact[] = [];
 
@@ -156,9 +161,16 @@ export function ConversationDeleteAction({ id, questions, language, action, arti
                       value={artifact.id}
                       checked={ticked.includes(artifact.id)}
                       onChange={(event) => toggle(artifact.id, event.target.checked)}
-                      aria-label={t('conversations.delete.artifactRow', { name: artifact.name, type: artifact.typeLabel })}
+                      aria-label={t(artifact.overrides === true ? 'conversations.delete.artifactRowOverrides' : 'conversations.delete.artifactRow', {
+                        name: artifact.name,
+                        type: artifact.typeLabel,
+                      })}
                     />
-                    <span className={styles.artifactName}>{artifact.name}</span>
+                    <span className={styles.artifactText}>
+                      <span className={styles.artifactName}>{artifact.name}</span>
+                      {/* Story 5.5 part A: deleting it ends the override, so its row says it has one. */}
+                      {artifact.overrides === true ? <span className={styles.artifactNote}>{t('conversations.delete.artifactOverrides')}</span> : null}
+                    </span>
                     <span className={styles.artifactType}>{artifact.typeLabel}</span>
                   </label>
                 </li>

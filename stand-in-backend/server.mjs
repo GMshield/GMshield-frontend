@@ -45,6 +45,8 @@
 // draft's text, its one reference copied), "Agora não" and "Salvar como artefato" answer 204, and an artifact written by
 // hand has no conversation and no references. Story 5.4 part B: the conversation's deletion lists no saved artifact (its
 // draft is offered, not saved), and its deletion with the ticked artifacts (POST .../deletion) answers 202 with no body.
+// Story 5.5 part A: an artifact overrides no record (`overrides: null`); a mark (PUT .../override) answers it overriding
+// the stand-in record "Fire Bolt", its removal (DELETE) answers 204, and the records it can override are that one record.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -792,6 +794,8 @@ export const ARTIFACT = {
   // Story 5.4 part A (contract 1.48.0): written by hand, so no conversation and no references.
   conversationId: null,
   references: [],
+  // Story 5.5 part A (contract 1.50.0): it overrides no record.
+  overrides: null,
 };
 export const ARTIFACT_PAGE = {
   items: [
@@ -839,8 +843,24 @@ export const SAVED_DRAFT = {
   createdAt: '2026-11-26T12:05:00Z',
   conversationId: CONVERSATION_ID,
   references: [ANSWER_DONE.references[0]],
+  overrides: null,
 };
 EXAMPLES['POST /api/v1/turns/{turnId}/artifact'] = SAVED_DRAFT;
+
+/**
+ * Story 5.5 part A (contract 1.50.0): a mark answers the artifact overriding the stand-in record "Fire Bolt" of the
+ * starter system; its removal answers 204 with no body, as declared; the records an artifact can override are that one.
+ */
+export const OVERRIDDEN_ARTIFACT = {
+  ...ARTIFACT,
+  overrides: { recordId: RECORD.id, name: RECORD.name, recordType: 'spell', systemId: STARTER_SYSTEM.id, removed: false },
+};
+export const OVERRIDE_TARGETS = {
+  items: [{ id: RECORD.id, name: RECORD.name, recordType: 'spell', materialName: 'Livro do Jogador' }],
+  total: 1,
+};
+EXAMPLES['PUT /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/override'] = OVERRIDDEN_ARTIFACT;
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/override-targets'] = OVERRIDE_TARGETS;
 // "Agora não" (PUT) and "Salvar como artefato" (DELETE) on /api/v1/turns/{turnId}/save-decline answer 204, as declared.
 
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
