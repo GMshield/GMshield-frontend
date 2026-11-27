@@ -63,7 +63,9 @@
 // Story 6.1 part A: the starter campaign has two Shields, its first one unnamed (`name: null`) and "Combate"; a new
 // Shield answers "Combate", one Shield reads as the unnamed first one, and a rename answers it as "Exploração", version 1.
 // Story 6.1 part B: a Shield's deletion preview names no notes and no rolls and that it is not the campaign's last, and
-// its deletion answers 204 with no body, as declared.
+// its deletion answers 204 with no body, as declared. Story 6.2 part A: every artifact names no Shield
+// (`shieldId: null`) but the first Shield's one note, "Pistas da cripta", which its list holds, a new note answers and its
+// artifact page reads.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -823,6 +825,8 @@ export const ARTIFACT = {
   // Story 5.6 part A (contract 1.52.0): it is shared with no campaign, and read in its own.
   sharedWith: [],
   sharedFrom: null,
+  // Story 6.2 part A (contract 1.57.0): no Shield holds it.
+  shieldId: null,
 };
 /** Story 5.6 part B (contract 1.53.0): an item of "Mesa de quinta" shared into the starter campaign. */
 export const SHARED_INTO_ID = '0190a0b0-0000-7000-8000-000000000904';
@@ -835,10 +839,11 @@ export const ARTIFACT_PAGE = {
       version: 1,
       createdAt: '2026-11-26T12:03:00Z',
       sharedFrom: { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de quinta' },
+      shieldId: null,
     },
-    { id: '0190a0b0-0000-7000-8000-000000000902', recordType: 'character_sheet', name: 'Lyra', version: 1, createdAt: '2026-11-26T12:02:00Z', sharedFrom: null },
-    { id: '0190a0b0-0000-7000-8000-000000000901', recordType: 'character_sheet', name: 'Kael', version: 1, createdAt: '2026-11-26T12:01:00Z', sharedFrom: null },
-    { id: ARTIFACT.id, recordType: ARTIFACT.recordType, name: ARTIFACT.name, version: 1, createdAt: ARTIFACT.createdAt, sharedFrom: null },
+    { id: '0190a0b0-0000-7000-8000-000000000902', recordType: 'character_sheet', name: 'Lyra', version: 1, createdAt: '2026-11-26T12:02:00Z', sharedFrom: null, shieldId: null },
+    { id: '0190a0b0-0000-7000-8000-000000000901', recordType: 'character_sheet', name: 'Kael', version: 1, createdAt: '2026-11-26T12:01:00Z', sharedFrom: null, shieldId: null },
+    { id: ARTIFACT.id, recordType: ARTIFACT.recordType, name: ARTIFACT.name, version: 1, createdAt: ARTIFACT.createdAt, sharedFrom: null, shieldId: null },
   ],
   total: 4,
   types: [
@@ -884,6 +889,7 @@ export const SAVED_DRAFT = {
   related: [],
   sharedWith: [],
   sharedFrom: null,
+  shieldId: null,
 };
 EXAMPLES['POST /api/v1/turns/{turnId}/artifact'] = SAVED_DRAFT;
 
@@ -987,6 +993,38 @@ EXAMPLES['PATCH /api/v1/campaigns/{id}/shields/{shieldId}'] = RENAMED_SHIELD;
 /** Story 6.1 part B: what goes with a Shield: nothing yet, and it is not the campaign's last (it has two). */
 export const SHIELD_DELETION = { notes: 0, rolls: 0, last: false };
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/deletion'] = SHIELD_DELETION;
+
+/**
+ * Story 6.2 part A (contract 1.57.0): the first Shield holds one note, "Pistas da cripta" (an artifact of the starter
+ * campaign of type note, no fields, version 1, naming the Shield); a new note answers it as stored (201), and the note
+ * reads as it on its artifact page.
+ */
+export const SHIELD_NOTE = {
+  ...ARTIFACT,
+  id: '0190a0b0-0000-7000-8000-000000000a11',
+  recordType: 'note',
+  name: 'Pistas da cripta',
+  fields: [],
+  content: 'O sacerdote mente sobre a chave.',
+  createdAt: '2026-11-27T12:00:00Z',
+  shieldId: FIRST_SHIELD.id,
+};
+export const SHIELD_NOTES = {
+  items: [
+    {
+      id: SHIELD_NOTE.id,
+      recordType: 'note',
+      name: SHIELD_NOTE.name,
+      version: 1,
+      createdAt: SHIELD_NOTE.createdAt,
+      sharedFrom: null,
+      shieldId: FIRST_SHIELD.id,
+    },
+  ],
+  total: 1,
+};
+EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/notes'] = SHIELD_NOTES;
+EXAMPLES['POST /api/v1/campaigns/{id}/shields/{shieldId}/notes'] = SHIELD_NOTE;
 
 /** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
 export function tinyPdf(text) {
@@ -1143,6 +1181,10 @@ export function answer(contract, method, pathname, traceId, search = '') {
       // Story 5.6 part B: the starter campaign's shared row reads as shared from "Mesa de quinta".
       if (read[2] === SHARED_INTO_ID) {
         return { status: 200, type, body: SHARED_INTO_ARTIFACT, ...headers };
+      }
+      // Story 6.2 part A: the first Shield's note reads as itself.
+      if (read[2] === SHIELD_NOTE.id) {
+        return { status: 200, type, body: SHIELD_NOTE, ...headers };
       }
     }
     const chosen = EXAMPLES[`${method.toUpperCase()} ${template}`];

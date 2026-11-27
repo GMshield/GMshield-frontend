@@ -274,7 +274,8 @@
       "form": "Editar «{name}»",
       "save": "Salvar",
       "cancel": "Cancelar",
-      "saved": "Vale a partir da próxima pergunta."
+      "saved": "Vale a partir da próxima pergunta.",
+      "offline": "Sem conexão"
     },
     "errors": {
       "name": "O nome precisa ter de {min} a {max} caracteres.",
@@ -426,6 +427,22 @@
       "rollsOther": "{count} rolagens",
       "last": "Uma campanha precisa de pelo menos um escudo.",
       "confirm": "Excluir escudo"
+    },
+    "notes": {
+      "new": "Nova nota",
+      "list": "Notas deste escudo",
+      "inShield": "No escudo «{name}»",
+      "form": {
+        "title": "Nova nota",
+        "name": "Título",
+        "content": "Texto",
+        "save": "Salvar nota",
+        "cancel": "Cancelar"
+      },
+      "errors": {
+        "name": "O título precisa ter de {min} a {max} caracteres.",
+        "content": "O texto pode ter até {max} caracteres."
+      }
     }
   },
   "characters": {
@@ -516,7 +533,8 @@
         "shield_name_taken": "Esta campanha já tem um escudo com este nome.",
         "last_shield": "Uma campanha precisa de pelo menos um escudo.",
         "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
-        "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres."
+        "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "note_type_fixed": "Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
@@ -1063,7 +1081,8 @@
     "artifactShared": "Compartilhamento salvo.",
     "shieldCreated": "Escudo «{name}» criado.",
     "shieldRenamed": "Escudo renomeado para «{name}».",
-    "shieldDeleted": "Escudo excluído."
+    "shieldDeleted": "Escudo excluído.",
+    "noteCreated": "Nota «{name}» criada."
   },
   "notifications": {
     "title": "Notificações",

@@ -35,6 +35,7 @@ const { References } = await import('@/components/conversation/References');
 const { TierLabel, tierWord } = await import('@/components/TierLabel');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
+const { useOnline } = await import('@/components/useOnline');
 
 // jsdom has no modal dialogs: the smallest stand-in for showModal() and close().
 beforeAll(() => {
@@ -1825,5 +1826,33 @@ describe('TierLabel (Story 3.7)', () => {
     expect(items[0]!.firstElementChild?.textContent).toBe('Sistema');
     expect(items[0]!.querySelector('[data-tier] + span + button')).not.toBeNull();
     expect(items[1]!.querySelector('[data-tier]')).toBeNull();
+  });
+});
+
+describe('useOnline (Story 6.2)', () => {
+  function Connection() {
+    return <p>{useOnline() ? 'online' : 'offline'}</p>;
+  }
+
+  it('follows navigator.onLine through the online and offline events', () => {
+    let onLine = false;
+    const spy = vi.spyOn(window.navigator, 'onLine', 'get').mockImplementation(() => onLine);
+    try {
+      render(<Connection />);
+      expect(screen.getByText('offline')).toBeTruthy();
+      onLine = true;
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      expect(screen.getByText('online')).toBeTruthy();
+      onLine = false;
+      act(() => {
+        window.dispatchEvent(new Event('offline'));
+      });
+      expect(screen.getByText('offline')).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+      cleanup();
+    }
   });
 });

@@ -410,6 +410,49 @@ describe("a new artifact's form (Story 5.1)", () => {
 });
 
 describe("an artifact's page (Story 5.1)", () => {
+  it('Story 6.2: a note a Shield holds says "No escudo «…»", a link to its Shield; another artifact says nothing of a Shield', async () => {
+    const shieldId = '0190a0b0-0000-7000-8000-000000000a01';
+    const note = { ...ARTIFACT, recordType: 'note', name: 'Pistas', fields: [], content: 'O sacerdote mente.', shieldId };
+    const server = await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: note },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+      [`GET /api/v1/campaigns/${CAMPAIGN}/shields/${shieldId}`]: { status: 200, body: { id: shieldId, name: null, version: 0 } },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+      const line = messages.shields.notes.inShield.replace('{name}', messages.shields.defaultName);
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}/shields/${shieldId}`)).not.toBe('');
+      expect(html).toContain(`>${line.replace(/'/g, '&#x27;')}</a>`);
+      expect(html).toContain(messages.systems.recordTypes.note);
+      // Its way back leads to the Shield, by the Shield's name, not to the artifacts tab.
+      const back = html.match(/<a[^>]*class="[^"]*_back_[^"]*"[^>]*>(?:(?!<\/a>).)*<\/a>/)?.[0] ?? '';
+      expect(back).toContain(`href="/campaigns/${CAMPAIGN}/shields/${shieldId}"`);
+      expect(back).toContain(`${messages.shields.defaultName.replace(/'/g, '&#x27;')}</a>`);
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}?tab=artifacts`)).toBe('');
+    }
+    expect(calls(server)).toContain(`GET /api/v1/campaigns/${CAMPAIGN}/shields/${shieldId}`);
+
+    // The Shield cannot be read: no line, the page still reads.
+    await backend?.close();
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: note }, [VERSIONS_ROUTE]: ONE_VERSION });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const unread = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+    expect(unread).toMatch(/<h1[^>]*>Pistas<\/h1>/);
+    expect(unread).not.toContain('No escudo');
+    expect(linkTo(unread, `/campaigns/${CAMPAIGN}?tab=artifacts`)).not.toBe('');
+
+    // An artifact no Shield holds asks for no Shield.
+    await backend?.close();
+    const plain = await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...ARTIFACT, shieldId: null } }, [VERSIONS_ROUTE]: ONE_VERSION });
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+    expect(html).not.toContain('No escudo');
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}?tab=artifacts`)).not.toBe('');
+    expect(calls(plain).some((call) => call.includes('/shields/'))).toBe(false);
+  });
+
   it('shows the name, the type as the subtitle, the fields as a two-column list, the content as Markdown with its lines and no sources', async () => {
     await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION });
     for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {

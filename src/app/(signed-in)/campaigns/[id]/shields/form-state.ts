@@ -13,3 +13,20 @@ export type ShieldFormState = {
   readonly field: 'name' | null;
   readonly stale: boolean;
 };
+
+/** A note's fields as its form holds them (Story 6.2): its title and its text. */
+export type NoteFormValues = { readonly name: string; readonly content: string };
+
+/**
+ * What a new note's form shows after a try (Story 6.2); `serial` counts the answers. A saved note opens its page, so the
+ * form only ever comes back refused: `error` is the refusal's text and `field` its part (null for one about the whole
+ * form), with the values typed kept.
+ */
+export type NoteFormState = {
+  readonly serial: number;
+  readonly values: NoteFormValues;
+  readonly error: string | null;
+  readonly field: 'name' | 'content' | null;
+};
+
+export const NO_NOTE: NoteFormState = { serial: 0, values: { name: '', content: '' }, error: null, field: null };

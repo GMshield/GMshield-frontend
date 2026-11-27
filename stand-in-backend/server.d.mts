@@ -142,6 +142,8 @@ export const ARTIFACT: {
   /** Story 5.6 part A: the campaigns it is shared with, and (read in another campaign) the one it is shared from. */
   sharedWith: { campaignId: string; name: string; archived: boolean }[];
   sharedFrom: { campaignId: string; name: string } | null;
+  /** Story 6.2 part A: the Shield holding a note (null: none). */
+  shieldId: string | null;
 };
 /** Story 5.6 part A: "Mesa de quinta", a sharing's answer, and the artifact as another campaign reads it. */
 export const SECOND_CAMPAIGN_ID: string;
@@ -160,6 +162,7 @@ export const ARTIFACT_PAGE: {
     version: number;
     createdAt: string;
     sharedFrom: { campaignId: string; name: string } | null;
+    shieldId: string | null;
   }[];
   total: number;
   types: { key: string; count: number }[];
@@ -172,6 +175,9 @@ export const SHIELD_PAGE: { items: StandInShield[]; total: number };
 export const RENAMED_SHIELD: StandInShield;
 /** Story 6.1 part B: a Shield's deletion preview (no notes, no rolls, not the last). */
 export const SHIELD_DELETION: { notes: number; rolls: number; last: boolean };
+/** Story 6.2 part A: the first Shield's one note ("Pistas da cripta") and the Shield's notes list. */
+export const SHIELD_NOTE: typeof ARTIFACT;
+export const SHIELD_NOTES: { items: (typeof ARTIFACT_PAGE)['items']; total: number };
 /** Story 5.2: an edit's and a restore's answer (version 2), and an artifact's versions (its one version 1). */
 export const EDITED_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_VERSIONS: {

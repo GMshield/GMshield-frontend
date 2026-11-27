@@ -22,6 +22,13 @@ import { listPage, type ListPage } from './list-page';
  *
  * A name outside 1 to 120 characters is `request.shield_name_invalid`; a name another Shield of the campaign has
  * (trimmed, whatever the case) is `request.shield_name_taken`.
+ *
+ * Story 6.2 part A (contract 1.57.0), a Shield's notes. A note is an artifact of the campaign of record type `note` that
+ * names its Shield (`shieldId`); it opens, changes and is deleted through `./artifacts`.
+ * - {@link listShieldNotes}: the Shield's notes, newest first, a page at a time, with the list's `total`;
+ *   {@link shieldNotesPage} reads one numbered page of it.
+ * - {@link createShieldNote}: a new note (`{name, content}`), answered as the artifact stored (201, version 1). A title
+ *   outside 1 to 200 characters or a text over 20,000 is `request.invalid` naming its field.
  */
 type Schemas = components['schemas'];
 export type Shield = Schemas['Shield'];
@@ -30,6 +37,11 @@ export type NewShield = Schemas['NewShield'];
 export type ShieldRename = Schemas['ShieldRename'];
 export type ShieldDeletion = Schemas['ShieldDeletion'];
 export type ShieldQuery = NonNullable<operations['listShields']['parameters']['query']>;
+export type NotePage = Schemas['NotePage'];
+export type NoteSummary = NotePage['items'][number];
+export type NewNote = Schemas['NewNote'];
+export type NoteQuery = NonNullable<operations['listShieldNotes']['parameters']['query']>;
+export type Note = Schemas['Artifact'];
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -102,6 +114,48 @@ export function deleteShield(sessionToken: string, campaignId: string, shieldId:
   return call('shields.delete', options, (client) =>
     client.DELETE('/api/v1/campaigns/{id}/shields/{shieldId}', {
       params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
+    }),
+  );
+}
+
+/** The notes one Shield of one of the account's campaigns holds, newest first, a page at a time; `request.not_found` for any other. */
+export function listShieldNotes(
+  sessionToken: string,
+  campaignId: string,
+  shieldId: string,
+  query: NoteQuery = {},
+  options: CallOptions = {},
+): Promise<Result<NotePage>> {
+  return call('shields.notes', options, (client) =>
+    client.GET('/api/v1/campaigns/{id}/shields/{shieldId}/notes', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId }, query },
+    }),
+  );
+}
+
+/** Page `page` of a Shield's notes, `size` a page, with where it stands in the whole list. */
+export function shieldNotesPage(
+  sessionToken: string,
+  campaignId: string,
+  shieldId: string,
+  page: number,
+  size: number,
+): Promise<Result<ListPage<NoteSummary>>> {
+  return listPage((ask) => listShieldNotes(sessionToken, campaignId, shieldId, ask), page, size);
+}
+
+/** A new note written in one Shield of one of the account's campaigns: the artifact as stored, of type `note`, version 1. */
+export function createShieldNote(
+  sessionToken: string,
+  campaignId: string,
+  shieldId: string,
+  body: NewNote,
+  options: CallOptions = {},
+): Promise<Result<Note>> {
+  return call('shields.createNote', options, (client) =>
+    client.POST('/api/v1/campaigns/{id}/shields/{shieldId}/notes', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
+      body,
     }),
   );
 }

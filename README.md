@@ -1174,6 +1174,28 @@ they sit in `src/`.
     toast. No delete control in the tab's rows.
   - Messages `shields.delete.*`, `feedback.shieldDeleted` and `errors.codes.request.last_shield`. The stand-in answers
     the preview (no notes, no rolls, not the last) and the deletion (204); the demo backend refuses the last Shield.
+- **Notes in a Shield (Story 6.2 part A).** Public contract 1.57.0 (the minimum backend contract too: the note routes
+  and `shieldId` are new; deploy the backend, then this frontend). A note is an artifact of type `note` that names its
+  Shield (`shieldId` on `Artifact` and `ArtifactSummary`). `src/server/shields.ts` adds `listShieldNotes` (newest first)
+  with `shieldNotesPage`, and `createShieldNote`.
+  - The Shield's screen puts "Nova nota" first in the header (the screen's one solid pill), then "Renomear" and
+    "Excluir", and lists the Shield's notes in `ItemList` (`viewKey="notes"`, a new list of the view cookie, paged with
+    `?page=`), each row the note's title opening its artifact page (`noteRow` in `campaigns/rows.ts`); with no note it
+    keeps the `EmptyState` "Este escudo ainda não tem notas.".
+  - `/campaigns/[id]/shields/[shieldId]/notes/new` is `NoteForm` ("Título" and "Texto", bordered; "Salvar nota").
+    `createNoteAction` (`campaigns/[id]/shields/actions.ts`) `flash()`es "Nota «…» criada.", revalidates the layout and
+    opens the note's artifact page; a title or text outside its limits shows under its field (`shields.notes.errors.*`).
+  - The artifact page reads the Shield of a held note and says "No escudo «Nome»", a link to its screen; its editor
+    gets that one type, which `RecordFieldsEditor` shows as fixed text (no select) with a hidden `recordType`.
+    `request.note_type_fixed` (a retype the backend refuses) shows under the editor.
+  - Offline: `useOnline` (`navigator.onLine` with the `online`/`offline` events; online while rendering on the server).
+    While it is false, `ArtifactEditor` and `NoteForm` show "Sem conexão" (`role="status"`), make their save pills
+    `aria-disabled` and send nothing (also "Manter a minha como nova versão"); what was typed stays in their state, and
+    saving works again once the connection is back. Nothing is written to browser storage.
+  - Messages `shields.notes.*`, `feedback.noteCreated`, `artifacts.edit.offline` and
+    `errors.codes.request.note_type_fixed`. The stand-in answers the two routes (the first Shield's one note, "Pistas da
+    cripta", whose artifact page reads as itself) and gives every other artifact `shieldId: null`; the demo backend
+    keeps each Shield's notes.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

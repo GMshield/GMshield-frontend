@@ -22,6 +22,8 @@ import {
   FIRST_SHIELD,
   RENAMED_SHIELD,
   SHIELD_DELETION,
+  SHIELD_NOTE,
+  SHIELD_NOTES,
   SHIELD_PAGE,
   RECORD_ID,
   RECORD_PAGE,
@@ -562,6 +564,33 @@ describe('stand-in backend', () => {
       expect(SHIELD_DELETION, key).toHaveProperty(key);
     }
     expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 204, type: null, body: null });
+  });
+
+  it('answers a Shield\'s notes, a new note and the note\'s page, and every artifact names its Shield or none (Story 6.2 part A)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    const notes = `/api/v1/campaigns/${campaign}/shields/${FIRST_SHIELD.id}/notes`;
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', notes, 't')).toMatchObject({ status: 200, body: SHIELD_NOTES });
+    expect(answer(contract, 'POST', notes, 't')).toMatchObject({ status: 201, body: SHIELD_NOTE });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign}/artifacts/${SHIELD_NOTE.id}`, 't')).toMatchObject({ status: 200, body: SHIELD_NOTE });
+    expect(SHIELD_NOTE).toMatchObject({ recordType: 'note', fields: [], version: 1, shieldId: FIRST_SHIELD.id });
+    for (const key of schemas.NotePage!.required ?? []) {
+      expect(SHIELD_NOTES, key).toHaveProperty(key);
+    }
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(SHIELD_NOTE, key).toHaveProperty(key);
+      expect(ARTIFACT, key).toHaveProperty(key);
+    }
+    expect(schemas.Artifact!.required).toContain('shieldId');
+    expect(schemas.ArtifactSummary!.required).toContain('shieldId');
+    for (const item of [...SHIELD_NOTES.items, ...ARTIFACT_PAGE.items]) {
+      for (const key of schemas.ArtifactSummary!.required ?? []) {
+        expect(item, key).toHaveProperty(key);
+      }
+    }
+    expect(ARTIFACT.shieldId).toBeNull();
+    expect(ARTIFACT_PAGE.items.every((item) => item.shieldId === null)).toBe(true);
   });
 
   it('answers an artifact\'s edit, its versions, one version and a restore (Story 5.2)', () => {

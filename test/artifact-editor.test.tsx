@@ -14,6 +14,9 @@ const { ArtifactVersions } = await import('@/components/ArtifactVersions');
 const { NO_ARTIFACT_EDIT, NO_ARTIFACT_RESTORE } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state');
 const { artifactEditorTexts, artifactVersionsTexts } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/texts');
 const { translator } = await import('@/messages');
+const { NoteForm } = await import('@/components/NoteForm');
+const { NO_NOTE } = await import('@/app/(signed-in)/campaigns/[id]/shields/form-state');
+type NoteFormState = import('@/app/(signed-in)/campaigns/[id]/shields/form-state').NoteFormState;
 type ArtifactEditState = import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state').ArtifactEditState;
 type ArtifactRestoreState = import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state').ArtifactRestoreState;
 
@@ -37,8 +40,30 @@ const VALUES = {
 type EditAction = (previous: ArtifactEditState, form: FormData) => Promise<ArtifactEditState>;
 type RestoreAction = (previous: ArtifactRestoreState, form: FormData) => Promise<ArtifactRestoreState>;
 
-beforeEach(() => routerRefresh.mockClear());
-afterEach(() => cleanup());
+/** Story 6.2: what `navigator.onLine` answers; the `online` and `offline` events tell the page it changed. */
+let onLine = true;
+function goOffline() {
+  onLine = false;
+  act(() => {
+    window.dispatchEvent(new Event('offline'));
+  });
+}
+function goOnline() {
+  onLine = true;
+  act(() => {
+    window.dispatchEvent(new Event('online'));
+  });
+}
+
+beforeEach(() => {
+  routerRefresh.mockClear();
+  onLine = true;
+  vi.spyOn(window.navigator, 'onLine', 'get').mockImplementation(() => onLine);
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function editor(action: EditAction, language: 'pt-BR' | 'en' = 'pt-BR') {
   return render(
@@ -158,8 +183,9 @@ describe("an artifact's edit (Story 5.2)", () => {
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     expect(screen.getByRole('alert').textContent).toBe('Não encontrado.');
     expect(screen.getByRole('form')).toBeTruthy();
-    // The saved line is said only once a save is stored, never beside an open form.
-    expect(screen.queryByRole('status')).toBeNull();
+    // The saved line is said only once a save is stored, never beside an open form (whose status line, from Story 6.2,
+    // stays empty while the browser is online).
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('a stale save says so with both choices: the GM\'s draft kept as a new version, or the current version read again', async () => {
@@ -300,5 +326,219 @@ describe('an artifact\'s "Versões" (Story 5.2)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Restaurar a versão 2' }));
     expect((await screen.findByRole('alert')).textContent).toBe('O tipo de registro desta versão não existe mais no sistema desta campanha.');
+  });
+});
+
+describe('no connection (Story 6.2)', () => {
+  it('an open edit says "Sem conexão", saves nothing and keeps what was typed; back online it saves the same draft', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<EditAction>(async (previous) => ({ ...NO_ARTIFACT_EDIT, serial: previous.serial + 1, saved: true, currentVersion: 3 }));
+    editor(action);
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+    const content = screen.getByRole('textbox', { name: 'Conteúdo' });
+    await user.clear(content);
+    await user.type(content, 'Escrito sem rede.');
+    const save = screen.getByRole('button', { name: 'Salvar' });
+    expect(save.getAttribute('aria-disabled')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('');
+
+    goOffline();
+
+    expect(screen.getByRole('status').textContent).toBe('Sem conexão');
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    await user.click(save);
+    await user.type(content, ' Mais.');
+    // Enter in the name field submits the form: still nothing is sent.
+    await user.type(screen.getByRole('textbox', { name: 'Nome' }), '{Enter}');
+    expect(action).not.toHaveBeenCalled();
+    expect(screen.getByRole('form')).toBeTruthy();
+    expect(content).toHaveProperty('value', 'Escrito sem rede. Mais.');
+    expect(screen.getByRole('textbox', { name: 'Nome' })).toHaveProperty('value', 'Espada de Kael');
+    // Nothing was written to browser storage.
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+
+    goOnline();
+
+    expect(screen.getByRole('status').textContent).toBe('');
+    expect(save.getAttribute('aria-disabled')).toBeNull();
+    await user.click(save);
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect(posted(action.mock.calls[0]![1]).content).toBe('Escrito sem rede. Mais.');
+  });
+
+  it('a save that fails on its way says "Sem conexão" under the form and keeps the draft', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<EditAction>(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    editor(action);
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+    const content = screen.getByRole('textbox', { name: 'Conteúdo' });
+    await user.clear(content);
+    await user.type(content, 'Escrito antes da queda.');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Sem conexão');
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('form')).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Conteúdo' })).toHaveProperty('value', 'Escrito antes da queda.');
+  });
+
+  it('"Manter a minha como nova versão" sends nothing while offline', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<EditAction>(async (previous) => ({ ...NO_ARTIFACT_EDIT, serial: previous.serial + 1, stale: true, currentVersion: 4 }));
+    editor(action);
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const keep = await screen.findByRole('button', { name: 'Manter a minha como nova versão' });
+
+    goOffline();
+    expect(keep.getAttribute('aria-disabled')).toBe('true');
+    await user.click(keep);
+
+    expect(action).toHaveBeenCalledTimes(1);
+    goOnline();
+    await user.click(keep);
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    expect(posted(action.mock.calls[1]![1]).version).toBe('4');
+  });
+
+  it('a closed editor says "Sem conexão" too, in each language', () => {
+    onLine = false;
+    editor(vi.fn());
+    expect(screen.getByRole('status').textContent).toBe('Sem conexão');
+    cleanup();
+    editor(vi.fn(), 'en');
+    expect(screen.getByRole('status').textContent).toBe('No connection');
+  });
+});
+
+describe("a note's fixed type (Story 6.2)", () => {
+  it('one type offered, the note\'s own, shows as text with no select, and is sent as it is', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<EditAction>(async (previous) => ({ ...NO_ARTIFACT_EDIT, serial: previous.serial + 1, saved: true, currentVersion: 3 }));
+    render(
+      <ArtifactEditor
+        campaignId={CAMPAIGN}
+        artifactId={ARTIFACT}
+        version={2}
+        values={{ recordType: 'note', name: 'Pistas', fields: [], content: 'O sacerdote mente.' }}
+        types={[{ key: 'note', label: 'Nota' }]}
+        texts={artifactEditorTexts(translator('pt-BR'))}
+        action={action}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByText('Tipo de registro')).toBeTruthy();
+    expect(screen.getByText('Nota').tagName).toBe('P');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect(posted(action.mock.calls[0]![1]).recordType).toBe('note');
+  });
+
+  it('a note\'s refused retype is shown under the form as its text', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<EditAction>(async (previous) => ({
+      ...NO_ARTIFACT_EDIT,
+      serial: previous.serial + 1,
+      error: 'Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar.',
+    }));
+    editor(action);
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar.');
+    expect(screen.getByRole('form')).toBeTruthy();
+  });
+});
+
+describe("a new note's form (Story 6.2)", () => {
+  type NoteAction = (previous: NoteFormState, form: FormData) => Promise<NoteFormState>;
+  const SHIELD = '0190a0b0-0000-7000-8000-000000000a01';
+  const LABELS = { name: 'Título', content: 'Texto', submit: 'Salvar nota', cancel: 'Cancelar', offline: 'Sem conexão' };
+  const noteForm = (action: NoteAction) =>
+    render(<NoteForm labels={LABELS} initial={NO_NOTE} campaignId={CAMPAIGN} shieldId={SHIELD} cancelHref="/back" action={action} />);
+
+  it('sends the title and text with the campaign and the Shield', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<NoteAction>(async (previous) => previous);
+    noteForm(action);
+
+    await user.type(screen.getByRole('textbox', { name: 'Título' }), 'Pistas');
+    await user.type(screen.getByRole('textbox', { name: 'Texto' }), 'O sacerdote mente.');
+    await user.click(screen.getByRole('button', { name: 'Salvar nota' }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const sent = action.mock.calls[0]![1];
+    expect([sent.get('campaign'), sent.get('shield'), sent.get('name'), sent.get('content')]).toEqual([CAMPAIGN, SHIELD, 'Pistas', 'O sacerdote mente.']);
+    expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/back');
+  });
+
+  it('offline: says "Sem conexão", sends nothing and keeps the text; back online it saves', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<NoteAction>(async (previous) => previous);
+    noteForm(action);
+    await user.type(screen.getByRole('textbox', { name: 'Título' }), 'Pistas');
+    await user.type(screen.getByRole('textbox', { name: 'Texto' }), 'Escrito na mesa.');
+
+    goOffline();
+
+    const save = screen.getByRole('button', { name: 'Salvar nota' });
+    expect(screen.getByRole('status').textContent).toBe('Sem conexão');
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    await user.click(save);
+    expect(action).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Título' })).toHaveProperty('value', 'Pistas');
+    expect(screen.getByRole('textbox', { name: 'Texto' })).toHaveProperty('value', 'Escrito na mesa.');
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+
+    goOnline();
+
+    expect(screen.getByRole('status').textContent).toBe('');
+    expect(save.getAttribute('aria-disabled')).toBeNull();
+    await user.click(save);
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect(action.mock.calls[0]![1].get('content')).toBe('Escrito na mesa.');
+  });
+
+  it('a post that fails on its way says "Sem conexão" under the form and keeps the text', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<NoteAction>(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    noteForm(action);
+    await user.type(screen.getByRole('textbox', { name: 'Título' }), 'Pistas');
+    await user.type(screen.getByRole('textbox', { name: 'Texto' }), 'Escrito antes da queda.');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar nota' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Sem conexão');
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox', { name: 'Título' })).toHaveProperty('value', 'Pistas');
+    expect(screen.getByRole('textbox', { name: 'Texto' })).toHaveProperty('value', 'Escrito antes da queda.');
+  });
+
+  it('a refusal shows under its field, which takes the focus, with the text kept', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<NoteAction>(async (previous, form) => ({
+      serial: previous.serial + 1,
+      values: { name: String(form.get('name')), content: String(form.get('content')) },
+      error: 'O título precisa ter de 1 a 200 caracteres.',
+      field: 'name' as const,
+    }));
+    noteForm(action);
+    await user.type(screen.getByRole('textbox', { name: 'Texto' }), 'Sem título.');
+    await user.click(screen.getByRole('button', { name: 'Salvar nota' }));
+
+    const name = screen.getByRole('textbox', { name: 'Título' });
+    await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+    expect(document.getElementById(name.getAttribute('aria-describedby')!)?.textContent).toBe('O título precisa ter de 1 a 200 caracteres.');
+    expect(document.activeElement).toBe(name);
+    expect(screen.getByRole('textbox', { name: 'Texto' })).toHaveProperty('value', 'Sem título.');
   });
 });

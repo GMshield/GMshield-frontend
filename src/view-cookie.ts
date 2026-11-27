@@ -1,13 +1,13 @@
 /**
  * How each list is shown (usability pass, 2026-11-21), remembered per browser in `__Host-gmshield-view`: for the files,
- * the campaigns, the systems, (Story 3.10) the conversations of an area and (Story 4.1) a system's record types and (Story 4.3) a record type's records and (Story 4.4) a system's approved terms and (Story 5.1) a campaign's artifacts (its tab and "Personagens") and (Story 6.1) a campaign's Shields, a layout (list or grid), a spacing (comfortable or compact), whether thumbnails show
+ * the campaigns, the systems, (Story 3.10) the conversations of an area and (Story 4.1) a system's record types and (Story 4.3) a record type's records and (Story 4.4) a system's approved terms and (Story 5.1) a campaign's artifacts (its tab and "Personagens") and (Story 6.1) a campaign's Shields and (Story 6.2) a Shield's notes, a layout (list or grid), a spacing (comfortable or compact), whether thumbnails show
  * and, from the third round, how many rows a page holds. The "Exibição" menu (a client component) writes it, so it is not `HttpOnly`; the server reads it
  * (`currentViews` in `./preferences`), so the first render already has the chosen view and nothing flashes. It holds no
  * content and no identifier; anything off the allowlists is the default.
  */
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, type PageSize } from './paging';
 
-export const VIEW_LISTS = ['files', 'campaigns', 'systems', 'conversations', 'recordTypes', 'records', 'terms', 'artifacts', 'shields'] as const;
+export const VIEW_LISTS = ['files', 'campaigns', 'systems', 'conversations', 'recordTypes', 'records', 'terms', 'artifacts', 'shields', 'notes'] as const;
 export type ViewList = (typeof VIEW_LISTS)[number];
 export const VIEW_LAYOUTS = ['list', 'grid'] as const;
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number];
@@ -28,6 +28,7 @@ export const DEFAULT_VIEWS: ListViews = {
   terms: DEFAULT_VIEW,
   artifacts: DEFAULT_VIEW,
   shields: DEFAULT_VIEW,
+  notes: DEFAULT_VIEW,
 };
 
 export const VIEW_COOKIE = '__Host-gmshield-view';

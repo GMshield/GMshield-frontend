@@ -8,14 +8,15 @@ import { errorText, problemFields, translator, type Language } from '@/messages'
 import { currentPreferences } from '@/preferences';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
-import { createShield, deleteShield, getShield, renameShield } from '@/server/shields';
+import { createShield, createShieldNote, deleteShield, getShield, renameShield } from '@/server/shields';
 
 import { shieldName } from '../../rows';
 
-import type { ShieldFormState } from './form-state';
+import type { NoteFormState, ShieldFormState } from './form-state';
 
 /**
- * The Server Actions of a campaign's Shields (Story 6.1): a new Shield, a rename, and (part B) a deletion. The backend checks the name; a
+ * The Server Actions of a campaign's Shields (Story 6.1): a new Shield, a rename, (part B) a deletion, and (Story 6.2) a
+ * new note in a Shield. The backend checks the name; a
  * refusal comes back as text under the name (or under the form), never a code, with what was typed kept and no toast. A
  * success says so with a toast (`flash`), renders the shared layout again and opens the Shield's screen. A rename the
  * backend finds stale comes back with the Shield's current stored name (empty for the unnamed first Shield) and version,
@@ -29,6 +30,11 @@ const ID = /^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
 const VERSION = /^(?:0|[1-9]\d{0,14})$/;
 /** Far past the limit, so the backend still sees a name too long and names it; only a runaway post is cut. */
 const MOST = 10_000;
+/**
+ * Far past a note's text limit (twice its 20,000 code points, each up to two UTF-16 units), so the backend still sees a
+ * text too long and names it; only a runaway post is cut.
+ */
+const MOST_CONTENT = 50_000;
 
 function nameOf(form: FormData): string {
   const value = form.get('name');
@@ -146,4 +152,43 @@ export async function deleteShieldAction(_previous: ShieldDeleteState, form: For
   }
   revalidatePath('/', 'layout');
   redirect(`/campaigns/${encodeURIComponent(campaignId)}?tab=shields`);
+}
+
+/** A note's typed field, cut at `most` characters; empty when absent. */
+function typed(form: FormData, field: string, most: number): string {
+  const value = form.get(field);
+  return typeof value === 'string' ? value.slice(0, most) : '';
+}
+
+/**
+ * "Salvar nota" on a new note's form (Story 6.2): the campaign's and the Shield's ids, the title and the text as typed
+ * (the backend trims and checks them). Once the backend has stored the note (an artifact of type note held by the
+ * Shield), a toast says "Nota «…» criada.", the whole signed-in layout is revalidated, and the note's artifact page
+ * opens. A title or a text outside its limits (`request.invalid` naming `name` or `content`) comes back as that field's
+ * own text under it; any other refusal (a Shield or campaign gone meanwhile) under the form, never a code; what was typed
+ * is kept either way. A malformed form never reaches the backend.
+ */
+export async function createNoteAction(previous: NoteFormState, form: FormData): Promise<NoteFormState> {
+  const { language } = await currentPreferences();
+  const t = translator(language);
+  const serial = previous.serial + 1;
+  const values = { name: typed(form, 'name', MOST), content: typed(form, 'content', MOST_CONTENT) };
+  const campaignId = form.get('campaign');
+  const shieldId = form.get('shield');
+  if (typeof campaignId !== 'string' || !ID.test(campaignId) || typeof shieldId !== 'string' || !ID.test(shieldId)) {
+    return { serial, values, error: invalid(language), field: null };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const result = await createShieldNote((await currentSessionToken()) ?? '', campaignId, shieldId, {
+    name: values.name,
+    content: values.content.trim() === '' ? null : values.content,
+  });
+  if (result.ok) {
+    await flash('success', t('feedback.noteCreated', { name: result.data.name }));
+    revalidatePath('/', 'layout');
+    redirect(`/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(result.data.id)}`);
+  }
+  const { code, params } = problemFields(result.problem);
+  const field = code === 'request.invalid' && (params.field === 'name' || params.field === 'content') ? params.field : null;
+  return { serial, values, error: field === null ? errorText(result.problem, language) : t(`shields.notes.errors.${field}`, params), field };
 }
