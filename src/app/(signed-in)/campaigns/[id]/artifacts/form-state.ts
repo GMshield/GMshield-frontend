@@ -1,3 +1,4 @@
+import type { OverrideActionState } from '@/components/artifacts/ArtifactOverride';
 import type { CorrectionField } from '@/components/RecordCorrection';
 
 /** The part of a new artifact's form a refusal is about (Story 5.1): a record's part, or the content. */
@@ -55,3 +56,16 @@ export type ArtifactRestoreState = {
 };
 
 export const NO_ARTIFACT_RESTORE: ArtifactRestoreState = { serial: 0, number: null, saved: false, error: null, stale: false, currentVersion: null };
+
+/** What a mark's change left to say (Story 5.5 part A): whether it was stored, else the refusal's text. */
+export type ArtifactOverrideState = OverrideActionState;
+
+/** How many records a page of the override picker holds (Story 5.5 part A). */
+export const OVERRIDE_PAGE_SIZE = 6;
+
+/** What a relation's change left to say (Story 5.5 part B): whether it was stored, else the refusal's text. */
+export type ArtifactRelationState = OverrideActionState;
+
+/** How many records a page of the related mode's picker holds (Story 5.5 part B), as the override picker's. */
+export const RELATION_PAGE_SIZE = OVERRIDE_PAGE_SIZE;
+

@@ -274,6 +274,7 @@ export async function openedConversationPage(area: Area, id: string, turn?: stri
               id: artifact.id,
               name: artifact.name,
               typeLabel: typeLabel(artifact.recordType, recordTypes.named, t),
+              overrides: artifact.overrides,
             }))
           : []
       }

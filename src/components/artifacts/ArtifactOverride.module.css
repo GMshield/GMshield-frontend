@@ -1,0 +1,61 @@
+/*
+ * Story 5.5 part A: "Substituição" on an artifact's page, laid out as its other sections (artifacts.module.css): a
+ * label-type heading, one line naming the record or saying there is none, then its one pill.
+ */
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 72ch;
+  margin: 0;
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+}
+
+.text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: var(--color-text);
+  font-weight: var(--font-label-weight);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.target {
+  font-weight: var(--font-label-weight);
+}
+
+.type {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+}
+
+.removed {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}

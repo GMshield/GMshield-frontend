@@ -15,7 +15,18 @@ vi.mock('next/cache', () => ({ refresh: () => steps.push('refresh'), revalidateP
 const flashed = vi.fn((...args: unknown[]) => steps.push(`flash ${args.join(' ')}`));
 vi.mock('@/server/flash', () => ({ flash: async (...args: unknown[]) => flashed(...args) }));
 
-const { createArtifactAction, deleteArtifactAction, restoreArtifactAction, updateArtifactAction } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
+const {
+  createArtifactAction,
+  deleteArtifactAction,
+  overrideTargetsAction,
+  relateAction,
+  relationTargetsAction,
+  removeOverrideAction,
+  restoreArtifactAction,
+  setOverrideAction,
+  unrelateAction,
+  updateArtifactAction,
+} = await import('@/app/(signed-in)/campaigns/[id]/artifacts/actions');
 const { NO_ARTIFACT_EDIT, NO_ARTIFACT_RESTORE } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/form-state');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
@@ -383,3 +394,184 @@ describe("an artifact's delete Server Action (Story 5.2 part B)", () => {
   });
 });
 
+
+describe("an artifact's override Server Actions (Story 5.5 part A)", () => {
+  const OVERRIDE = `${ARTIFACTS}/${ARTIFACT}/override`;
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+  const MARK = { campaignId: CAMPAIGN, artifactId: ARTIFACT, recordId: RECORD };
+  const START_OVERRIDE = { serial: 0, done: false, error: null };
+  const MARKED = {
+    ...STORED,
+    conversationId: null,
+    references: [],
+    overrides: { recordId: RECORD, name: 'Bola de Fogo', recordType: 'spell', systemId: '0190a0b0-0000-7000-8000-000000000001', removed: false },
+  };
+
+  it('a mark sends the record, then the toast that it applies from the next question, the layout and the page', async () => {
+    const server = await withBackend({ [`PUT ${OVERRIDE}`]: { status: 200, body: MARKED } });
+
+    expect(await setOverrideAction(START_OVERRIDE, form(MARK))).toEqual({ serial: 1, done: true, error: null });
+
+    expect(calls(server)).toEqual([`PUT ${OVERRIDE}`]);
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ recordId: RECORD });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual(['flash success Substituição salva. Vale a partir da próxima pergunta.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('a record taken by another artifact, or no target any more, says so in words; nothing is announced', async () => {
+    await withBackend({ [`PUT ${OVERRIDE}`]: problemOf(409, 'artifact.override_taken', { artifactId: ARTIFACT }) });
+    expect(await setOverrideAction(START_OVERRIDE, form(MARK))).toEqual({
+      serial: 1,
+      done: false,
+      error: 'Outro artefato desta campanha já substitui esse registro.',
+    });
+    await backend?.close();
+    await withBackend({ [`PUT ${OVERRIDE}`]: problemOf(400, 'artifact.override_target') });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect((await setOverrideAction(START_OVERRIDE, form(MARK))).error).toBe('That record cannot be overridden: pick another from the list.');
+    expect(steps).toEqual([]);
+  });
+
+  it('a removal answers 204, then the toast, the layout and the page; a refusal comes back in words', async () => {
+    const server = await withBackend({ [`DELETE ${OVERRIDE}`]: { status: 204 } });
+
+    expect(await removeOverrideAction(START_OVERRIDE, form({ campaignId: CAMPAIGN, artifactId: ARTIFACT }))).toEqual({
+      serial: 1,
+      done: true,
+      error: null,
+    });
+    expect(calls(server)).toEqual([`DELETE ${OVERRIDE}`]);
+    expect(steps).toEqual(['flash success Substituição removida. Vale a partir da próxima pergunta.', 'revalidate / layout', 'refresh']);
+    await backend?.close();
+    steps.length = 0;
+    await withBackend({ [`DELETE ${OVERRIDE}`]: problemOf(404, 'request.not_found') });
+    expect((await removeOverrideAction(START_OVERRIDE, form({ campaignId: CAMPAIGN, artifactId: ARTIFACT }))).done).toBe(false);
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed mark or removal', async () => {
+    const server = await withBackend({});
+    for (const fields of [{ ...MARK, recordId: 'x' }, { ...MARK, artifactId: '../x' }, { campaignId: CAMPAIGN, artifactId: ARTIFACT }, {}] as Record<string, string>[]) {
+      expect((await setOverrideAction(START_OVERRIDE, form(fields))).error).toBe('O pedido não é válido.');
+    }
+    expect((await removeOverrideAction(START_OVERRIDE, form({ campaignId: 'x', artifactId: ARTIFACT }))).error).toBe('O pedido não é válido.');
+    expect(server.calls).toEqual([]);
+  });
+
+  it("the picker's page reads the targets by type, trimmed filter and offset, and answers its rows and paging", async () => {
+    const targets = `/api/v1/campaigns/${CAMPAIGN}/override-targets`;
+    const server = await withBackend({
+      [`GET ${targets}?recordType=spell&q=bola&offset=6&limit=6`]: {
+        status: 200,
+        body: { items: [{ id: RECORD, name: 'Bola de Fogo', recordType: 'spell', materialName: 'Livro' }], total: 9 },
+      },
+      [`GET ${targets}?recordType=spell&offset=0&limit=6`]: { status: 200, body: { items: [], total: 0 } },
+    });
+
+    expect(await overrideTargetsAction(CAMPAIGN, 'spell', '  bola ', 2)).toEqual({
+      ok: true,
+      rows: [{ id: RECORD, name: 'Bola de Fogo', materialName: 'Livro' }],
+      paging: { page: 2, pages: 2, total: 9, from: 7, to: 7 },
+    });
+    expect(await overrideTargetsAction(CAMPAIGN, 'spell', '', 1)).toEqual({ ok: true, rows: [], paging: { page: 1, pages: 1, total: 0, from: 0, to: 0 } });
+    expect(calls(server)).toEqual([`GET ${targets}?recordType=spell&q=bola&offset=6&limit=6`, `GET ${targets}?recordType=spell&offset=0&limit=6`]);
+    // A malformed request lists nothing and reaches nothing.
+    expect(await overrideTargetsAction('x', 'spell', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(await overrideTargetsAction(CAMPAIGN, 'Spell', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(server.calls).toHaveLength(2);
+  });
+});
+
+describe("an artifact's relation Server Actions (Story 5.5 part B)", () => {
+  const RELATIONS = `${ARTIFACTS}/${ARTIFACT}/relations`;
+  const RECORD = '0190a0b0-0000-7000-8000-000000000700';
+  const OTHER = '0190a0b0-0000-7000-8000-000000000901';
+  const PICKED = { campaignId: CAMPAIGN, artifactId: ARTIFACT, recordId: RECORD };
+  const START_RELATION = { serial: 0, done: false, error: null };
+  const RELATED = {
+    ...STORED,
+    conversationId: null,
+    references: [],
+    overrides: null,
+    related: [{ recordId: RECORD, name: 'Troll', recordType: 'creature', tier: 'system', artifact: false, removed: false }],
+  };
+
+  it('a relation sends the record, then the toast (saying nothing of the next question), the layout and the page', async () => {
+    const server = await withBackend({ [`POST ${RELATIONS}`]: { status: 200, body: RELATED } });
+
+    expect(await relateAction(START_RELATION, form(PICKED))).toEqual({ serial: 1, done: true, error: null });
+
+    expect(calls(server)).toEqual([`POST ${RELATIONS}`]);
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ recordId: RECORD });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual(['flash success Relação salva.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('a record that is no target, or a side with 50 relations, says so in words; nothing is announced', async () => {
+    await withBackend({ [`POST ${RELATIONS}`]: problemOf(400, 'artifact.relation_target') });
+    expect(await relateAction(START_RELATION, form(PICKED))).toEqual({
+      serial: 1,
+      done: false,
+      error: 'Esse registro não pode ser relacionado: escolha outro da lista.',
+    });
+    await backend?.close();
+    await withBackend({ [`POST ${RELATIONS}`]: problemOf(409, 'artifact.relations_full') });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect((await relateAction(START_RELATION, form(PICKED))).error).toBe(
+      'This artifact, or the other one, has 50 relations already: remove one first.',
+    );
+    expect(steps).toEqual([]);
+  });
+
+  it('a removal names the record, answers 204, then the toast, the layout and the page; a refusal comes back in words', async () => {
+    const server = await withBackend({ [`DELETE ${RELATIONS}/${OTHER}`]: { status: 204 } });
+
+    expect(await unrelateAction(START_RELATION, form({ ...PICKED, recordId: OTHER }))).toEqual({ serial: 1, done: true, error: null });
+    expect(calls(server)).toEqual([`DELETE ${RELATIONS}/${OTHER}`]);
+    expect(steps).toEqual(['flash success Relação removida.', 'revalidate / layout', 'refresh']);
+    await backend?.close();
+    steps.length = 0;
+    await withBackend({ [`DELETE ${RELATIONS}/${OTHER}`]: problemOf(404, 'request.not_found') });
+    expect((await unrelateAction(START_RELATION, form({ ...PICKED, recordId: OTHER }))).done).toBe(false);
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed relation or removal', async () => {
+    const server = await withBackend({});
+    for (const fields of [{ ...PICKED, recordId: 'x' }, { ...PICKED, artifactId: '../x' }, { campaignId: CAMPAIGN, artifactId: ARTIFACT }, {}] as Record<string, string>[]) {
+      expect((await relateAction(START_RELATION, form(fields))).error).toBe('O pedido não é válido.');
+      expect((await unrelateAction(START_RELATION, form(fields))).error).toBe('O pedido não é válido.');
+    }
+    expect(server.calls).toEqual([]);
+  });
+
+  it("the related mode's page reads the targets by artifact, type, trimmed filter and offset, each row with its tier", async () => {
+    const targets = `${ARTIFACTS}/${ARTIFACT}/relation-targets`;
+    const server = await withBackend({
+      [`GET ${targets}?recordType=creature&q=tro&offset=6&limit=6`]: {
+        status: 200,
+        body: {
+          items: [
+            { id: OTHER, name: 'Guarda', recordType: 'creature', tier: 'campaign', artifact: true, materialName: null },
+            { id: RECORD, name: 'Troll', recordType: 'creature', tier: 'system', artifact: false, materialName: 'Monstros' },
+          ],
+          total: 8,
+        },
+      },
+    });
+
+    expect(await relationTargetsAction(CAMPAIGN, ARTIFACT, 'creature', '  tro ', 2)).toEqual({
+      ok: true,
+      rows: [
+        { id: OTHER, name: 'Guarda', materialName: 'Artefato desta campanha', tier: 'campaign' },
+        { id: RECORD, name: 'Troll', materialName: 'Monstros', tier: 'system' },
+      ],
+      paging: { page: 2, pages: 2, total: 8, from: 7, to: 8 },
+    });
+    expect(calls(server)).toEqual([`GET ${targets}?recordType=creature&q=tro&offset=6&limit=6`]);
+    // A malformed request lists nothing and reaches nothing.
+    expect(await relationTargetsAction(CAMPAIGN, 'x', 'creature', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(await relationTargetsAction(CAMPAIGN, ARTIFACT, 'Creature', '', 1)).toEqual({ ok: false, error: 'O pedido não é válido.' });
+    expect(server.calls).toHaveLength(1);
+  });
+});

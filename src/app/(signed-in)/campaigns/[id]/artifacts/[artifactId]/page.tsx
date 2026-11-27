@@ -6,6 +6,8 @@ import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
 import { ArtifactDeleteAction } from '@/components/ArtifactDeleteAction';
 import { ArtifactEditor } from '@/components/ArtifactEditor';
+import { ArtifactOverride } from '@/components/artifacts/ArtifactOverride';
+import { ArtifactRelations, type ShownRelation } from '@/components/artifacts/ArtifactRelations';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
 import { AnswerMarkdown } from '@/components/conversation/AnswerMarkdown';
 import { References } from '@/components/conversation/References';
@@ -22,9 +24,28 @@ import { parseReferences } from '@/client/conversation';
 import { getCampaign } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import { deleteArtifactAction, restoreArtifactAction, updateArtifactAction } from '../actions';
+import {
+  deleteArtifactAction,
+  overrideTargetsAction,
+  relateAction,
+  relationTargetsAction,
+  removeOverrideAction,
+  restoreArtifactAction,
+  setOverrideAction,
+  unrelateAction,
+  updateArtifactAction,
+} from '../actions';
 import styles from '../artifacts.module.css';
-import { artifactBack, artifactEditorTexts, artifactTypeOptions, artifactVersionsTexts, fromOf, FROM_CHARACTERS } from '../texts';
+import {
+  artifactBack,
+  artifactEditorTexts,
+  artifactOverrideTexts,
+  artifactRelationsTexts,
+  artifactTypeOptions,
+  artifactVersionsTexts,
+  fromOf,
+  FROM_CHARACTERS,
+} from '../texts';
 
 type Query = Readonly<Record<string, string | string[] | undefined>>;
 
@@ -113,6 +134,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * - "Fontes" lists a saved draft's references ({@link References}, as under an answer, without opening the source
  *   view): a source deleted since shows "fonte removida" and no link. One written by hand keeps its sentence.
  * - An artifact saved from a draft links to the conversation it came from, while that conversation exists.
+ *
+ * Story 5.5 part A: "Substituição" ({@link ArtifactOverride}), between the fields and "Fontes", on every version shown
+ * (the mark is the artifact's, not a version's): the record it overrides as a link to its page, or that it overrides
+ * none, with "Substituir um registro" (the picker) or "Remover substituição".
+ *
+ * Story 5.5 part B: "Relacionados" ({@link ArtifactRelations}), after "Substituição", on every version shown too: the
+ * records the artifact is related to, from either side, each linking to its page (an artifact's, or
+ * `/search/records/{id}`) with its type and tier and "Remover", and "Relacionar um registro" (the picker's related
+ * mode).
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -131,7 +161,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     notFoundFor(artifact.problem);
     return <Notice status="danger" language={language} message={errorText(artifact.problem, language)} dismissible={false} />;
   }
-  const { name, recordType, fields, content, version, currentVersion, campaignId, conversationId } = artifact.data;
+  const { name, recordType, fields, content, version, currentVersion, campaignId, conversationId, overrides } = artifact.data;
   const references = parseReferences(artifact.data.references);
   const linkText = (text: string, address: string) => t('conversation.link', { text, address });
   const from = fromOf(query.from);
@@ -148,6 +178,17 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     older ? getArtifact(token ?? '', campaignId, artifact.data.id) : null,
   ]);
   const currentName = newest?.ok ? newest.data.name : name;
+  // Absent from a backend before contract 1.51.0: no relation then.
+  const related: readonly ShownRelation[] = (artifact.data.related ?? []).map((row) => ({
+    recordId: row.recordId,
+    name: row.name,
+    typeLabel: typeLabel(row.recordType, types, t),
+    tier: row.tier === 'campaign' || row.tier === 'system' || row.tier === 'other' ? row.tier : null,
+    href: row.artifact
+      ? `/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(row.recordId)}`
+      : `/search/records/${encodeURIComponent(row.recordId)}`,
+    removed: row.removed,
+  }));
   const shownFields = (
     <>
       <RecordFields fields={fields} t={t} />
@@ -232,6 +273,40 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
           {shownFields}
         </ArtifactEditor>
       )}
+      <ArtifactOverride
+        campaignId={campaignId}
+        artifactId={artifact.data.id}
+        override={
+          // Null for none (and absent from a backend before contract 1.50.0).
+          overrides
+            ? {
+                recordId: overrides.recordId,
+                name: overrides.name,
+                typeLabel: typeLabel(overrides.recordType, types, t),
+                removed: overrides.removed,
+              }
+            : null
+        }
+        types={artifactTypeOptions(types, t)}
+        recordType={recordType}
+        texts={artifactOverrideTexts(t)}
+        language={language}
+        setAction={setOverrideAction}
+        removeAction={removeOverrideAction}
+        load={overrideTargetsAction}
+      />
+      <ArtifactRelations
+        campaignId={campaignId}
+        artifactId={artifact.data.id}
+        related={related}
+        types={artifactTypeOptions(types, t)}
+        recordType={recordType}
+        texts={artifactRelationsTexts(t)}
+        language={language}
+        relateAction={relateAction}
+        unrelateAction={unrelateAction}
+        load={relationTargetsAction}
+      />
       <section className={styles.section} aria-labelledby="artifact-sources">
         <h2 id="artifact-sources" className={styles.heading}>
           {t('artifacts.page.sources')}
