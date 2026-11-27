@@ -173,11 +173,13 @@ export const FIRST_SHIELD: StandInShield;
 export const COMBAT_SHIELD: StandInShield;
 export const SHIELD_PAGE: { items: StandInShield[]; total: number };
 export const RENAMED_SHIELD: StandInShield;
-/** Story 6.1 part B: a Shield's deletion preview (no notes, no rolls, not the last). */
+/** Story 6.1 part B: a Shield's deletion preview (from Story 6.2 part B one note; no rolls, not the last). */
 export const SHIELD_DELETION: { notes: number; rolls: number; last: boolean };
 /** Story 6.2 part A: the first Shield's one note ("Pistas da cripta") and the Shield's notes list. */
 export const SHIELD_NOTE: typeof ARTIFACT;
 export const SHIELD_NOTES: { items: (typeof ARTIFACT_PAGE)['items']; total: number };
+/** Story 6.2 part B: a note's move answers the note held by "Combate". */
+export const MOVED_NOTE: typeof ARTIFACT;
 /** Story 5.2: an edit's and a restore's answer (version 2), and an artifact's versions (its one version 1). */
 export const EDITED_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_VERSIONS: {

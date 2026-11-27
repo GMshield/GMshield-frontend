@@ -2,6 +2,7 @@ import 'server-only';
 
 import { call, type CallOptions, type Result } from './accounts';
 import type { components, operations } from './backend/generated/public';
+import { everyPage, type Every } from './every-page';
 import { listPage, type ListPage } from './list-page';
 
 /**
@@ -12,13 +13,16 @@ import { listPage, type ListPage } from './list-page';
  * deleted answer `request.not_found`, like an unknown one. Nothing here logs a name.
  *
  * - {@link listShields}: the campaign's Shields, oldest first, a page at a time (`limit` and `offset`, or `cursor`), with
- *   the list's `total`; {@link shieldsPage} reads one numbered page of it.
+ *   the list's `total`; {@link shieldsPage} reads one numbered page of it, and {@link everyShield} the whole list (Story
+ *   6.2 part B: the Shields a note can move to).
  * - {@link getShield}: one Shield (`{id, name, version}`).
  * - {@link createShield}: a new Shield with a typed name, answered as stored (201, version 0).
  * - {@link renameShield}: a rename on the version the GM read (`request.stale_version` when it changed elsewhere).
  *
- * - {@link shieldDeletion}: what goes with a Shield if it is deleted (`{notes, rolls, last}`; part B, contract 1.56.0).
- * - {@link deleteShield}: deletes a Shield at once (204); the campaign's only Shield is `request.last_shield`.
+ * - {@link shieldDeletion}: what goes with a Shield if it is deleted (`{notes, rolls, last}`; part B, contract 1.56.0;
+ *   from Story 6.2 part B, contract 1.58.0, `notes` counts its live notes).
+ * - {@link deleteShield}: starts a Shield's deletion (202 from contract 1.58.0, 204 before: the Shield and its notes are
+ *   not found at once and go in the background); the campaign's only Shield is `request.last_shield`.
  *
  * A name outside 1 to 120 characters is `request.shield_name_invalid`; a name another Shield of the campaign has
  * (trimmed, whatever the case) is `request.shield_name_taken`.
@@ -62,6 +66,11 @@ export function shieldsPage(sessionToken: string, campaignId: string, page: numb
   return listPage((ask) => listShields(sessionToken, campaignId, ask), page, size);
 }
 
+/** Every Shield of one of the account's campaigns, oldest first, 50 a call (Story 6.2 part B). */
+export function everyShield(sessionToken: string, campaignId: string, options: CallOptions = {}): Promise<Result<Every<Shield>>> {
+  return everyPage((cursor) => listShields(sessionToken, campaignId, { limit: 50, ...(cursor === undefined ? {} : { cursor }) }, options));
+}
+
 /** One Shield of one of the account's campaigns; `request.not_found` for any other id. */
 export function getShield(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<Shield>> {
   return call('shields.read', options, (client) =>
@@ -95,8 +104,9 @@ export function renameShield(
 }
 
 /**
- * What goes with one Shield of one of the account's campaigns if it is deleted: its notes and stored rolls (0 until they
- * exist), and whether it is the campaign's only Shield (`last`); `request.not_found` for any other id.
+ * What goes with one Shield of one of the account's campaigns if it is deleted: its live notes (from contract 1.58.0)
+ * and stored rolls (0 until they exist), and whether it is the campaign's only Shield (`last`); `request.not_found` for
+ * any other id.
  */
 export function shieldDeletion(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<ShieldDeletion>> {
   return call('shields.deletion', options, (client) =>
@@ -107,8 +117,10 @@ export function shieldDeletion(sessionToken: string, campaignId: string, shieldI
 }
 
 /**
- * Deletes one Shield of one of the account's campaigns at once (204, no body); `request.last_shield` for the campaign's
- * only Shield, `request.not_found` for any other id, one already deleted included.
+ * Starts the deletion of one Shield of one of the account's campaigns (202 from contract 1.58.0, 204 before; no body
+ * either way, and `call` reads both as done): the Shield and its notes are not found at once, and the notes go in the
+ * background with their index points. `request.last_shield` for the campaign's only Shield, `request.not_found` for any
+ * other id, one already deleted included.
  */
 export function deleteShield(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<undefined>> {
   return call('shields.delete', options, (client) =>

@@ -21,7 +21,8 @@ vi.mock('next/navigation', async (importOriginal) => ({
 /**
  * Story 6.2: the editor types an artifact's page chooses, seen in the page itself (jsdom, the page rendered and "Editar"
  * pressed): a note a Shield holds offers its one type as text, any other artifact the system's types in a select. The
- * rest of the page is test/artifacts.test.tsx's (Node, as markup).
+ * rest of the page is test/artifacts.test.tsx's (Node, as markup). Story 6.2 part B: the Shields the page offers a held
+ * note's move ("Mover" pressed): the campaign's others, the unnamed first one by its default name.
  */
 const { default: ArtifactPage } = await import('@/app/(signed-in)/campaigns/[id]/artifacts/[artifactId]/page');
 
@@ -64,7 +65,7 @@ const NOTE = {
 let backend: Server | undefined;
 
 /** A backend that answers each `METHOD path` from a table (test/support/servers.ts reads a file URL jsdom lacks). */
-async function scripted(artifact: unknown): Promise<void> {
+async function scripted(artifact: unknown, more: Record<string, { status: number; body: unknown }> = {}): Promise<void> {
   const routes: Record<string, { status: number; body: unknown }> = {
     [`GET /api/v1/campaigns/${CAMPAIGN}`]: { status: 200, body: CAMPAIGN_BODY },
     [`GET /api/v1/campaigns/${CAMPAIGN}/artifacts/${ID}`]: { status: 200, body: artifact },
@@ -74,6 +75,7 @@ async function scripted(artifact: unknown): Promise<void> {
     },
     [`GET /api/v1/campaigns/${CAMPAIGN}/shields/${SHIELD}`]: { status: 200, body: { id: SHIELD, name: null, version: 0 } },
     [`GET /api/v1/systems/${SYSTEM}/record-types?limit=50`]: { status: 200, body: { items: TYPES, total: TYPES.length } },
+    ...more,
   };
   backend = createServer((request, response) => {
     const reply = routes[`${request.method} ${request.url}`] ?? { status: 404, body: { status: 404, category: 'request', code: 'request.not_found', params: {} } };
@@ -121,5 +123,54 @@ describe("an artifact page's editor types (Story 6.2)", () => {
     const select = screen.getByRole('combobox', { name: 'Tipo de registro' }) as HTMLSelectElement;
     expect(select.value).toBe('note');
     expect(select.options.length).toBe(CORE.length);
+  });
+});
+
+describe("a held note's move targets (Story 6.2 part B)", () => {
+  const COMBAT = '0190a0b0-0000-7000-8000-000000000a02';
+  const EXPLORATION = '0190a0b0-0000-7000-8000-000000000a03';
+  const SHIELDS = `GET /api/v1/campaigns/${CAMPAIGN}/shields?limit=50`;
+  const LIST = {
+    status: 200,
+    body: {
+      items: [
+        { id: SHIELD, name: null, version: 0 },
+        { id: COMBAT, name: 'Combate', version: 0 },
+        { id: EXPLORATION, name: 'Exploração', version: 0 },
+      ],
+      total: 3,
+    },
+  };
+
+  it('offers the campaign\'s other Shields, not the note\'s own', async () => {
+    const user = userEvent.setup();
+    await scripted(NOTE, { [SHIELDS]: LIST });
+    render(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: ID }) }));
+
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+
+    const select = screen.getByRole('combobox', { name: 'Mover para' }) as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => [option.value, option.textContent])).toEqual([
+      [COMBAT, 'Combate'],
+      [EXPLORATION, 'Exploração'],
+    ]);
+  });
+
+  it('a note in a named Shield is offered the unnamed first Shield by its default name', async () => {
+    const user = userEvent.setup();
+    await scripted(
+      { ...NOTE, shieldId: COMBAT },
+      { [SHIELDS]: LIST, [`GET /api/v1/campaigns/${CAMPAIGN}/shields/${COMBAT}`]: { status: 200, body: { id: COMBAT, name: 'Combate', version: 0 } } },
+    );
+    render(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: ID }) }));
+
+    expect(screen.getByRole('link', { name: 'No escudo «Combate»' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+
+    const select = screen.getByRole('combobox', { name: 'Mover para' }) as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => [option.value, option.textContent])).toEqual([
+      [SHIELD, 'Escudo do Mestre'],
+      [EXPLORATION, 'Exploração'],
+    ]);
   });
 });

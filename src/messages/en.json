@@ -432,6 +432,13 @@
       "new": "New note",
       "list": "This Shield's notes",
       "inShield": "In the Shield «{name}»",
+      "move": {
+        "open": "Move",
+        "to": "Move to",
+        "submit": "Move",
+        "none": "This campaign has no other Shield.",
+        "cancel": "Cancel"
+      },
       "form": {
         "title": "New note",
         "name": "Title",
@@ -1082,7 +1089,8 @@
     "shieldCreated": "Shield «{name}» created.",
     "shieldRenamed": "Shield renamed to «{name}».",
     "shieldDeleted": "Shield deleted.",
-    "noteCreated": "Note «{name}» created."
+    "noteCreated": "Note «{name}» created.",
+    "noteMoved": "Note «{name}» moved."
   },
   "notifications": {
     "title": "Notifications",

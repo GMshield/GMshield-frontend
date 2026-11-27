@@ -1859,6 +1859,18 @@
         "required" : [ "items", "total" ],
         "type" : "object"
       },
+      "NoteShield" : {
+        "description" : "The Shield a note moves to (contract 1.58.0)",
+        "properties" : {
+          "shieldId" : {
+            "description" : "The id of a live Shield of the note's campaign",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "shieldId" ],
+        "type" : "object"
+      },
       "Origin" : {
         "properties" : {
           "kind" : {
@@ -3072,7 +3084,7 @@
             "type" : "boolean"
           },
           "notes" : {
-            "description" : "How many notes of the Shield go with it (0 until notes exist)",
+            "description" : "How many live notes of the Shield go with it (contract 1.58.0)",
             "example" : 0,
             "format" : "int64",
             "minimum" : 0,
@@ -3745,7 +3757,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.57.0"
+    "version" : "1.58.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -4748,6 +4760,71 @@
           }
         },
         "summary" : "The GM shares one of the account's campaigns' artifacts with exactly these other campaigns of its system (contract 1.52.0), answering the artifact as getArtifact does, with sharedWith. It stays one artifact: an edit shows everywhere. From the next question, in each campaign it is shared with, it is a source of the system tier while that tier is on, cited under that tier, and it opens read-only there; its override and relations apply in its own campaign only. A campaign it no longer names stops at once: a reference stored there reads as removed. artifact.share_target (400) when any id is not another of the account's campaigns of the artifact's system (its own campaign, another system's, another account's, one being deleted, unknown or malformed); request.invalid (400) for a malformed body or more than 200 ids; nothing is stored then; request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; request.not_found (404) too from any campaign but the artifact's own; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/shield" : {
+      "put" : {
+        "operationId" : "moveNote",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The note's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NoteShield"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The GM moves a note one of the account's Shields holds to another Shield of the same campaign (contract 1.58.0), answering the note as getArtifact does, with the new shieldId. It keeps its versions: no version is created, nothing is indexed again and its content does not change; its own Shield answers it unchanged. request.invalid (400) for a malformed body; request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; request.not_found (404) too for an artifact no Shield holds, and for a Shield that is not a live Shield of the note's campaign (another campaign's, being deleted, unknown or malformed); nothing changes then; session.required (401) without a session.",
         "tags" : [ "artifacts" ]
       }
     },
@@ -6035,8 +6112,8 @@
           }
         } ],
         "responses" : {
-          "204" : {
-            "description" : "The Shield was deleted"
+          "202" : {
+            "description" : "The deletion started"
           },
           "default" : {
             "content" : {
@@ -6049,7 +6126,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "Deletes one Shield of one of the account's campaigns (204, no body): from now on it is not found, and nothing else of the campaign changes. Cannot be undone. request.last_shield (409) when it is the campaign's only Shield, request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); nothing changes then; session.required (401) without a session.",
+        "summary" : "Deletes one Shield of one of the account's campaigns (202, no body, from contract 1.58.0; 204 before): from now on it and its notes are not found (lists, search and the campaign tier), its name is free in its campaign, and its notes are removed in the background with their index points; nothing else of the campaign changes. Cannot be undone. request.last_shield (409) when it is the campaign's only Shield, request.not_found (404) for any other id (unknown, another account's, malformed, already deleted or being deleted, a Shield of another campaign or of a campaign being deleted); nothing changes then; session.required (401) without a session.",
         "tags" : [ "library" ]
       },
       "get" : {
@@ -6220,7 +6297,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "What goes with one Shield of one of the account's campaigns if it is deleted: how many notes and stored rolls (0 until they exist), and whether it is the campaign's only Shield (last), which cannot be deleted. request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
+        "summary" : "What goes with one Shield of one of the account's campaigns if it is deleted: how many live notes (contract 1.58.0) and stored rolls (0 until they exist), and whether it is the campaign's only Shield (last), which cannot be deleted. request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

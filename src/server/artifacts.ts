@@ -32,6 +32,7 @@ import { listPage, type ListPage } from './list-page';
  *   `artifact.share_target`. Every artifact carries `sharedWith` (by name) and `sharedFrom`: {@link getArtifact} also
  *   answers, read-only, an artifact shared into the campaign asked, `sharedFrom` naming its own campaign; every other
  *   call here answers it `request.not_found` there.
+ * - Story 6.2 part B (contract 1.58.0): {@link moveNote} moves a note a Shield holds to another Shield of its campaign.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -282,6 +283,26 @@ export function share(
     client.PUT('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/sharing', {
       params: { header: session(sessionToken), path: { campaignId, artifactId } },
       body: { campaignIds: [...campaignIds] },
+    }),
+  );
+}
+
+/**
+ * The GM moves a note one of the account's Shields holds to another Shield of the same campaign (Story 6.2 part B,
+ * contract 1.58.0): the note as stored, with the new `shieldId`, its versions and content unchanged. A note no Shield
+ * holds, a Shield of another campaign, a deleting or unknown Shield are `request.not_found`.
+ */
+export function moveNote(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  shieldId: string,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.moveNote', options, (client) =>
+    client.PUT('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/shield', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+      body: { shieldId },
     }),
   );
 }

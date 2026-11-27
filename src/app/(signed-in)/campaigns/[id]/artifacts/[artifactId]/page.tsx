@@ -10,6 +10,7 @@ import { ArtifactExport } from '@/components/artifacts/ArtifactExport';
 import { ArtifactOverride } from '@/components/artifacts/ArtifactOverride';
 import { ArtifactRelations, type ShownRelation } from '@/components/artifacts/ArtifactRelations';
 import { ArtifactSharing, type SharingCampaign } from '@/components/artifacts/ArtifactSharing';
+import { NoteMove } from '@/components/artifacts/NoteMove';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
 import { AnswerMarkdown } from '@/components/conversation/AnswerMarkdown';
 import { References } from '@/components/conversation/References';
@@ -25,10 +26,11 @@ import { artifactVersionsPage, getArtifact, type ArtifactVersionSummary } from '
 import { parseReferences } from '@/client/conversation';
 import { everyCampaign, getCampaign, type RecordType } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
-import { getShield } from '@/server/shields';
+import { everyShield, getShield } from '@/server/shields';
 
 import {
   deleteArtifactAction,
+  moveNoteAction,
   overrideTargetsAction,
   relateAction,
   relationTargetsAction,
@@ -268,7 +270,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
   // Story 6.2: the Shield holding a note (absent from a backend before contract 1.57.0: none).
   const shieldId = artifact.data.shieldId ?? null;
   // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
-  const [types, versions, newest, others, shield] = await Promise.all([
+  const [types, versions, newest, others, shield, campaignShields] = await Promise.all([
     campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
     artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
     // Story 5.2 part B: "Excluir" names the artifact by its current name, also on an earlier version's page.
@@ -276,6 +278,8 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     // Story 5.6 part A: the system's campaigns in use, for "Compartilhamento".
     campaign.ok ? everyCampaign(token ?? '', { system: campaign.data.system.id }) : null,
     shieldId === null ? null : getShield(token ?? '', campaignId, shieldId),
+    // Story 6.2 part B: the Shields a held note can move to, on its current version only.
+    shieldId === null || older ? null : everyShield(token ?? '', campaignId),
   ]);
   // Story 6.2: a note's way back leads to its Shield, when the Shield could be read.
   const shieldBack = shield?.ok
@@ -354,7 +358,27 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       >
         <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
       </PageHeader>
-      {shield?.ok ? (
+      {shield?.ok && campaignShields?.ok ? (
+        // Story 6.2 part B: "Mover" beside the Shield, to the campaign's other live Shields; read again under the new one.
+        <NoteMove
+          key={shield.data.id}
+          campaignId={campaignId}
+          artifactId={artifact.data.id}
+          inShield={t('shields.notes.inShield', { name: shieldName(shield.data, t) })}
+          shieldHref={shieldBack?.href ?? ''}
+          shields={campaignShields.data.items
+            .filter((row) => row.id !== shield.data.id)
+            .map((row) => ({ id: row.id, label: shieldName(row, t) }))}
+          texts={{
+            move: t('shields.notes.move.open'),
+            moveTo: t('shields.notes.move.to'),
+            none: t('shields.notes.move.none'),
+            submit: t('shields.notes.move.submit'),
+            cancel: t('shields.notes.move.cancel'),
+          }}
+          action={moveNoteAction}
+        />
+      ) : shield?.ok ? (
         <p className={styles.origin}>
           <Link className={styles.originLink} href={`/campaigns/${encodeURIComponent(campaignId)}/shields/${encodeURIComponent(shield.data.id)}`}>
             {t('shields.notes.inShield', { name: shieldName(shield.data, t) })}

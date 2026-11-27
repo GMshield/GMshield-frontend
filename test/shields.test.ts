@@ -243,6 +243,23 @@ describe("a Shield's deletion (Story 6.1 part B)", () => {
     expect(calls(server)).toContain(`GET ${SHIELDS}/${COMBAT_ID}/deletion`);
   });
 
+  it('Story 6.2 part B: the dialog names how many notes go, as the preview counts them', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
+      [`GET ${SHIELDS}/${COMBAT_ID}/deletion`]: { status: 200, body: { notes: 3, rolls: 0, last: false } },
+    });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: COMBAT_ID }) }));
+
+      const consequence = messages.shields.delete.consequence
+        .replace('{notes}', messages.shields.delete.notesOther.replace('{count}', '3'))
+        .replace('{rolls}', messages.shields.delete.rollsOther.replace('{count}', '0'));
+      expect(html).toContain(escaped(consequence));
+      expect(html).not.toContain(escaped(messages.shields.delete.empty));
+    }
+  });
+
   it('still offers the dialog when the preview cannot be read, naming what goes in words', async () => {
     await useBackend({
       [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
@@ -270,8 +287,9 @@ describe("a Shield's deletion (Story 6.1 part B)", () => {
     expect(html).not.toContain('<dialog');
   });
 
-  it('deletes: the ids go to the backend, then the toast, the layout revalidated, and the campaign\'s Shields tab', async () => {
-    const server = await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: { status: 204 } });
+  it('deletes (202): the ids go to the backend, then the toast, the layout revalidated, and the campaign\'s Shields tab', async () => {
+    // Story 6.2 part B: the recorded deletion answers 202; a backend before 1.58.0 answered 204, read the same way.
+    const server = await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: { status: 202 } });
 
     const digest = await thrownDigest(() => deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: COMBAT_ID })));
 

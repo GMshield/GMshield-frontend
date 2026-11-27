@@ -1856,3 +1856,90 @@ describe('useOnline (Story 6.2)', () => {
     }
   });
 });
+
+describe('NoteMove (Story 6.2 part B)', () => {
+  type MoveState = { serial: number; done: boolean; error: string | null };
+  const texts = { move: 'Mover', moveTo: 'Mover para', none: 'Esta campanha não tem outro escudo.', submit: 'Mover', cancel: 'Cancelar' };
+  const shields = [
+    { id: 's2', label: 'Combate' },
+    { id: 's3', label: 'Exploração' },
+  ];
+
+  it('opens a bordered select of the other Shields, posts the one chosen, and gives the focus back to "Mover" on cancel', async () => {
+    const { NoteMove } = await import('@/components/artifacts/NoteMove');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: MoveState, form: FormData) => Promise<MoveState>>(async (previous) => ({
+      serial: previous.serial + 1,
+      done: true,
+      error: null,
+    }));
+    const { container } = render(
+      <NoteMove campaignId="c1" artifactId="a1" inShield="No escudo «Escudo do Mestre»" shieldHref="/campaigns/c1/shields/s1" shields={shields} texts={texts} action={action} />,
+    );
+    expect(screen.getByRole('link', { name: 'No escudo «Escudo do Mestre»' }).getAttribute('href')).toBe('/campaigns/c1/shields/s1');
+    expect(screen.queryByRole('combobox')).toBeNull();
+
+    const opener = screen.getByRole('button', { name: 'Mover' });
+    await user.click(opener);
+    const select = screen.getByLabelText('Mover para') as HTMLSelectElement;
+    expect(document.activeElement).toBe(select);
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(['Combate', 'Exploração']);
+    expect(screen.getByRole('button', { name: 'Mover' }).dataset.variant).toBe('solid');
+
+    // Cancel: the form closes, and the focus is back on the pill that opened it.
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByLabelText('Mover para')).toBeNull();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Mover' }));
+
+    // Again, by keyboard: choose the second Shield and send it.
+    await user.keyboard('{Enter}');
+    await user.selectOptions(screen.getByLabelText('Mover para'), 's3');
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+    expect(action).toHaveBeenCalledTimes(1);
+    const sent = action.mock.calls[0]![1];
+    expect(sent.get('campaignId')).toBe('c1');
+    expect(sent.get('artifactId')).toBe('a1');
+    expect(sent.get('shieldId')).toBe('s3');
+    expect([...sent.keys()].sort()).toEqual(['artifactId', 'campaignId', 'shieldId']);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('says the campaign has no other Shield instead of a select, with no way to send', async () => {
+    const { NoteMove } = await import('@/components/artifacts/NoteMove');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: MoveState, form: FormData) => Promise<MoveState>>();
+    render(<NoteMove campaignId="c1" artifactId="a1" inShield="No escudo «Combate»" shieldHref="/x" shields={[]} texts={texts} action={action} />);
+
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+
+    expect(screen.getByText('Esta campanha não tem outro escudo.')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mover' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText('Esta campanha não tem outro escudo.')).toBeNull();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal under the form as an alert', async () => {
+    const { NoteMove } = await import('@/components/artifacts/NoteMove');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: MoveState, form: FormData) => Promise<MoveState>>(async (previous) => ({
+      serial: previous.serial + 1,
+      done: false,
+      error: 'Não encontrado.',
+    }));
+    render(<NoteMove campaignId="c1" artifactId="a1" inShield="No escudo «Combate»" shieldHref="/x" shields={shields} texts={texts} action={action} />);
+
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+    await user.click(screen.getByRole('button', { name: 'Mover' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Não encontrado.');
+    expect(screen.getByLabelText('Mover para')).toBeTruthy();
+  });
+});

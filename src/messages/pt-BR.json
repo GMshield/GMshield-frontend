@@ -432,6 +432,13 @@
       "new": "Nova nota",
       "list": "Notas deste escudo",
       "inShield": "No escudo «{name}»",
+      "move": {
+        "open": "Mover",
+        "to": "Mover para",
+        "submit": "Mover",
+        "none": "Esta campanha não tem outro escudo.",
+        "cancel": "Cancelar"
+      },
       "form": {
         "title": "Nova nota",
         "name": "Título",
@@ -1082,7 +1089,8 @@
     "shieldCreated": "Escudo «{name}» criado.",
     "shieldRenamed": "Escudo renomeado para «{name}».",
     "shieldDeleted": "Escudo excluído.",
-    "noteCreated": "Nota «{name}» criada."
+    "noteCreated": "Nota «{name}» criada.",
+    "noteMoved": "Nota «{name}» movida."
   },
   "notifications": {
     "title": "Notificações",

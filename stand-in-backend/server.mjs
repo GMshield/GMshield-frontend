@@ -62,10 +62,11 @@
 // unknown format is request.invalid. Without a query it answers the PDF of one artifact.
 // Story 6.1 part A: the starter campaign has two Shields, its first one unnamed (`name: null`) and "Combate"; a new
 // Shield answers "Combate", one Shield reads as the unnamed first one, and a rename answers it as "Exploração", version 1.
-// Story 6.1 part B: a Shield's deletion preview names no notes and no rolls and that it is not the campaign's last, and
-// its deletion answers 204 with no body, as declared. Story 6.2 part A: every artifact names no Shield
-// (`shieldId: null`) but the first Shield's one note, "Pistas da cripta", which its list holds, a new note answers and its
-// artifact page reads.
+// Story 6.1 part B: a Shield's deletion preview names no rolls and that it is not the campaign's last, and its deletion
+// answers with no body, as declared (202 from Story 6.2 part B, contract 1.58.0). Story 6.2 part A: every artifact names
+// no Shield (`shieldId: null`) but the first Shield's one note, "Pistas da cripta", which its list holds, a new note
+// answers and its artifact page reads. Story 6.2 part B: the preview names that one note, and a note's move (PUT
+// .../artifacts/{artifactId}/shield) answers it held by "Combate".
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -990,8 +991,11 @@ EXAMPLES['GET /api/v1/campaigns/{id}/shields'] = SHIELD_PAGE;
 EXAMPLES['POST /api/v1/campaigns/{id}/shields'] = COMBAT_SHIELD;
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}'] = FIRST_SHIELD;
 EXAMPLES['PATCH /api/v1/campaigns/{id}/shields/{shieldId}'] = RENAMED_SHIELD;
-/** Story 6.1 part B: what goes with a Shield: nothing yet, and it is not the campaign's last (it has two). */
-export const SHIELD_DELETION = { notes: 0, rolls: 0, last: false };
+/**
+ * Story 6.1 part B: what goes with a Shield: from Story 6.2 part B its one note, no rolls yet, and it is not the
+ * campaign's last (it has two).
+ */
+export const SHIELD_DELETION = { notes: 1, rolls: 0, last: false };
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/deletion'] = SHIELD_DELETION;
 
 /**
@@ -1025,6 +1029,9 @@ export const SHIELD_NOTES = {
 };
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/notes'] = SHIELD_NOTES;
 EXAMPLES['POST /api/v1/campaigns/{id}/shields/{shieldId}/notes'] = SHIELD_NOTE;
+/** Story 6.2 part B (contract 1.58.0): a note's move answers the note held by "Combate", its version unchanged. */
+export const MOVED_NOTE = { ...SHIELD_NOTE, shieldId: COMBAT_SHIELD.id };
+EXAMPLES['PUT /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/shield'] = MOVED_NOTE;
 
 /** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
 export function tinyPdf(text) {

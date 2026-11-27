@@ -13,6 +13,7 @@ import {
   createArtifact,
   deleteArtifact,
   getArtifact,
+  moveNote,
   overrideTargets,
   relate,
   relationTargets,
@@ -35,6 +36,7 @@ import type {
   ArtifactRelationState,
   ArtifactRestoreState,
   ArtifactSharingState,
+  NoteMoveState,
 } from './form-state';
 import { OVERRIDE_PAGE_SIZE, RELATION_PAGE_SIZE } from './form-state';
 import { artifactBack, fromOf } from './texts';
@@ -505,6 +507,47 @@ export async function shareAction(previous: ArtifactSharingState, form: FormData
     return { serial, done: false, error: code === 'artifact.share_target' ? t('artifacts.share.target') : errorText(result.problem, language) };
   }
   await flash('success', `${t('feedback.artifactShared')} ${t('artifacts.edit.saved')}`);
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/**
+ * "Mover" in a held note's "No escudo «…»" block (Story 6.2 part B): the campaign's, the note's and the chosen Shield's
+ * ids. Once the backend has moved the note (no new version, its content unchanged), a toast says "Nota «…» movida.",
+ * the whole signed-in layout is revalidated and the page, which stays, is read again under its new Shield ("No escudo
+ * «…»" names it). A refusal comes back as every refusal reads, never a code; a `request.not_found` (a Shield deleted or
+ * a note moved meanwhile) also reads the page again, so a Shield that is gone leaves the select. A malformed form never
+ * reaches the backend.
+ */
+export async function moveNoteAction(previous: NoteMoveState, form: FormData): Promise<NoteMoveState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const shieldId = form.get('shieldId');
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof shieldId !== 'string' ||
+    !ID.test(shieldId)
+  ) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await moveNote(token, campaignId, artifactId, shieldId);
+  if (!result.ok) {
+    if (problemFields(result.problem).code === 'request.not_found') {
+      // The Shield (or the note) is gone: the page and its list of Shields are read again.
+      revalidatePath('/', 'layout');
+      refresh();
+    }
+    return { serial, done: false, error: errorText(result.problem, language) };
+  }
+  await flash('success', translator(language)('feedback.noteMoved', { name: result.data.name }));
   revalidatePath('/', 'layout');
   refresh();
   return { serial, done: true, error: null };
