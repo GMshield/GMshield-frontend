@@ -9,6 +9,7 @@ import {
   CONVERSATION,
   CONVERSATION_ID,
   EDITED_ARTIFACT,
+  STORED_DRAFT,
   STORED_TURN,
   NOTES_VERSION,
   RECORD,
@@ -101,7 +102,7 @@ describe('stand-in backend', () => {
     expect(answer(contract, 'PUT', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: { ...campaign, version: 0 } });
     expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/conversation`, 't')).toMatchObject({
       status: 200,
-      body: { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+      body: { id: '0190a0b0-0000-7000-8000-000000000020', questions: 2 },
     });
   });
 
@@ -419,7 +420,7 @@ describe('stand-in backend', () => {
     type Schema = { required?: string[] };
     const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
     const listed = answer(contract, 'GET', `/api/v1/campaigns/${campaign}/conversations`, 't');
-    expect(listed).toMatchObject({ status: 200, body: { total: 1, items: [{ id: CONVERSATION_ID, area: 'questions', questions: 1 }] } });
+    expect(listed).toMatchObject({ status: 200, body: { total: 1, items: [{ id: CONVERSATION_ID, area: 'questions', questions: 2 }] } });
     for (const key of schemas.ConversationSummary!.required ?? []) {
       expect((listed.body as { items: unknown[] }).items[0], key).toHaveProperty(key);
     }
@@ -431,14 +432,21 @@ describe('stand-in backend', () => {
     // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
     expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
       status: 200,
-      body: { questions: 1 },
+      body: { questions: 2 },
     });
     expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
     const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
-    expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN] } });
+    expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN, STORED_DRAFT] } });
     for (const key of schemas.StoredTurn!.required ?? []) {
       expect(STORED_TURN, key).toHaveProperty(key);
+      expect(STORED_DRAFT, key).toHaveProperty(key);
     }
+    // Story 5.3 part A: the answered question and a cited draft, each with its kind, as the contract allows.
+    expect(schemas.StoredTurn!.required).toContain('kind');
+    expect(STORED_TURN.kind).toBe('question');
+    expect(STORED_DRAFT.kind).toBe('draft');
+    expect(STORED_DRAFT.events.map((event) => event.type)).toEqual(['delta', 'citation', 'done']);
+    expect(STORED_DRAFT.events[0]).toMatchObject({ type: 'delta', data: { text: expect.stringMatching(/^## /) } });
     // The stored events are the streamed answer's, by sequence, ending with its done.
     expect(STORED_TURN.events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(STORED_TURN.events.at(-1)).toEqual({ sequence: 10, type: 'done', data: ANSWER_DONE });

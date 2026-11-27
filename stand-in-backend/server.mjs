@@ -37,7 +37,9 @@
 // types, in their fixed order, none with records yet; one of them reads as the rule type. Story 5.1: the starter campaign
 // has three artifacts (two character sheets and an item), and a new artifact answers as stored, version 1. Story 5.2:
 // an edit or a restore answers version 2, and an artifact's versions are its one version 1. Story 5.2 part B: an
-// artifact's delete answers 202 with no body, as the contract declares.
+// artifact's delete answers 202 with no body, as the contract declares. Story 5.3 part A: a question is recorded
+// whatever its kind (the body is never read), and the conversation holds two turns: the answered question
+// (`kind: question`) and a cited draft (`kind: draft`), so it counts two questions.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -267,7 +269,7 @@ export const EXAMPLES = {
     archived: false,
     version: 0,
   },
-  'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 1 },
+  'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 2 },
   // Story 3.10: one conversation, whatever area is asked (the stand-in reads no query).
   'GET /api/v1/campaigns/{campaignId}/conversations': {
     items: [
@@ -275,9 +277,9 @@ export const EXAMPLES = {
         id: CONVERSATION_ID,
         area: 'questions',
         name: CONVERSATION.name,
-        questions: 1,
+        questions: 2,
         createdAt: '2026-11-22T12:00:00Z',
-        lastAskedAt: '2026-11-22T12:00:00Z',
+        lastAskedAt: '2026-11-22T12:02:00Z',
         version: 0,
       },
     ],
@@ -285,7 +287,7 @@ export const EXAMPLES = {
   },
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
-  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 1 },
+  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2 },
   // Story 5.1: the starter campaign's three artifacts go with it.
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,
@@ -571,8 +573,26 @@ export const STORED_TURN = {
     ['done', ANSWER_DONE],
   ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
   bookmarked: false,
+  kind: 'question',
 };
-EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN] };
+
+/** Story 5.3 part A: a draft the GM asked for in the same conversation, cited and done, as a stored turn carries it. */
+export const DRAFT_HEADING = '## Encontro na cripta';
+const DRAFT_TEXT = `${DRAFT_HEADING}\n\n- Inimigos: três esqueletos guardam a porta.`;
+export const STORED_DRAFT = {
+  id: '0190a0b0-0000-7000-8000-000000000022',
+  question: 'Um encontro para a cripta',
+  language: 'pt-BR',
+  createdAt: '2026-11-22T12:02:00Z',
+  events: [
+    ['delta', { text: DRAFT_TEXT }],
+    ['citation', { passageId: '0190a0b0-0000-7000-8000-000000000010', offset: Array.from(DRAFT_TEXT).length }],
+    ['done', { stopped: false, silent: false, modelKnowledge: false, references: [ANSWER_DONE.references[0]] }],
+  ].map(([type, data], index) => ({ sequence: index + 1, type, data })),
+  bookmarked: false,
+  kind: 'draft',
+};
+EXAMPLES['GET /api/v1/conversations/{conversationId}/turns'] = { items: [STORED_TURN, STORED_DRAFT] };
 
 /** Story 3.12: the saved answers: the stored turn's, in the starter campaign, then one in another campaign. */
 EXAMPLES['GET /api/v1/saved-answers'] = {

@@ -46,8 +46,14 @@ export type SavedAnswerPage = Schemas['SavedAnswerPage'];
 /** The areas of the sidebar a conversation belongs to (Story 3.10). */
 export const AREAS = ['questions', 'rules'] as const;
 export type Area = (typeof AREAS)[number];
-/** Where a question goes (Story 3.10): a conversation to continue, or the area of a new one. */
-export type QuestionTarget = { readonly conversationId?: string; readonly area?: Area };
+/** What the GM asks for in a turn (Story 5.3 part A): a question (the default), or a draft. */
+export const TURN_KINDS = ['question', 'draft'] as const;
+export type TurnKind = (typeof TURN_KINDS)[number];
+/**
+ * Where a question goes (Story 3.10): a conversation to continue, or the area of a new one. Story 5.3 part A: and what it
+ * asks for (`kind`; absent: a question).
+ */
+export type QuestionTarget = { readonly conversationId?: string; readonly area?: Area; readonly kind?: TurnKind };
 
 /** A campaign or turn id as the backend mints it (a UUID); anything else is one nowhere. */
 const ID = /^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/;
@@ -67,7 +73,8 @@ export function currentConversation(sessionToken: string, options: CallOptions =
 
 /**
  * Records a question on the campaign: the turn, its conversation and its language. Story 3.10: in the conversation
- * `target` names, or in a new one of its area; with neither, the campaign's latest questions conversation.
+ * `target` names, or in a new one of its area; with neither, the campaign's latest questions conversation. Story 5.3
+ * part A: with the target's `kind` when it has one.
  */
 export function askQuestion(
   sessionToken: string,
@@ -79,7 +86,12 @@ export function askQuestion(
   return call('conversations.ask', options, (client) =>
     client.POST('/api/v1/campaigns/{campaignId}/turns', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { campaignId } },
-      body: { question, ...(target.conversationId === undefined ? {} : { conversationId: target.conversationId }), ...(target.area === undefined ? {} : { area: target.area }) },
+      body: {
+        question,
+        ...(target.conversationId === undefined ? {} : { conversationId: target.conversationId }),
+        ...(target.area === undefined ? {} : { area: target.area }),
+        ...(target.kind === undefined ? {} : { kind: target.kind }),
+      },
     }),
   );
 }

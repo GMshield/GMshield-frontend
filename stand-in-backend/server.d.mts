@@ -92,7 +92,12 @@ export const STORED_TURN: {
   language: string | null;
   createdAt: string;
   events: { sequence: number; type: string; data: unknown }[];
+  bookmarked: boolean;
+  kind: 'question' | 'draft';
 };
+/** Story 5.3 part A: a cited draft stored in the same conversation, and the heading its text opens with. */
+export const DRAFT_HEADING: string;
+export const STORED_DRAFT: typeof STORED_TURN;
 /** Story 4.3: a record type's records, one record as its system shows it, and that record's id. */
 export const RECORD_ID: string;
 export const RECORD_PAGE: { items: { id: string; name: string; materialName: string; page: number }[]; total: number };
