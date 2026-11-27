@@ -779,8 +779,8 @@ export const RECORD = {
 };
 EXAMPLES['GET /api/v1/record-types/{id}/records'] = RECORD_PAGE;
 EXAMPLES['GET /api/v1/systems/{systemId}/records/{recordId}'] = RECORD;
-// Story 4.3 part B: the same record as a campaign shows it (the search's record result).
-EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = RECORD;
+// Story 4.3 part B: the same record as a campaign shows it (the search's record result) is set with Story 5.5 part B's
+// related artifacts below.
 /** Story 4.5 (contract 1.40.0): a correction answers the record as stored, its version raised by one. */
 export const CORRECTED_RECORD = { ...RECORD, fields: RECORD.fields.slice(0, 3), version: 1 };
 EXAMPLES['PATCH /api/v1/systems/{systemId}/records/{recordId}'] = CORRECTED_RECORD;
@@ -908,6 +908,7 @@ export const RELATION_TARGETS = {
 };
 EXAMPLES['POST /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations'] = RELATED_ARTIFACT;
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relation-targets'] = RELATION_TARGETS;
+// The record as a campaign shows it (Story 4.3 part B), with the stand-in artifact related to it (Story 5.5 part B).
 EXAMPLES['GET /api/v1/campaigns/{campaignId}/records/{recordId}'] = {
   ...RECORD,
   related: [{ artifactId: ARTIFACT.id, name: ARTIFACT.name, recordType: ARTIFACT.recordType }],
