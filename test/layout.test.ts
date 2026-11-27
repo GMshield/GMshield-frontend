@@ -1638,6 +1638,34 @@ describe("a search's record result, opened in the campaign's context (Story 4.3 
     expect(html).toMatch(/<a[^>]*href="\/search\?type=talento"[^>]*>(<svg.*?<\/svg>)?Busca<\/a>/);
   });
 
+  it('Story 5.5 part B: "Relacionados", before "Fontes", links the campaign\'s related artifacts with their type; none shows nothing', async () => {
+    const CRYPT = '0190a0b0-0000-7000-8000-000000000900';
+    await useBackend({
+      [CURRENT]: CAMPAIGN,
+      [RECORD]: { status: 200, body: { ...record, related: [{ artifactId: CRYPT, name: 'Cripta', recordType: 'encounter' }] } },
+    });
+    let html = await page();
+    const related = html.indexOf('>Relacionados</h2>');
+    expect(related).toBeGreaterThan(-1);
+    expect(html.indexOf('>Fontes</h2>')).toBeGreaterThan(related);
+    expect(html).toContain('aria-label="Artefatos relacionados"');
+    expect(html).toMatch(
+      new RegExp(`<a[^>]*href="/campaigns/${CAMPAIGN_ID}/artifacts/${CRYPT}"[^>]*>Cripta</a><span[^>]*> · Encontro</span>`),
+    );
+    html = await page(query, 'en');
+    expect(html).toContain('>Related</h2>');
+    // An empty list, and a backend before contract 1.51.0 (no field), show no section.
+    await backend?.close();
+    await useBackend({ [CURRENT]: CAMPAIGN, [RECORD]: { status: 200, body: { ...record, related: [] } } });
+    html = await page();
+    expect(html).not.toContain('Relacionados');
+    expect(html).toContain('>Fontes</h2>');
+    await backend?.close();
+    await useBackend({ [CURRENT]: CAMPAIGN, [RECORD]: { status: 200, body: record } });
+    html = await page();
+    expect(html).not.toContain('Relacionados');
+  });
+
   it('a record outside the campaign\'s scope, or no current campaign, is the single not-found page; another failure is a notice', async () => {
     const routes: Record<string, { status: number; body: unknown }> = { [CURRENT]: CAMPAIGN, [RECORD]: problem(404, 'request.not_found') };
     await useBackend(routes);

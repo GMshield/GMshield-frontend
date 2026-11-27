@@ -14,9 +14,12 @@ import {
   deleteArtifact,
   getArtifact,
   overrideTargets,
+  relate,
+  relationTargets,
   removeOverride,
   restoreArtifact,
   setOverride,
+  unrelate,
   updateArtifact,
 } from '@/server/artifacts';
 import { flash } from '@/server/flash';
@@ -28,9 +31,10 @@ import type {
   ArtifactFormState,
   ArtifactFormValues,
   ArtifactOverrideState,
+  ArtifactRelationState,
   ArtifactRestoreState,
 } from './form-state';
-import { OVERRIDE_PAGE_SIZE } from './form-state';
+import { OVERRIDE_PAGE_SIZE, RELATION_PAGE_SIZE } from './form-state';
 import { artifactBack, fromOf } from './texts';
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -377,5 +381,136 @@ export async function overrideTargetsAction(
     ok: true,
     rows: result.data.items.map((item) => ({ id: item.id, name: item.name, materialName: item.materialName })),
     paging: pagingOf(result.data.total, offset, result.data.items.length, OVERRIDE_PAGE_SIZE),
+  };
+}
+
+/** The text of a refused relation: no target any more, or one side full; else as every refusal. */
+function relationRefusal(problem: unknown, language: Language): string {
+  const t = translator(language);
+  const { code } = problemFields(problem);
+  if (code === 'artifact.relation_target') {
+    return t('artifacts.relations.target');
+  }
+  if (code === 'artifact.relations_full') {
+    return t('artifacts.relations.full');
+  }
+  return errorText(problem, language);
+}
+
+/**
+ * "Relacionar" in an artifact's record picker, related mode (Story 5.5 part B): the campaign's and the artifact's ids
+ * and the record picked. Once the backend has stored the relation (or found it there already, from either side), a
+ * toast says "Relação salva.", the whole signed-in layout is revalidated and the page is read again, which lists the
+ * record. A relation changes no answer, so the toast says nothing about the next question. A record that is no longer
+ * a target, or a side that has 50 relations already, comes back as its own text; any other refusal as every refusal
+ * reads, never a code. A malformed form never reaches the backend.
+ */
+export async function relateAction(previous: ArtifactRelationState, form: FormData): Promise<ArtifactRelationState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const recordId = form.get('recordId');
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof recordId !== 'string' ||
+    !ID.test(recordId)
+  ) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await relate(token, campaignId, artifactId, recordId);
+  if (!result.ok) {
+    return { serial, done: false, error: relationRefusal(result.problem, language) };
+  }
+  await flash('success', translator(language)('feedback.artifactRelationSet'));
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/**
+ * "Remover" on a row of an artifact's "Relacionados" (Story 5.5 part B): the campaign's and the artifact's ids and the
+ * related record's. Once the backend has removed the relation (also when it was gone already), a toast says "Relação
+ * removida.", the layout is revalidated and the page is read again. A refusal comes back as its text, never a code. A
+ * malformed form never reaches the backend.
+ */
+export async function unrelateAction(previous: ArtifactRelationState, form: FormData): Promise<ArtifactRelationState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const campaignId = form.get('campaignId');
+  const artifactId = form.get('artifactId');
+  const recordId = form.get('recordId');
+  if (
+    typeof campaignId !== 'string' ||
+    !ID.test(campaignId) ||
+    typeof artifactId !== 'string' ||
+    !ID.test(artifactId) ||
+    typeof recordId !== 'string' ||
+    !ID.test(recordId)
+  ) {
+    return { serial, done: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await unrelate(token, campaignId, artifactId, recordId);
+  if (!result.ok) {
+    return { serial, done: false, error: errorText(result.problem, language) };
+  }
+  await flash('success', translator(language)('feedback.artifactRelationRemoved'));
+  revalidatePath('/', 'layout');
+  refresh();
+  return { serial, done: true, error: null };
+}
+
+/** The tiers a relation target may have; anything else shows no pill. */
+const TIERS = new Set(['campaign', 'system', 'other']);
+
+/**
+ * Page `page` of the records the artifact `artifactId` of the campaign can be related to (Story 5.5 part B), for the
+ * picker's related mode: those of the type key `recordType` whose name contains `query` (case and accents ignored;
+ * blank for all), {@link RELATION_PAGE_SIZE} a page, alphabetical, each with its tier; another artifact reads
+ * "Artefato desta campanha" where a record names its material. A malformed request lists nothing; a refusal comes back
+ * as its text. Nothing is written.
+ */
+export async function relationTargetsAction(
+  campaignId: string,
+  artifactId: string,
+  recordType: string,
+  query: string,
+  page: number,
+): Promise<OverrideTargetsPage> {
+  const { language } = await currentPreferences();
+  const at = Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1;
+  if (!ID.test(campaignId) || !ID.test(artifactId) || !KEY.test(recordType) || typeof query !== 'string') {
+    return { ok: false, error: errorText({ category: 'request', code: 'request.invalid' }, language) };
+  }
+  const q = [...query.trim()].slice(0, MOST_QUERY).join('');
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const offset = (at - 1) * RELATION_PAGE_SIZE;
+  const result = await relationTargets(token, campaignId, artifactId, {
+    recordType,
+    ...(q === '' ? {} : { q }),
+    offset,
+    limit: RELATION_PAGE_SIZE,
+  });
+  if (!result.ok) {
+    return { ok: false, error: errorText(result.problem, language) };
+  }
+  const t = translator(language);
+  return {
+    ok: true,
+    rows: result.data.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      materialName: item.artifact ? t('artifacts.relations.artifact') : (item.materialName ?? ''),
+      ...(TIERS.has(item.tier) ? { tier: item.tier } : {}),
+    })),
+    paging: pagingOf(result.data.total, offset, result.data.items.length, RELATION_PAGE_SIZE),
   };
 }

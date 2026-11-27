@@ -2,20 +2,33 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
 
-import { errorText, type Language } from '@/messages';
+import type { TurnTier } from '@/client/conversation';
+import { errorText, translator, type Language } from '@/messages';
 import type { Paging } from '@/paging';
 
 import { Pager } from '../Pager';
 import { PillButton, SolidPillButton } from '../PillButton';
 import formStyles from '../SystemForm.module.css';
+import { TierLabel } from '../TierLabel';
 import styles from './OverridePicker.module.css';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 /** How long the name filter waits after the last key before it asks again. */
 const FILTER_DELAY_MS = 250;
 
-/** A record the picker lists: its id, name and the name of the material it was read from. */
-export type OverrideTargetRow = { readonly id: string; readonly name: string; readonly materialName: string };
+/**
+ * A record the picker lists: its id, name and the name of the material it was read from (or, Story 5.5 part B, the
+ * word for another artifact), and in the related mode its tier, shown as the tier's pill before its name.
+ */
+export type OverrideTargetRow = {
+  readonly id: string;
+  readonly name: string;
+  readonly materialName: string;
+  readonly tier?: TurnTier;
+};
+
+/** A record the picker lists, in either mode (Story 5.5 part B). */
+export type RecordPickerRow = OverrideTargetRow;
 
 /** A page the picker read: its rows and where it stands, or the refusal's text. */
 export type OverrideTargetsPage =
@@ -24,6 +37,9 @@ export type OverrideTargetsPage =
 
 /** How the picker reads a page: the campaign, the record type's key, the name filter and the page (from 1). */
 export type LoadOverrideTargets = (campaignId: string, recordType: string, query: string, page: number) => Promise<OverrideTargetsPage>;
+
+/** How the picker reads a page, in either mode (Story 5.5 part B). */
+export type LoadRecords = LoadOverrideTargets;
 
 export type OverridePickerTexts = {
   readonly title: string;
@@ -40,6 +56,9 @@ export type OverridePickerTexts = {
   readonly pick: string;
 };
 
+/** The picker's texts, in either mode (Story 5.5 part B). */
+export type RecordPickerTexts = OverridePickerTexts;
+
 export type OverridePickerProps = {
   readonly open: boolean;
   readonly campaignId: string;
@@ -50,9 +69,9 @@ export type OverridePickerProps = {
   readonly texts: OverridePickerTexts;
   readonly language: Language;
   readonly load: LoadOverrideTargets;
-  /** Whether the mark is being stored: "Substituir" shows it is busy and is pressed no more. */
+  /** Whether the choice is being stored: the confirming button shows it is busy and is pressed no more. */
   readonly pending?: boolean;
-  /** The refusal of the last "Substituir", said under the list; null for none. */
+  /** The refusal of the last confirmation, said under the list; null for none. */
   readonly error?: string | null;
   readonly onConfirm: (recordId: string) => void;
   /** Called by "Cancelar" and by Esc. */
@@ -62,17 +81,23 @@ export type OverridePickerProps = {
 /** The last page read, and what it was asked for (type, filter and page as one key). */
 type Shown = { readonly key: string; readonly page: OverrideTargetsPage | null };
 
+/** The record picker's props, in either mode (Story 5.5 part B). */
+export type RecordPickerProps = OverridePickerProps;
+
 /**
- * The dialog that picks the record an artifact overrides (Story 5.5 part A), as the confirmation dialog opens: modal on
+ * The dialog that picks a record for an artifact (Story 5.5): the record it overrides (part A, "Substituir um registro")
+ * or, in the related mode (part B, "Relacionar um registro"), a record it is related to; only the texts, the loader and
+ * the rows' tier pills differ. It opens as the confirmation dialog opens: modal on
  * a dimmed canvas, Tab kept inside, Esc closing it and focus given back to what opened it ("Substituir um registro").
  * It opens with focus on the name filter. A record-type select (the artifact's type at first), then the bordered name
- * filter (case and accents ignored, asked again a moment after the last key), then the records of that type in the
- * system tier of the campaign's scope, alphabetical, a page at a time: each a bordered row with its radio, its name and
- * its material, every row reachable by Tab, and the pager's buttons ({@link Pager} `onPage`) under them. "Substituir"
- * sends the record picked; with none picked it says to pick one. Its choices start afresh each time it is mounted:
- * the caller gives it a new `key` for each opening.
+ * filter (case and accents ignored, asked again a moment after the last key), then the records of that type the loader
+ * gives (part A: the system tier of the campaign's scope; part B: every tier and the campaign's other artifacts),
+ * alphabetical, a page at a time: each a bordered row with its radio, its tier's pill when it has one, its name and
+ * its material, every row reachable by Tab, and the pager's buttons ({@link Pager} `onPage`) under them. The confirming
+ * button sends the record picked; with none picked it says to pick one. Its choices start afresh each time it is
+ * mounted: the caller gives it a new `key` for each opening.
  */
-export function OverridePicker({
+export function RecordPicker({
   open,
   campaignId,
   types,
@@ -193,6 +218,7 @@ export function OverridePicker({
 
   const read = shown.page;
   const rows = read?.ok === true ? read.rows : [];
+  const t = translator(language);
   const message = read !== null && !read.ok ? read.error : unpicked && picked === null ? texts.pick : error;
   return (
     <dialog
@@ -272,6 +298,7 @@ export function OverridePicker({
                       setUnpicked(false);
                     }}
                   />
+                  {row.tier === undefined ? null : <TierLabel tier={row.tier} t={t} />}
                   <span className={styles.name}>{row.name}</span>
                   <span className={styles.material}>{row.materialName}</span>
                 </label>
@@ -295,6 +322,9 @@ export function OverridePicker({
     </dialog>
   );
 }
+
+/** The picker of the record an artifact overrides (Story 5.5 part A): the {@link RecordPicker}. */
+export const OverridePicker = RecordPicker;
 
 function returnFocus(openerRef: { current: HTMLElement | null }) {
   const opener = openerRef.current;

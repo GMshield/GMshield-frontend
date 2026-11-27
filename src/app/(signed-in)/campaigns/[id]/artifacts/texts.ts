@@ -1,6 +1,7 @@
 import { correctionTexts } from '@/app/(signed-in)/records/correction';
 import type { ArtifactEditorTexts } from '@/components/ArtifactEditor';
 import type { ArtifactOverrideTexts } from '@/components/artifacts/ArtifactOverride';
+import type { ArtifactRelationsTexts } from '@/components/artifacts/ArtifactRelations';
 import type { ArtifactFormTexts } from '@/components/ArtifactForm';
 import type { ArtifactVersionsTexts } from '@/components/ArtifactVersions';
 import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
@@ -104,6 +105,32 @@ export function artifactOverrideTexts(t: Translate): ArtifactOverrideTexts {
     confirm: t('artifacts.override.confirm'),
     cancel: t('artifacts.override.cancel'),
     pick: t('artifacts.override.pick'),
+  };
+}
+
+/** Every text of an artifact's "Relacionados" and its picker's related mode (Story 5.5 part B), in the page's language. */
+export function artifactRelationsTexts(t: Translate): ArtifactRelationsTexts {
+  return {
+    heading: t('artifacts.relations.title'),
+    none: t('artifacts.relations.none'),
+    rows: t('artifacts.relations.list'),
+    open: t('artifacts.relations.open'),
+    removed: t('artifacts.relations.removed'),
+    remove: t('artifacts.relations.remove'),
+    // A template the section fills with each row's name (functions do not cross to a client component).
+    removeLabel: t('artifacts.relations.removeLabel', { name: '{name}' }),
+    title: t('artifacts.relations.dialogTitle'),
+    intro: t('artifacts.relations.dialogIntro'),
+    type: t('artifacts.relations.type'),
+    filter: t('artifacts.relations.filter'),
+    list: t('artifacts.relations.records'),
+    empty: t('artifacts.relations.empty'),
+    emptyFiltered: t('artifacts.relations.emptyFiltered'),
+    loading: t('artifacts.relations.loading'),
+    pages: t('artifacts.relations.pages'),
+    confirm: t('artifacts.relations.confirm'),
+    cancel: t('artifacts.relations.cancel'),
+    pick: t('artifacts.relations.pick'),
   };
 }
 

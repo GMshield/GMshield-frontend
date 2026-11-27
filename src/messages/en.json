@@ -330,6 +330,30 @@
       "pick": "Pick a record from the list.",
       "taken": "Another artifact of this campaign already overrides that record.",
       "target": "That record cannot be overridden: pick another from the list."
+    },
+    "relations": {
+      "title": "Related",
+      "none": "Not related to any record.",
+      "list": "Related records",
+      "open": "Relate a record",
+      "removed": "out of the campaign's scope or deleted",
+      "remove": "Remove",
+      "removeLabel": "Remove the relation with {name}",
+      "artifact": "Artifact of this campaign",
+      "dialogTitle": "Relate a record",
+      "dialogIntro": "Pick a record of this campaign's scope or another of its artifacts. The relation shows on both pages.",
+      "type": "Record type",
+      "filter": "Filter by name",
+      "records": "Records and artifacts",
+      "empty": "No record of this type in this campaign's scope.",
+      "emptyFiltered": "No record with that name.",
+      "loading": "Loading records…",
+      "pages": "Record pages",
+      "confirm": "Relate",
+      "cancel": "Cancel",
+      "pick": "Pick a record from the list.",
+      "target": "That record cannot be related: pick another from the list.",
+      "full": "This artifact, or the other one, has 50 relations already: remove one first."
     }
   },
   "characters": {
@@ -958,7 +982,9 @@
     "artifactRestored": "Version {number} restored.",
     "artifactDeleted": "Artifact «{name}» deleted.",
     "artifactOverrideSet": "Override saved.",
-    "artifactOverrideRemoved": "Override removed."
+    "artifactOverrideRemoved": "Override removed.",
+    "artifactRelationSet": "Relation saved.",
+    "artifactRelationRemoved": "Relation removed."
   },
   "notifications": {
     "title": "Notifications",
@@ -1053,7 +1079,11 @@
     "retry": "Try again",
     "notFound": "Not found.",
     "noCampaign": "Choose or create a campaign to search its sources.",
-    "newCampaign": "New campaign"
+    "newCampaign": "New campaign",
+    "record": {
+      "related": "Related",
+      "relatedList": "Related artifacts"
+    }
   },
   "conversations": {
     "new": "New conversation",

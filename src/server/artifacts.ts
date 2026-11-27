@@ -23,6 +23,10 @@ import { listPage, type ListPage } from './list-page';
  *   campaign's system (or points its mark to another), {@link removeOverride} drops the mark (safe to repeat), and
  *   {@link overrideTargets} lists the records it can override, alphabetical, by type and name. A record that is no
  *   target is `artifact.override_target`; one another artifact of the campaign overrides is `artifact.override_taken`.
+ * - Story 5.5 part B (contract 1.51.0): {@link relate} relates the artifact to a record of its campaign's scope or to
+ *   another artifact of the campaign, {@link unrelate} removes a relation from either side (safe to repeat), and
+ *   {@link relationTargets} lists the records it can be related to, each with its tier. A record that is no target is
+ *   `artifact.relation_target`; a 51st relation is `artifact.relations_full`. A relation changes no answer.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -39,6 +43,9 @@ export type ArtifactVersionQuery = NonNullable<operations['listArtifactVersions'
 export type ArtifactOverride = Schemas['ArtifactOverride'];
 export type OverrideTarget = Schemas['OverrideTarget'];
 export type OverrideTargetPage = Schemas['OverrideTargetPage'];
+export type ArtifactRelated = Schemas['ArtifactRelated'];
+export type RelationTarget = Schemas['RelationTarget'];
+export type RelationTargetPage = Schemas['RelationTargetPage'];
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -228,6 +235,60 @@ export function overrideTargets(
   return call('artifacts.overrideTargets', options, (client) =>
     client.GET('/api/v1/campaigns/{campaignId}/override-targets', {
       params: { header: session(sessionToken), path: { campaignId }, query: { ...query } },
+    }),
+  );
+}
+
+/**
+ * The GM relates one of the account's campaigns' artifacts to the record `recordId` (Story 5.5 part B): an extracted
+ * record of the campaign's scope or another artifact of the campaign. The artifact with its relations; a relation that
+ * exists already, from either side, is kept as it is.
+ */
+export function relate(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  recordId: string,
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.relate', options, (client) =>
+    client.POST('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+      body: { recordId },
+    }),
+  );
+}
+
+/** The GM removes the relation between an artifact and a record (Story 5.5 part B; 204, also when there was none). */
+export function unrelate(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  recordId: string,
+  options: CallOptions = {},
+): Promise<Result<undefined>> {
+  return call('artifacts.unrelate', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations/{recordId}', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId, recordId } },
+    }),
+  );
+}
+
+/**
+ * The records an artifact can be related to (Story 5.5 part B): of the type key `recordType`, whose name contains `q`
+ * (case and accents ignored), from `offset`, at most `limit`, alphabetical, each with its tier, with how many match in
+ * all. The artifact itself and the records it is related to already are left out.
+ */
+export function relationTargets(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  query: { readonly recordType: string; readonly q?: string; readonly offset?: number; readonly limit?: number },
+  options: CallOptions = {},
+): Promise<Result<RelationTargetPage>> {
+  return call('artifacts.relationTargets', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relation-targets', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId }, query: { ...query } },
     }),
   );
 }

@@ -2,7 +2,7 @@
   "components" : {
     "schemas" : {
       "Artifact" : {
-        "description" : "An artifact with its newest version, or one of its versions when asked by number (contract 1.42.0; currentVersion and versions from 1.44.0; conversationId and references from 1.48.0; overrides from 1.50.0)",
+        "description" : "An artifact with its newest version, or one of its versions when asked by number (contract 1.42.0; currentVersion and versions from 1.44.0; conversationId and references from 1.48.0; overrides from 1.50.0; related from 1.51.0)",
         "properties" : {
           "campaignId" : {
             "description" : "Its campaign's id",
@@ -71,6 +71,13 @@
             },
             "type" : "array"
           },
+          "related" : {
+            "description" : "The records the artifact is related to (contract 1.51.0), from either side, oldest first: extracted records of the campaign's scope and the campaign's other artifacts. A relation changes no answer. Not versioned: every version shows the artifact's current relations. Empty for none",
+            "items" : {
+              "$ref" : "#/components/schemas/ArtifactRelated"
+            },
+            "type" : "array"
+          },
           "version" : {
             "description" : "The number of the version shown, from 1",
             "example" : 1,
@@ -79,7 +86,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "campaignId", "content", "conversationId", "createdAt", "currentVersion", "fields", "id", "name", "overrides", "recordType", "references", "version" ],
+        "required" : [ "campaignId", "content", "conversationId", "createdAt", "currentVersion", "fields", "id", "name", "overrides", "recordType", "references", "related", "version" ],
         "type" : "object"
       },
       "ArtifactEdit" : {
@@ -212,6 +219,54 @@
           }
         },
         "required" : [ "items", "total", "types" ],
+        "type" : "object"
+      },
+      "ArtifactRelated" : {
+        "description" : "A record an artifact is related to (contract 1.51.0)",
+        "properties" : {
+          "artifact" : {
+            "description" : "True for another artifact of the campaign, false for an extracted record",
+            "type" : "boolean"
+          },
+          "name" : {
+            "description" : "Its name: an artifact's newest version's, or a record's as extracted or corrected",
+            "example" : "Troll",
+            "type" : "string"
+          },
+          "recordId" : {
+            "description" : "The other record's id: an artifact's page is in the campaign; an extracted record's is /search/records/{recordId} in the campaign",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of its record type",
+            "example" : "creature",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "removed" : {
+            "description" : "True when the record no longer shows in the campaign: it was deleted, its version superseded or its material left the campaign's scope. Show its name with no link, or remove the relation",
+            "type" : "boolean"
+          },
+          "tier" : {
+            "description" : "Its tier in the campaign's scope: campaign for an artifact; null for a record out of the scope",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "artifact", "name", "recordId", "recordType", "removed", "tier" ],
+        "type" : "object"
+      },
+      "ArtifactRelationChange" : {
+        "description" : "A record the artifact is related to from now on (contract 1.51.0)",
+        "properties" : {
+          "recordId" : {
+            "description" : "The record's id: an extracted record of the campaign's scope or another artifact of the campaign, as listRelationTargets lists them",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "recordId" ],
         "type" : "object"
       },
       "ArtifactRestore" : {
@@ -2040,6 +2095,13 @@
             },
             "type" : "array"
           },
+          "related" : {
+            "description" : "Only on getCampaignRecord (contract 1.51.0): the live artifacts of the campaign related to the record, oldest relation first; empty for none. Absent from every other answer",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordRelatedArtifact"
+            },
+            "type" : "array"
+          },
           "version" : {
             "description" : "The record's version (contract 1.40.0): a correction names it and raises it by one",
             "example" : 0,
@@ -2181,6 +2243,29 @@
         "required" : [ "materialName", "page", "passageIds", "sectionPath", "versionId" ],
         "type" : "object"
       },
+      "RecordRelatedArtifact" : {
+        "description" : "An artifact of the campaign related to the record (contract 1.51.0)",
+        "properties" : {
+          "artifactId" : {
+            "description" : "The artifact's id; its page is in the campaign",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The artifact's name, as its newest version has it",
+            "example" : "Cripta",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of the artifact's record type",
+            "example" : "encounter",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "artifactId", "name", "recordType" ],
+        "type" : "object"
+      },
       "RecordSummary" : {
         "properties" : {
           "id" : {
@@ -2317,6 +2402,63 @@
             "description" : "How many record types the system has in all, whatever the page",
             "example" : 8,
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "RelationTarget" : {
+        "description" : "A record an artifact can be related to (contract 1.51.0)",
+        "properties" : {
+          "artifact" : {
+            "description" : "True for another artifact of the campaign",
+            "type" : "boolean"
+          },
+          "id" : {
+            "description" : "The record's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "materialName" : {
+            "description" : "The name of the material it was extracted from; null for an artifact",
+            "example" : "Livro dos Monstros",
+            "type" : [ "string", "null" ]
+          },
+          "name" : {
+            "description" : "The record's name",
+            "example" : "Troll",
+            "type" : "string"
+          },
+          "recordType" : {
+            "description" : "The key of the record's type",
+            "example" : "creature",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "tier" : {
+            "description" : "Its tier in the campaign's scope: campaign for an artifact",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "artifact", "id", "materialName", "name", "recordType", "tier" ],
+        "type" : "object"
+      },
+      "RelationTargetPage" : {
+        "description" : "A page of the records an artifact can be related to (contract 1.51.0)",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RelationTarget"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many records match in all, whatever the page",
+            "example" : 12,
+            "format" : "int64",
+            "minimum" : 0,
             "type" : "integer"
           }
         },
@@ -3361,7 +3503,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.50.0"
+    "version" : "1.51.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3988,6 +4130,222 @@
         "tags" : [ "artifacts" ]
       }
     },
+    "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relation-targets" : {
+      "get" : {
+        "operationId" : "listRelationTargets",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The record type key of the records listed",
+          "in" : "query",
+          "name" : "recordType",
+          "required" : true,
+          "schema" : {
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          }
+        }, {
+          "description" : "Only the records whose name contains this, case and accents ignored; at most 200 characters, blank for all",
+          "in" : "query",
+          "name" : "q",
+          "schema" : {
+            "maxLength" : 200,
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the first to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifact's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RelationTargetPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The records one of the account's campaigns' artifacts can be related to (contract 1.51.0): of one record type, the live extracted records of every tier of the campaign's scope (its stored settings) and the campaign's other live artifacts, each with its tier (campaign for an artifact), alphabetical by name, a page at a time with the total; the artifact itself and the records it is related to already are left out; q keeps those whose name contains it, case and accents ignored. request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; request.invalid (400) for a missing or malformed recordType, a q over 200 characters, a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations" : {
+      "post" : {
+        "operationId" : "relateArtifact",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifact's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ArtifactRelationChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The GM relates one of the account's campaigns' artifacts to a record (contract 1.51.0), answering the artifact as getArtifact does. The record is a live extracted record of any tier of the campaign's scope, or another live artifact of the campaign. A relation has no direction: it shows on both records, and relating a record that is related to the artifact already, from either side, stores nothing and answers 200. A relation changes no answer. artifact.relation_target (400) for a record that is no target (out of the scope, a deleted one, another campaign's artifact, another account's, unknown or malformed, the artifact itself, or none); artifact.relations_full (409) when the artifact, or the artifact it is related to, has 50 relations already; request.invalid (400) for a malformed body; request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; nothing changes then; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations/{recordId}" : {
+      "delete" : {
+        "operationId" : "unrelateArtifact",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifact's id",
+          "in" : "path",
+          "name" : "artifactId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The related record's id",
+          "in" : "path",
+          "name" : "recordId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The artifact is not related to the record"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The GM removes the relation between one of the account's campaigns' artifacts and a record (contract 1.51.0; 204, no body), whichever side made it: it shows on neither record any more. A record the artifact is not related to (unknown or malformed included) answers 204 too, so repeating it is safe. request.not_found (404) for a campaign that is not the account's, and for an artifact that is not this campaign's (unknown, another account's, another campaign's or malformed); none is told apart; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
     "/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/versions" : {
       "get" : {
         "operationId" : "listArtifactVersions",
@@ -4519,7 +4877,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "One record as one of the account's campaigns shows it (contract 1.36.0, a search's record result): the same answer as getRecord, its record type the campaign's system's type of its core key. Only a record of an accepted version in the campaign's current scope is read (its tiers and materials switched on, any tier); its references open the source view on the ground of that scope (getScopeSourcePage). request.not_found (404) for a campaign that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of a material switched off or outside the scope): none is told apart, and no name or field is answered then; session.required (401) without a session.",
+        "summary" : "One record as one of the account's campaigns shows it (contract 1.36.0, a search's record result): the same answer as getRecord, its record type the campaign's system's type of its core key. Only a record of an accepted version in the campaign's current scope is read (its tiers and materials switched on, any tier); its references open the source view on the ground of that scope (getScopeSourcePage). request.not_found (404) for a campaign that is not the account's (another account's, unknown, malformed or being deleted), and for a record that is not one of those (another account's, unknown, malformed, of a version that needs review or is superseded, or of a material switched off or outside the scope): none is told apart, and no name or field is answered then. From contract 1.51.0 it alone also answers related, the campaign's live artifacts related to the record; session.required (401) without a session.",
         "tags" : [ "ontology" ]
       },
       "patch" : {

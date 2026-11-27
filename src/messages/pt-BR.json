@@ -330,6 +330,30 @@
       "pick": "Escolha um registro da lista.",
       "taken": "Outro artefato desta campanha já substitui esse registro.",
       "target": "Esse registro não pode ser substituído: escolha outro da lista."
+    },
+    "relations": {
+      "title": "Relacionados",
+      "none": "Não está relacionado a nenhum registro.",
+      "list": "Registros relacionados",
+      "open": "Relacionar um registro",
+      "removed": "fora do escopo da campanha ou excluído",
+      "remove": "Remover",
+      "removeLabel": "Remover a relação com {name}",
+      "artifact": "Artefato desta campanha",
+      "dialogTitle": "Relacionar um registro",
+      "dialogIntro": "Escolha um registro do escopo desta campanha ou outro artefato dela. A relação aparece nas duas páginas.",
+      "type": "Tipo de registro",
+      "filter": "Filtrar por nome",
+      "records": "Registros e artefatos",
+      "empty": "Nenhum registro deste tipo no escopo desta campanha.",
+      "emptyFiltered": "Nenhum registro com esse nome.",
+      "loading": "Carregando registros…",
+      "pages": "Páginas dos registros",
+      "confirm": "Relacionar",
+      "cancel": "Cancelar",
+      "pick": "Escolha um registro da lista.",
+      "target": "Esse registro não pode ser relacionado: escolha outro da lista.",
+      "full": "Este artefato, ou o outro, já tem 50 relações: remova uma antes."
     }
   },
   "characters": {
@@ -958,7 +982,9 @@
     "artifactRestored": "Versão {number} restaurada.",
     "artifactDeleted": "Artefato «{name}» excluído.",
     "artifactOverrideSet": "Substituição salva.",
-    "artifactOverrideRemoved": "Substituição removida."
+    "artifactOverrideRemoved": "Substituição removida.",
+    "artifactRelationSet": "Relação salva.",
+    "artifactRelationRemoved": "Relação removida."
   },
   "notifications": {
     "title": "Notificações",
@@ -1053,7 +1079,11 @@
     "retry": "Tentar de novo",
     "notFound": "Não encontrado.",
     "noCampaign": "Escolha ou crie uma campanha para buscar nas fontes dela.",
-    "newCampaign": "Nova campanha"
+    "newCampaign": "Nova campanha",
+    "record": {
+      "related": "Relacionados",
+      "relatedList": "Artefatos relacionados"
+    }
   },
   "conversations": {
     "new": "Nova conversa",

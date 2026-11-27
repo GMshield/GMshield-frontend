@@ -9,11 +9,12 @@ import { PageHeader, PageSubtitle } from '@/components/PageHeader';
 import { RecordCorrection } from '@/components/RecordCorrection';
 import { RecordFields } from '@/components/RecordFields';
 import { RecordReferences } from '@/components/RecordReferences';
+import { RecordRelated } from '@/components/RecordRelated';
 import { searchHref } from '@/components/search/search-address';
 import { searchAddressOf, type SearchParams } from '@/components/search/search-params';
 import { errorText, translator } from '@/messages';
 import { currentPreferences } from '@/preferences';
-import { recordTypeName } from '@/record-types';
+import { recordTypeName, typeLabel } from '@/record-types';
 import { currentCampaign, getCampaignRecord } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
 
@@ -39,7 +40,9 @@ type Props = {
  * no current campaign, shows the single "Não encontrado." page; another failure is a notice. Story 4.5: "Corrigir" opens
  * the record's correction there too ({@link RecordCorrection}), its type among the campaign's system's record types.
  * Story 4.5 part B: "Excluir" beside it asks for confirmation, deletes the record as the campaign shows it and goes back
- * to the search it was opened from with the toast "Registro excluído.".
+ * to the search it was opened from with the toast "Registro excluído.". Story 5.5 part B: "Relacionados", before
+ * "Fontes", lists the current campaign's artifacts related to the record, each a link to its page; it shows only when
+ * there is one.
  */
 export default async function SearchRecordPage({ params, searchParams }: Props) {
   const [{ recordId }, query, { language }, token] = await Promise.all([
@@ -70,6 +73,13 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
     );
   }
   const { name, recordType, fields, references, version } = record.data;
+  // Absent from a backend before contract 1.51.0: none then.
+  const related = (record.data.related ?? []).map((row) => ({
+    artifactId: row.artifactId,
+    href: `/campaigns/${encodeURIComponent(campaign.data.id)}/artifacts/${encodeURIComponent(row.artifactId)}`,
+    name: row.name,
+    typeLabel: typeLabel(row.recordType, types, t),
+  }));
   return (
     <>
       <PageHeader title={name} back={back}>
@@ -87,6 +97,7 @@ export default async function SearchRecordPage({ params, searchParams }: Props) 
       >
         <RecordFields fields={fields} t={t} />
       </RecordCorrection>
+      <RecordRelated rows={related} heading={t('search.record.related')} label={t('search.record.relatedList')} />
       <RecordReferences ground={{ kind: 'scope', campaignId: campaign.data.id }} references={references} language={language} />
     </>
   );
