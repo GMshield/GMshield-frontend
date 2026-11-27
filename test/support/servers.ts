@@ -63,7 +63,11 @@ export async function closedAddress(): Promise<string> {
 
 export type Recorded = { method: string; url: string; headers: Record<string, unknown>; body: string };
 export type Scripted = Running & { calls: Recorded[] };
-export type Reply = { status: number; body?: unknown; contentType?: string; delayMs?: number };
+/**
+ * A scripted answer: its status, its body (JSON, unless a text with a content type that is not JSON, sent as it is), its
+ * content type, more headers (Story 5.7: an export's `Content-Disposition`) and a delay.
+ */
+export type Reply = { status: number; body?: unknown; contentType?: string; headers?: Readonly<Record<string, string>>; delayMs?: number };
 
 /** A backend that answers each `METHOD path` from a table, and records every request with its body. */
 export async function startScripted(routes: Readonly<Record<string, Reply>>): Promise<Scripted> {
@@ -85,8 +89,8 @@ export async function startScripted(routes: Readonly<Record<string, Reply>>): Pr
         return;
       }
       const type = reply.contentType ?? (reply.status >= 400 ? 'application/problem+json' : 'application/json');
-      response.writeHead(reply.status, { 'Content-Type': type });
-      response.end(JSON.stringify(reply.body));
+      response.writeHead(reply.status, { ...reply.headers, 'Content-Type': type });
+      response.end(typeof reply.body === 'string' && !type.includes('json') ? reply.body : JSON.stringify(reply.body));
     }
   });
   return { ...(await listen(server, requests)), calls };

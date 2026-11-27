@@ -368,6 +368,19 @@
       "sharedFrom": "Shared from the campaign {campaign}.",
       "openIn": "Open in the campaign {campaign}",
       "listedFrom": "Shared from {campaign}"
+    },
+    "export": {
+      "action": "Export",
+      "menu": "Export formats",
+      "pdf": "PDF",
+      "txt": "Text (TXT)",
+      "markdown": "Markdown",
+      "jpg": "Image (JPG)",
+      "done": "Export ready: {file}.",
+      "notFound": "This artifact can no longer be exported: it was deleted or is no longer shared with this campaign.",
+      "tooLarge": "This artifact is too long to export as PDF or JPG. Export it as TXT or Markdown.",
+      "busy": "Other exports are being made right now. Try again in a moment.",
+      "file": "artifact"
     }
   },
   "characters": {

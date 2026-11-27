@@ -368,6 +368,19 @@
       "sharedFrom": "Compartilhado da campanha {campaign}.",
       "openIn": "Abrir na campanha {campaign}",
       "listedFrom": "Compartilhado de {campaign}"
+    },
+    "export": {
+      "action": "Exportar",
+      "menu": "Formatos de exportação",
+      "pdf": "PDF",
+      "txt": "Texto (TXT)",
+      "markdown": "Markdown",
+      "jpg": "Imagem (JPG)",
+      "done": "Exportação pronta: {file}.",
+      "notFound": "Este artefato não pode mais ser exportado: ele foi excluído ou deixou de ser compartilhado com esta campanha.",
+      "tooLarge": "Este artefato é longo demais para exportar como PDF ou JPG. Exporte como TXT ou Markdown.",
+      "busy": "Outras exportações estão sendo feitas agora. Tente de novo em instantes.",
+      "file": "artefato"
     }
   },
   "characters": {

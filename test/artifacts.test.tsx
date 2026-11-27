@@ -845,6 +845,71 @@ describe("an artifact's delete (Story 5.2 part B)", () => {
   });
 });
 
+describe("an artifact's export (Story 5.7 part A)", () => {
+  const ONE = `${ARTIFACTS}/${SWORD}`;
+  const CROWN = '0190a0b0-0000-7000-8000-000000000045';
+  /** The header's "Exportar" pill, or '' when there is none. */
+  const exportPill = (html: string, messages: typeof ptBR) => {
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    return new RegExp(`<button[^>]*aria-expanded="false"[^>]*>${messages.artifacts.export.action}<`).exec(header)?.[0] ?? '';
+  };
+
+  it('"Exportar" sits in the header beside "Excluir" on the newest version, with its four formats, in both languages', async () => {
+    await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+      const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+      expect(exportPill(html, messages)).not.toBe('');
+      // Before "Excluir", in the header's actions.
+      expect(header.indexOf(`>${messages.artifacts.export.action}<`)).toBeLessThan(header.indexOf(`>${messages.artifacts.delete.action}<`));
+      expect(header).toContain(`aria-label="${messages.artifacts.export.menu}"`);
+      for (const format of ['pdf', 'txt', 'markdown', 'jpg'] as const) {
+        expect(header).toContain(`>${messages.artifacts.export[format]}</button>`);
+      }
+    }
+  });
+
+  it('an earlier version (?version=N) has no "Exportar"', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+
+    expect(html).toContain(ptBR.artifacts.page.citedVersion.replace('{version}', '1'));
+    expect(exportPill(html, ptBR)).toBe('');
+    expect(html).not.toContain(`>${ptBR.artifacts.export.action}<`);
+  });
+
+  it('shared into this campaign, the read-only page has "Exportar" alone in its header; not on a cited version', async () => {
+    const IN_B = `/api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}`;
+    const FROM = { ...ARTIFACT, campaignId: CROWN, overrides: null, related: [], sharedWith: [], sharedFrom: { campaignId: CROWN, name: 'A Coroa Partida' } };
+    await useBackend({
+      ...BASE,
+      [`GET ${IN_B}`]: { status: 200, body: FROM },
+      [`GET ${IN_B}/versions/1`]: { status: 200, body: { ...FROM, version: 1, currentVersion: 2 } },
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+    expect(exportPill(html, ptBR)).not.toBe('');
+    expect(html).not.toContain(`>${ptBR.artifacts.delete.action}<`);
+
+    const cited = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+    expect(exportPill(cited, ptBR)).toBe('');
+  });
+});
+
 describe('"Personagens" (Story 5.1)', () => {
   it("lists the current campaign's character sheets, each opening its page, with \"Nova ficha\", in both languages", async () => {
     const server = await useBackend({

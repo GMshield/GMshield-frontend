@@ -81,7 +81,14 @@ export const HOUSE_RULE: string;
 export const BOOK_RULE: string;
 export function loadContract(path: string): Contract;
 export function exampleOf(contract: unknown, schema: unknown, depth?: number): unknown;
-export function answer(contract: unknown, method: string, pathname: string, traceId: string): Answer;
+/** Story 5.7 part A: `search` is the query (`?ids=…&format=…`), read by an export only. */
+export function answer(contract: unknown, method: string, pathname: string, traceId: string, search?: string): Answer;
+/** Story 5.7 part A: an export's answer, by its query; an 8 x 8 JPEG, a one-page PDF and a stored zip of files. */
+export function exportAnswer(search: string, traceId: string): Answer;
+export const EXPORT_JPEG: Buffer;
+export function tinyPdf(text: string): Buffer;
+export function storedZip(files: readonly { name: string; bytes: Buffer }[]): Buffer;
+export function attachment(name: string): string;
 export function createStandInServer(contract: Contract, options?: { quiet?: boolean }): Server;
 /** Story 3.10: the starter campaign's questions conversation, its id, and its one stored turn with its events. */
 export const CONVERSATION_ID: string;

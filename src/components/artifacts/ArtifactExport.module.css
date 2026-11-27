@@ -1,0 +1,56 @@
+/* "Exportar" (Story 5.7 part A): a pill in an artifact's page header that opens the formats under it. */
+.menu {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: min(14rem, calc(100vw - 2 * var(--space-4)));
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-popover);
+  color: var(--color-text);
+  list-style: none;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+/* One format: a row as wide as the panel, as tall as a touch target. */
+.format {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--font-label-line-height);
+  text-align: start;
+  cursor: pointer;
+}
+
+.format:hover {
+  background-color: var(--color-hover);
+}
+
+.format:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

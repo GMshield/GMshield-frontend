@@ -6,6 +6,7 @@ import { systemRecordTypes } from '@/app/(signed-in)/systems/rows';
 import { notFoundFor } from '@/app/not-found';
 import { ArtifactDeleteAction } from '@/components/ArtifactDeleteAction';
 import { ArtifactEditor } from '@/components/ArtifactEditor';
+import { ArtifactExport } from '@/components/artifacts/ArtifactExport';
 import { ArtifactOverride } from '@/components/artifacts/ArtifactOverride';
 import { ArtifactRelations, type ShownRelation } from '@/components/artifacts/ArtifactRelations';
 import { ArtifactSharing, type SharingCampaign } from '@/components/artifacts/ArtifactSharing';
@@ -160,6 +161,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * Story 5.6 part B: the artifacts tab and "Personagens" of the campaign it is shared into list it, marked "Compartilhado
  * de {A}", and open this read-only page. In its own campaign, "Excluir" names the campaigns it is shared with ("Também
  * sai de: …").
+ *
+ * Story 5.7 part A: "Exportar" ({@link ArtifactExport}) in the header, beside "Excluir" on an own artifact's page and
+ * alone on a shared one's, on the current version only (never on `?version=N`): PDF, TXT, Markdown or JPG, downloaded
+ * through this site's relay with a toast.
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -232,7 +237,12 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     const ownPage = `/campaigns/${encodeURIComponent(sharedFrom.campaignId)}/artifacts/${encodeURIComponent(artifact.data.id)}`;
     return (
       <>
-        <PageHeader title={name} back={artifactBack(campaignId, from, t)}>
+        <PageHeader
+          title={name}
+          back={artifactBack(campaignId, from, t)}
+          // Story 5.7 part A: the current version only; it is read in this campaign, where it is shared.
+          actions={older ? undefined : <ArtifactExport campaignId={campaignId} ids={[artifact.data.id]} language={language} />}
+        >
           <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
         </PageHeader>
         <p className={styles.origin}>
@@ -311,15 +321,19 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
         title={name}
         back={artifactBack(campaignId, from, t)}
         actions={
-          <ArtifactDeleteAction
-            campaignId={campaignId}
-            artifactId={artifact.data.id}
-            name={currentName}
-            from={from}
-            language={language}
-            action={deleteArtifactAction}
-            sharedWith={leaves}
-          />
+          <>
+            {/* Story 5.7 part A: "Exportar" beside "Excluir", on the current version only. */}
+            {older ? null : <ArtifactExport campaignId={campaignId} ids={[artifact.data.id]} language={language} />}
+            <ArtifactDeleteAction
+              campaignId={campaignId}
+              artifactId={artifact.data.id}
+              name={currentName}
+              from={from}
+              language={language}
+              action={deleteArtifactAction}
+              sharedWith={leaves}
+            />
+          </>
         }
       >
         <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>

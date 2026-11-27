@@ -3584,7 +3584,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.53.0"
+    "version" : "1.54.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -3933,6 +3933,104 @@
           }
         },
         "summary" : "A new artifact of one of the account's campaigns, written by hand (contract 1.42.0; 201): its record type, name, fields and optional content become its version 1, as getArtifact answers it. A character sheet stores what was written: nothing is calculated. request.invalid (400) with params.field naming the value outside its limits (and its min and max): recordType (not a key of the campaign's system's record types, core or approved), name (1 to 200 code points after trimming), fields (at most 64), fieldName or fieldValue (with index, from 0: a name of 1 to 200, a value of 1 to 8,000, after trimming) or content (at most 20,000 after trimming); request.invalid (400) without a field for a malformed body; request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted); nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/artifacts/export" : {
+      "get" : {
+        "operationId" : "exportArtifacts",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The artifacts' ids, comma-separated, 1 to 50, distinct, in the order the file holds them",
+          "in" : "query",
+          "name" : "ids",
+          "required" : true,
+          "schema" : {
+            "example" : "0190a0b0-0000-7000-8000-000000000030",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The file's format",
+          "in" : "query",
+          "name" : "format",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "pdf", "txt", "markdown", "jpg" ],
+            "type" : "string"
+          }
+        }, {
+          "description" : "The language of the labels the export adds (record type names of the core types, Fontes or Sources, a removed source's mark)",
+          "in" : "query",
+          "name" : "language",
+          "schema" : {
+            "default" : "pt-BR",
+            "enum" : [ "pt-BR", "en" ],
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/pdf" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              },
+              "application/zip" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              },
+              "image/jpeg" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              },
+              "text/markdown" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              },
+              "text/plain" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The file, as an attachment"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "One file of 1 to 50 of the account's artifacts readable in one of its campaigns (contract 1.54.0), in the order given: each read as getArtifact reads it (the campaign's own and the live ones shared into it, at their newest version) and printed with its name, record type, fields in the order written, content, then its sources as numbered references (a material's place, a record's type and name, an artifact's type, name and version; a removed one marked), labelled in the language given. pdf, txt and markdown give one file, each artifact a new section (a new page in the PDF); jpg gives one image (all the pages of the PDF stacked) for one artifact, a zip of 01-<name>.jpg, 02-... for several. The file is named after the artifact, or artefatos / artifacts for several, as an attachment (filename*), no-store and nosniff. Built in memory: nothing is kept. request.not_found (404) for a campaign that is not the account's, and when any id is not readable there (unknown, another account's, another campaign's, deleting or malformed), naming none; request.invalid (400) for no ids, more than 50, a duplicate or an empty one, or a format or language that is not one of these; artifact.export_too_large (400) for a pdf or jpg export of more than 200 PDF pages in all (txt and markdown are not counted); artifact.export_busy (503) while 2 pdf or jpg exports render, to try again in a moment; session.required (401) without a session.",
         "tags" : [ "artifacts" ]
       }
     },
