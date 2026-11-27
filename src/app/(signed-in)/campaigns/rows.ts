@@ -5,7 +5,7 @@ import type { Translate } from '@/messages';
 import { typeLabel, type NamedRecordType } from '@/record-types';
 import type { ArtifactSummary } from '@/server/artifacts';
 import type { CampaignSummary } from '@/server/library';
-import type { Shield } from '@/server/shields';
+import type { NoteSummary, Shield } from '@/server/shields';
 
 /** A campaign's system as a row shows it: its name, and its edition after it when it has one. */
 export function systemLabel(system: CampaignSummary['system'], t: Translate): string {
@@ -67,6 +67,17 @@ export function shieldRow(shield: Shield, campaignPath: string, t: Translate): L
     label: shieldName(shield, t),
     detail: null,
     href: `${campaignPath}/shields/${encodeURIComponent(shield.id)}`,
+    state: null,
+  };
+}
+
+/** A row of a Shield's notes (Story 6.2): the note's title; it opens the note's artifact page under `campaignPath`. */
+export function noteRow(note: Pick<NoteSummary, 'id' | 'name'>, campaignPath: string): ListRow {
+  return {
+    id: note.id,
+    label: note.name,
+    detail: null,
+    href: `${campaignPath}/artifacts/${encodeURIComponent(note.id)}`,
     state: null,
   };
 }

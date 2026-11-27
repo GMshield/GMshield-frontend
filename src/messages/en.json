@@ -274,7 +274,8 @@
       "form": "Edit «{name}»",
       "save": "Save",
       "cancel": "Cancel",
-      "saved": "It applies from the next question."
+      "saved": "It applies from the next question.",
+      "offline": "No connection"
     },
     "errors": {
       "name": "The name needs {min} to {max} characters.",
@@ -426,6 +427,29 @@
       "rollsOther": "{count} rolls",
       "last": "A campaign needs at least one Shield.",
       "confirm": "Delete Shield"
+    },
+    "notes": {
+      "new": "New note",
+      "list": "This Shield's notes",
+      "inShield": "In the Shield «{name}»",
+      "move": {
+        "open": "Move",
+        "to": "Move to",
+        "submit": "Move",
+        "none": "This campaign has no other Shield.",
+        "cancel": "Cancel"
+      },
+      "form": {
+        "title": "New note",
+        "name": "Title",
+        "content": "Text",
+        "save": "Save note",
+        "cancel": "Cancel"
+      },
+      "errors": {
+        "name": "The title needs {min} to {max} characters.",
+        "content": "The text can have up to {max} characters."
+      }
     }
   },
   "characters": {
@@ -516,7 +540,8 @@
         "shield_name_taken": "This campaign already has a Shield with this name.",
         "last_shield": "A campaign needs at least one Shield.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
-        "conversation_name_invalid": "The name needs {min} to {max} characters."
+        "conversation_name_invalid": "The name needs {min} to {max} characters.",
+        "note_type_fixed": "A note in a Shield stays a note: its type cannot change."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",
@@ -1063,7 +1088,9 @@
     "artifactShared": "Sharing saved.",
     "shieldCreated": "Shield «{name}» created.",
     "shieldRenamed": "Shield renamed to «{name}».",
-    "shieldDeleted": "Shield deleted."
+    "shieldDeleted": "Shield deleted.",
+    "noteCreated": "Note «{name}» created.",
+    "noteMoved": "Note «{name}» moved."
   },
   "notifications": {
     "title": "Notifications",

@@ -20,8 +20,11 @@ import {
   CORRECTED_RECORD,
   COMBAT_SHIELD,
   FIRST_SHIELD,
+  MOVED_NOTE,
   RENAMED_SHIELD,
   SHIELD_DELETION,
+  SHIELD_NOTE,
+  SHIELD_NOTES,
   SHIELD_PAGE,
   RECORD_ID,
   RECORD_PAGE,
@@ -552,7 +555,7 @@ describe('stand-in backend', () => {
     }
   });
 
-  it('answers a Shield\'s deletion preview and its deletion with 204 and no body (Story 6.1 part B)', () => {
+  it('answers a Shield\'s deletion preview with its notes and its deletion with 202 and no body (Stories 6.1 and 6.2 part B)', () => {
     const shield = `/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/shields/${COMBAT_SHIELD.id}`;
     type Schema = { required?: string[] };
     const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
@@ -561,7 +564,50 @@ describe('stand-in backend', () => {
     for (const key of schemas.ShieldDeletion!.required ?? []) {
       expect(SHIELD_DELETION, key).toHaveProperty(key);
     }
-    expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 204, type: null, body: null });
+    expect(SHIELD_DELETION.notes).toBe(1);
+    expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 202, type: null, body: null });
+  });
+
+  it('answers a note\'s move with the note held by the other Shield, its version unchanged (Story 6.2 part B)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'PUT', `/api/v1/campaigns/${campaign}/artifacts/${SHIELD_NOTE.id}/shield`, 't')).toMatchObject({
+      status: 200,
+      body: MOVED_NOTE,
+    });
+    expect(MOVED_NOTE).toMatchObject({ id: SHIELD_NOTE.id, shieldId: COMBAT_SHIELD.id, version: SHIELD_NOTE.version });
+    expect(schemas.NoteShield!.required).toEqual(['shieldId']);
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(MOVED_NOTE, key).toHaveProperty(key);
+    }
+  });
+
+  it('answers a Shield\'s notes, a new note and the note\'s page, and every artifact names its Shield or none (Story 6.2 part A)', () => {
+    const campaign = '0190a0b0-0000-7000-8000-000000000002';
+    const notes = `/api/v1/campaigns/${campaign}/shields/${FIRST_SHIELD.id}/notes`;
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', notes, 't')).toMatchObject({ status: 200, body: SHIELD_NOTES });
+    expect(answer(contract, 'POST', notes, 't')).toMatchObject({ status: 201, body: SHIELD_NOTE });
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign}/artifacts/${SHIELD_NOTE.id}`, 't')).toMatchObject({ status: 200, body: SHIELD_NOTE });
+    expect(SHIELD_NOTE).toMatchObject({ recordType: 'note', fields: [], version: 1, shieldId: FIRST_SHIELD.id });
+    for (const key of schemas.NotePage!.required ?? []) {
+      expect(SHIELD_NOTES, key).toHaveProperty(key);
+    }
+    for (const key of schemas.Artifact!.required ?? []) {
+      expect(SHIELD_NOTE, key).toHaveProperty(key);
+      expect(ARTIFACT, key).toHaveProperty(key);
+    }
+    expect(schemas.Artifact!.required).toContain('shieldId');
+    expect(schemas.ArtifactSummary!.required).toContain('shieldId');
+    for (const item of [...SHIELD_NOTES.items, ...ARTIFACT_PAGE.items]) {
+      for (const key of schemas.ArtifactSummary!.required ?? []) {
+        expect(item, key).toHaveProperty(key);
+      }
+    }
+    expect(ARTIFACT.shieldId).toBeNull();
+    expect(ARTIFACT_PAGE.items.every((item) => item.shieldId === null)).toBe(true);
   });
 
   it('answers an artifact\'s edit, its versions, one version and a restore (Story 5.2)', () => {

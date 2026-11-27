@@ -42,7 +42,10 @@ export type RecordFieldsEditorProps = {
   readonly draft: EditorDraft;
   /** Applies a change to the draft the parent holds. */
   readonly onChange: (change: (before: EditorDraft) => EditorDraft) => void;
-  /** The record types offered; the draft's own type comes first when they lack it. */
+  /**
+   * The record types offered; the draft's own type comes first when they lack it. One type alone that is the draft's
+   * own (Story 6.2: a note a Shield holds) shows as fixed text, with no select.
+   */
   readonly types: readonly EditorTypeOption[];
   readonly texts: RecordFieldsEditorTexts;
   /** The refusal to show under a part of the editor, or null. */
@@ -69,7 +72,8 @@ export function editorRows(fields: readonly { readonly name: string; readonly va
  * under the part it is about. A new field takes the focus on its name; a removed one gives it to the row that takes its
  * place, else the one before, else "Adicionar campo". The inputs carry form names (`name`, `recordType`, `fieldName`
  * and `fieldValue`, the fields in order), so a form posts them as they are shown. Used by a record's correction
- * ({@link RecordCorrection}) and by a new artifact's form.
+ * ({@link RecordCorrection}) and by a new artifact's form. From Story 6.2 a type that cannot change (one offered type,
+ * the draft's own) is shown as text beside its label, and posted from a hidden input.
  */
 export function RecordFieldsEditor({ id, draft, onChange, types, texts, errorOf, nameRef }: RecordFieldsEditorProps) {
   const addButton = useRef<HTMLButtonElement>(null);
@@ -111,6 +115,7 @@ export function RecordFieldsEditor({ id, draft, onChange, types, texts, errorOf,
     );
   };
   const offered = types.some((type) => type.key === draft.recordType) ? types : [{ key: draft.recordType, label: draft.recordType }, ...types];
+  const fixed = offered.length === 1 ? offered[0] : undefined;
   return (
     <div className={formStyles.fields}>
       <div className={formStyles.field}>
@@ -131,27 +136,40 @@ export function RecordFieldsEditor({ id, draft, onChange, types, texts, errorOf,
         />
         {error('name')}
       </div>
-      <div className={formStyles.field}>
-        <label htmlFor={`${id}-type`} className={formStyles.label}>
-          {texts.type}
-        </label>
-        <select
-          id={`${id}-type`}
-          name="recordType"
-          className={formStyles.select}
-          value={draft.recordType}
-          onChange={(event) => onChange((before) => ({ ...before, recordType: event.target.value }))}
-          aria-invalid={errorOf('recordType') !== null}
-          aria-describedby={describedBy('recordType')}
-        >
-          {offered.map((type) => (
-            <option key={type.key} value={type.key}>
-              {type.label}
-            </option>
-          ))}
-        </select>
-        {error('recordType')}
-      </div>
+      {fixed === undefined ? (
+        <div className={formStyles.field}>
+          <label htmlFor={`${id}-type`} className={formStyles.label}>
+            {texts.type}
+          </label>
+          <select
+            id={`${id}-type`}
+            name="recordType"
+            className={formStyles.select}
+            value={draft.recordType}
+            onChange={(event) => onChange((before) => ({ ...before, recordType: event.target.value }))}
+            aria-invalid={errorOf('recordType') !== null}
+            aria-describedby={describedBy('recordType')}
+          >
+            {offered.map((type) => (
+              <option key={type.key} value={type.key}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+          {error('recordType')}
+        </div>
+      ) : (
+        <div className={formStyles.field}>
+          <span className={formStyles.label}>
+            {texts.type}
+          </span>
+          <p id={`${id}-type`} className={styles.fixed}>
+            {fixed.label}
+          </p>
+          <input type="hidden" name="recordType" value={fixed.key} />
+          {error('recordType')}
+        </div>
+      )}
       <fieldset className={styles.group} aria-describedby={describedBy('fields')}>
         <legend className={formStyles.label}>{texts.fields}</legend>
         {draft.rows.length === 0 ? <p className={styles.none}>{texts.noFields}</p> : null}

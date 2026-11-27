@@ -71,3 +71,6 @@ export const RELATION_PAGE_SIZE = OVERRIDE_PAGE_SIZE;
 
 /** What a sharing's change left to say (Story 5.6 part A): whether it was stored, else the refusal's text. */
 export type ArtifactSharingState = OverrideActionState;
+
+/** What a note's move left to say (Story 6.2 part B): whether it moved, else the refusal's text. */
+export type NoteMoveState = OverrideActionState;

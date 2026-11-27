@@ -18,6 +18,7 @@ vi.mock('@/server/flash', () => ({ flash: async (...args: unknown[]) => flashed(
 const {
   createArtifactAction,
   deleteArtifactAction,
+  moveNoteAction,
   overrideTargetsAction,
   relateAction,
   relationTargetsAction,
@@ -648,6 +649,81 @@ describe("an artifact's sharing Server Action (Story 5.6 part A)", () => {
     ];
     for (const data of malformed) {
       expect((await shareAction(START_SHARING, data)).error).toBe('O pedido não é válido.');
+    }
+    expect(server.calls).toEqual([]);
+    expect(steps).toEqual([]);
+  });
+});
+
+describe("a note's move Server Action (Story 6.2 part B)", () => {
+  const MOVE = `${ARTIFACTS}/${ARTIFACT}/shield`;
+  const COMBAT = '0190a0b0-0000-7000-8000-000000000a02';
+  const START_MOVE = { serial: 0, done: false, error: null };
+  const MOVED = {
+    ...STORED,
+    recordType: 'note',
+    name: 'Pistas',
+    fields: [],
+    conversationId: null,
+    references: [],
+    overrides: null,
+    related: [],
+    sharedWith: [],
+    sharedFrom: null,
+    shieldId: COMBAT,
+  };
+  const moving = (fields: Record<string, string> = {}) =>
+    form({ campaignId: CAMPAIGN, artifactId: ARTIFACT, shieldId: COMBAT, ...fields });
+
+  it('sends the chosen Shield, then the toast naming the note, the layout and the page, which stays', async () => {
+    const server = await withBackend({ [`PUT ${MOVE}`]: { status: 200, body: MOVED } });
+
+    expect(await moveNoteAction(START_MOVE, moving())).toEqual({ serial: 1, done: true, error: null });
+
+    expect(calls(server)).toEqual([`PUT ${MOVE}`]);
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ shieldId: COMBAT });
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual(['flash success Nota «Pistas» movida.', 'revalidate / layout', 'refresh']);
+    steps.length = 0;
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    await moveNoteAction(START_MOVE, moving());
+    expect(steps).toEqual(['flash success Note «Pistas» moved.', 'revalidate / layout', 'refresh']);
+  });
+
+  it('a Shield or note gone meanwhile comes back as its text, with no toast, and the page is read again', async () => {
+    await withBackend({ [`PUT ${MOVE}`]: problemOf(404, 'request.not_found') });
+
+    const refused = await moveNoteAction({ serial: 2, done: false, error: null }, moving());
+
+    expect(refused.serial).toBe(3);
+    expect(refused.done).toBe(false);
+    expect(refused.error).toBeTruthy();
+    expect(refused.error).not.toContain('request.');
+    // No toast; the layout and the page are read again, so the gone Shield leaves the select.
+    expect(steps).toEqual(['revalidate / layout', 'refresh']);
+  });
+
+  it('another refusal comes back as its text, with nothing read again', async () => {
+    await withBackend({ [`PUT ${MOVE}`]: problemOf(503, 'server.unavailable') });
+
+    const refused = await moveNoteAction(START_MOVE, moving());
+
+    expect(refused.done).toBe(false);
+    expect(refused.error).toBeTruthy();
+    expect(refused.error).not.toContain('server.');
+    expect(steps).toEqual([]);
+  });
+
+  it('never reaches the backend with a malformed form', async () => {
+    const server = await withBackend({});
+    const malformed = [
+      moving({ shieldId: 'x' }),
+      moving({ artifactId: '../x' }),
+      moving({ campaignId: '' }),
+      form({ campaignId: CAMPAIGN, artifactId: ARTIFACT }),
+    ];
+    for (const data of malformed) {
+      expect((await moveNoteAction(START_MOVE, data)).error).toBe('O pedido não é válido.');
     }
     expect(server.calls).toEqual([]);
     expect(steps).toEqual([]);

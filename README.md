@@ -1173,7 +1173,49 @@ they sit in `src/`.
     comes back as the same inline reason with no toast; a `request.not_found` (already gone) moves to the tab with no
     toast. No delete control in the tab's rows.
   - Messages `shields.delete.*`, `feedback.shieldDeleted` and `errors.codes.request.last_shield`. The stand-in answers
-    the preview (no notes, no rolls, not the last) and the deletion (204); the demo backend refuses the last Shield.
+    the preview (no notes, no rolls, not the last) and the deletion (204; 202 from Story 6.2 part B); the demo backend
+    refuses the last Shield.
+- **Notes in a Shield (Story 6.2 part A).** Public contract 1.57.0 (the minimum backend contract too: the note routes
+  and `shieldId` are new; deploy the backend, then this frontend). A note is an artifact of type `note` that names its
+  Shield (`shieldId` on `Artifact` and `ArtifactSummary`). `src/server/shields.ts` adds `listShieldNotes` (newest first)
+  with `shieldNotesPage`, and `createShieldNote`.
+  - The Shield's screen puts "Nova nota" first in the header (the screen's one solid pill), then "Renomear" and
+    "Excluir", and lists the Shield's notes in `ItemList` (`viewKey="notes"`, a new list of the view cookie, paged with
+    `?page=`), each row the note's title opening its artifact page (`noteRow` in `campaigns/rows.ts`); with no note it
+    keeps the `EmptyState` "Este escudo ainda não tem notas.".
+  - `/campaigns/[id]/shields/[shieldId]/notes/new` is `NoteForm` ("Título" and "Texto", bordered; "Salvar nota").
+    `createNoteAction` (`campaigns/[id]/shields/actions.ts`) `flash()`es "Nota «…» criada.", revalidates the layout and
+    opens the note's artifact page; a title or text outside its limits shows under its field (`shields.notes.errors.*`).
+  - The artifact page reads the Shield of a held note and says "No escudo «Nome»", a link to its screen; its editor
+    gets that one type, which `RecordFieldsEditor` shows as fixed text (no select) with a hidden `recordType`.
+    `request.note_type_fixed` (a retype the backend refuses) shows under the editor.
+  - Offline: `useOnline` (`navigator.onLine` with the `online`/`offline` events; online while rendering on the server).
+    While it is false, `ArtifactEditor` and `NoteForm` show "Sem conexão" (`role="status"`), make their save pills
+    `aria-disabled` and send nothing (also "Manter a minha como nova versão"); what was typed stays in their state, and
+    saving works again once the connection is back. Nothing is written to browser storage.
+  - Messages `shields.notes.*`, `feedback.noteCreated`, `artifacts.edit.offline` and
+    `errors.codes.request.note_type_fixed`. The stand-in answers the two routes (the first Shield's one note, "Pistas da
+    cripta", whose artifact page reads as itself) and gives every other artifact `shieldId: null`; the demo backend
+    keeps each Shield's notes.
+- **Move a note, and delete a Shield with its notes (Story 6.2 part B).** Public contract 1.58.0 (the minimum backend
+  contract too: the move route is new and a Shield's deletion answers 202; deploy the backend, then this frontend).
+  `src/server/artifacts.ts` adds `moveNote` (`PUT …/artifacts/{artifactId}/shield` `{shieldId}`), and
+  `src/server/shields.ts` adds `everyShield` (the campaign's whole Shield list, 50 a call).
+  - On a held note's current-version page, `NoteMove` (`components/artifacts/NoteMove.tsx`) puts a "Mover" pill in the
+    "No escudo «…»" block. It opens an inline form: a bordered select of the campaign's other live Shields ("Mover
+    para"), a solid "Mover" and "Cancelar" (the focus goes to the select, and back to "Mover" on cancel); with no other
+    Shield it says "Esta campanha não tem outro escudo." instead of the select. An earlier version's page shows the line
+    alone and reads no Shield list. When the list cannot be read, the line shows without the pill.
+  - `moveNoteAction` (`campaigns/[id]/artifacts/actions.ts`) `flash()`es "Nota «…» movida.", revalidates the layout
+    and refreshes; the page stays and is read again under the new Shield (the block mounts again by its key). A refusal
+    shows under the form as an alert; a `request.not_found` (a Shield deleted or a note moved meanwhile) also reads the
+    page again, so a Shield that is gone leaves the select.
+  - A Shield's deletion is the backend's recorded process: its dialog names the real counts (`notes` counts the
+    Shield's live notes), and the 202 counts as success with the same toast and redirect (`call` reads any 2xx as done).
+    The Shield and its notes leave every list at once.
+  - Messages `shields.notes.move.*` and `feedback.noteMoved`. The stand-in answers the move (the note held by
+    "Combate"), previews one note, and the deletion with 202; the demo backend moves a note between a campaign's
+    Shields and deletes a Shield with its notes.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

@@ -64,6 +64,7 @@ export function artifactEditorTexts(t: Translate): ArtifactEditorTexts {
     viewCurrent: record.viewCurrent,
     keepMine: record.keepMine,
     saved: t('artifacts.edit.saved'),
+    offline: t('artifacts.edit.offline'),
   };
 }
 

@@ -116,3 +116,16 @@
 .status:empty {
   display: none;
 }
+
+/* Story 6.2: "Sem conexão" in a form's row of pills, beside the save it blocks. */
+.besidePills {
+  align-self: center;
+}
+
+/* A type that cannot change (Story 6.2: a note a Shield holds): plain text where the select would be. */
+.fixed {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-touch-target);
+  margin: 0;
+}

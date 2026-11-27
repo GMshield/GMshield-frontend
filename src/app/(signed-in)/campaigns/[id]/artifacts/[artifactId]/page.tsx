@@ -10,6 +10,7 @@ import { ArtifactExport } from '@/components/artifacts/ArtifactExport';
 import { ArtifactOverride } from '@/components/artifacts/ArtifactOverride';
 import { ArtifactRelations, type ShownRelation } from '@/components/artifacts/ArtifactRelations';
 import { ArtifactSharing, type SharingCampaign } from '@/components/artifacts/ArtifactSharing';
+import { NoteMove } from '@/components/artifacts/NoteMove';
 import { ArtifactVersions, type ArtifactVersionRow } from '@/components/ArtifactVersions';
 import { AnswerMarkdown } from '@/components/conversation/AnswerMarkdown';
 import { References } from '@/components/conversation/References';
@@ -25,9 +26,11 @@ import { artifactVersionsPage, getArtifact, type ArtifactVersionSummary } from '
 import { parseReferences } from '@/client/conversation';
 import { everyCampaign, getCampaign, type RecordType } from '@/server/library';
 import { currentSessionToken } from '@/server/session-cookies';
+import { everyShield, getShield } from '@/server/shields';
 
 import {
   deleteArtifactAction,
+  moveNoteAction,
   overrideTargetsAction,
   relateAction,
   relationTargetsAction,
@@ -39,6 +42,7 @@ import {
   updateArtifactAction,
 } from '../actions';
 import styles from '../artifacts.module.css';
+import { shieldName } from '../../../rows';
 import {
   artifactBack,
   artifactEditorTexts,
@@ -165,6 +169,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  * Story 5.7 part A: "Exportar" ({@link ArtifactExport}) in the header, beside "Excluir" on an own artifact's page and
  * alone on a shared one's, on the current version only (never on `?version=N`): PDF, TXT, Markdown or JPG, downloaded
  * through this site's relay with a toast.
+ *
+ * Story 6.2: a note a Shield holds (`shieldId`) says "No escudo «Nome»" under the header, a link to its Shield's screen,
+ * and its way back leads there too (the Shield read with the page; without it, the line is left out and the way back is
+ * the artifacts tab's), and its editor shows the type as fixed
+ * text ("Nota"), with no select. The editor keeps what was typed while the browser has no connection.
  */
 export default async function ArtifactPage({ params, searchParams }: Props) {
   const [{ id, artifactId }, query, { language }, token] = await Promise.all([
@@ -258,15 +267,26 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     );
   }
   const versionsPage = pageParam(query.page);
+  // Story 6.2: the Shield holding a note (absent from a backend before contract 1.57.0: none).
+  const shieldId = artifact.data.shieldId ?? null;
   // The campaign was read beside the artifact: without it, the type is named by its key's translation or the key.
-  const [types, versions, newest, others] = await Promise.all([
+  const [types, versions, newest, others, shield, campaignShields] = await Promise.all([
     campaign.ok ? systemRecordTypes(token ?? '', campaign.data.system.id) : [],
     artifactVersionsPage(token ?? '', campaignId, artifact.data.id, versionsPage, VERSIONS_PAGE_SIZE),
     // Story 5.2 part B: "Excluir" names the artifact by its current name, also on an earlier version's page.
     older ? getArtifact(token ?? '', campaignId, artifact.data.id) : null,
     // Story 5.6 part A: the system's campaigns in use, for "Compartilhamento".
     campaign.ok ? everyCampaign(token ?? '', { system: campaign.data.system.id }) : null,
+    shieldId === null ? null : getShield(token ?? '', campaignId, shieldId),
+    // Story 6.2 part B: the Shields a held note can move to, on its current version only.
+    shieldId === null || older ? null : everyShield(token ?? '', campaignId),
   ]);
+  // Story 6.2: a note's way back leads to its Shield, when the Shield could be read.
+  const shieldBack = shield?.ok
+    ? { href: `/campaigns/${encodeURIComponent(campaignId)}/shields/${encodeURIComponent(shield.data.id)}`, label: shieldName(shield.data, t) }
+    : null;
+  // Story 6.2: a held note stays a note, so its editor offers that one type, shown as text.
+  const editorTypes = shieldId === null ? artifactTypeOptions(types, t) : [{ key: recordType, label: typeLabel(recordType, types, t) }];
   const currentName = newest?.ok ? newest.data.name : name;
   // Story 5.6 part B: "Excluir" names the campaigns it also leaves, as the newest read has them (none: not shared).
   const leaves = ((newest?.ok ? newest.data : artifact.data).sharedWith ?? []).map((row) => row.name);
@@ -319,7 +339,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
     <>
       <PageHeader
         title={name}
-        back={artifactBack(campaignId, from, t)}
+        back={shieldBack ?? artifactBack(campaignId, from, t)}
         actions={
           <>
             {/* Story 5.7 part A: "Exportar" beside "Excluir", on the current version only. */}
@@ -338,6 +358,33 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       >
         <PageSubtitle>{typeLabel(recordType, types, t)}</PageSubtitle>
       </PageHeader>
+      {shield?.ok && campaignShields?.ok ? (
+        // Story 6.2 part B: "Mover" beside the Shield, to the campaign's other live Shields; read again under the new one.
+        <NoteMove
+          key={shield.data.id}
+          campaignId={campaignId}
+          artifactId={artifact.data.id}
+          inShield={t('shields.notes.inShield', { name: shieldName(shield.data, t) })}
+          shieldHref={shieldBack?.href ?? ''}
+          shields={campaignShields.data.items
+            .filter((row) => row.id !== shield.data.id)
+            .map((row) => ({ id: row.id, label: shieldName(row, t) }))}
+          texts={{
+            move: t('shields.notes.move.open'),
+            moveTo: t('shields.notes.move.to'),
+            none: t('shields.notes.move.none'),
+            submit: t('shields.notes.move.submit'),
+            cancel: t('shields.notes.move.cancel'),
+          }}
+          action={moveNoteAction}
+        />
+      ) : shield?.ok ? (
+        <p className={styles.origin}>
+          <Link className={styles.originLink} href={`/campaigns/${encodeURIComponent(campaignId)}/shields/${encodeURIComponent(shield.data.id)}`}>
+            {t('shields.notes.inShield', { name: shieldName(shield.data, t) })}
+          </Link>
+        </p>
+      ) : null}
       {conversationId ? (
         <p className={styles.origin}>
           <Link className={styles.originLink} href={`/questions/${encodeURIComponent(conversationId)}`}>
@@ -356,7 +403,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
           artifactId={artifact.data.id}
           version={version}
           values={{ recordType, name, fields, content: content ?? '' }}
-          types={artifactTypeOptions(types, t)}
+          types={editorTypes}
           texts={artifactEditorTexts(t)}
           action={updateArtifactAction}
         >

@@ -25,12 +25,14 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: NewShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/new/page');
 const { default: ShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/page');
 const { default: RenameShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/edit/page');
-const { createShieldAction, deleteShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
+const { default: NewNotePage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/notes/new/page');
+const { createNoteAction, createShieldAction, deleteShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 type ShieldFormState = import('@/app/(signed-in)/campaigns/[id]/shields/form-state').ShieldFormState;
+const { NO_NOTE } = await import('@/app/(signed-in)/campaigns/[id]/shields/form-state');
 
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const CREDENTIAL = 'configured-service-credential-0123456789';
@@ -53,7 +55,7 @@ async function useBackend(routes: Parameters<typeof startScripted>[0]): Promise<
   return backend;
 }
 
-function problem(status: number, code: string, params: Record<string, number> = {}) {
+function problem(status: number, code: string, params: Record<string, number | string> = {}) {
   return { status, body: { type: `urn:gmshield:problem:${code}`, title: 'x', status, category: code.split('.')[0], code, params, traceId: 't' } };
 }
 
@@ -159,7 +161,10 @@ describe("a campaign's Shields tab (Story 6.1)", () => {
 
 describe("a Shield's screen and its forms (Story 6.1)", () => {
   it('names the unnamed first Shield by its default name, leads back to the tab, offers "Renomear" and says it has no notes yet', async () => {
-    await useBackend({ [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST } });
+    await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${SHIELDS}/${FIRST_ID}/notes?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+    });
     for (const [language, messages] of LANGUAGES) {
       cookieJar['__Host-gmshield-lang'] = language;
       const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
@@ -238,6 +243,23 @@ describe("a Shield's deletion (Story 6.1 part B)", () => {
     expect(calls(server)).toContain(`GET ${SHIELDS}/${COMBAT_ID}/deletion`);
   });
 
+  it('Story 6.2 part B: the dialog names how many notes go, as the preview counts them', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
+      [`GET ${SHIELDS}/${COMBAT_ID}/deletion`]: { status: 200, body: { notes: 3, rolls: 0, last: false } },
+    });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: COMBAT_ID }) }));
+
+      const consequence = messages.shields.delete.consequence
+        .replace('{notes}', messages.shields.delete.notesOther.replace('{count}', '3'))
+        .replace('{rolls}', messages.shields.delete.rollsOther.replace('{count}', '0'));
+      expect(html).toContain(escaped(consequence));
+      expect(html).not.toContain(escaped(messages.shields.delete.empty));
+    }
+  });
+
   it('still offers the dialog when the preview cannot be read, naming what goes in words', async () => {
     await useBackend({
       [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
@@ -265,8 +287,9 @@ describe("a Shield's deletion (Story 6.1 part B)", () => {
     expect(html).not.toContain('<dialog');
   });
 
-  it('deletes: the ids go to the backend, then the toast, the layout revalidated, and the campaign\'s Shields tab', async () => {
-    const server = await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: { status: 204 } });
+  it('deletes (202): the ids go to the backend, then the toast, the layout revalidated, and the campaign\'s Shields tab', async () => {
+    // Story 6.2 part B: the recorded deletion answers 202; a backend before 1.58.0 answered 204, read the same way.
+    const server = await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: { status: 202 } });
 
     const digest = await thrownDigest(() => deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: COMBAT_ID })));
 
@@ -421,5 +444,183 @@ describe("the Shields' Server Actions (Story 6.1)", () => {
     }
     expect((await createShieldAction(NEW, form({ campaign: 'nope', name: 'Combate' }))).error).toBe('The request is not valid.');
     expect(server.calls).toHaveLength(0);
+  });
+});
+
+describe("a Shield's notes (Story 6.2 part A)", () => {
+  const NOTES = `${SHIELDS}/${FIRST_ID}/notes`;
+  const PISTAS = '0190a0b0-0000-7000-8000-000000000a12';
+  const LEMBRETE = '0190a0b0-0000-7000-8000-000000000a11';
+  const row = (id: string, name: string) => ({ id, recordType: 'note', name, version: 1, createdAt: '2026-11-27T12:00:00Z', sharedFrom: null, shieldId: FIRST_ID });
+  const NOTE = {
+    id: PISTAS,
+    campaignId: CAMPAIGN,
+    recordType: 'note',
+    name: 'Pistas da cripta',
+    fields: [],
+    content: 'O sacerdote mente.',
+    version: 1,
+    currentVersion: 1,
+    createdAt: '2026-11-27T12:00:00Z',
+    conversationId: null,
+    references: [],
+    overrides: null,
+    related: [],
+    sharedWith: [],
+    sharedFrom: null,
+    shieldId: FIRST_ID,
+  };
+
+  it('lists the notes newest first, each opening its artifact page, under "Nova nota" first in the header as the one solid pill', async () => {
+    const server = await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [row(PISTAS, 'Pistas da cripta'), row(LEMBRETE, 'Lembrete')], total: 2 } },
+    });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+
+      expect(html).toContain(`aria-label="${escaped(messages.shields.notes.list)}"`);
+      expect(html.indexOf('Lembrete')).toBeGreaterThan(html.indexOf('Pistas da cripta'));
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${PISTAS}`)).not.toBe('');
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${LEMBRETE}`)).not.toBe('');
+      expect(html).not.toContain(messages.shields.empty);
+      // "Nova nota" comes first, solid, before "Renomear"; it opens the new note's page.
+      expect(solids(html)).toEqual([messages.shields.notes.new]);
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}/shields/${FIRST_ID}/notes/new`)).toContain('data-variant="solid"');
+      expect(html.indexOf(`>${messages.shields.notes.new}</a>`)).toBeLessThan(html.indexOf(`>${messages.shields.rename}</a>`));
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    expect(calls(server)).toContain(`GET ${NOTES}?limit=10`);
+  });
+
+  it('is paged: a later page is asked by its offset and the pager links stay on the Shield', async () => {
+    const many = Array.from({ length: 10 }, (_, index) => row(`0190a0b0-0000-7000-8000-00000000c0${String(index).padStart(2, '0')}`, `Nota ${index + 11}`));
+    const server = await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10&offset=10`]: { status: 200, body: { items: many, total: 23 } },
+    });
+
+    const html = renderToStaticMarkup(
+      await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }), searchParams: Promise.resolve({ page: '2' }) }),
+    );
+
+    expect(calls(server)).toContain(`GET ${NOTES}?limit=10&offset=10`);
+    expect(html).toContain('Nota 11');
+    expect(html).toContain(`href="/campaigns/${CAMPAIGN}/shields/${FIRST_ID}?page=3"`);
+  });
+
+  it('says why when the notes cannot be read, and still offers "Nova nota"', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: problem(503, 'server.unavailable'),
+    });
+
+    const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+
+    expect(html).toContain('data-status="danger"');
+    expect(html).toContain(ptBR.errors.codes.server.unavailable);
+    expect(html).not.toContain(ptBR.shields.empty);
+    expect(solids(html)).toEqual([ptBR.shields.notes.new]);
+  });
+
+  it('starts "Nova nota" empty under the way back to its Shield, with "Título", "Texto" and one solid "Salvar nota"', async () => {
+    await useBackend({ [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST } });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await NewNotePage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+
+      expect(html).toMatch(new RegExp(`<h1[^>]*>${escaped(messages.shields.notes.form.title)}</h1>`));
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}/shields/${FIRST_ID}`)).not.toBe('');
+      expect(html).toContain(`>${escaped(messages.shields.defaultName)}</a>`);
+      expect(html).toMatch(new RegExp(`<label[^>]*>${messages.shields.notes.form.name}</label>`));
+      expect(html).toMatch(new RegExp(`<label[^>]*>${messages.shields.notes.form.content}</label>`));
+      expect(html).toMatch(/<input[^>]*name="name"[^>]*value=""/);
+      expect(html).toMatch(/<textarea[^>]*name="content"[^>]*><\/textarea>/);
+      expect(solids(html)).toEqual([messages.shields.notes.form.save]);
+      // Online while rendering on the server: nothing says otherwise, and saving is not blocked.
+      expect(html).not.toContain(messages.artifacts.edit.offline);
+      expect(html).not.toContain('aria-disabled="true"');
+    }
+  });
+
+  it('shows the single "Não encontrado." page for a Shield the backend does not find', async () => {
+    await useBackend({ [`GET ${SHIELDS}/${COMBAT_ID}`]: problem(404, 'request.not_found') });
+
+    expect(await thrownDigest(async () => NewNotePage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: COMBAT_ID }) }))).toMatch(/NEXT_HTTP_ERROR_FALLBACK;404/);
+  });
+
+  it('creates: the title and text go to the backend, then the toast, the layout revalidated, and the note\'s artifact page', async () => {
+    const server = await useBackend({ [`POST ${NOTES}`]: { status: 201, body: NOTE } });
+
+    const digest = await thrownDigest(() =>
+      createNoteAction(NO_NOTE, form({ campaign: CAMPAIGN, shield: FIRST_ID, name: ' Pistas da cripta ', content: 'O sacerdote mente.' })),
+    );
+
+    expect(digest).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}/artifacts/${PISTAS};`));
+    expect(calls(server)).toEqual([`POST ${NOTES}`]);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    // Sent as typed: the backend trims and checks.
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ name: ' Pistas da cripta ', content: 'O sacerdote mente.' });
+    expect(steps).toEqual(['flash success Nota «Pistas da cripta» criada.', 'revalidate / layout']);
+    steps.length = 0;
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    await thrownDigest(() => createNoteAction(NO_NOTE, form({ campaign: CAMPAIGN, shield: FIRST_ID, name: 'Pistas da cripta', content: '  ' })));
+    expect(steps).toEqual(['flash success Note «Pistas da cripta» created.', 'revalidate / layout']);
+    // A blank text is none.
+    expect(JSON.parse(server.calls[1]!.body)).toEqual({ name: 'Pistas da cripta', content: null });
+  });
+
+  it('a title or a text outside its limits comes back under its field, with what was typed kept and no toast', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [`POST ${NOTES}`]: problem(400, 'request.invalid', { field: 'name', min: 1, max: 200 }),
+    };
+    await useBackend(routes);
+    const typed = { campaign: CAMPAIGN, shield: FIRST_ID, name: '   ', content: 'Texto guardado' };
+
+    expect(await createNoteAction(NO_NOTE, form(typed))).toEqual({
+      serial: 1,
+      values: { name: '   ', content: 'Texto guardado' },
+      error: 'O título precisa ter de 1 a 200 caracteres.',
+      field: 'name',
+    });
+    routes[`POST ${NOTES}`] = problem(400, 'request.invalid', { field: 'content', min: 0, max: 20000 });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await createNoteAction(NO_NOTE, form(typed))).toMatchObject({ error: 'The text can have up to 20000 characters.', field: 'content' });
+    expect(steps).toEqual([]);
+  });
+
+  it('a Shield gone meanwhile is said under the form, with what was typed kept and no toast', async () => {
+    await useBackend({ [`POST ${NOTES}`]: problem(404, 'request.not_found') });
+
+    const state = await createNoteAction(NO_NOTE, form({ campaign: CAMPAIGN, shield: FIRST_ID, name: 'Pistas', content: 'Texto' }));
+
+    expect(state).toEqual({ serial: 1, values: { name: 'Pistas', content: 'Texto' }, error: ptBR.errors.codes.request.not_found, field: null });
+    expect(flashed).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('never sends a malformed campaign or Shield to the backend', async () => {
+    const server = await useBackend({});
+    cookieJar['__Host-gmshield-lang'] = 'en';
+
+    const malformed: Record<string, string>[] = [{ campaign: '../me', shield: FIRST_ID }, { campaign: CAMPAIGN, shield: 'x' }, { campaign: CAMPAIGN }, {}];
+    for (const fields of malformed) {
+      expect((await createNoteAction(NO_NOTE, form({ ...fields, name: 'Pistas' }))).error).toBe('The request is not valid.');
+    }
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it('keeps the same keys in both languages', () => {
+    const keys = (value: unknown, prefix = ''): string[] =>
+      typeof value === 'object' && value !== null
+        ? Object.entries(value).flatMap(([key, inner]) => keys(inner, `${prefix}${key}.`))
+        : [prefix];
+    expect(keys(en.shields.notes).sort()).toEqual(keys(ptBR.shields.notes).sort());
+    expect(Object.keys(en.feedback)).toContain('noteCreated');
+    expect(Object.keys(ptBR.feedback)).toContain('noteCreated');
+    expect(ptBR.artifacts.edit.offline).toBe('Sem conexão');
+    expect(en.errors.codes.request.note_type_fixed).not.toBe('');
+    expect(ptBR.errors.codes.request.note_type_fixed).not.toBe('');
   });
 });

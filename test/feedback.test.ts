@@ -207,14 +207,14 @@ describe('the view cookie', () => {
     expect(viewsFrom('files:list:compact:1:20').files.size).toBe(20);
     // A layout off the allowlist, and a list that does not exist: the default stays.
     expect(views.campaigns).toEqual(DEFAULT_VIEW);
-    expect(Object.keys(views).sort()).toEqual(['artifacts', 'campaigns', 'conversations', 'files', 'recordTypes', 'records', 'shields', 'systems', 'terms']);
+    expect(Object.keys(views).sort()).toEqual(['artifacts', 'campaigns', 'conversations', 'files', 'notes', 'recordTypes', 'records', 'shields', 'systems', 'terms']);
     expect(viewsFrom(viewsValue(views))).toEqual(views);
   });
 
   it('is written for a year with the __Host- attributes, and read back from document.cookie', () => {
     const views = { ...DEFAULT_VIEWS, files: { layout: 'grid', density: 'comfortable', previews: true, size: 20 } } as const;
     const line = viewCookieLine(views);
-    expect(line).toBe(`${VIEW_COOKIE}=files:grid:comfortable:1:20|campaigns:list:comfortable:1:10|systems:list:comfortable:1:10|conversations:list:comfortable:1:10|recordTypes:list:comfortable:1:10|records:list:comfortable:1:10|terms:list:comfortable:1:10|artifacts:list:comfortable:1:10|shields:list:comfortable:1:10; Path=/; Max-Age=31536000; Secure; SameSite=Lax`);
+    expect(line).toBe(`${VIEW_COOKIE}=files:grid:comfortable:1:20|campaigns:list:comfortable:1:10|systems:list:comfortable:1:10|conversations:list:comfortable:1:10|recordTypes:list:comfortable:1:10|records:list:comfortable:1:10|terms:list:comfortable:1:10|artifacts:list:comfortable:1:10|shields:list:comfortable:1:10|notes:list:comfortable:1:10; Path=/; Max-Age=31536000; Secure; SameSite=Lax`);
     expect(viewsIn(`a=b; ${line.split(';')[0]}`)).toEqual(views);
     expect(viewsIn('a=b')).toEqual(DEFAULT_VIEWS);
   });

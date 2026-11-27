@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { unstable_rethrow, useRouter } from 'next/navigation';
+import { startTransition, useActionState, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import {
   NO_ARTIFACT_EDIT,
@@ -14,6 +14,7 @@ import { PillButton, SolidPillButton } from './PillButton';
 import styles from './RecordCorrection.module.css';
 import { RecordFieldsEditor, editorRows, type EditorDraft, type EditorTypeOption, type RecordFieldsEditorTexts } from './RecordFieldsEditor';
 import formStyles from './SystemForm.module.css';
+import { useOnline } from './useOnline';
 
 /** Every text of the editor, in the interface's language (the server translates). */
 export type ArtifactEditorTexts = RecordFieldsEditorTexts & {
@@ -27,6 +28,8 @@ export type ArtifactEditorTexts = RecordFieldsEditorTexts & {
   readonly keepMine: string;
   /** The line said once a save is stored: "Vale a partir da próxima pergunta." */
   readonly saved: string;
+  /** The line said while the browser has no connection (Story 6.2): "Sem conexão". */
+  readonly offline: string;
 };
 
 export type ArtifactEditorProps = {
@@ -36,7 +39,10 @@ export type ArtifactEditorProps = {
   readonly version: number;
   /** The newest version's type key, name, fields and content as the page read them: the form starts from them. */
   readonly values: ArtifactFormValues;
-  /** The record types of the campaign's system, core and approved, each named as this interface names it. */
+  /**
+   * The record types of the campaign's system, core and approved, each named as this interface names it. One type alone
+   * (Story 6.2: a note a Shield holds) shows as fixed text, with no select.
+   */
   readonly types: readonly EditorTypeOption[];
   readonly texts: ArtifactEditorTexts;
   readonly action: (previous: ArtifactEditState, form: FormData) => Promise<ArtifactEditState>;
@@ -58,10 +64,29 @@ function fill(text: string, params: Readonly<Record<string, string | number>>): 
  * stale says "Este item mudou em outra aba." with "Ver a versão atual" (the page read again, the form closed) and
  * "Manter a minha como nova versão" (the draft sent again on the newest version). Every part is reachable from the
  * keyboard: the form takes the focus on the name, and "Editar" gets it back when the form closes. Nothing here deletes.
+ *
+ * Story 6.2: while the browser has no connection ({@link useOnline}) a status line says "Sem conexão", "Salvar" and
+ * "Manter a minha como nova versão" are `aria-disabled` and send nothing, and what was typed stays in this component's
+ * state (nothing goes to browser storage); once the connection is back they save again. A save that fails on its way
+ * (the connection dropped while the browser still said it had one, the server restarting) says "Sem conexão" under the
+ * form instead of leaving the page, with the draft kept.
  */
 export function ArtifactEditor({ campaignId, artifactId, version, values, types, texts, action, children }: ArtifactEditorProps) {
   const router = useRouter();
-  const [state, dispatch, pending] = useActionState(action, NO_ARTIFACT_EDIT);
+  const online = useOnline();
+  // A save that never got an answer comes back as a refusal of the whole form, so the page (and the draft) stays.
+  const guarded = useCallback(
+    async (previous: ArtifactEditState, form: FormData): Promise<ArtifactEditState> => {
+      try {
+        return await action(previous, form);
+      } catch (error) {
+        unstable_rethrow(error);
+        return { ...previous, serial: previous.serial + 1, saved: false, error: texts.offline, field: null, stale: false };
+      }
+    },
+    [action, texts.offline],
+  );
+  const [state, dispatch, pending] = useActionState(guarded, NO_ARTIFACT_EDIT);
   // The answer the form opened after (null: closed): an edit saved since then closes it.
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   const [draft, setDraft] = useState<EditorDraft>({ name: '', recordType: '', rows: [] });
@@ -97,6 +122,10 @@ export function ArtifactEditor({ campaignId, artifactId, version, values, types,
     setOpenedAt(state.serial);
   };
   const send = (on: number) => {
+    // Without a connection nothing is sent: the draft stays as typed until it is back.
+    if (!online) {
+      return;
+    }
     const data = new FormData();
     data.set('campaignId', campaignId);
     data.set('artifactId', artifactId);
@@ -122,7 +151,7 @@ export function ArtifactEditor({ campaignId, artifactId, version, values, types,
           </PillButton>
         </div>
         <p role="status" className={styles.status}>
-          {state.saved && openedAt !== null ? texts.saved : ''}
+          {!online ? texts.offline : state.saved && openedAt !== null ? texts.saved : ''}
         </p>
       </>
     );
@@ -152,7 +181,11 @@ export function ArtifactEditor({ campaignId, artifactId, version, values, types,
             >
               {texts.viewCurrent}
             </PillButton>
-            <PillButton disabled={pending || state.currentVersion === null} onClick={() => state.currentVersion !== null && send(state.currentVersion)}>
+            <PillButton
+              disabled={pending || state.currentVersion === null}
+              aria-disabled={!online || undefined}
+              onClick={() => state.currentVersion !== null && send(state.currentVersion)}
+            >
               {texts.keepMine}
             </PillButton>
           </div>
@@ -193,12 +226,16 @@ export function ArtifactEditor({ campaignId, artifactId, version, values, types,
         </p>
       ) : null}
       <div className={formStyles.actions}>
-        <SolidPillButton type="submit" disabled={pending} pending={pending}>
+        <SolidPillButton type="submit" disabled={pending} pending={pending} aria-disabled={!online || undefined}>
           {texts.save}
         </SolidPillButton>
         <PillButton disabled={pending} onClick={() => setOpenedAt(null)}>
           {texts.cancel}
         </PillButton>
+        {/* Beside the pill it blocks, so it is seen where the GM presses. */}
+        <p role="status" className={`${styles.status} ${styles.besidePills}`}>
+          {online ? '' : texts.offline}
+        </p>
       </div>
     </form>
   );
