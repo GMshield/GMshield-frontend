@@ -1054,6 +1054,17 @@
       "consequenceOne": "Going with it: 1 question and its answer. This cannot be undone.",
       "consequenceOther": "Going with it: {count} questions and their answers. This cannot be undone.",
       "unknown": "Going with it: this conversation's questions and their answers. This cannot be undone.",
+      "consequenceOneWithArtifacts": "Going with it: 1 question and its answer, and {artifacts}. This cannot be undone.",
+      "consequenceOtherWithArtifacts": "Going with it: {count} questions and their answers, and {artifacts}. This cannot be undone.",
+      "unknownWithArtifacts": "Going with it: this conversation's questions and their answers, and {artifacts}. This cannot be undone.",
+      "artifactsOne": "1 saved artifact",
+      "artifactsOther": "{count} saved artifacts",
+      "artifactsLegend": "Artifacts saved from this conversation",
+      "artifactsHint": "The ticked ones are deleted with the conversation. The others stay in the campaign.",
+      "artifactsControls": "Quick choice",
+      "keepAll": "Keep all",
+      "selectAll": "Select all",
+      "artifactRow": "{name}, {type}",
       "confirm": "Delete conversation"
     }
   },

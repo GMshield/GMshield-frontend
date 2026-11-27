@@ -341,6 +341,27 @@ describe("an artifact's page (Story 5.1)", () => {
     expect(html).toContain(ptBR.artifacts.page.conversation);
   });
 
+  it('Story 5.4 part B: a saved draft kept when its conversation was deleted keeps its sources and opens no conversation', async () => {
+    const kept = {
+      ...ARTIFACT,
+      recordType: 'encounter',
+      name: 'Emboscada na Cripta',
+      fields: [],
+      content: '## Cripta',
+      // The backend names no conversation from the moment its deletion starts.
+      conversationId: null,
+      references: [
+        { number: 1, kind: 'passage', materialName: 'Notas da campanha.md', sectionPath: ['Cripta'], page: 2, passageIds: ['0190a0b0-0000-7000-8000-000000000010'], removed: false, tier: 'campaign' },
+      ],
+    };
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: kept }, [VERSIONS_ROUTE]: ONE_VERSION });
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+    expect(html).toContain('Notas da campanha.md, Cripta, p. 2');
+    expect(html).not.toContain(ptBR.artifacts.page.conversation);
+    expect(html).not.toMatch(/href="\/questions\//);
+  });
+
   it('an artifact without fields or content shows neither; another owner\'s or another campaign\'s is not found', async () => {
     await useBackend({
       ...BASE,

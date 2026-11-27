@@ -3572,6 +3572,8 @@ describe('save a draft through the save confirmation (Story 5.4 part A)', () => 
     expect(screen.queryByTestId('save-card')).toBeNull();
     expect(screen.getByRole('region', { name: 'Avisos' }).textContent).toContain('Artefato salvo.');
     expect(localStorage.getItem(`${SAVE_PREFIX}${DRAFT_TURN}`)).toBeNull();
+    // Story 5.4 part B: the page is read again, so the delete dialog lists the new artifact.
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('"Editar conteúdo" turns the draft into a textarea in place, and an edited save sends the edits', async () => {

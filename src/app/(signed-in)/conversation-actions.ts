@@ -66,16 +66,23 @@ export async function renameConversationAction(previous: CampaignFormState, form
   return { values, version: Number(version), error: errorText(result.problem, language), field, stale: false };
 }
 
+/** The most saved artifacts a conversation's deletion takes (Story 5.4 part B, as the backend's limit). */
+const MOST_ARTIFACTS = 64;
+
 /**
  * "Excluir conversa" in a conversation's confirmation (Story 3.10 part B): the conversation is read for its name and
  * area, the backend deletes it (its questions, answers and references go in the background), the toast names it, the
  * shared layout is rendered again, and the area's list opens without it. A refusal comes back as its text; a malformed
- * id never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
+ * id never reaches the backend. From Story 5.4 part B the ticked saved artifacts (`artifactIds`, repeated) go with it,
+ * in the same request; one that is not an id, or more than {@link MOST_ARTIFACTS}, is refused before the backend. The
+ * proxy (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
  */
 export async function deleteConversationAction(_previous: ConversationDeleteState, form: FormData): Promise<ConversationDeleteState> {
   const { language } = await currentPreferences();
   const id = form.get('id');
-  if (typeof id !== 'string' || !ID.test(id)) {
+  const ticked = form.getAll('artifactIds');
+  const artifactIds = ticked.filter((artifactId): artifactId is string => typeof artifactId === 'string' && ID.test(artifactId));
+  if (typeof id !== 'string' || !ID.test(id) || artifactIds.length !== ticked.length || ticked.length > MOST_ARTIFACTS) {
     return { error: invalid(language) };
   }
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
@@ -84,7 +91,7 @@ export async function deleteConversationAction(_previous: ConversationDeleteStat
   if (!conversation.ok) {
     return { error: errorText(conversation.problem, language) };
   }
-  const result = await deleteConversation(token, id);
+  const result = await deleteConversation(token, id, [...new Set(artifactIds)]);
   if (result.ok) {
     await flash('success', translator(language)('feedback.conversationDeleted', { name: conversation.data.name }));
     revalidatePath('/', 'layout');

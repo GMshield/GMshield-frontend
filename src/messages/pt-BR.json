@@ -1054,6 +1054,17 @@
       "consequenceOne": "Vai junto: 1 pergunta e sua resposta. Isso não pode ser desfeito.",
       "consequenceOther": "Vão junto: {count} perguntas e suas respostas. Isso não pode ser desfeito.",
       "unknown": "Vão junto: as perguntas desta conversa e suas respostas. Isso não pode ser desfeito.",
+      "consequenceOneWithArtifacts": "Vão junto: 1 pergunta e sua resposta, e {artifacts}. Isso não pode ser desfeito.",
+      "consequenceOtherWithArtifacts": "Vão junto: {count} perguntas e suas respostas, e {artifacts}. Isso não pode ser desfeito.",
+      "unknownWithArtifacts": "Vão junto: as perguntas desta conversa e suas respostas, e {artifacts}. Isso não pode ser desfeito.",
+      "artifactsOne": "1 artefato salvo",
+      "artifactsOther": "{count} artefatos salvos",
+      "artifactsLegend": "Artefatos salvos desta conversa",
+      "artifactsHint": "Os marcados são excluídos com a conversa. Os outros ficam na campanha.",
+      "artifactsControls": "Escolha rápida",
+      "keepAll": "Manter todos",
+      "selectAll": "Selecionar todos",
+      "artifactRow": "{name}, {type}",
       "confirm": "Excluir conversa"
     }
   },

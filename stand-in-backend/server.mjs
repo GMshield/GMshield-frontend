@@ -43,7 +43,8 @@
 // carries its proposal ("Emboscada na Cripta", an encounter) and its stored turn is offered for saving
 // (`saving: offered`); a save answers 201 with the draft saved as an artifact of the conversation (its content the
 // draft's text, its one reference copied), "Agora não" and "Salvar como artefato" answer 204, and an artifact written by
-// hand has no conversation and no references.
+// hand has no conversation and no references. Story 5.4 part B: the conversation's deletion lists no saved artifact (its
+// draft is offered, not saved), and its deletion with the ticked artifacts (POST .../deletion) answers 202 with no body.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -291,7 +292,8 @@ export const EXAMPLES = {
   },
   'GET /api/v1/conversations/{conversationId}': CONVERSATION,
   'PATCH /api/v1/conversations/{conversationId}': { ...CONVERSATION, name: 'Viagem ao norte', version: 1 },
-  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2 },
+  // Story 5.4 part B: nothing was saved from it (its draft is offered), so its deletion lists no artifact.
+  'GET /api/v1/conversations/{conversationId}/deletion': { questions: 2, artifacts: [] },
   // Story 5.1: the starter campaign's three artifacts go with it.
   'GET /api/v1/campaigns/{id}/deletion': { conversations: 1, materials: 0, artifacts: 3 },
   'GET /api/v1/campaigns/{id}/scope': STARTING_SCOPE,

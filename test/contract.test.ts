@@ -22,6 +22,8 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 5.4 part B: it reads a conversation deletion's saved `artifacts` and deletes the ticked ones with it
+    // (`POST /conversations/{conversationId}/deletion`), added in 1.49.0.
     // Story 5.4 part A: it saves a draft as an artifact (`POST /turns/{turnId}/artifact`), declines and reopens its save
     // (`/turns/{turnId}/save-decline`), reads a stored turn's `saving` and an artifact's `conversationId` and
     // `references`, added in 1.48.0 (Story 5.3 part B's 1.47.0 added the draft's proposal, read here too).
@@ -50,10 +52,11 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.48.0');
-    expect(meetsMinimum('1.48.0')).toBe(true);
-    expect(meetsMinimum('1.48.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.49.0');
     expect(meetsMinimum('1.49.0')).toBe(true);
+    expect(meetsMinimum('1.49.1')).toBe(true);
+    expect(meetsMinimum('1.50.0')).toBe(true);
+    expect(meetsMinimum('1.48.0')).toBe(false);
     expect(meetsMinimum('1.47.0')).toBe(false);
     expect(meetsMinimum('1.46.0')).toBe(false);
     expect(meetsMinimum('1.45.0')).toBe(false);

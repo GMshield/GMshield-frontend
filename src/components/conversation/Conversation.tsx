@@ -43,7 +43,7 @@ import { TIER_SEPARATOR, tierSpoken, tierWord } from '../TierLabel';
 import { useUploads } from '../uploads/UploadsProvider';
 
 import { AnswerMarkdown, type CitationMark, type TierMark } from './AnswerMarkdown';
-import { ConversationDeleteAction, type ConversationDeleteState } from './ConversationDeleteAction';
+import { ConversationDeleteAction, type ConversationDeleteArtifact, type ConversationDeleteState } from './ConversationDeleteAction';
 import { ConversationOutline } from './ConversationOutline';
 import { showTurn } from './show-turn';
 import { NamedIcon } from '../Icons';
@@ -267,6 +267,12 @@ export type ConversationProps = {
   readonly questions?: number | null;
   /** Story 3.10 part B: the Server Action behind "Excluir"; without it the conversation offers no delete. */
   readonly deleteAction?: (previous: ConversationDeleteState, form: FormData) => Promise<ConversationDeleteState>;
+  /**
+   * Story 5.4 part B: the artifacts saved from the conversation that are not being deleted, oldest first, each with its
+   * record type's label, as its deletion was read; "Excluir"'s dialog lists them to tick. Absent or empty, the plain
+   * dialog.
+   */
+  readonly deleteArtifacts?: readonly ConversationDeleteArtifact[];
   /** The newest material that needs review, when there is one. */
   readonly review: { readonly href: string; readonly name: string } | null;
   /** For tests: how a stream of a turn is opened (the browser's `EventSource` by default). */
@@ -690,6 +696,7 @@ export function Conversation({
   stored = NO_STORED,
   questions = null,
   deleteAction,
+  deleteArtifacts,
   focusTurn = null,
   recordTypes = NO_RECORD_TYPES,
   saveTypes = NO_SAVE_TYPES,
@@ -1299,6 +1306,8 @@ export function Conversation({
           contentEditing: false,
         }));
         notify({ status: 'success', message: t('feedback.artifactSaved') });
+        // Story 5.4 part B: the page reads the conversation's deletion again, so its dialog lists the new artifact.
+        router.refresh();
         return;
       }
       if (problemFields(result.problem).code === 'conversation.turn_saved') {
@@ -1603,7 +1612,13 @@ export function Conversation({
                 <p className={styles.name}>{conversation.name}</p>
                 <PillLink href={`/${area}/${encodeURIComponent(conversation.id)}/edit`}>{t('conversation.rename')}</PillLink>
                 {deleteAction === undefined ? null : (
-                  <ConversationDeleteAction id={conversation.id} questions={questionCount} language={language} action={deleteAction} />
+                  <ConversationDeleteAction
+                    id={conversation.id}
+                    questions={questionCount}
+                    language={language}
+                    action={deleteAction}
+                    artifacts={deleteArtifacts}
+                  />
                 )}
               </>
             )}

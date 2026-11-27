@@ -41,6 +41,7 @@ export type ConversationTurns = Schemas['ConversationTurns'];
 export type ConversationChange = Schemas['ConversationChange'];
 /** Story 3.10 part B: what goes with a conversation if it is deleted (its questions). */
 export type ConversationDeletion = Schemas['ConversationDeletion'];
+export type ConversationDeletionArtifact = Schemas['ConversationDeletionArtifact'];
 /** Story 5.4 part A: what a draft is saved as, and the artifact it becomes. */
 export type SavedDraft = Schemas['SavedDraft'];
 export type SavedArtifact = Schemas['Artifact'];
@@ -154,7 +155,10 @@ export function renameConversation(
   );
 }
 
-/** What goes with one of the account's conversations if it is deleted (Story 3.10 part B); `request.not_found` otherwise. */
+/**
+ * What goes with one of the account's conversations if it is deleted (Story 3.10 part B): its questions, and (Story 5.4
+ * part B) the artifacts saved from it that are not being deleted, oldest first; `request.not_found` otherwise.
+ */
 export function conversationDeletion(
   sessionToken: string,
   conversationId: string,
@@ -169,12 +173,21 @@ export function conversationDeletion(
 
 /**
  * Deletes one of the account's conversations with its questions, answers and references (Story 3.10 part B; 202, no
- * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included.
+ * body: the removal runs in the backend); `request.not_found` for any other id, one already deleted included. From Story
+ * 5.4 part B the artifacts saved from it among `artifactIds` (0 to 64; none keeps them all) go with it, in the same
+ * request (`POST /api/v1/conversations/{id}/deletion`); an id that is not one of them is ignored by the backend, and a
+ * malformed list is `request.invalid` on `artifactIds`.
  */
-export function deleteConversation(sessionToken: string, conversationId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+export function deleteConversation(
+  sessionToken: string,
+  conversationId: string,
+  artifactIds: readonly string[] = [],
+  options: CallOptions = {},
+): Promise<Result<undefined>> {
   return call('conversations.delete', options, (client) =>
-    client.DELETE('/api/v1/conversations/{conversationId}', {
+    client.POST('/api/v1/conversations/{conversationId}/deletion', {
       params: { header: { 'X-Session-Token': sessionToken }, path: { conversationId } },
+      body: { artifactIds: [...artifactIds] },
     }),
   );
 }

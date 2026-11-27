@@ -1027,6 +1027,145 @@ describe('ConversationDeleteAction (Story 3.10 part B)', () => {
   });
 });
 
+describe('ConversationDeleteAction with saved artifacts (Story 5.4 part B)', () => {
+  const ID = '0190a0b0-0000-7000-8000-000000000020';
+  const CRIPTA = '0190a0b0-0000-7000-8000-000000000903';
+  const TROLL = '0190a0b0-0000-7000-8000-000000000904';
+  const ARTIFACTS = [
+    { id: CRIPTA, name: 'Cripta', typeLabel: 'Encontro' },
+    { id: TROLL, name: 'Troll', typeLabel: 'Criatura' },
+  ];
+  type State = { readonly error: string | null };
+  const recorder = () => {
+    const posted: { id: string; artifactIds: string[] }[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push({ id: String(form.get('id')), artifactIds: form.getAll('artifactIds').map(String) });
+      return { error: null };
+    });
+    return { posted, action };
+  };
+  const pressed = (button: HTMLElement) => button.getAttribute('aria-pressed');
+
+  it('with none, the plain dialog: no list, no control', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    render(<ConversationDeleteAction id={ID} questions={2} language="pt-BR" action={action} artifacts={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    expect(within(dialog).queryByRole('group')).toBeNull();
+    expect(within(dialog).queryAllByRole('checkbox')).toEqual([]);
+    expect(within(dialog).queryByRole('button', { name: 'Manter todos' })).toBeNull();
+    expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancelar', 'Excluir conversa']);
+  });
+
+  it('lists them unticked, "Manter todos" pressed; ticks count in the consequence, and confirm posts the ticked ids', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ConversationDeleteAction id={ID} questions={2} language="pt-BR" action={action} artifacts={ARTIFACTS} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    const list = within(dialog).getByRole('group', { name: 'Artefatos salvos desta conversa' });
+    expect(list.textContent).toContain('Os marcados são excluídos com a conversa. Os outros ficam na campanha.');
+    const cripta = within(list).getByRole('checkbox', { name: 'Cripta, Encontro' }) as HTMLInputElement;
+    const troll = within(list).getByRole('checkbox', { name: 'Troll, Criatura' }) as HTMLInputElement;
+    expect([cripta.checked, troll.checked]).toEqual([false, false]);
+    expect(within(list).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['CriptaEncontro', 'TrollCriatura']);
+    const keepAll = within(list).getByRole('button', { name: 'Manter todos' });
+    const selectAll = within(list).getByRole('button', { name: 'Selecionar todos' });
+    expect([pressed(keepAll), pressed(selectAll)]).toEqual(['true', 'false']);
+    expect(dialog.textContent).toContain('Vão junto: 2 perguntas e suas respostas. Isso não pode ser desfeito.');
+
+    await user.click(cripta);
+    expect([pressed(keepAll), pressed(selectAll)]).toEqual(['false', 'false']);
+    expect(dialog.textContent).toContain('Vão junto: 2 perguntas e suas respostas, e 1 artefato salvo. Isso não pode ser desfeito.');
+    await user.click(selectAll);
+    expect([cripta.checked, troll.checked]).toEqual([true, true]);
+    expect([pressed(keepAll), pressed(selectAll)]).toEqual(['false', 'true']);
+    expect(dialog.textContent).toContain('Vão junto: 2 perguntas e suas respostas, e 2 artefatos salvos. Isso não pode ser desfeito.');
+    await user.click(keepAll);
+    expect([cripta.checked, troll.checked]).toEqual([false, false]);
+    expect([pressed(keepAll), pressed(selectAll)]).toEqual(['true', 'false']);
+    await user.click(cripta);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir conversa' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, artifactIds: [CRIPTA] }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expectNoStyleAttribute(container);
+  });
+
+  it('keep all posts no id; select all posts both', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    render(<ConversationDeleteAction id={ID} questions={1} language="pt-BR" action={action} artifacts={ARTIFACTS} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir conversa' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ id: ID, artifactIds: [] }]));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    await user.click(opener);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos' }));
+    expect(dialog.textContent).toContain('Vão junto: 1 pergunta e sua resposta, e 2 artefatos salvos. Isso não pode ser desfeito.');
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir conversa' }));
+    await vi.waitFor(() => expect(posted[1]).toEqual({ id: ID, artifactIds: [CRIPTA, TROLL] }));
+  });
+
+  it('by keyboard: focus opens on Cancelar, Tab reaches every control inside the dialog, Space ticks, Esc closes back on Excluir and clears the ticks', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    render(<ConversationDeleteAction id={ID} questions={null} language="pt-BR" action={action} artifacts={ARTIFACTS} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir esta conversa?' });
+    const cancel = within(dialog).getByRole('button', { name: 'Cancelar' });
+    expect(document.activeElement).toBe(cancel);
+    const order: string[] = [];
+    for (let step = 0; step < 6; step += 1) {
+      await user.tab();
+      const active = document.activeElement as HTMLElement;
+      expect(dialog.contains(active)).toBe(true);
+      order.push(active.getAttribute('aria-label') ?? active.textContent ?? '');
+    }
+    expect(order).toEqual(['Excluir conversa', 'Manter todos', 'Selecionar todos', 'Cripta, Encontro', 'Troll, Criatura', 'Cancelar']);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(within(dialog).getByRole('checkbox', { name: 'Troll, Criatura' }));
+    await user.keyboard(' ');
+    expect((document.activeElement as HTMLInputElement).checked).toBe(true);
+    expect(dialog.textContent).toContain('Vão junto: as perguntas desta conversa e suas respostas, e 1 artefato salvo. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+    // Opened again, nothing is ticked.
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(cancel);
+    expect(within(dialog).getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)).toEqual([false, false]);
+    expect(within(dialog).getByRole('button', { name: 'Manter todos' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('speaks English too', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    render(
+      <ConversationDeleteAction
+        id={ID}
+        questions={3}
+        language="en"
+        action={action}
+        artifacts={[{ id: CRIPTA, name: 'Crypt', typeLabel: 'Encounter' }]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this conversation?' });
+    const list = within(dialog).getByRole('group', { name: 'Artifacts saved from this conversation' });
+    expect(within(list).getByRole('button', { name: 'Keep all' }).getAttribute('aria-pressed')).toBe('true');
+    await user.click(within(list).getByRole('button', { name: 'Select all' }));
+    expect((within(list).getByRole('checkbox', { name: 'Crypt, Encounter' }) as HTMLInputElement).checked).toBe(true);
+    expect(dialog.textContent).toContain('Going with it: 3 questions and their answers, and 1 saved artifact. This cannot be undone.');
+  });
+});
+
 describe('MaterialDeleteAction (Story 3.4 part B)', () => {
   const ID = '0190a0b0-0000-7000-8000-000000000003';
   type State = { readonly error: string | null };

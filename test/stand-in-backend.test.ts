@@ -435,9 +435,11 @@ describe('stand-in backend', () => {
     // Story 3.10 part B: what the conversation's deletion takes, and the delete itself (202, no body).
     expect(answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toMatchObject({
       status: 200,
-      body: { questions: 2 },
+      body: { questions: 2, artifacts: [] },
     });
     expect(answer(contract, 'DELETE', `/api/v1/conversations/${CONVERSATION_ID}`, 't')).toEqual({ status: 202, type: null, body: null });
+    // Story 5.4 part B: the deletion with the ticked saved artifacts, one request (202, no body).
+    expect(answer(contract, 'POST', `/api/v1/conversations/${CONVERSATION_ID}/deletion`, 't')).toEqual({ status: 202, type: null, body: null });
     const turns = answer(contract, 'GET', `/api/v1/conversations/${CONVERSATION_ID}/turns`, 't');
     expect(turns).toMatchObject({ status: 200, body: { items: [STORED_TURN, STORED_DRAFT] } });
     for (const key of schemas.StoredTurn!.required ?? []) {

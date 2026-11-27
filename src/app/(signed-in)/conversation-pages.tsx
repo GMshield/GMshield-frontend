@@ -21,7 +21,7 @@ import {
   type ConversationSummary,
   type StoredTurn,
 } from '@/server/conversations';
-import type { NamedRecordType } from '@/record-types';
+import { typeLabel, type NamedRecordType } from '@/record-types';
 import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
 import { getArtifact } from '@/server/artifacts';
 import { getCampaign } from '@/server/library';
@@ -213,7 +213,9 @@ export async function newConversationPage(area: Area) {
  * An opened conversation (Story 3.10): its stored turns with their answers and references, and the composer, which
  * continues it. Another account's id, an unknown one or a malformed one is the single "Não encontrado." page; a
  * conversation of the other area opens under its own area's address. Story 3.10 part B: how many questions its deletion
- * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words. Story 3.12: a
+ * takes is read with it, for "Excluir"'s dialog; a count that cannot be read leaves the dialog in words. Story 5.4 part
+ * B: so are the artifacts saved from it, named with their record type's label, which the dialog lists to tick (none
+ * when the read failed: the plain dialog, which keeps them all). Story 3.12: a
  * `turn` (the `?turn=` of a saved item's "Ir") opens it scrolled to that answer, with focus on it; anything that is not
  * an id is ignored, and a turn not among those loaded leaves it at its last turn.
  */
@@ -266,6 +268,15 @@ export async function openedConversationPage(area: Area, id: string, turn?: stri
       stored={turns.data.items}
       questions={deletion.ok ? deletion.data.questions : null}
       deleteAction={deleteConversationAction}
+      deleteArtifacts={
+        deletion.ok
+          ? deletion.data.artifacts.map((artifact) => ({
+              id: artifact.id,
+              name: artifact.name,
+              typeLabel: typeLabel(artifact.recordType, recordTypes.named, t),
+            }))
+          : []
+      }
       recordTypes={recordTypes.named}
       saveTypes={recordTypes.options}
       savedNames={savedNames}
