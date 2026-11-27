@@ -21,6 +21,7 @@ import {
   COMBAT_SHIELD,
   FIRST_SHIELD,
   RENAMED_SHIELD,
+  SHIELD_DELETION,
   SHIELD_PAGE,
   RECORD_ID,
   RECORD_PAGE,
@@ -549,6 +550,18 @@ describe('stand-in backend', () => {
         expect(shield, key).toHaveProperty(key);
       }
     }
+  });
+
+  it('answers a Shield\'s deletion preview and its deletion with 204 and no body (Story 6.1 part B)', () => {
+    const shield = `/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/shields/${COMBAT_SHIELD.id}`;
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', `${shield}/deletion`, 't')).toMatchObject({ status: 200, body: SHIELD_DELETION });
+    expect(schemas.ShieldDeletion!.required).toEqual(['last', 'notes', 'rolls']);
+    for (const key of schemas.ShieldDeletion!.required ?? []) {
+      expect(SHIELD_DELETION, key).toHaveProperty(key);
+    }
+    expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 204, type: null, body: null });
   });
 
   it('answers an artifact\'s edit, its versions, one version and a restore (Story 5.2)', () => {

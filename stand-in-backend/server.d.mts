@@ -170,6 +170,8 @@ export const FIRST_SHIELD: StandInShield;
 export const COMBAT_SHIELD: StandInShield;
 export const SHIELD_PAGE: { items: StandInShield[]; total: number };
 export const RENAMED_SHIELD: StandInShield;
+/** Story 6.1 part B: a Shield's deletion preview (no notes, no rolls, not the last). */
+export const SHIELD_DELETION: { notes: number; rolls: number; last: boolean };
 /** Story 5.2: an edit's and a restore's answer (version 2), and an artifact's versions (its one version 1). */
 export const EDITED_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_VERSIONS: {

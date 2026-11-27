@@ -3008,6 +3008,31 @@
         "required" : [ "id", "name", "version" ],
         "type" : "object"
       },
+      "ShieldDeletion" : {
+        "properties" : {
+          "last" : {
+            "description" : "Whether it is the campaign's only Shield, which cannot be deleted",
+            "example" : false,
+            "type" : "boolean"
+          },
+          "notes" : {
+            "description" : "How many notes of the Shield go with it (0 until notes exist)",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "rolls" : {
+            "description" : "How many stored rolls of the Shield go with it (0 until rolls are stored)",
+            "example" : 0,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "last", "notes", "rolls" ],
+        "type" : "object"
+      },
       "ShieldPage" : {
         "properties" : {
           "items" : {
@@ -3664,7 +3689,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.55.0"
+    "version" : "1.56.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -5925,6 +5950,52 @@
       }
     },
     "/api/v1/campaigns/{id}/shields/{shieldId}" : {
+      "delete" : {
+        "operationId" : "deleteShield",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The Shield was deleted"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Deletes one Shield of one of the account's campaigns (204, no body): from now on it is not found, and nothing else of the campaign changes. Cannot be undone. request.last_shield (409) when it is the campaign's only Shield, request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
       "get" : {
         "operationId" : "getShield",
         "parameters" : [ {
@@ -6039,6 +6110,61 @@
           }
         },
         "summary" : "Renames one Shield of one of the account's campaigns on the version it names: the Shield as stored, its version raised by one. request.stale_version (409) when the Shield has left that version, request.shield_name_taken (409) when another Shield of the campaign has the new name, request.shield_name_invalid (400) for a name outside its limits, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id (unknown, another account's, malformed, a Shield of another campaign or of a campaign being deleted); nothing changes then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/shields/{shieldId}/deletion" : {
+      "get" : {
+        "operationId" : "getShieldDeletion",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ShieldDeletion"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "What goes with one Shield of one of the account's campaigns if it is deleted: how many notes and stored rolls (0 until they exist), and whether it is the campaign's only Shield (last), which cannot be deleted. request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

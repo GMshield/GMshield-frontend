@@ -27,6 +27,7 @@ const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
 const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
 const { ArtifactDeleteAction } = await import('@/components/ArtifactDeleteAction');
+const { ShieldDeleteAction } = await import('@/components/ShieldDeleteAction');
 const { ConversationDeleteAction } = await import('@/components/conversation/ConversationDeleteAction');
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
@@ -877,6 +878,131 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
     await user.click(opener);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir campanha' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Não encontrado.');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
+describe('ShieldDeleteAction (Story 6.1 part B)', () => {
+  const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+  const SHIELD = '0190a0b0-0000-7000-8000-000000000a02';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+  const props = { campaignId: CAMPAIGN, shieldId: SHIELD, name: 'Combate' } as const;
+  const EMPTY = { notes: 0, rolls: 0, last: false } as const;
+
+  it('Excluir is a danger pill that opens the confirmation saying the Shield is empty; Esc or Cancelar closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ShieldDeleteAction {...props} deletion={EMPTY} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog, focus starts on "Cancelar".
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Combate»?' });
+    expect(dialog.textContent).toContain('O escudo está vazio.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir escudo' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ campaign: CAMPAIGN, id: SHIELD }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('names the notes and rolls that go with their counts, one and other, and in words when the preview is missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<ShieldDeleteAction {...props} deletion={{ notes: 1, rolls: 1, last: false }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 nota e 1 rolagem deste escudo. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={{ notes: 3, rolls: 0, last: false }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 3 notas e 0 rolagens deste escudo.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={{ notes: 1, rolls: 12, last: false }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete «Combate»?' });
+    expect(dialog.textContent).toContain('Going with it: 1 note and 12 rolls of this Shield. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete Shield' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={EMPTY} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('The Shield is empty.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as notas e as rolagens deste escudo. Isso não pode ser desfeito.');
+  });
+
+  it('the campaign\'s only Shield: a press opens no dialog and says why in an alert, posting nothing', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container, rerender } = render(<ShieldDeleteAction {...props} deletion={{ ...EMPTY, last: true }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.hasAttribute('aria-haspopup')).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(container.querySelector('dialog')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe('Uma campanha precisa de pelo menos um escudo.');
+    expect(document.activeElement).toBe(opener);
+    await user.click(opener);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(posted).toEqual([]);
+    expect(action).not.toHaveBeenCalled();
+    rerender(<ShieldDeleteAction {...props} deletion={{ ...EMPTY, last: true }} language="en" action={action} />);
+    expect(screen.getByRole('alert').textContent).toBe('A campaign needs at least one Shield.');
+    expectNoStyleAttribute(container);
+  });
+
+  it('"Excluir" ignores clicks while the delete runs, and a refusal (the last Shield, meanwhile) shows as an alert with focus back on it', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<ShieldDeleteAction {...props} deletion={EMPTY} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir escudo' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: 'Uma campanha precisa de pelo menos um escudo.' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Uma campanha precisa de pelo menos um escudo.');
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
     expect(document.activeElement).toBe(opener);
     expect(opener.hasAttribute('disabled')).toBe(false);
   });

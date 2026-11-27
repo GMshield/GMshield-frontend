@@ -413,6 +413,19 @@
       "save": "Save",
       "cancel": "Cancel",
       "stale": "This Shield was changed elsewhere. The field now shows its current name: make your change again and save."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete «{name}»?",
+      "empty": "The Shield is empty.",
+      "consequence": "Going with it: {notes} and {rolls} of this Shield. This cannot be undone.",
+      "unknown": "Going with it: this Shield's notes and rolls. This cannot be undone.",
+      "notesOne": "1 note",
+      "notesOther": "{count} notes",
+      "rollsOne": "1 roll",
+      "rollsOther": "{count} rolls",
+      "last": "A campaign needs at least one Shield.",
+      "confirm": "Delete Shield"
     }
   },
   "characters": {
@@ -501,6 +514,7 @@
         "campaign_name_taken": "This system already has a campaign with this name, perhaps an archived one.",
         "shield_name_invalid": "The name needs {min} to {max} characters.",
         "shield_name_taken": "This campaign already has a Shield with this name.",
+        "last_shield": "A campaign needs at least one Shield.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
         "conversation_name_invalid": "The name needs {min} to {max} characters."
       },
@@ -1048,7 +1062,8 @@
     "artifactRelationRemoved": "Relation removed.",
     "artifactShared": "Sharing saved.",
     "shieldCreated": "Shield «{name}» created.",
-    "shieldRenamed": "Shield renamed to «{name}»."
+    "shieldRenamed": "Shield renamed to «{name}».",
+    "shieldDeleted": "Shield deleted."
   },
   "notifications": {
     "title": "Notifications",

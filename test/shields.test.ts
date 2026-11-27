@@ -25,7 +25,7 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: NewShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/new/page');
 const { default: ShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/page');
 const { default: RenameShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/edit/page');
-const { createShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
+const { createShieldAction, deleteShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 const { startScripted } = await import('./support/servers');
@@ -215,6 +215,121 @@ describe("a Shield's screen and its forms (Story 6.1)", () => {
       expect(solids(renamed)).toEqual([messages.shields.form.save]);
       expect(renamed).not.toMatch(/<[^>]+\sstyle=/);
     }
+  });
+});
+
+describe("a Shield's deletion (Story 6.1 part B)", () => {
+  it('puts a danger "Excluir" last in the header, after "Renomear", with the preview read alongside the Shield', async () => {
+    const server = await useBackend({
+      [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
+      [`GET ${SHIELDS}/${COMBAT_ID}/deletion`]: { status: 200, body: { notes: 0, rolls: 0, last: false } },
+    });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: COMBAT_ID }) }));
+
+      const pill = html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${messages.shields.delete.action}(?:(?!</button>).)*</button>`))?.[0] ?? '';
+      expect(pill).toContain('data-variant="danger"');
+      expect(pill).toContain('aria-haspopup="dialog"');
+      expect(html.indexOf(pill)).toBeGreaterThan(html.indexOf(`>${messages.shields.rename}</a>`));
+      // The dialog is closed until the pill is pressed; its text is there for it.
+      expect(html).toContain(escaped(messages.shields.delete.empty));
+    }
+    expect(calls(server)).toContain(`GET ${SHIELDS}/${COMBAT_ID}/deletion`);
+  });
+
+  it('still offers the dialog when the preview cannot be read, naming what goes in words', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${COMBAT_ID}`]: { status: 200, body: COMBAT },
+      [`GET ${SHIELDS}/${COMBAT_ID}/deletion`]: problem(503, 'server.unavailable'),
+    });
+
+    const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: COMBAT_ID }) }));
+
+    const pill = html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${ptBR.shields.delete.action}(?:(?!</button>).)*</button>`))?.[0] ?? '';
+    expect(pill).toContain('aria-haspopup="dialog"');
+    expect(html).toContain(escaped(ptBR.shields.delete.unknown));
+    expect(html).not.toContain(escaped(ptBR.shields.delete.empty));
+  });
+
+  it('offers no dialog for the campaign\'s only Shield', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${SHIELDS}/${FIRST_ID}/deletion`]: { status: 200, body: { notes: 0, rolls: 0, last: true } },
+    });
+
+    const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+
+    expect(html).toContain(`>${ptBR.shields.delete.action}<`);
+    expect(html).not.toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain('<dialog');
+  });
+
+  it('deletes: the ids go to the backend, then the toast, the layout revalidated, and the campaign\'s Shields tab', async () => {
+    const server = await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: { status: 204 } });
+
+    const digest = await thrownDigest(() => deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: COMBAT_ID })));
+
+    expect(digest).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}\\?tab=shields;`));
+    expect(calls(server)).toEqual([`DELETE ${SHIELDS}/${COMBAT_ID}`]);
+    expect(server.calls[0]!.headers['x-session-token']).toBe(SESSION);
+    expect(steps).toEqual([`flash success ${ptBR.feedback.shieldDeleted}`, 'revalidate / layout']);
+    steps.length = 0;
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    await thrownDigest(() => deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: COMBAT_ID })));
+    expect(steps).toEqual(['flash success Shield deleted.', 'revalidate / layout']);
+  });
+
+  it('the last Shield refused meanwhile comes back as the reason, with no toast; another refusal as its text', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [`DELETE ${SHIELDS}/${FIRST_ID}`]: problem(409, 'request.last_shield'),
+    };
+    await useBackend(routes);
+
+    expect(await deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: FIRST_ID }))).toEqual({
+      error: 'Uma campanha precisa de pelo menos um escudo.',
+    });
+    // The screen's stale preview (not the last) is read again, so the next press says why without a dialog.
+    expect(steps).toEqual(['revalidate / layout']);
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect(await deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: FIRST_ID }))).toEqual({
+      error: 'A campaign needs at least one Shield.',
+    });
+    steps.length = 0;
+    revalidatePath.mockClear();
+    routes[`DELETE ${SHIELDS}/${FIRST_ID}`] = problem(503, 'server.unavailable');
+    expect(await deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: FIRST_ID }))).toEqual({
+      error: en.errors.codes.server.unavailable,
+    });
+    expect(flashed).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('a Shield already gone moves on to the tab with no toast', async () => {
+    await useBackend({ [`DELETE ${SHIELDS}/${COMBAT_ID}`]: problem(404, 'request.not_found') });
+
+    const digest = await thrownDigest(() => deleteShieldAction({ error: null }, form({ campaign: CAMPAIGN, id: COMBAT_ID })));
+
+    expect(digest).toMatch(new RegExp(`^NEXT_REDIRECT;[a-z]+;/campaigns/${CAMPAIGN}\\?tab=shields;`));
+    expect(steps).toEqual(['revalidate / layout']);
+  });
+
+  it('never sends a malformed campaign or Shield to the backend', async () => {
+    const server = await useBackend({});
+    cookieJar['__Host-gmshield-lang'] = 'en';
+
+    const malformed: Record<string, string>[] = [{ campaign: '../me', id: COMBAT_ID }, { campaign: CAMPAIGN, id: 'x' }, { campaign: CAMPAIGN }, {}];
+    for (const fields of malformed) {
+      expect(await deleteShieldAction({ error: null }, form(fields))).toEqual({ error: 'The request is not valid.' });
+    }
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it('keeps the same keys in both languages, the last Shield\'s reason and its error code saying the same', () => {
+    expect(Object.keys(en.shields.delete).sort()).toEqual(Object.keys(ptBR.shields.delete).sort());
+    expect(ptBR.errors.codes.request.last_shield).toBe(ptBR.shields.delete.last);
+    expect(en.errors.codes.request.last_shield).toBe(en.shields.delete.last);
+    expect(ptBR.shields.delete.empty).toBe('O escudo está vazio.');
   });
 });
 

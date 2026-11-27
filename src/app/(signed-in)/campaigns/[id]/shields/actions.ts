@@ -3,18 +3,19 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import type { ShieldDeleteState } from '@/components/ShieldDeleteAction';
 import { errorText, problemFields, translator, type Language } from '@/messages';
 import { currentPreferences } from '@/preferences';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
-import { createShield, getShield, renameShield } from '@/server/shields';
+import { createShield, deleteShield, getShield, renameShield } from '@/server/shields';
 
 import { shieldName } from '../../rows';
 
 import type { ShieldFormState } from './form-state';
 
 /**
- * The Server Actions of a campaign's Shields (Story 6.1): a new Shield and a rename. The backend checks the name; a
+ * The Server Actions of a campaign's Shields (Story 6.1): a new Shield, a rename, and (part B) a deletion. The backend checks the name; a
  * refusal comes back as text under the name (or under the form), never a code, with what was typed kept and no toast. A
  * success says so with a toast (`flash`), renders the shared layout again and opens the Shield's screen. A rename the
  * backend finds stale comes back with the Shield's current stored name (empty for the unnamed first Shield) and version,
@@ -109,4 +110,40 @@ export async function renameShieldAction(previous: ShieldFormState, form: FormDa
     return { values, version: Number(version), error: errorText(current.problem, language), field: null, stale: false };
   }
   return { values, version: Number(version), error: errorText(result.problem, language), field: aboutName(result.problem), stale: false };
+}
+
+/**
+ * "Excluir escudo" confirmed on a Shield's screen (Story 6.1 part B): the campaign's and the Shield's ids. Once the
+ * backend has deleted it, a toast says "Escudo excluído.", the whole signed-in layout is revalidated, and the page goes to
+ * the campaign's Shields tab. A Shield not found (already deleted in another tab) moves the page on the same way, without
+ * the toast. The campaign's only Shield (`request.last_shield`, when another tab deleted the other one meanwhile) comes
+ * back as "Uma campanha precisa de pelo menos um escudo.", with no toast, and the layout revalidated so the screen reads the
+ * preview again (now `last`); another refusal as its text, never a code. A
+ * malformed form never reaches the backend.
+ */
+export async function deleteShieldAction(_previous: ShieldDeleteState, form: FormData): Promise<ShieldDeleteState> {
+  const { language } = await currentPreferences();
+  const t = translator(language);
+  const campaignId = form.get('campaign');
+  const shieldId = form.get('id');
+  if (typeof campaignId !== 'string' || !ID.test(campaignId) || typeof shieldId !== 'string' || !ID.test(shieldId)) {
+    return { error: invalid(language) };
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const result = await deleteShield((await currentSessionToken()) ?? '', campaignId, shieldId);
+  const code = result.ok ? null : problemFields(result.problem).code;
+  // Not found: already deleted (another tab) or no longer the campaign's; the page is dead either way, so it moves on.
+  if (!result.ok && code !== 'request.last_shield' && code !== 'request.not_found') {
+    return { error: errorText(result.problem, language) };
+  }
+  if (code === 'request.last_shield') {
+    // The screen's preview still says it is not the last: render it again, so a press says why without a dialog.
+    revalidatePath('/', 'layout');
+    return { error: t('shields.delete.last') };
+  }
+  if (result.ok) {
+    await flash('success', t('feedback.shieldDeleted'));
+  }
+  revalidatePath('/', 'layout');
+  redirect(`/campaigns/${encodeURIComponent(campaignId)}?tab=shields`);
 }

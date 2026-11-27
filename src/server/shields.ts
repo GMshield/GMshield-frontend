@@ -5,7 +5,7 @@ import type { components, operations } from './backend/generated/public';
 import { listPage, type ListPage } from './list-page';
 
 /**
- * A campaign's Shields through the backend (Story 6.1 part A, public contract 1.55.0): the GM's private space in a
+ * A campaign's Shields through the backend (Story 6.1, public contracts 1.55.0 and, for the deletion, 1.56.0): the GM's private space in a
  * campaign, for notes (6.2) and dice (6.3, 6.4). Every campaign has at least one: the first is unnamed (`name` null)
  * until the GM renames it, and the screens show it as "Escudo do Mestre" / "GM's Shield". The backend takes the owner
  * from the session token alone; another owner's campaign or Shield, a Shield of another campaign and a campaign being
@@ -17,6 +17,9 @@ import { listPage, type ListPage } from './list-page';
  * - {@link createShield}: a new Shield with a typed name, answered as stored (201, version 0).
  * - {@link renameShield}: a rename on the version the GM read (`request.stale_version` when it changed elsewhere).
  *
+ * - {@link shieldDeletion}: what goes with a Shield if it is deleted (`{notes, rolls, last}`; part B, contract 1.56.0).
+ * - {@link deleteShield}: deletes a Shield at once (204); the campaign's only Shield is `request.last_shield`.
+ *
  * A name outside 1 to 120 characters is `request.shield_name_invalid`; a name another Shield of the campaign has
  * (trimmed, whatever the case) is `request.shield_name_taken`.
  */
@@ -25,6 +28,7 @@ export type Shield = Schemas['Shield'];
 export type ShieldPage = Schemas['ShieldPage'];
 export type NewShield = Schemas['NewShield'];
 export type ShieldRename = Schemas['ShieldRename'];
+export type ShieldDeletion = Schemas['ShieldDeletion'];
 export type ShieldQuery = NonNullable<operations['listShields']['parameters']['query']>;
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
@@ -74,6 +78,30 @@ export function renameShield(
     client.PATCH('/api/v1/campaigns/{id}/shields/{shieldId}', {
       params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
       body,
+    }),
+  );
+}
+
+/**
+ * What goes with one Shield of one of the account's campaigns if it is deleted: its notes and stored rolls (0 until they
+ * exist), and whether it is the campaign's only Shield (`last`); `request.not_found` for any other id.
+ */
+export function shieldDeletion(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<ShieldDeletion>> {
+  return call('shields.deletion', options, (client) =>
+    client.GET('/api/v1/campaigns/{id}/shields/{shieldId}/deletion', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
+    }),
+  );
+}
+
+/**
+ * Deletes one Shield of one of the account's campaigns at once (204, no body); `request.last_shield` for the campaign's
+ * only Shield, `request.not_found` for any other id, one already deleted included.
+ */
+export function deleteShield(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('shields.delete', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{id}/shields/{shieldId}', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
     }),
   );
 }
