@@ -600,9 +600,9 @@ describe('delete a conversation (Story 3.10 part B)', () => {
         body: {
           questions: 2,
           artifacts: [
-            // Story 5.5 part A: the first overrides a record.
-            { id: ARTIFACT_A, name: 'Cripta', recordType: 'encounter', overrides: true },
-            { id: ARTIFACT_B, name: 'Golpe', recordType: 'talento', overrides: false },
+            // Story 5.5 part A: the first overrides a record; Story 5.6 part B: it is shared too.
+            { id: ARTIFACT_A, name: 'Cripta', recordType: 'encounter', overrides: true, shared: true },
+            { id: ARTIFACT_B, name: 'Golpe', recordType: 'talento', overrides: false, shared: false },
           ],
         },
       },
@@ -616,14 +616,15 @@ describe('delete a conversation (Story 3.10 part B)', () => {
     const page = await RulesConversationPage({ params: params(RULES_ID) });
 
     expect((page as { props: { deleteArtifacts?: unknown } }).props.deleteArtifacts).toEqual([
-      { id: ARTIFACT_A, name: 'Cripta', typeLabel: ptBR.systems.recordTypes.encounter, overrides: true },
-      { id: ARTIFACT_B, name: 'Golpe', typeLabel: 'Talento', overrides: false },
+      { id: ARTIFACT_A, name: 'Cripta', typeLabel: ptBR.systems.recordTypes.encounter, overrides: true, shared: true },
+      { id: ARTIFACT_B, name: 'Golpe', typeLabel: 'Talento', overrides: false, shared: false },
     ]);
     // The dialog is rendered closed with its list, nothing ticked, "Manter todos" pressed.
     const html = inShell(page);
     expect(html).toContain(ptBR.conversations.delete.artifactsLegend);
     expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>Manter todos<\/button>/);
-    expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*aria-label="Cripta, Encontro, substitui um registro"/);
+    expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*aria-label="Cripta, Encontro, substitui um registro, compartilhado"/);
+    expect(html).toContain(`>${ptBR.conversations.delete.artifactShared}</span>`);
     expect(html).not.toMatch(/<input[^>]*type="checkbox"[^>]*checked/);
   });
 

@@ -132,11 +132,28 @@ export const ARTIFACT: {
   /** Story 5.4 part A: the conversation a saved draft came from (null: written by hand), and its references. */
   conversationId: string | null;
   references: unknown[];
+  /** Story 5.6 part A: the campaigns it is shared with, and (read in another campaign) the one it is shared from. */
+  sharedWith: { campaignId: string; name: string; archived: boolean }[];
+  sharedFrom: { campaignId: string; name: string } | null;
 };
+/** Story 5.6 part A: "Mesa de quinta", a sharing's answer, and the artifact as another campaign reads it. */
+export const SECOND_CAMPAIGN_ID: string;
+export const SHARED_ARTIFACT: typeof ARTIFACT;
+export const SHARED_FROM_ARTIFACT: typeof ARTIFACT;
 /** Story 5.4 part A: the stored draft saved as an artifact of its conversation. */
 export const SAVED_DRAFT: typeof ARTIFACT;
+/** Story 5.6 part B: the starter campaign's shared row ("Escudo de Lyra" of "Mesa de quinta") and its read there. */
+export const SHARED_INTO_ID: string;
+export const SHARED_INTO_ARTIFACT: typeof ARTIFACT;
 export const ARTIFACT_PAGE: {
-  items: { id: string; recordType: string; name: string; version: number; createdAt: string }[];
+  items: {
+    id: string;
+    recordType: string;
+    name: string;
+    version: number;
+    createdAt: string;
+    sharedFrom: { campaignId: string; name: string } | null;
+  }[];
   total: number;
   types: { key: string; count: number }[];
 };

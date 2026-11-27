@@ -21,7 +21,11 @@ export type ArtifactDeleteActionProps = {
   readonly from: string | null;
   readonly language: Language;
   readonly action: (previous: ArtifactDeleteState, form: FormData) => Promise<ArtifactDeleteState>;
+  /** Story 5.6 part B: the names of the campaigns the artifact is shared with, in its `sharedWith` order; none: absent. */
+  readonly sharedWith?: readonly string[];
 };
+
+const NOT_SHARED: readonly string[] = [];
 
 /**
  * "Excluir" on an artifact's page (Story 5.2 part B), as a material's page has it: a danger pill in the header that
@@ -30,8 +34,11 @@ export type ArtifactDeleteActionProps = {
  * opened from to the Server Action, which deletes it and opens the artifacts tab (or "Personagens"); a refusal shows as
  * an alert under the pill. "Cancelar" or Esc closes the dialog, and focus goes back to "Excluir", which stays focusable
  * (`aria-disabled`, its clicks ignored) while the delete runs, so focus is still there when a refusal comes back.
+ *
+ * Story 5.6 part B: when the artifact is shared, the consequence also says "Também sai de: {A} e {B}." before it says it
+ * cannot be undone, naming the campaigns in `sharedWith` order as a list in the interface's language.
  */
-export function ArtifactDeleteAction({ campaignId, artifactId, name, from, language, action }: ArtifactDeleteActionProps) {
+export function ArtifactDeleteAction({ campaignId, artifactId, name, from, language, action, sharedWith = NOT_SHARED }: ArtifactDeleteActionProps) {
   const t = translator(language);
   const [state, formAction, pending] = useActionState(action, INITIAL);
   const [confirming, setConfirming] = useState(false);
@@ -70,7 +77,13 @@ export function ArtifactDeleteAction({ campaignId, artifactId, name, from, langu
       <ConfirmationDialog
         open={confirming}
         title={t('artifacts.delete.title', { name })}
-        consequence={t('artifacts.delete.consequence')}
+        consequence={
+          sharedWith.length === 0
+            ? t('artifacts.delete.consequence')
+            : t('artifacts.delete.consequenceShared', {
+                campaigns: new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(sharedWith),
+              })
+        }
         confirmLabel={t('artifacts.delete.confirm')}
         cancelLabel={t('artifacts.delete.cancel')}
         language={language}

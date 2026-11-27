@@ -27,6 +27,11 @@ export function campaignListRow(campaign: CampaignSummary, t: Translate): ListRo
  * the campaign's system's record types, which name an approved one); it opens the artifact's page under `campaignPath`.
  * With `types` null the type is left out (a list of one type, such as "Personagens"); `from` names the page the row's
  * artifact page leads back to (`characters`: "Personagens").
+ *
+ * Story 5.6 part B: an artifact of another campaign shared into this one (`sharedFrom`, contract 1.53.0) is marked in
+ * its detail, "{type} · Compartilhado de {campaign}" (the mark alone when the type is left out), so the mark is read as
+ * part of the row's link. It opens the same address, where the backend answers the artifact read-only (Story 5.6 part
+ * A). A row with no `sharedFrom` (null) is the campaign's own.
  */
 export function artifactRow(
   artifact: ArtifactSummary,
@@ -35,10 +40,12 @@ export function artifactRow(
   t: Translate,
   from?: 'characters',
 ): ListRow {
+  const type = types === null ? null : typeLabel(artifact.recordType, types, t);
+  const shared = artifact.sharedFrom ? t('artifacts.share.listedFrom', { campaign: artifact.sharedFrom.name }) : null;
   return {
     id: artifact.id,
     label: artifact.name,
-    detail: types === null ? null : typeLabel(artifact.recordType, types, t),
+    detail: shared === null ? type : type === null ? shared : `${type} · ${shared}`,
     href: `${campaignPath}/artifacts/${encodeURIComponent(artifact.id)}${from === undefined ? '' : `?from=${from}`}`,
     state: null,
   };

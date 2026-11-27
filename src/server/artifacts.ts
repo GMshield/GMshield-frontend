@@ -27,6 +27,11 @@ import { listPage, type ListPage } from './list-page';
  *   another artifact of the campaign, {@link unrelate} removes a relation from either side (safe to repeat), and
  *   {@link relationTargets} lists the records it can be related to, each with its tier. A record that is no target is
  *   `artifact.relation_target`; a 51st relation is `artifact.relations_full`. A relation changes no answer.
+ * - Story 5.6 part A (contract 1.52.0): {@link share} sets the whole set of the account's other campaigns of the
+ *   artifact's system it is shared with (empty unshares it from all); a campaign that is no target is
+ *   `artifact.share_target`. Every artifact carries `sharedWith` (by name) and `sharedFrom`: {@link getArtifact} also
+ *   answers, read-only, an artifact shared into the campaign asked, `sharedFrom` naming its own campaign; every other
+ *   call here answers it `request.not_found` there.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -46,6 +51,8 @@ export type OverrideTargetPage = Schemas['OverrideTargetPage'];
 export type ArtifactRelated = Schemas['ArtifactRelated'];
 export type RelationTarget = Schemas['RelationTarget'];
 export type RelationTargetPage = Schemas['RelationTargetPage'];
+export type ArtifactSharedWith = Schemas['ArtifactSharedWith'];
+export type ArtifactSharedFrom = Schemas['ArtifactSharedFrom'];
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -255,6 +262,26 @@ export function relate(
     client.POST('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/relations', {
       params: { header: session(sessionToken), path: { campaignId, artifactId } },
       body: { recordId },
+    }),
+  );
+}
+
+/**
+ * The GM shares one of the account's campaigns' artifacts with exactly the campaigns `campaignIds` (Story 5.6 part A):
+ * the account's other campaigns of its system, the whole set (empty unshares it from every campaign). The artifact with
+ * its `sharedWith`; `artifact.share_target` when any id is no target, and nothing is stored then.
+ */
+export function share(
+  sessionToken: string,
+  campaignId: string,
+  artifactId: string,
+  campaignIds: readonly string[],
+  options: CallOptions = {},
+): Promise<Result<Artifact>> {
+  return call('artifacts.share', options, (client) =>
+    client.PUT('/api/v1/campaigns/{campaignId}/artifacts/{artifactId}/sharing', {
+      params: { header: session(sessionToken), path: { campaignId, artifactId } },
+      body: { campaignIds: [...campaignIds] },
     }),
   );
 }

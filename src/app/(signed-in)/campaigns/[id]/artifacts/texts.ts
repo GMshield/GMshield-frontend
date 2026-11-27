@@ -2,6 +2,7 @@ import { correctionTexts } from '@/app/(signed-in)/records/correction';
 import type { ArtifactEditorTexts } from '@/components/ArtifactEditor';
 import type { ArtifactOverrideTexts } from '@/components/artifacts/ArtifactOverride';
 import type { ArtifactRelationsTexts } from '@/components/artifacts/ArtifactRelations';
+import type { ArtifactSharingTexts } from '@/components/artifacts/ArtifactSharing';
 import type { ArtifactFormTexts } from '@/components/ArtifactForm';
 import type { ArtifactVersionsTexts } from '@/components/ArtifactVersions';
 import type { EditorTypeOption } from '@/components/RecordFieldsEditor';
@@ -131,6 +132,19 @@ export function artifactRelationsTexts(t: Translate): ArtifactRelationsTexts {
     confirm: t('artifacts.relations.confirm'),
     cancel: t('artifacts.relations.cancel'),
     pick: t('artifacts.relations.pick'),
+  };
+}
+
+/** Every text of an artifact's "Compartilhamento" (Story 5.6 part A), in the page's language. */
+export function artifactSharingTexts(t: Translate): ArtifactSharingTexts {
+  return {
+    heading: t('artifacts.share.title'),
+    intro: t('artifacts.share.intro'),
+    legend: t('artifacts.share.legend'),
+    none: t('artifacts.share.none'),
+    newCampaign: t('artifacts.share.newCampaign'),
+    archived: t('artifacts.share.archived'),
+    save: t('artifacts.share.save'),
   };
 }
 

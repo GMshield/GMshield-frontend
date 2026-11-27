@@ -172,6 +172,33 @@ describe("a campaign's artifacts tab (Story 5.1)", () => {
     expect(calls(server).filter((call) => call.includes('/artifacts'))).toHaveLength(2);
   });
 
+  it('Story 5.6 part B: an artifact shared into the campaign is a row among its own, marked with its campaign in its link, and opens its page here, in both languages', async () => {
+    const SHIELD = '0190a0b0-0000-7000-8000-000000000903';
+    const FROM = '0190a0b0-0000-7000-8000-000000000040';
+    const shared = { id: SHIELD, recordType: 'item', name: 'Escudo de Lyra', version: 1, createdAt: '2026-11-26T12:03:00Z', sharedFrom: { campaignId: FROM, name: 'A Coroa Partida' } };
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10`]: {
+        status: 200,
+        body: { items: [shared, ...ROWS.map((row) => ({ ...row, sharedFrom: null }))], total: 4, types: [...IN_USE, { key: 'item', count: 1 }] },
+      },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts' }) }));
+      const mark = messages.artifacts.share.listedFrom.replace('{campaign}', 'A Coroa Partida');
+      // The row opens the artifact's page under this campaign (part A's read-only page), and its link holds the mark.
+      const link = html.slice(html.indexOf(`href="/campaigns/${CAMPAIGN}/artifacts/${SHIELD}"`));
+      expect(link.slice(0, link.indexOf('</a>'))).toContain(`${messages.systems.recordTypes.item} · ${mark}`);
+      expect(html.indexOf('Escudo de Lyra')).toBeLessThan(html.indexOf('Lyra<'));
+      // An own row has no mark.
+      const own = html.slice(html.indexOf(`href="/campaigns/${CAMPAIGN}/artifacts/${LYRA}"`));
+      expect(own.slice(0, own.indexOf('</a>'))).not.toContain(mark);
+      expect(html.split(mark)).toHaveLength(2);
+    }
+    expect(ptBR.artifacts.share.listedFrom).toBe('Compartilhado de {campaign}');
+  });
+
   it('a chip narrows the list to its type, and the page links keep it', async () => {
     const server = await useBackend({
       ...BASE,
@@ -484,6 +511,125 @@ describe("an artifact's relations (Story 5.5 part B)", () => {
   });
 });
 
+describe("an artifact's sharing (Story 5.6 part A)", () => {
+  const SUNDAY = '0190a0b0-0000-7000-8000-000000000042';
+  const FRIDAY = '0190a0b0-0000-7000-8000-000000000044';
+  const OLD = '0190a0b0-0000-7000-8000-000000000043';
+  const CROWN = '0190a0b0-0000-7000-8000-000000000045';
+  const row = (id: string, name: string) => ({ id, name, system: { id: SYSTEM, name: 'D&D', edition: null }, archived: false });
+  /** The system's campaigns in use, newest first, as the backend lists them: the artifact's own among them. */
+  const IN_USE = `GET /api/v1/campaigns?system=${SYSTEM}&limit=50`;
+  const CAMPAIGNS = { status: 200, body: { items: [row(SUNDAY, 'Mesa de domingo'), row(CAMPAIGN, 'Mesa de quinta'), row(FRIDAY, 'Mesa de sexta')], total: 3 } };
+  const SHARED = {
+    ...ARTIFACT,
+    overrides: null,
+    related: [],
+    sharedWith: [
+      { campaignId: OLD, name: 'Mesa antiga', archived: true },
+      { campaignId: FRIDAY, name: 'Mesa de sexta', archived: false },
+    ],
+    sharedFrom: null,
+  };
+  const heading = (html: string, text: string) => html.indexOf(`>${text}</h2>`);
+  const boxes = (html: string) => [...html.matchAll(/<input[^>]*type="checkbox"[^>]*>/g)].map((match) => match[0]);
+
+  it('"Compartilhamento" sits after "Relacionados" and before "Fontes": the other campaigns by name, then the archived ones shared', async () => {
+    const server = await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: SHARED }, [VERSIONS_ROUTE]: ONE_VERSION, [IN_USE]: CAMPAIGNS });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+      const sharing = heading(html, messages.artifacts.share.title);
+      expect(sharing).toBeGreaterThan(heading(html, messages.artifacts.relations.title));
+      expect(heading(html, messages.artifacts.page.sources)).toBeGreaterThan(sharing);
+      expect(html).toContain(messages.artifacts.share.intro);
+      // Its own campaign is no row; the others in use by name, then the archived one it is shared with, marked.
+      const rows = boxes(html);
+      expect(rows.map((box) => /value="([^"]+)"/.exec(box)?.[1])).toEqual([SUNDAY, FRIDAY, OLD]);
+      expect(rows.map((box) => box.includes('checked'))).toEqual([false, true, true]);
+      // In the section (Story 5.6 part B: the header's delete dialog names the shared ones too).
+      const section = html.slice(sharing);
+      expect(section.indexOf('Mesa de domingo')).toBeLessThan(section.indexOf('Mesa de sexta'));
+      expect(html).toContain(`>${messages.artifacts.share.archived}</span>`);
+      expect(html).toMatch(new RegExp(`<button[^>]*>${messages.artifacts.share.save}</button>`));
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    expect(calls(server)).toContain(IN_USE);
+  });
+
+  it('on an earlier version too; with no other campaign, one sentence and "Nova campanha" on the system', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}/${SWORD}/versions/1`]: { status: 200, body: { ...SHARED, sharedWith: [], version: 1, currentVersion: 2 } },
+      [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: { ...SHARED, sharedWith: [], version: 2, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+      [IN_USE]: { status: 200, body: { items: [row(CAMPAIGN, 'Mesa de quinta')], total: 1 } },
+    });
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+    expect(html).toContain(`>${ptBR.artifacts.share.title}</h2>`);
+    expect(html).toContain(ptBR.artifacts.share.none);
+    expect(linkTo(html, amp(`/campaigns/new?system=${SYSTEM}`))).not.toBe('');
+    expect(boxes(html)).toEqual([]);
+    expect(html).not.toMatch(new RegExp(`<button[^>]*>${ptBR.artifacts.share.save}</button>`));
+  });
+
+  it('a backend before contract 1.52.0 (no sharedWith, no sharedFrom) shows the section with nothing ticked', async () => {
+    expect(Object.hasOwn(ARTIFACT, 'sharedWith')).toBe(false);
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}/${SWORD}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION, [IN_USE]: CAMPAIGNS });
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+    expect(boxes(html)).toHaveLength(2);
+    expect(boxes(html).some((box) => box.includes('checked'))).toBe(false);
+    // The rest of the page as before: the editor, "Excluir" and "Versões".
+    expect(html).toMatch(new RegExp(`<button[^>]*>${ptBR.artifacts.edit.open}</button>`));
+    expect(html).toContain(`>${ptBR.artifacts.versions.title}</h2>`);
+  });
+
+  it('shared into this campaign, it reads read-only: its name, type, fields, content and "Fontes", naming the campaign it is shared from', async () => {
+    const IN_B = `/api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}`;
+    const FROM = { ...ARTIFACT, campaignId: CROWN, overrides: null, related: [], sharedWith: [], sharedFrom: { campaignId: CROWN, name: 'A Coroa Partida' } };
+    const server = await useBackend({ ...BASE, [`GET ${IN_B}`]: { status: 200, body: FROM } });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
+
+      expect(html).toMatch(/<h1[^>]*>Espada de Kael<\/h1>/);
+      expect(html).toContain(messages.systems.recordTypes.item);
+      expect(html).toContain('1d8 cortante');
+      expect(html).toContain('Forjada nas montanhas do norte.');
+      expect(html).toContain(`>${messages.artifacts.page.sources}</h2>`);
+      expect(html).toContain(messages.artifacts.share.sharedFrom.replace('{campaign}', 'A Coroa Partida'));
+      const own = linkTo(html, `/campaigns/${CROWN}/artifacts/${SWORD}`);
+      expect(own).not.toBe('');
+      expect(html).toContain(`>${messages.artifacts.share.openIn.replace('{campaign}', 'A Coroa Partida')}</a>`);
+      // The way back stays in this campaign.
+      expect(linkTo(html, `/campaigns/${CAMPAIGN}?tab=artifacts`)).not.toBe('');
+      // Nothing that changes it: no editor, "Excluir", "Versões", override, relations or sharing.
+      expect(html).not.toMatch(new RegExp(`<button[^>]*>${messages.artifacts.edit.open}</button>`));
+      expect(html).not.toContain(`>${messages.artifacts.delete.action}<`);
+      for (const title of [messages.artifacts.versions.title, messages.artifacts.override.title, messages.artifacts.relations.title, messages.artifacts.share.title]) {
+        expect(html).not.toContain(`>${title}</h2>`);
+      }
+      expect(boxes(html)).toEqual([]);
+    }
+    // No route of its own campaign is called: no versions, no campaigns list, nothing under the other campaign.
+    expect(calls(server).filter((call) => call.includes('/versions') || call.includes('/api/v1/campaigns?') || call.includes(CROWN))).toEqual([]);
+  });
+
+  it('a cited version shared into this campaign says which it is, with a link to the newest here', async () => {
+    const IN_B = `/api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}`;
+    const FROM = { ...ARTIFACT, campaignId: CROWN, version: 1, currentVersion: 2, overrides: null, related: [], sharedWith: [], sharedFrom: { campaignId: CROWN, name: 'A Coroa Partida' } };
+    await useBackend({ ...BASE, [`GET ${IN_B}/versions/1`]: { status: 200, body: FROM } });
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+    expect(html).toContain(ptBR.artifacts.page.citedVersion.replace('{version}', '1'));
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/${SWORD}`)).not.toBe('');
+    expect(html).toContain(ptBR.artifacts.share.sharedFrom.replace('{campaign}', 'A Coroa Partida'));
+  });
+});
+
 describe("an artifact's versions (Story 5.2)", () => {
   const ONE = `${ARTIFACTS}/${SWORD}`;
   const V3 = { ...ARTIFACT, recordType: 'talento', name: 'Espada Rubra', content: 'Reforjada no vulcão.', version: 3, currentVersion: 3 };
@@ -633,11 +779,43 @@ describe("an artifact's delete (Story 5.2 part B)", () => {
       action: 'Excluir',
       title: 'Excluir «{name}»?',
       consequence: 'Todas as versões deste artefato vão junto. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.',
+      consequenceShared:
+        'Todas as versões deste artefato vão junto. Também sai de: {campaigns}. As respostas que o citaram mostram «fonte removida». Isso não pode ser desfeito.',
       confirm: 'Excluir artefato',
       cancel: 'Cancelar',
     });
     expect(ptBR.feedback.artifactDeleted).toBe('Artefato «{name}» excluído.');
     expect(Object.keys(en.artifacts.delete)).toEqual(Object.keys(ptBR.artifacts.delete));
+  });
+
+  it('Story 5.6 part B: a shared artifact\'s "Excluir" names the campaigns it also leaves, in its sharedWith order, on every version shown', async () => {
+    const shares = [
+      { campaignId: '0190a0b0-0000-7000-8000-000000000041', name: 'Mesa de domingo', archived: false },
+      { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'Mesa de sábado', archived: true },
+    ];
+    const server = await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, version: 2, currentVersion: 2, sharedWith: shares, sharedFrom: null } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2, sharedWith: shares, sharedFrom: null } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+      [`GET /api/v1/campaigns?system=${SYSTEM}&limit=50`]: { status: 200, body: { items: [THURSDAY], total: 1 } },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      for (const searchParams of [query(), query({ version: '1' })]) {
+        const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams }));
+        const list = language === 'pt-BR' ? 'Mesa de domingo e Mesa de sábado' : 'Mesa de domingo and Mesa de sábado';
+        expect(html).toContain(messages.artifacts.delete.consequenceShared.replace('{campaigns}', list));
+      }
+    }
+    expect(calls(server)).toContain(`GET ${ONE}`);
+    // Not shared: the consequence alone.
+    await backend?.close();
+    await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, sharedWith: [], sharedFrom: null } }, [VERSIONS_ROUTE]: ONE_VERSION });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+    expect(html).toContain(ptBR.artifacts.delete.consequence);
+    expect(html).not.toContain('Também sai de');
   });
 
   it('on an earlier version\'s page, "Excluir" names the artifact by its current name, not the version\'s', async () => {
@@ -687,6 +865,34 @@ describe('"Personagens" (Story 5.1)', () => {
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
     expect(calls(server)).toContain(`GET ${ARTIFACTS}?limit=10&recordType=character_sheet`);
+  });
+
+  it('Story 5.6 part B: a character sheet shared into the current campaign is listed with its mark and keeps from=characters', async () => {
+    const SHEET = '0190a0b0-0000-7000-8000-000000000903';
+    const shared = {
+      id: SHEET,
+      recordType: 'character_sheet',
+      name: 'Thorin',
+      version: 1,
+      createdAt: '2026-11-26T12:03:00Z',
+      sharedFrom: { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'A Coroa Partida' },
+    };
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10&recordType=character_sheet`]: {
+        status: 200,
+        body: { items: [shared, ...ROWS.slice(0, 2).map((row) => ({ ...row, sharedFrom: null }))], total: 3, types: IN_USE },
+      },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CharactersPage({ searchParams: query() }));
+      const row = html.slice(html.indexOf(`href="/campaigns/${CAMPAIGN}/artifacts/${SHEET}?from=characters"`));
+      // No type in "Personagens": the mark alone is the row's detail, inside its link.
+      expect(row.slice(0, row.indexOf('</a>'))).toContain(`>${messages.artifacts.share.listedFrom.replace('{campaign}', 'A Coroa Partida')}<`);
+      const own = html.slice(html.indexOf(`href="/campaigns/${CAMPAIGN}/artifacts/${KAEL}?from=characters"`));
+      expect(own.slice(0, own.indexOf('</a>'))).not.toContain('A Coroa Partida');
+    }
   });
 
   it('no sheet: one sentence with "Nova ficha"; no current campaign: one sentence linking to the campaigns', async () => {
