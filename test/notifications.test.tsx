@@ -305,7 +305,7 @@ describe('a list\'s display options, thumbnails and preview', () => {
     await user.click(within(options).getByRole('radio', { name: 'Compacto' }));
     expect(list.dataset.density).toBe('compact');
     // The other lists keep what the cookie held for them.
-    expect(cookies[VIEW_COOKIE]).toBe('files:grid:compact:1:10|campaigns:grid:compact:1:10|systems:list:comfortable:1:10|conversations:list:comfortable:1:10|recordTypes:list:comfortable:1:10|records:list:comfortable:1:10|terms:list:comfortable:1:10|artifacts:list:comfortable:1:10');
+    expect(cookies[VIEW_COOKIE]).toBe('files:grid:compact:1:10|campaigns:grid:compact:1:10|systems:list:comfortable:1:10|conversations:list:comfortable:1:10|recordTypes:list:comfortable:1:10|records:list:comfortable:1:10|terms:list:comfortable:1:10|artifacts:list:comfortable:1:10|shields:list:comfortable:1:10');
     expect(written.at(-1)).toMatch(/; Path=\/; Max-Age=31536000; Secure; SameSite=Lax$/);
 
     // Thumbnails off: the picture gives way to the list's icon, and the choice is kept.

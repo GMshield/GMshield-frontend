@@ -18,6 +18,11 @@ import {
   NOTES_VERSION,
   RECORD,
   CORRECTED_RECORD,
+  COMBAT_SHIELD,
+  FIRST_SHIELD,
+  RENAMED_SHIELD,
+  SHIELD_DELETION,
+  SHIELD_PAGE,
   RECORD_ID,
   RECORD_PAGE,
   REFERENCE_TEXT_PAGE,
@@ -525,6 +530,38 @@ describe('stand-in backend', () => {
     for (const path of [`/api/v1/systems/${system}/records/${RECORD_ID}`, `/api/v1/campaigns/${campaign}/records/${RECORD_ID}`]) {
       expect(answer(contract, 'DELETE', path, 't')).toMatchObject({ status: 204, type: null, body: null });
     }
+  });
+
+  it('answers the starter campaign\'s Shields, a new one, one Shield and a rename (Story 6.1)', () => {
+    const shields = '/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/shields';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', shields, 't')).toMatchObject({ status: 200, body: SHIELD_PAGE });
+    expect(answer(contract, 'POST', shields, 't')).toMatchObject({ status: 201, body: COMBAT_SHIELD });
+    expect(answer(contract, 'GET', `${shields}/${FIRST_SHIELD.id}`, 't')).toMatchObject({ status: 200, body: FIRST_SHIELD });
+    expect(answer(contract, 'PATCH', `${shields}/${FIRST_SHIELD.id}`, 't')).toMatchObject({ status: 200, body: RENAMED_SHIELD });
+    // The first one is unnamed, as every campaign's first Shield is until it is renamed.
+    expect(SHIELD_PAGE.items.map((shield) => shield.name)).toEqual([null, 'Combate']);
+    for (const key of schemas.ShieldPage!.required ?? []) {
+      expect(SHIELD_PAGE, key).toHaveProperty(key);
+    }
+    for (const shield of [FIRST_SHIELD, COMBAT_SHIELD, RENAMED_SHIELD]) {
+      for (const key of schemas.Shield!.required ?? []) {
+        expect(shield, key).toHaveProperty(key);
+      }
+    }
+  });
+
+  it('answers a Shield\'s deletion preview and its deletion with 204 and no body (Story 6.1 part B)', () => {
+    const shield = `/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/shields/${COMBAT_SHIELD.id}`;
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', `${shield}/deletion`, 't')).toMatchObject({ status: 200, body: SHIELD_DELETION });
+    expect(schemas.ShieldDeletion!.required).toEqual(['last', 'notes', 'rolls']);
+    for (const key of schemas.ShieldDeletion!.required ?? []) {
+      expect(SHIELD_DELETION, key).toHaveProperty(key);
+    }
+    expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 204, type: null, body: null });
   });
 
   it('answers an artifact\'s edit, its versions, one version and a restore (Story 5.2)', () => {

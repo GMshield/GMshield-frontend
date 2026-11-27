@@ -1145,6 +1145,35 @@ they sit in `src/`.
   - Messages `conversation.save.*`, `artifacts.page.conversation`, `errors.codes.conversation.turn_not_saveable` and
     `turn_saved`. The stand-in answers the save (a saved draft artifact) and both decline routes, its stored draft is
     offered with its proposal; the demo backend keeps each draft's save state.
+- **Shields in a campaign (Story 6.1 part A).** Public contract 1.55.0 (the minimum backend contract too: the Shield
+  routes are new; deploy the backend, then this frontend). `src/server/shields.ts` calls them: `listShields` (oldest
+  first) with `shieldsPage`, `getShield`, `createShield`, `renameShield`.
+  - A campaign's page gains the tab "Escudos" (`?tab=shields`, after "Escopo"): "Novo escudo" (a solid pill), then the
+    Shields in `ItemList` (`viewKey="shields"`, a new list of the view cookie, paged with `?page=`), each opening its
+    screen. The first Shield is unnamed (`name: null`) until renamed, and is shown as "Escudo do Mestre" / "GM's Shield"
+    (`shieldName` in `campaigns/rows.ts`).
+  - Three routes: `/campaigns/[id]/shields/new`, `/campaigns/[id]/shields/[shieldId]` (`PageHeader` back to the tab,
+    "Renomear", and the `EmptyState` "Este escudo ainda não tem notas.") and `/campaigns/[id]/shields/[shieldId]/edit`.
+    Both forms are `ShieldForm` (a bordered name field; the rename starts from the stored name, the default name only
+    as the placeholder). `createShieldAction` and `renameShieldAction` (`campaigns/[id]/shields/actions.ts`) `flash()`,
+    `revalidatePath('/', 'layout')` and open the Shield's screen; `request.shield_name_invalid` and
+    `request.shield_name_taken` show under the name, and a stale rename brings the current name and version back.
+  - Messages `campaigns.page.shields`, `shields.*`, `feedback.shieldCreated` and `shieldRenamed`. The stand-in answers
+    the four routes (an unnamed first Shield and "Combate"); the demo backend keeps each campaign's Shields.
+- **Delete a Shield (Story 6.1 part B).** Public contract 1.56.0 (the minimum backend contract too). `shieldDeletion`
+  reads what goes (`{notes, rolls, last}`; the counts are 0 until notes and rolls exist) and `deleteShield` deletes at once
+  (204).
+  - The Shield's screen reads the preview with the Shield and puts `ShieldDeleteAction`, a danger "Excluir", last in
+    the header after "Renomear". For the campaign's only Shield (`last`) a press opens no dialog and shows "Uma campanha
+    precisa de pelo menos um escudo." under the pill (`role="alert"`). Otherwise it opens `ConfirmationDialog`, which
+    says "O escudo está vazio." when both counts are 0, else "Vão junto: {n} notas e {n} rolagens deste escudo." (One and
+    Other forms), or names them in words when the preview could not be read.
+  - `deleteShieldAction` (`campaigns/[id]/shields/actions.ts`) `flash()`es "Escudo excluído.", revalidates the layout
+    and opens the campaign's `?tab=shields`. A `request.last_shield` (another tab deleted the other Shield meanwhile)
+    comes back as the same inline reason with no toast; a `request.not_found` (already gone) moves to the tab with no
+    toast. No delete control in the tab's rows.
+  - Messages `shields.delete.*`, `feedback.shieldDeleted` and `errors.codes.request.last_shield`. The stand-in answers
+    the preview (no notes, no rolls, not the last) and the deletion (204); the demo backend refuses the last Shield.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

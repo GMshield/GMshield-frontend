@@ -218,6 +218,7 @@
       "sections": "Seções da campanha",
       "overview": "Visão geral",
       "scope": "Escopo",
+      "shields": "Escudos",
       "conversations": "Conversas",
       "artifacts": "Artefatos",
       "name": "Nome",
@@ -398,6 +399,35 @@
       "tickedOther": "{count} de {total} marcados"
     }
   },
+  "shields": {
+    "defaultName": "Escudo do Mestre",
+    "list": "Escudos desta campanha",
+    "new": "Novo escudo",
+    "rename": "Renomear",
+    "empty": "Este escudo ainda não tem notas.",
+    "form": {
+      "newTitle": "Novo escudo",
+      "renameTitle": "Renomear escudo",
+      "name": "Nome",
+      "create": "Criar escudo",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "Este escudo foi alterado em outro lugar. O campo agora mostra o nome atual: faça sua alteração de novo e salve."
+    },
+    "delete": {
+      "action": "Excluir",
+      "title": "Excluir «{name}»?",
+      "empty": "O escudo está vazio.",
+      "consequence": "Vão junto: {notes} e {rolls} deste escudo. Isso não pode ser desfeito.",
+      "unknown": "Vão junto as notas e as rolagens deste escudo. Isso não pode ser desfeito.",
+      "notesOne": "1 nota",
+      "notesOther": "{count} notas",
+      "rollsOne": "1 rolagem",
+      "rollsOther": "{count} rolagens",
+      "last": "Uma campanha precisa de pelo menos um escudo.",
+      "confirm": "Excluir escudo"
+    }
+  },
   "characters": {
     "list": "Fichas de personagem de {campaign}",
     "campaign": "Campanha {name}",
@@ -482,6 +512,9 @@
         "system_name_taken": "Você já tem um sistema com este nome e esta edição.",
         "campaign_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "campaign_name_taken": "Este sistema já tem uma campanha com este nome, talvez arquivada.",
+        "shield_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
+        "shield_name_taken": "Esta campanha já tem um escudo com este nome.",
+        "last_shield": "Uma campanha precisa de pelo menos um escudo.",
         "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
         "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres."
       },
@@ -1027,7 +1060,10 @@
     "artifactOverrideRemoved": "Substituição removida.",
     "artifactRelationSet": "Relação salva.",
     "artifactRelationRemoved": "Relação removida.",
-    "artifactShared": "Compartilhamento salvo."
+    "artifactShared": "Compartilhamento salvo.",
+    "shieldCreated": "Escudo «{name}» criado.",
+    "shieldRenamed": "Escudo renomeado para «{name}».",
+    "shieldDeleted": "Escudo excluído."
   },
   "notifications": {
     "title": "Notificações",

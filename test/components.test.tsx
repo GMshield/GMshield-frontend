@@ -27,6 +27,7 @@ const { MaterialActions } = await import('@/components/MaterialActions');
 const { SystemActions } = await import('@/components/SystemActions');
 const { CampaignDeleteAction } = await import('@/components/CampaignDeleteAction');
 const { ArtifactDeleteAction } = await import('@/components/ArtifactDeleteAction');
+const { ShieldDeleteAction } = await import('@/components/ShieldDeleteAction');
 const { ConversationDeleteAction } = await import('@/components/conversation/ConversationDeleteAction');
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
@@ -882,6 +883,131 @@ describe('CampaignDeleteAction (Story 3.2 part B)', () => {
   });
 });
 
+describe('ShieldDeleteAction (Story 6.1 part B)', () => {
+  const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
+  const SHIELD = '0190a0b0-0000-7000-8000-000000000a02';
+  type State = { readonly error: string | null };
+  const recorder = (answer: State = { error: null }) => {
+    const posted: Record<string, string>[] = [];
+    const action = vi.fn(async (_previous: State, form: FormData) => {
+      posted.push(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
+      return answer;
+    });
+    return { posted, action };
+  };
+  const props = { campaignId: CAMPAIGN, shieldId: SHIELD, name: 'Combate' } as const;
+  const EMPTY = { notes: 0, rolls: 0, last: false } as const;
+
+  it('Excluir is a danger pill that opens the confirmation saying the Shield is empty; Esc or Cancelar closes it and focus goes back', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container } = render(<ShieldDeleteAction {...props} deletion={EMPTY} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.getAttribute('aria-haspopup')).toBe('dialog');
+    // From the keyboard: Tab to Excluir, Enter opens the dialog, focus starts on "Cancelar".
+    await user.tab();
+    expect(document.activeElement).toBe(opener);
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Excluir «Combate»?' });
+    expect(dialog.textContent).toContain('O escudo está vazio.');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(posted).toEqual([]);
+
+    await user.click(opener);
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir escudo' });
+    expect(confirm.dataset.variant).toBe('danger');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posted).toEqual([{ campaign: CAMPAIGN, id: SHIELD }]));
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expectNoStyleAttribute(container);
+  });
+
+  it('names the notes and rolls that go with their counts, one and other, and in words when the preview is missing, in both languages', async () => {
+    const user = userEvent.setup();
+    const { action } = recorder();
+    const { rerender } = render(<ShieldDeleteAction {...props} deletion={{ notes: 1, rolls: 1, last: false }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 1 nota e 1 rolagem deste escudo. Isso não pode ser desfeito.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={{ notes: 3, rolls: 0, last: false }} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto: 3 notas e 0 rolagens deste escudo.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={{ notes: 1, rolls: 12, last: false }} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete «Combate»?' });
+    expect(dialog.textContent).toContain('Going with it: 1 note and 12 rolls of this Shield. This cannot be undone.');
+    expect(within(dialog).getByRole('button', { name: 'Delete Shield' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={EMPTY} language="en" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('dialog').textContent).toContain('The Shield is empty.');
+    await user.keyboard('{Escape}');
+    rerender(<ShieldDeleteAction {...props} deletion={null} language="pt-BR" action={action} />);
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Vão junto as notas e as rolagens deste escudo. Isso não pode ser desfeito.');
+  });
+
+  it('the campaign\'s only Shield: a press opens no dialog and says why in an alert, posting nothing', async () => {
+    const user = userEvent.setup();
+    const { posted, action } = recorder();
+    const { container, rerender } = render(<ShieldDeleteAction {...props} deletion={{ ...EMPTY, last: true }} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    expect(opener.dataset.variant).toBe('danger');
+    expect(opener.hasAttribute('aria-haspopup')).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(container.querySelector('dialog')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe('Uma campanha precisa de pelo menos um escudo.');
+    expect(document.activeElement).toBe(opener);
+    await user.click(opener);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(posted).toEqual([]);
+    expect(action).not.toHaveBeenCalled();
+    rerender(<ShieldDeleteAction {...props} deletion={{ ...EMPTY, last: true }} language="en" action={action} />);
+    expect(screen.getByRole('alert').textContent).toBe('A campaign needs at least one Shield.');
+    expectNoStyleAttribute(container);
+  });
+
+  it('"Excluir" ignores clicks while the delete runs, and a refusal (the last Shield, meanwhile) shows as an alert with focus back on it', async () => {
+    const user = userEvent.setup();
+    let finish: (state: State) => void = () => undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<State>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { container } = render(<ShieldDeleteAction {...props} deletion={EMPTY} language="pt-BR" action={action} />);
+    const opener = screen.getByRole('button', { name: 'Excluir' });
+    await user.click(opener);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Excluir escudo' }));
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('true'));
+    await user.click(opener);
+    expect(container.querySelector('dialog')?.open).toBe(false);
+    expect(action).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish({ error: 'Uma campanha precisa de pelo menos um escudo.' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Uma campanha precisa de pelo menos um escudo.');
+    await vi.waitFor(() => expect(opener.getAttribute('aria-disabled')).toBe('false'));
+    expect(document.activeElement).toBe(opener);
+    expect(opener.hasAttribute('disabled')).toBe(false);
+  });
+});
+
 describe('ArtifactDeleteAction (Story 5.2 part B)', () => {
   const CAMPAIGN = '0190a0b0-0000-7000-8000-000000000002';
   const ARTIFACT = '0190a0b0-0000-7000-8000-000000000900';
@@ -1594,6 +1720,66 @@ describe('SystemForm (Story 3.1)', () => {
     expect((screen.getByLabelText('Descrição (opcional)') as HTMLTextAreaElement).value).toBe('Novo.');
     expect(screen.getByLabelText('Nome').getAttribute('aria-invalid')).toBe('false');
     // The next save names the current version.
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
+  });
+});
+
+type ShieldFormState = import('@/app/(signed-in)/campaigns/[id]/shields/form-state').ShieldFormState;
+
+describe('ShieldForm (Story 6.1)', () => {
+  const labels = { name: 'Nome', submit: 'Salvar', cancel: 'Cancelar', placeholder: 'Escudo do Mestre' };
+  const start: ShieldFormState = { values: { name: '' }, version: 3, error: null, field: null, stale: false };
+
+  it('labels its field, starts an unnamed Shield empty with its default name as the placeholder, and posts campaign, id, version and name', async () => {
+    const { ShieldForm } = await import('@/components/ShieldForm');
+    const user = userEvent.setup();
+    const action = vi.fn<(previous: ShieldFormState, form: FormData) => Promise<ShieldFormState>>(async () => start);
+    const { container } = render(
+      <ShieldForm labels={labels} initial={start} campaignId="c1" id="s1" cancelHref="/campaigns/c1/shields/s1" action={action} />,
+    );
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    expect(name.value).toBe('');
+    expect(name.placeholder).toBe('Escudo do Mestre');
+    expect(name.getAttribute('aria-required')).toBe('true');
+    expect(container.querySelectorAll('[maxlength]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Salvar' }).dataset.variant).toBe('solid');
+    expect(screen.getByRole('link', { name: 'Cancelar' }).getAttribute('href')).toBe('/campaigns/c1/shields/s1');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.type(name, 'Exploração');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const sent = action.mock.calls[0]![1];
+    expect(sent.get('campaign')).toBe('c1');
+    expect(sent.get('id')).toBe('s1');
+    expect(sent.get('version')).toBe('3');
+    expect(sent.get('name')).toBe('Exploração');
+    expectNoStyleAttribute(container);
+  });
+
+  it('shows a refusal under the name and keeps what was typed; a stale rename shows the current name and posts its version next', async () => {
+    const { ShieldForm } = await import('@/components/ShieldForm');
+    const user = userEvent.setup();
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({ values: { name: 'combate' }, version: 3, error: 'Esta campanha já tem um escudo com este nome.', field: 'name', stale: false })
+      .mockResolvedValueOnce({ values: { name: 'Viagem' }, version: 5, error: 'Este escudo foi alterado em outro lugar.', field: null, stale: true })
+      .mockResolvedValueOnce({ values: { name: 'Viagem' }, version: 5, error: null, field: null, stale: false });
+    render(<ShieldForm labels={labels} initial={start} campaignId="c1" id="s1" cancelHref="/campaigns/c1/shields/s1" action={action} />);
+    const name = screen.getByLabelText('Nome') as HTMLInputElement;
+    await user.type(name, 'combate');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Esta campanha já tem um escudo com este nome.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe(alert.id);
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('combate');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const stale = await screen.findByText('Este escudo foi alterado em outro lugar.');
+    expect(stale.getAttribute('role')).toBe('alert');
+    expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('Viagem');
+    expect(screen.getByLabelText('Nome').getAttribute('aria-invalid')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     expect((action.mock.calls[2]?.[1] as FormData).get('version')).toBe('5');
   });
