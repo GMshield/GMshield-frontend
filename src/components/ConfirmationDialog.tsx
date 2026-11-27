@@ -27,6 +27,18 @@ export type ConfirmationDialogProps = {
    * to tick). Its controls are inside the Tab trap; focus still opens on the cancel button.
    */
   readonly children?: ReactNode;
+  /**
+   * Story 5.7 part B: the confirmation cannot be pressed yet (nothing is ticked). It says so with `aria-disabled` and
+   * ignores presses, so it stays inside the Tab trap. Absent: it can always be pressed.
+   */
+  readonly confirmDisabled?: boolean;
+  /**
+   * Story 5.7 part B: what the confirmation does. `danger` (the default) removes something and is filled in the danger
+   * colour; `solid` is a confirmation that removes nothing (an export), filled in the text colour.
+   */
+  readonly confirmTone?: 'danger' | 'solid';
+  /** Story 5.7 part B: the id of what describes the confirmation (why it is unavailable, what it covers). */
+  readonly confirmDescribedBy?: string;
 };
 
 /**
@@ -44,6 +56,9 @@ export function ConfirmationDialog({
   onConfirm,
   onCancel,
   children,
+  confirmDisabled = false,
+  confirmTone = 'danger',
+  confirmDescribedBy,
 }: ConfirmationDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -106,7 +121,17 @@ export function ConfirmationDialog({
         <PillButton ref={cancelRef} onClick={onCancel}>
           {cancelLabel ?? messagesFor(language).dialog.cancel}
         </PillButton>
-        <PillButton variant="danger" className={styles.confirm} onClick={onConfirm}>
+        <PillButton
+          variant={confirmTone}
+          className={confirmTone === 'danger' ? styles.confirm : undefined}
+          aria-disabled={confirmDisabled || undefined}
+          aria-describedby={confirmDescribedBy}
+          onClick={() => {
+            if (!confirmDisabled) {
+              onConfirm();
+            }
+          }}
+        >
           {confirmLabel}
         </PillButton>
       </div>

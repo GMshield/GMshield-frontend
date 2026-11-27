@@ -56,6 +56,10 @@
 // as shared from the starter campaign, read-only. Story 5.6 part B: the starter campaign's artifacts list also holds
 // "Escudo de Lyra", an item of "Mesa de quinta" shared into it (`sharedFrom`), which reads there as shared from "Mesa de
 // quinta"; and the conversation's deletion lists one saved artifact, shared with another campaign (`shared: true`).
+// Story 5.7 part A: an export (GET .../artifacts/export?ids=...&format=...) answers a small file of its format, named
+// after the stand-in artifact for one id and "artefatos" ("artifacts" with language=en) for several, as an attachment:
+// a one-page PDF, the artifact as text or Markdown, an 8 x 8 JPEG, or for several JPG ids a zip of one JPEG each; an
+// unknown format is request.invalid. Without a query it answers the PDF of one artifact.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -63,6 +67,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { crc32 } from 'node:zlib';
 
 const PROBLEM_TYPE = 'application/problem+json';
 const TRACEPARENT = /^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}/;
@@ -952,11 +957,123 @@ export const SHARED_INTO_ARTIFACT = {
 /** An artifact's page or one of its versions, under the campaign of the first group, the artifact of the second. */
 const ARTIFACT_READ_PATH = /^\/api\/v1\/campaigns\/([^/]+)\/artifacts\/([^/]+)(?:\/versions\/[^/]+)?$/;
 
+/** Story 5.7 part A: an artifacts export, whose answer depends on its query. */
+const EXPORT_PATH = /^\/api\/v1\/campaigns\/[^/]+\/artifacts\/export$/;
+/** An 8 x 8 white JPEG: the stand-in's image of one artifact. */
+export const EXPORT_JPEG = Buffer.from(
+  '/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgo' +
+    'KCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEA' +
+    'AAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpAB//Z',
+  'base64',
+);
+
+/** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
+export function tinyPdf(text) {
+  const stream = `BT /F1 18 Tf 72 760 Td (${text.replace(/[()\\]/g, '')}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets = objects.map((object, index) => {
+    const offset = body.length;
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    return offset;
+  });
+  const xref = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  body += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
+}
+
+/** A zip of these files, each stored as it is (no compression), in order. */
+export function storedZip(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const { name, bytes } of files) {
+    const fileName = Buffer.from(name, 'utf8');
+    const checksum = crc32(bytes);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(bytes.length, 18);
+    local.writeUInt32LE(bytes.length, 22);
+    local.writeUInt16LE(fileName.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(bytes.length, 20);
+    central.writeUInt32LE(bytes.length, 24);
+    central.writeUInt16LE(fileName.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, fileName, bytes);
+    centrals.push(central, fileName);
+    offset += local.length + fileName.length + bytes.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+
+/** `Content-Disposition` for an attachment named `name` (RFC 6266), as the backend writes it. */
+export function attachment(name) {
+  const ascii = name.normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\x20-\x7E]|["\\%]/g, '_');
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/** Story 5.7 part A: the answer to an export, by its query (`ids`, `format`, `language`). */
+export function exportAnswer(search, traceId) {
+  const query = new URLSearchParams(search);
+  const ids = (query.get('ids') ?? '').split(',').filter((id) => id !== '');
+  const format = query.get('format') ?? 'pdf';
+  const several = ids.length > 1;
+  const base = several ? (query.get('language') === 'en' ? 'artifacts' : 'artefatos') : ARTIFACT.name;
+  const text = `${ARTIFACT.name}\nItem\n\nDano: 1d8 cortante\nPeso: 1,5 kg\n`;
+  const files = {
+    pdf: ['application/pdf', 'pdf', () => tinyPdf(ARTIFACT.name)],
+    txt: ['text/plain;charset=UTF-8', 'txt', () => Buffer.from(text, 'utf8')],
+    markdown: ['text/markdown;charset=UTF-8', 'md', () => Buffer.from(`# ${ARTIFACT.name}\n\n*Item*\n`, 'utf8')],
+    jpg: several
+      ? ['application/zip', 'zip', () => storedZip(ids.map((id, index) => ({ name: `${String(index + 1).padStart(2, '0')}-${ARTIFACT.name}.jpg`, bytes: EXPORT_JPEG })))]
+      : ['image/jpeg', 'jpg', () => EXPORT_JPEG],
+  };
+  const chosen = Object.hasOwn(files, format) ? files[format] : undefined;
+  if (chosen === undefined) {
+    return problem(400, 'invalid', 'Invalid request', traceId);
+  }
+  const [type, extension, body] = chosen;
+  return {
+    status: 200,
+    type,
+    body: body(),
+    headers: { 'Content-Disposition': attachment(`${base}.${extension}`), 'X-Content-Type-Options': 'nosniff' },
+  };
+}
+
 /** A 1 x 1 WebP: the body of every binary answer (Story 1.19: a page's picture). */
 export const PICTURE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
 
 /** The answer to a request: status, content type and body. */
-export function answer(contract, method, pathname, traceId) {
+export function answer(contract, method, pathname, traceId, search = '') {
+  if (EXPORT_PATH.test(pathname) && method.toUpperCase() === 'GET') {
+    return exportAnswer(search, traceId);
+  }
   for (const [template, item] of Object.entries(contract.paths ?? {})) {
     if (!templateToPattern(template).test(pathname)) {
       continue;
@@ -1053,8 +1170,9 @@ export function createStandInServer(contract, { quiet = false } = {}) {
   return createServer((request, response) => {
     const traceId = TRACEPARENT.exec(request.headers.traceparent ?? '')?.[1] ?? randomBytes(16).toString('hex');
     // A base only to parse the request's path; nothing connects to it.
-    const pathname = new URL(request.url ?? '/', 'http://stand-in').pathname; // NOSONAR: not a connection
-    const result = answer(contract, request.method ?? 'GET', pathname, traceId);
+    const url = new URL(request.url ?? '/', 'http://stand-in'); // NOSONAR: not a connection
+    const pathname = url.pathname;
+    const result = answer(contract, request.method ?? 'GET', pathname, traceId, url.search);
     // The request body is only counted, never kept: read to its end, the connection can be reused.
     let received = 0;
     request.on('data', (chunk) => {

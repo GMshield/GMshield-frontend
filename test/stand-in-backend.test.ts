@@ -11,6 +11,7 @@ import {
   DRAFT_PROPOSAL,
   DRAFT_TEXT,
   EDITED_ARTIFACT,
+  EXPORT_JPEG,
   SAVED_DRAFT,
   STORED_DRAFT,
   STORED_TURN,
@@ -701,6 +702,35 @@ describe('stand-in backend', () => {
     });
     expect(exampleOf(document, { allOf: [{ type: 'object', properties: { a: { const: 1 } } }, { type: 'object', properties: { b: { type: 'number' } } }] })).toEqual({ a: 1, b: 0 });
     expect(exampleOf(document, { oneOf: [{ type: 'string' }, { type: 'integer' }] })).toBe('example');
+  });
+
+  it('Story 5.7 part A: an export answers a small file of its format as an attachment, over HTTP too', async () => {
+    const path = '/api/v1/campaigns/x/artifacts/export';
+    const bytes = (result: { body: unknown }) => result.body as Buffer;
+    const disposition = (result: { headers?: Record<string, string> }) => result.headers?.['Content-Disposition'];
+    const pdf = answer(contract, 'GET', path, 't', '?ids=a&format=pdf');
+    expect(pdf).toMatchObject({ status: 200, type: 'application/pdf' });
+    expect(bytes(pdf).subarray(0, 8).toString('latin1')).toBe('%PDF-1.4');
+    expect(disposition(pdf)).toBe(`attachment; filename="${ARTIFACT.name}.pdf"; filename*=UTF-8''Espada%20de%20Kael.pdf`);
+    expect(bytes(answer(contract, 'GET', path, 't', '?ids=a&format=txt')).toString('utf8')).toContain('Dano: 1d8 cortante');
+    expect(answer(contract, 'GET', path, 't', '?ids=a&format=markdown')).toMatchObject({ type: 'text/markdown;charset=UTF-8' });
+    expect(answer(contract, 'GET', path, 't', '?ids=a&format=jpg')).toMatchObject({ type: 'image/jpeg', body: EXPORT_JPEG });
+    const zip = answer(contract, 'GET', path, 't', '?ids=a,b&format=jpg&language=en');
+    expect(zip).toMatchObject({ status: 200, type: 'application/zip' });
+    expect(disposition(zip)).toContain('filename="artifacts.zip"');
+    // Two stored entries, each named in order.
+    expect(bytes(zip).subarray(0, 4).readUInt32LE(0)).toBe(0x04034b50);
+    expect(bytes(zip).toString('latin1')).toContain('01-Espada de Kael.jpg');
+    expect(bytes(zip).toString('latin1')).toContain('02-Espada de Kael.jpg');
+    expect(disposition(answer(contract, 'GET', path, 't', '?ids=a,b&format=txt'))).toContain('filename="artefatos.txt"');
+    expect(answer(contract, 'GET', path, 't', '?ids=a&format=docx')).toMatchObject({ status: 400, body: { code: 'request.invalid' } });
+
+    running = await startStandIn();
+    const response = await fetch(`${running.url}${path}?ids=a&format=jpg`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/jpeg');
+    expect(response.headers.get('content-disposition')).toContain('Espada%20de%20Kael.jpg');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(EXPORT_JPEG);
   });
 
   it('matches path templates', () => {

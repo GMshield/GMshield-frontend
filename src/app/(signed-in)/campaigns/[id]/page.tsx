@@ -1,3 +1,4 @@
+import { ArtifactExportDialog } from '@/components/artifacts/ArtifactExportDialog';
 import { NamedIcon } from '@/components/Icons';
 import { ItemList, type ListRow } from '@/components/ItemList';
 import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
@@ -193,6 +194,7 @@ export default async function CampaignPage({
         <Notice status="danger" language={language} message={errorText(artifacts.problem, language)} dismissible={false} />
       ) : (
         <ArtifactsTab
+          campaignId={campaignId}
           here={here}
           type={type}
           page={artifacts.data.list}
@@ -212,8 +214,12 @@ export default async function CampaignPage({
 /**
  * The artifacts tab (Story 5.1): "Novo artefato", then the list with its type chips and its pages, or the one sentence
  * of an empty campaign, or of a type with no artifact (which leads back to all).
+ *
+ * Story 5.7 part B: beside "Novo artefato", "Exportar" ({@link ArtifactExportDialog}) offers the rows of the page shown,
+ * in list order with the type filter applied; it is left out while the list shows no row.
  */
 function ArtifactsTab({
+  campaignId,
   here,
   type,
   page,
@@ -225,6 +231,7 @@ function ArtifactsTab({
   view,
   language,
 }: {
+  readonly campaignId: string;
   readonly here: string;
   readonly type: string | null;
   readonly page: ListPage<ArtifactSummary>;
@@ -263,7 +270,16 @@ function ArtifactsTab({
   }
   return (
     <>
-      <div className={styles.tabActions}>{create}</div>
+      <div className={styles.tabActions}>
+        {create}
+        {page.paging.total > 0 && rows.length > 0 ? (
+          <ArtifactExportDialog
+            campaignId={campaignId}
+            rows={rows.map((row) => ({ id: row.id, label: row.label, detail: row.detail }))}
+            language={language}
+          />
+        ) : null}
+      </div>
       {page.paging.total === 0 ? (
         <>
           {chips}

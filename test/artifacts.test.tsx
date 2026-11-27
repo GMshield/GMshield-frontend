@@ -123,8 +123,17 @@ const params = (id: string) => Promise.resolve({ id });
 const query = (values: Record<string, string> = {}) => Promise.resolve(values);
 /** The opening tag of the link to `href`, whatever its attributes' order; '' when there is none. */
 const linkTo = (html: string, href: string) => [...html.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes(`href="${href}"`)) ?? '';
-/** The solid pills of a page: links or buttons whose variant is solid. */
-const solids = (html: string) => [...html.matchAll(/<(a|button)[^>]*data-variant="solid"[^>]*>(.*?)<\/\1>/g)].map((match) => match[2]);
+/** A page without its dialogs (closed until opened, each a surface of its own with its own main action). */
+function outsideDialogs(html: string): string {
+  let rest = html;
+  for (let start = rest.indexOf('<dialog'); start !== -1; start = rest.indexOf('<dialog')) {
+    const end = rest.indexOf('</dialog>', start);
+    rest = rest.slice(0, start) + (end === -1 ? '' : rest.slice(end + '</dialog>'.length));
+  }
+  return rest;
+}
+/** The solid pills of a page, outside its dialogs: links or buttons whose variant is solid. */
+const solids = (html: string) => [...outsideDialogs(html).matchAll(/<(a|button)[^>]*data-variant="solid"[^>]*>(.*?)<\/\1>/g)].map((match) => match[2]);
 const calls = (server: Scripted) => server.calls.map((call) => `${call.method} ${call.url}`);
 const amp = (href: string) => href.replaceAll('&', '&amp;');
 
@@ -194,7 +203,8 @@ describe("a campaign's artifacts tab (Story 5.1)", () => {
       // An own row has no mark.
       const own = html.slice(html.indexOf(`href="/campaigns/${CAMPAIGN}/artifacts/${LYRA}"`));
       expect(own.slice(0, own.indexOf('</a>'))).not.toContain(mark);
-      expect(html.split(mark)).toHaveLength(2);
+      // Once in the list (Story 5.7 part B: the export dialog lists the rows too).
+      expect(outsideDialogs(html).split(mark)).toHaveLength(2);
     }
     expect(ptBR.artifacts.share.listedFrom).toBe('Compartilhado de {campaign}');
   });
@@ -249,6 +259,105 @@ describe("a campaign's artifacts tab (Story 5.1)", () => {
 
     const html = renderToStaticMarkup(await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts' }) }));
     expect(html).toContain('O serviço está indisponível agora. Tente de novo em instantes.');
+  });
+});
+
+/** The labels of the checkboxes in the page's export dialog (Story 5.7 part B), in order; [] when there is none. */
+function exportRows(html: string, messages: typeof ptBR = ptBR): string[] {
+  const title = `>${messages.artifacts.export.title}</h2>`;
+  for (let start = html.indexOf('<dialog'); start !== -1; start = html.indexOf('<dialog', start + 1)) {
+    const dialog = html.slice(start, html.indexOf('</dialog>', start));
+    if (dialog.includes(title)) {
+      return [...dialog.matchAll(/<input type="checkbox"[^>]*aria-label="([^"]*)"/g)].map((match) => match[1] ?? '');
+    }
+  }
+  return [];
+}
+/** The export pill that opens the dialog (Story 5.7 part B), or '' when there is none. */
+const exportOpener = (html: string, messages: typeof ptBR) =>
+  new RegExp(`<button[^>]*aria-haspopup="dialog"[^>]*>${messages.artifacts.export.action}</button>`).exec(outsideDialogs(html))?.[0] ?? '';
+
+describe('"Exportar" above the lists (Story 5.7 part B)', () => {
+  it('the tab has "Exportar" beside "Novo artefato", its dialog offering the page\'s rows in list order, shared ones too, in both languages', async () => {
+    const SHIELD = '0190a0b0-0000-7000-8000-000000000903';
+    const shared = { id: SHIELD, recordType: 'item', name: 'Escudo de Lyra', version: 1, createdAt: '2026-11-26T12:03:00Z', sharedFrom: { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'A Coroa Partida' } };
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10`]: { status: 200, body: { items: [shared, ...ROWS], total: 4, types: [...IN_USE, { key: 'item', count: 1 }] } },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts' }) }));
+      const pill = exportOpener(html, messages);
+      expect(pill).not.toBe('');
+      // Beside "Novo artefato", before the list.
+      const create = html.indexOf(linkTo(html, `/campaigns/${CAMPAIGN}/artifacts/new`));
+      expect(create).toBeGreaterThan(-1);
+      expect(html.indexOf(pill)).toBeGreaterThan(create);
+      expect(html.indexOf(pill)).toBeLessThan(html.indexOf(`aria-label="${messages.artifacts.list}"`));
+      expect(html).toContain(`>${messages.artifacts.export.title}</h2>`);
+      const sheet = messages.systems.recordTypes.character_sheet;
+      expect(exportRows(html, messages)).toEqual([
+        `Escudo de Lyra, ${messages.systems.recordTypes.item} · ${messages.artifacts.share.listedFrom.replace('{campaign}', 'A Coroa Partida')}`,
+        `Lyra, ${sheet}`,
+        `Kael, ${sheet}`,
+        'Conjurador de Guerra, Talento',
+      ]);
+      // Nothing ticked when it opens.
+      expect(html).not.toMatch(/<input type="checkbox"[^>]*checked=""/);
+    }
+  });
+
+  it('with a type chosen, the dialog offers that page\'s rows only; neither an empty campaign nor a type with none has "Exportar"', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10&offset=10&recordType=character_sheet`]: { status: 200, body: { items: [ROWS[1]], total: 11, types: IN_USE } },
+      [`GET ${ARTIFACTS}?limit=10&recordType=spell`]: { status: 200, body: { items: [], total: 0, types: IN_USE } },
+    });
+    let html = renderToStaticMarkup(
+      await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts', type: 'character_sheet', page: '2' }) }),
+    );
+    expect(exportRows(html)).toEqual([`Kael, ${ptBR.systems.recordTypes.character_sheet}`]);
+
+    html = renderToStaticMarkup(await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts', type: 'spell' }) }));
+    expect(html).toContain(ptBR.view.emptyFilter);
+    expect(exportOpener(html, ptBR)).toBe('');
+    expect(html).not.toContain(`>${ptBR.artifacts.export.title}</h2>`);
+    await backend?.close();
+
+    await useBackend({ ...BASE, [`GET ${ARTIFACTS}?limit=10`]: { status: 200, body: { items: [], total: 0, types: [] } } });
+    html = renderToStaticMarkup(await CampaignPage({ params: params(CAMPAIGN), searchParams: query({ tab: 'artifacts' }) }));
+    expect(html).toContain(ptBR.artifacts.empty);
+    expect(html).not.toContain(`>${ptBR.artifacts.export.action}<`);
+  });
+
+  it('"Personagens" has "Exportar" beside "Nova ficha", offering the page\'s sheets; an empty list has none', async () => {
+    const SHEET = '0190a0b0-0000-7000-8000-000000000903';
+    const shared = { id: SHEET, recordType: 'character_sheet', name: 'Thorin', version: 1, createdAt: '2026-11-26T12:03:00Z', sharedFrom: { campaignId: '0190a0b0-0000-7000-8000-000000000040', name: 'A Coroa Partida' } };
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10&recordType=character_sheet`]: { status: 200, body: { items: [shared, ...ROWS.slice(0, 2)], total: 3, types: IN_USE } },
+    });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CharactersPage({ searchParams: query() }));
+      const header = outsideDialogs(html.slice(html.indexOf('<header'), html.indexOf('</header>')));
+      const pill = exportOpener(header, messages);
+      expect(pill).not.toBe('');
+      expect(header.indexOf(pill)).toBeGreaterThan(header.indexOf(`>${messages.characters.new}<`));
+      // No type in "Personagens": a shared sheet's detail is its mark, an own sheet is named alone.
+      expect(exportRows(html, messages)).toEqual([`Thorin, ${messages.artifacts.share.listedFrom.replace('{campaign}', 'A Coroa Partida')}`, 'Lyra', 'Kael']);
+    }
+    await backend?.close();
+
+    await useBackend({
+      ...BASE,
+      [`GET ${ARTIFACTS}?limit=10&recordType=character_sheet`]: { status: 200, body: { items: [], total: 0, types: [] } },
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const html = renderToStaticMarkup(await CharactersPage({ searchParams: query() }));
+    expect(html).toContain(ptBR.characters.empty);
+    expect(html).not.toContain(`>${ptBR.artifacts.export.action}<`);
   });
 });
 
@@ -842,6 +951,71 @@ describe("an artifact's delete (Story 5.2 part B)", () => {
     const newest = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
     expect(newest).toContain('>Excluir «Espada Rubra»?</h2>');
     expect(calls(server).filter((call) => call === `GET ${ONE}`)).toHaveLength(1);
+  });
+});
+
+describe("an artifact's export (Story 5.7 part A)", () => {
+  const ONE = `${ARTIFACTS}/${SWORD}`;
+  const CROWN = '0190a0b0-0000-7000-8000-000000000045';
+  /** The header's "Exportar" pill, or '' when there is none. */
+  const exportPill = (html: string, messages: typeof ptBR) => {
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    return new RegExp(`<button[^>]*aria-expanded="false"[^>]*>${messages.artifacts.export.action}<`).exec(header)?.[0] ?? '';
+  };
+
+  it('"Exportar" sits in the header beside "Excluir" on the newest version, with its four formats, in both languages', async () => {
+    await useBackend({ ...BASE, [`GET ${ONE}`]: { status: 200, body: ARTIFACT }, [VERSIONS_ROUTE]: ONE_VERSION });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+      const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+      expect(exportPill(html, messages)).not.toBe('');
+      // Before "Excluir", in the header's actions.
+      expect(header.indexOf(`>${messages.artifacts.export.action}<`)).toBeLessThan(header.indexOf(`>${messages.artifacts.delete.action}<`));
+      expect(header).toContain(`aria-label="${messages.artifacts.export.menu}"`);
+      for (const format of ['pdf', 'txt', 'markdown', 'jpg'] as const) {
+        expect(header).toContain(`>${messages.artifacts.export[format]}</button>`);
+      }
+    }
+  });
+
+  it('an earlier version (?version=N) has no "Exportar"', async () => {
+    await useBackend({
+      ...BASE,
+      [`GET ${ONE}`]: { status: 200, body: { ...ARTIFACT, version: 2, currentVersion: 2 } },
+      [`GET ${ONE}/versions/1`]: { status: 200, body: { ...ARTIFACT, version: 1, currentVersion: 2 } },
+      [VERSIONS_ROUTE]: ONE_VERSION,
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+
+    expect(html).toContain(ptBR.artifacts.page.citedVersion.replace('{version}', '1'));
+    expect(exportPill(html, ptBR)).toBe('');
+    expect(html).not.toContain(`>${ptBR.artifacts.export.action}<`);
+  });
+
+  it('shared into this campaign, the read-only page has "Exportar" alone in its header; not on a cited version', async () => {
+    const IN_B = `/api/v1/campaigns/${CAMPAIGN}/artifacts/${SWORD}`;
+    const FROM = { ...ARTIFACT, campaignId: CROWN, overrides: null, related: [], sharedWith: [], sharedFrom: { campaignId: CROWN, name: 'A Coroa Partida' } };
+    await useBackend({
+      ...BASE,
+      [`GET ${IN_B}`]: { status: 200, body: FROM },
+      [`GET ${IN_B}/versions/1`]: { status: 200, body: { ...FROM, version: 1, currentVersion: 2 } },
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+
+    const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query() }));
+    expect(exportPill(html, ptBR)).not.toBe('');
+    expect(html).not.toContain(`>${ptBR.artifacts.delete.action}<`);
+
+    const cited = renderToStaticMarkup(
+      await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }), searchParams: query({ version: '1' }) }),
+    );
+    expect(exportPill(cited, ptBR)).toBe('');
   });
 });
 
