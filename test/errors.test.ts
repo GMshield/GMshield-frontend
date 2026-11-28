@@ -18,12 +18,12 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 // change naming a material in none of the campaign's tiers (Story 3.5, CampaignScopes.java; shown from Story 3.6), and a
 // dismissal of an answer still being written (Story 3.11, ConversationProblems.java), and a bookmark of an answer that
 // is not done (Story 3.12), and a core record type renamed or removed and a record type's name (Story 4.1,
-// KnowledgeProblems.java).
+// KnowledgeProblems.java), and a party value out of its range (Story 7.1, LibraryProblems.java).
 const BACKEND_CODES = {
   request: ['invalid', 'not_found', 'method_not_allowed', 'not_acceptable', 'too_large', 'unsupported_media_type', 'rejected', 'cross_origin',
     'sign_in_expired', 'sign_in_refused', 'username_taken', 'username_invalid', 'terms_required',
     'system_name_invalid', 'system_edition_invalid', 'system_description_invalid', 'system_name_taken', 'campaign_name_invalid',
-    'campaign_name_taken', 'stale_version'],
+    'campaign_name_taken', 'stale_version', 'party_size_invalid', 'party_level_invalid'],
   server: ['unexpected', 'unavailable'],
   integrity: ['failed'],
   session: ['required', 'renewal_required', 'already_renewed'],

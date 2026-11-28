@@ -1307,6 +1307,23 @@ they sit in `src/`.
   - `useRefreshWhileMoving` no longer refreshes while the browser is offline: a `router.refresh()` offline throws the
     page to the browser's error page, which took the Shield's screen away from offline rolling.
   - `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.60.0 (`Me.id`); the stand-in answers the contract's example id.
+- **The party's size and level (Story 7.1, public contract 1.61.0).** A campaign's overview shows "Jogadores" and "Nível
+  do grupo" in its details (`Campaign.partySize`, `partyLevel`; "Não definido", muted, while not set), then, while
+  either is not set, one sentence on what they are for (fitting loot and encounters to the group), and "Alterar".
+  - `PartyForm` (`components/PartyForm.tsx`, the `MaterialPlace` model) opens an inline form with two bordered fields
+    (`SystemForm.module.css`), side by side from 768px; empty means not set. They are text boxes with the number
+    keyboard (`inputMode="numeric"`), because a number input posts a letter as empty, which here would clear the value.
+    The level's hint says "Na maioria dos sistemas, de 1 a 20; suplementos podem ir além.": a recommendation, never a
+    refusal.
+  - `changePartyAction` (`campaigns/actions.ts`) sends `{version, size|null, level|null}` through
+    `changeCampaignParty` (`PUT /api/v1/campaigns/{id}/party`). A value that is not digits only (a letter, a sign, or a
+    decimal such as "4.0", "2,5" or "1.000") is refused beside its field before the backend is called; the backend
+    checks the range. On success
+    `flash('success', "Grupo salvo. Vale a partir da próxima pergunta.")` and `refresh()`; the form closes and focus
+    goes back to "Alterar". `request.party_size_invalid` / `request.party_level_invalid` stay beside their field; a stale
+    version re-reads the campaign and keeps the form open on its current values with `campaigns.party.stale`.
+  - `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.61.0. The stand-in's starter campaign has no party, and a party change
+    answers 4 players at level 5; the demo backend keeps each campaign's party in memory, with a stale 409.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

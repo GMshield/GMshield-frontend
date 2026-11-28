@@ -82,6 +82,19 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * Story 7.1: every row the same height. A link in a value (the system) keeps its full touch target, but its negative
+ * block margins give back what that target adds beyond one line, so its row is no taller than a row of plain text.
+ */
+.detail dd .inlineLink {
+  margin-block: calc((1lh - var(--space-touch-target)) / 2);
+}
+
+/* Story 7.1: a value the GM has not set ("Não definido") reads muted, as the field names do. */
+.detail .unset {
+  color: var(--color-text-muted);
+}
+
 @media (max-width: 767px) {
   .details {
     grid-template-columns: minmax(0, 1fr);

@@ -69,6 +69,8 @@
 // .../artifacts/{artifactId}/shield) answers it held by "Combate". Story 6.4 part A: a Shield's log holds one stored roll,
 // "2d6+3" labelled "Iniciativa", which the preview counts; a roll sent answers that roll stored now (201), and a clear
 // answers 204. Story 6.4 part B (contract 1.60.0): the account (GET /api/v1/me) carries the contract's example id.
+// Story 7.1 (contract 1.61.0): the starter campaign has no party set, and a party change (PUT .../party) answers it with 4
+// players at level 5, version 1.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -189,7 +191,8 @@ export const STARTER_SYSTEM = {
 const STARTER_CAMPAIGN = { id: '0190a0b0-0000-7000-8000-000000000002', name: 'Primeira campanha' };
 /** Story 3.2: the starter campaign as a list row (its system's name and edition) and as one campaign (with its version). */
 const STARTER_ROW = { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name, edition: null }, archived: false };
-const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, version: 0 };
+/** Story 7.1: the starter campaign has no party size or level set. */
+const STARTER = { ...STARTER_CAMPAIGN, system: STARTER_SYSTEM, archived: false, version: 0, partySize: null, partyLevel: null };
 /** Story 3.3: where the example material belongs, the starter campaign, and the same material moved to its system. */
 const IN_STARTER_CAMPAIGN = { campaign: { ...STARTER_CAMPAIGN, system: { id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name } }, systems: [] };
 const IN_STARTER_SYSTEM = { campaign: null, systems: [{ id: STARTER_SYSTEM.id, name: STARTER_SYSTEM.name }] };
@@ -298,7 +301,11 @@ export const EXAMPLES = {
     system: STARTER_SYSTEM,
     archived: false,
     version: 0,
+    partySize: null,
+    partyLevel: null,
   },
+  // Story 7.1: a party change answers the starter campaign with 4 players at level 5, version 1.
+  'PUT /api/v1/campaigns/{id}/party': { ...STARTER, version: 1, partySize: 4, partyLevel: 5 },
   'GET /api/v1/campaigns/{campaignId}/conversation': { id: '0190a0b0-0000-7000-8000-000000000020', questions: 2 },
   // Story 3.10: one conversation, whatever area is asked (the stand-in reads no query).
   'GET /api/v1/campaigns/{campaignId}/conversations': {

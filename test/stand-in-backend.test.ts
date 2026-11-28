@@ -120,6 +120,12 @@ describe('stand-in backend', () => {
     });
     expect(answer(contract, 'PATCH', `/api/v1/campaigns/${campaign.id}`, 't')).toMatchObject({ status: 200, body: { ...campaign, version: 1 } });
     expect(answer(contract, 'PUT', '/api/v1/campaigns/current', 't')).toMatchObject({ status: 200, body: { ...campaign, version: 0 } });
+    // Story 7.1: no party set, and a party change answers 4 players at level 5.
+    expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}`, 't').body).toMatchObject({ partySize: null, partyLevel: null });
+    expect(answer(contract, 'PUT', `/api/v1/campaigns/${campaign.id}/party`, 't')).toMatchObject({
+      status: 200,
+      body: { ...campaign, version: 1, partySize: 4, partyLevel: 5 },
+    });
     expect(answer(contract, 'GET', `/api/v1/campaigns/${campaign.id}/conversation`, 't')).toMatchObject({
       status: 200,
       body: { id: '0190a0b0-0000-7000-8000-000000000020', questions: 2 },

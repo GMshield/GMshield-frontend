@@ -1,0 +1,57 @@
+/*
+ * A campaign overview's party (Story 7.1), under its details: the sentence on what the values are for (muted, while
+ * either is not set), "Alterar", and the inline form with its two fields side by side from 768px (where the details
+ * grid takes two columns too), one under the other below it. The fields, labels, stale line and refusals are the
+ * system form's.
+ */
+.party {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.purpose {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--width-form);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

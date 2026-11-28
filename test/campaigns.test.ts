@@ -24,6 +24,7 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: RenameCampaignPage } = await import('@/app/(signed-in)/campaigns/[id]/edit/page');
 const {
   archiveCampaignAction,
+  changePartyAction,
   changeScopeAction,
   chooseCampaignAction,
   createCampaignAction,
@@ -36,6 +37,7 @@ const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
 const { startScripted } = await import('./support/servers');
 type ScopeFormState = import('@/components/ScopeControls').ScopeFormState;
+const { NO_PARTY_ANSWER } = await import('@/app/(signed-in)/campaigns/form-state');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
@@ -774,5 +776,135 @@ describe("a campaign's scope (Story 3.6)", () => {
     missing.delete('otherTier');
     expect((await changeScopeAction(NO_SCOPE_ANSWER, missing)).error).toBe('O pedido não é válido.');
     expect(server.calls).toEqual([]);
+  });
+});
+
+describe("a campaign's party (Story 7.1)", () => {
+  const PUT = `PUT /api/v1/campaigns/${ID}/party`;
+  const GET = `GET /api/v1/campaigns/${ID}`;
+  const party = (fields: Record<string, string>) => form({ id: ID, version: '2', size: '', level: '', ...fields });
+  const rows = (html: string) =>
+    [...html.matchAll(/<dt>([^<]*)<\/dt><dd[^>]*>([^<]*)<\/dd>/g)].map((match) => [match[1], match[2]]);
+
+  it('matrix row "Not set": both rows read "Não definido" with the sentence on what they are for, and "Alterar", in both languages', async () => {
+    await useBackend({ [GET]: { status: 200, body: { ...THURSDAY, partySize: null, partyLevel: null } }, 'GET /api/v1/campaigns/current': { status: 200, body: FIRST } });
+    for (const [language, messages] of [['pt-BR', ptBR], ['en', en]] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+      expect(rows(html)).toEqual(
+        expect.arrayContaining([
+          [messages.campaigns.page.partySize, messages.campaigns.page.notSet],
+          [messages.campaigns.page.partyLevel, messages.campaigns.page.notSet],
+        ]),
+      );
+      expect(html).toContain(messages.campaigns.page.partyPurpose);
+      expect(html).toMatch(new RegExp(`<section[^>]*aria-label="${messages.campaigns.party.label}"`));
+      expect(html).toMatch(new RegExp(`<button[^>]*>${messages.campaigns.party.change}</button>`));
+    }
+  });
+
+  it('matrix rows "Set" and "High level": the rows show the values, with no sentence; another tab shows neither', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [GET]: { status: 200, body: { ...THURSDAY, partySize: 4, partyLevel: 40 } },
+      'GET /api/v1/campaigns/current': { status: 200, body: FIRST },
+    };
+    await useBackend(routes);
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const html = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+    expect(rows(html)).toEqual(expect.arrayContaining([['Jogadores', '4'], ['Nível do grupo', '40']]));
+    expect(html).not.toContain(ptBR.campaigns.page.partyPurpose);
+    expect(html).not.toContain(ptBR.campaigns.page.notSet);
+    // One value set still says what they are for.
+    routes[GET] = { status: 200, body: { ...THURSDAY, partySize: 4, partyLevel: null } };
+    const one = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query() }));
+    expect(rows(one)).toEqual(expect.arrayContaining([['Jogadores', '4'], ['Nível do grupo', 'Não definido']]));
+    expect(one).toContain(ptBR.campaigns.page.partyPurpose);
+    const scope = renderToStaticMarkup(await CampaignPage({ params: params(ID), searchParams: query({ tab: 'scope' }) }));
+    expect(scope).not.toContain(ptBR.campaigns.page.partySize);
+    expect(scope).not.toContain(`aria-label="${ptBR.campaigns.party.label}"`);
+  });
+
+  it('matrix row "Set": the values go on the version read, the toast says when it applies, and the page is refreshed', async () => {
+    const saved = { ...THURSDAY, version: 3, partySize: 4, partyLevel: 5 };
+    const server = await useBackend({ [PUT]: { status: 200, body: saved } });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const answer = await changePartyAction(NO_PARTY_ANSWER, party({ size: '4', level: ' 5 ' }));
+    expect(answer).toEqual({ version: 3, size: 4, level: 5, error: null, field: null, stale: false, saved: true, serial: 1 });
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 2, size: 4, level: 5 });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('matrix row "Clear one": an empty field is sent as null', async () => {
+    const server = await useBackend({ [PUT]: { status: 200, body: { ...THURSDAY, version: 3, partySize: 4, partyLevel: null } } });
+    const answer = await changePartyAction(NO_PARTY_ANSWER, party({ size: '4' }));
+    expect(answer).toMatchObject({ saved: true, size: 4, level: null });
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 2, size: 4, level: null });
+  });
+
+  it('matrix row "Invalid": the backend\'s refusal stays beside its field, in both languages', async () => {
+    const routes: Record<string, { status: number; body: unknown }> = { [PUT]: problem(400, 'request.party_size_invalid', { min: 1, max: 20 }) };
+    const server = await useBackend(routes);
+    for (const [language, text] of [['pt-BR', 'Informe um número inteiro de 1 a 20.'], ['en', 'Enter a whole number from 1 to 20.']] as const) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const answer = await changePartyAction(NO_PARTY_ANSWER, party({ size: '21', level: '5' }));
+      expect(answer).toMatchObject({ error: text, field: 'size', saved: false, stale: false });
+    }
+    expect(JSON.parse(server.calls[0]!.body)).toEqual({ version: 2, size: 21, level: 5 });
+    routes[PUT] = problem(400, 'request.party_level_invalid', { min: 1, max: 999 });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    expect(await changePartyAction(NO_PARTY_ANSWER, party({ level: '1000' }))).toMatchObject({
+      error: 'Informe um número inteiro de 1 a 999.',
+      field: 'level',
+    });
+    expect(JSON.parse(server.calls.at(-1)!.body)).toEqual({ version: 2, size: null, level: 1000 });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('a value that is not digits only is refused beside its field before the backend is called; a malformed form never reaches it', async () => {
+    const server = await useBackend({});
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    expect(await changePartyAction(NO_PARTY_ANSWER, party({ size: 'x' }))).toMatchObject({
+      error: 'Informe um número inteiro de 1 a 20.',
+      field: 'size',
+      serial: 1,
+    });
+    expect(await changePartyAction(NO_PARTY_ANSWER, party({ size: '4', level: '-1' }))).toMatchObject({
+      error: 'Informe um número inteiro de 1 a 999.',
+      field: 'level',
+    });
+    // A decimal, whole or not, is refused too: "1.000" (one thousand in pt-BR) is never saved as 1.
+    for (const level of ['1.000', '2,5', '4.0']) {
+      expect(await changePartyAction(NO_PARTY_ANSWER, party({ level }))).toMatchObject({ error: 'Informe um número inteiro de 1 a 999.', field: 'level' });
+    }
+    for (const size of ['4.0', '20,0']) {
+      expect(await changePartyAction(NO_PARTY_ANSWER, party({ size }))).toMatchObject({ error: 'Informe um número inteiro de 1 a 20.', field: 'size' });
+    }
+    for (const fields of [{ id: '../x' }, { version: '-1' }, { version: 'x' }] as Record<string, string>[]) {
+      expect(await changePartyAction(NO_PARTY_ANSWER, party(fields))).toMatchObject({ error: 'O pedido não é válido.', field: null });
+    }
+    expect(server.calls).toEqual([]);
+  });
+
+  it('matrix row "Stale": the campaign is read again, its values and version come back with the stale line, nothing saved', async () => {
+    const server = await useBackend({
+      [PUT]: problem(409, 'request.stale_version'),
+      [GET]: { status: 200, body: { ...THURSDAY, version: 6, partySize: 3, partyLevel: 12 } },
+    });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    const answer = await changePartyAction(NO_PARTY_ANSWER, party({ size: '4', level: '5' }));
+    expect(answer).toEqual({ version: 6, size: 3, level: 12, error: ptBR.campaigns.party.stale, field: null, stale: true, saved: false, serial: 1 });
+    expect(calls(server)).toEqual([PUT, GET]);
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    expect((await changePartyAction(NO_PARTY_ANSWER, party({ size: '4' }))).error).toBe(en.campaigns.party.stale);
+  });
+
+  it('matrix row "Cross-owner": request.not_found comes back as its text under the form', async () => {
+    await useBackend({ [PUT]: problem(404, 'request.not_found') });
+    cookieJar['__Host-gmshield-lang'] = 'pt-BR';
+    expect(await changePartyAction(NO_PARTY_ANSWER, party({ size: '4' }))).toMatchObject({
+      error: ptBR.errors.codes.request.not_found,
+      field: null,
+      saved: false,
+    });
   });
 });

@@ -24,3 +24,33 @@ export type CampaignFormState = {
 export type CampaignActionState = { readonly error: string | null; readonly done: number };
 
 export const CAMPAIGN_ACTION_START: CampaignActionState = { error: null, done: 0 };
+
+/** The party field a refusal is about (Story 7.1), shown beside it; null for a refusal about the whole form. */
+export type PartyField = 'size' | 'level';
+
+/**
+ * What the party form shows after a save (Story 7.1): the version the next save names (null before any answer), the
+ * values to start the fields from after a stale save (the campaign's current ones; null for not set), the refusal's
+ * text and its field, whether the save was stale or went through, and a count of answers.
+ */
+export type PartyFormState = {
+  readonly version: number | null;
+  readonly size: number | null;
+  readonly level: number | null;
+  readonly error: string | null;
+  readonly field: PartyField | null;
+  readonly stale: boolean;
+  readonly saved: boolean;
+  readonly serial: number;
+};
+
+export const NO_PARTY_ANSWER: PartyFormState = {
+  version: null,
+  size: null,
+  level: null,
+  error: null,
+  field: null,
+  stale: false,
+  saved: false,
+  serial: 0,
+};
