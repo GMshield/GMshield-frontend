@@ -25,6 +25,7 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: NewShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/new/page');
 const { default: ShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/page');
 const { default: RenameShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/edit/page');
+const { DiceRoller } = await import('@/components/DiceRoller');
 const { default: NewNotePage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/notes/new/page');
 const { createNoteAction, createShieldAction, deleteShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
@@ -675,8 +676,42 @@ describe("a Shield's dice roller (Story 6.3)", () => {
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
     // Story 6.4: the page reads the newest 10 stored rolls with the Shield; the roller itself sends nothing on the server.
+    // Part B: and the account, whose id keys this browser's pending rolls.
     expect(calls(server)).toContain(`GET ${ROLLS}?limit=10`);
-    expect(calls(server).every((call) => call.startsWith(`GET ${SHIELDS}/${FIRST_ID}`))).toBe(true);
+    expect(calls(server)).toContain('GET /api/v1/me');
+    expect(calls(server).every((call) => call.startsWith(`GET ${SHIELDS}/${FIRST_ID}`) || call === 'GET /api/v1/me')).toBe(true);
+  });
+
+  it("Story 6.4 part B: gives the roller the account's id, or null when the account cannot be read", async () => {
+    const ACCOUNT_ID = '0190a0b0-0000-7000-8000-0000000000a1';
+    const routes = {
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+      [`GET ${ROLLS}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+    };
+    const rollerProps = async () => {
+      const found: Record<string, unknown>[] = [];
+      const visit = (node: unknown): void => {
+        if (Array.isArray(node)) {
+          node.forEach(visit);
+        } else if (typeof node === 'object' && node !== null && 'props' in node) {
+          const element = node as { type: unknown; props: { children?: unknown } & Record<string, unknown> };
+          if (element.type === DiceRoller) {
+            found.push(element.props);
+          }
+          visit(element.props.children);
+        }
+      };
+      visit(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    await useBackend({ ...routes, 'GET /api/v1/me': { status: 200, body: { id: ACCOUNT_ID, username: 'Mestre_Ana' } } });
+    expect(await rollerProps()).toMatchObject({ accountId: ACCOUNT_ID, campaignId: CAMPAIGN, shieldId: FIRST_ID });
+    await backend?.close();
+
+    await useBackend({ ...routes, 'GET /api/v1/me': problem(503, 'server.unavailable') });
+    expect(await rollerProps()).toMatchObject({ accountId: null });
   });
 
   it('stays when the notes cannot be read, and beside a Shield with no notes', async () => {
@@ -707,9 +742,12 @@ describe("a Shield's dice roller (Story 6.3)", () => {
     expect(Object.keys(en.shields.dice).sort()).toEqual(Object.keys(ptBR.shields.dice).sort());
     expect(Object.keys(ptBR.shields.dice).sort()).toEqual([
       'clear', 'clearConfirm', 'clearConsequence', 'clearFailed', 'clearTitle', 'cleared', 'die', 'empty', 'failed', 'formula',
-      'invalid', 'label', 'loadFailed', 'log', 'more', 'moreFailed', 'remove', 'roll', 'rollsOne', 'rollsOther', 'sentence',
-      'title', 'unsaved',
+      'invalid', 'label', 'loadFailed', 'log', 'more', 'moreFailed', 'offline', 'remove', 'roll', 'rollsOne', 'rollsOther',
+      'sentence', 'title', 'unsaved',
     ]);
+    // Story 6.4 part B: the line above the log while offline.
+    expect(ptBR.shields.dice.offline).toBe('Sem conexão. As rolagens serão salvas quando ela voltar.');
+    expect(en.shields.dice.offline).toBe('No connection. Rolls will be saved when it returns.');
     // Story 6.4: the log's words, as the spec names them.
     expect(ptBR.shields.dice.label).toBe('Rótulo');
     expect(ptBR.shields.dice.unsaved).toBe('ainda não salva');

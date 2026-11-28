@@ -474,7 +474,8 @@
       "cleared": "Rolagens limpas.",
       "clearFailed": "Não foi possível limpar as rolagens. Tente de novo.",
       "rollsOne": "1 rolagem",
-      "rollsOther": "{count} rolagens"
+      "rollsOther": "{count} rolagens",
+      "offline": "Sem conexão. As rolagens serão salvas quando ela voltar."
     }
   },
   "characters": {

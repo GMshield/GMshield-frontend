@@ -3,9 +3,10 @@ import type { components } from '@/server/backend/generated/public';
 /**
  * The browser's side of a Shield's stored rolls (Story 6.4 part A), towards this site only: a roll is sent with
  * `POST /api/v1/campaigns/{id}/shields/{shieldId}/rolls`, the log is read a page at a time with `GET` on the same path,
- * and cleared with `DELETE`. The relay reaches the backend; the browser never does, and nothing is kept in browser
- * storage (part B adds the pending list). Any answer but the expected one, a refusal or no answer at all (none within
- * {@link ROLL_REQUEST_TIMEOUT_MS} included), is "not saved".
+ * and cleared with `DELETE`. The relay reaches the backend; the browser never does. This module keeps nothing in browser
+ * storage: part B's pending list and its one sender are `pending-rolls.ts`, which sends through {@link sendRoll}. Any
+ * answer but the expected one, a refusal or no answer at all (none within {@link ROLL_REQUEST_TIMEOUT_MS} included), is
+ * "not saved".
  */
 
 /** A stored roll, as the relay answers it. */
@@ -22,8 +23,8 @@ export type NewRoll = components['schemas']['NewRoll'];
 export const ROLL_LOG_PAGE = 10;
 
 /**
- * How long a request may take before it counts as unanswered ("não foi possível salvar"), so a stalled connection never
- * leaves a roll "ainda não salva" for good.
+ * How long a request may take before it counts as unanswered, so a stalled connection never holds a roll in flight for
+ * good: from part B the roll then stays pending ("ainda não salva") and is sent again later.
  */
 export const ROLL_REQUEST_TIMEOUT_MS = 15_000;
 

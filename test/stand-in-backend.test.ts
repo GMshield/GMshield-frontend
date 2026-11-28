@@ -90,7 +90,8 @@ describe('stand-in backend', () => {
       expiresInSeconds: 604800,
       renewAfterSeconds: 900,
     });
-    expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ username: 'mestre_ana' });
+    // Story 6.4 part B: the account's id, which keys the browser's pending rolls.
+    expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ id: '01890a5d-ac96-774b-bcce-b302099a8057', username: 'mestre_ana' });
     expect(answer(contract, 'DELETE', '/api/v1/session', 't')).toEqual({ status: 204, type: null, body: null });
   });
 

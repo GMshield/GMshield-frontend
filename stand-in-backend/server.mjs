@@ -68,7 +68,7 @@
 // answers and its artifact page reads. Story 6.2 part B: the preview names that one note, and a note's move (PUT
 // .../artifacts/{artifactId}/shield) answers it held by "Combate". Story 6.4 part A: a Shield's log holds one stored roll,
 // "2d6+3" labelled "Iniciativa", which the preview counts; a roll sent answers that roll stored now (201), and a clear
-// answers 204.
+// answers 204. Story 6.4 part B (contract 1.60.0): the account (GET /api/v1/me) carries the contract's example id.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';

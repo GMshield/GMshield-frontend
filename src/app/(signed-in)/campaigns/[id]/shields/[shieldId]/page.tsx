@@ -11,6 +11,7 @@ import { ShieldDeleteAction } from '@/components/ShieldDeleteAction';
 import { errorText, translator, type Translate } from '@/messages';
 import { pageParam } from '@/paging';
 import { currentPreferences, currentViews } from '@/preferences';
+import { requestAccount } from '@/server/accounts';
 import { currentSessionToken } from '@/server/session-cookies';
 import { getShield, listRolls, shieldDeletion, shieldNotesPage } from '@/server/shields';
 
@@ -42,7 +43,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * screen's only offline part) comes first: a side column on the left of the notes when the main column is wide enough
  * (a container query), above them otherwise, and it stays when the notes cannot be read. Story 6.4: the roller gets the
  * campaign, the Shield and the newest stored rolls, read with the page, for its log; when they cannot be read the roller
- * still works and its log says so. Another owner's Shield, one of another
+ * still works and its log says so. Part B: the roller also gets the account's id, which keys this browser's pending rolls,
+ * from the layout's one read of the account per request (null when it could not be read: they then live as long as the
+ * tab). Another owner's Shield, one of another
  * campaign or of a campaign being deleted, an unknown one or a malformed one shows the single "Não encontrado." page;
  * another failure is a notice.
  */
@@ -56,11 +59,12 @@ export default async function ShieldPage({ params, searchParams }: Props) {
   ]);
   const t = translator(language);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const [shield, deletion, notes, rolls] = await Promise.all([
+  const [shield, deletion, notes, rolls, account] = await Promise.all([
     getShield(token ?? '', id, shieldId),
     shieldDeletion(token ?? '', id, shieldId),
     shieldNotesPage(token ?? '', id, shieldId, pageParam(query.page), views.notes.size),
     listRolls(token ?? '', id, shieldId, { limit: ROLL_LOG_PAGE }),
+    requestAccount(token ?? ''),
   ]);
   if (!shield.ok) {
     notFoundFor(shield.problem);
@@ -100,6 +104,7 @@ export default async function ShieldPage({ params, searchParams }: Props) {
               language={language}
               campaignId={id}
               shieldId={shield.data.id}
+              accountId={account.ok ? account.data.id : null}
               firstPage={rolls.ok ? rolls.data : null}
             />
           </div>
@@ -131,7 +136,7 @@ function diceLabels(t: Translate): DiceRollerLabels {
   const keys = [
     'title', 'formula', 'roll', 'invalid', 'sentence', 'die', 'label', 'log', 'empty', 'unsaved', 'failed', 'remove', 'more',
     'moreFailed', 'loadFailed', 'clear', 'clearTitle', 'clearConsequence', 'clearConfirm', 'cleared', 'clearFailed', 'rollsOne',
-    'rollsOther',
+    'rollsOther', 'offline',
   ] as const satisfies readonly (keyof DiceRollerLabels)[];
   return Object.fromEntries(keys.map((key) => [key, t(`shields.dice.${key}`)])) as DiceRollerLabels;
 }

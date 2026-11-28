@@ -1639,13 +1639,19 @@
       },
       "Me" : {
         "properties" : {
+          "id" : {
+            "description" : "The account's id: the browser keys this account's pending rolls with it (Story 6.4)",
+            "example" : "01890a5d-ac96-774b-bcce-b302099a8057",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "username" : {
             "description" : "The username, as typed",
             "example" : "mestre_ana",
             "type" : "string"
           }
         },
-        "required" : [ "username" ],
+        "required" : [ "id", "username" ],
         "type" : "object"
       },
       "NewArtifact" : {
@@ -3874,7 +3880,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.59.0"
+    "version" : "1.60.0"
   },
   "openapi" : "3.1.0",
   "paths" : {

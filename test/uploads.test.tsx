@@ -719,6 +719,28 @@ describe('the upload tray (Story 1.14)', () => {
     expect(refresh).toHaveBeenCalledTimes(4);
   });
 
+  it('Story 6.4 part B: never refreshes while the browser is offline (a refresh would throw the page to the error page)', () => {
+    vi.useFakeTimers();
+    let onLine = false;
+    vi.spyOn(window.navigator, 'onLine', 'get').mockImplementation(() => onLine);
+    view({ rows: [{ id: ID, name: 'Livro.pdf', state: 'processing' }] });
+    act(() => vi.advanceTimersByTime(3 * REFRESH_MS));
+    expect(refresh).not.toHaveBeenCalled();
+
+    onLine = true;
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    act(() => vi.advanceTimersByTime(REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    onLine = false;
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    act(() => vi.advanceTimersByTime(3 * REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('a processing material shows its pages done of the total in the pill and the line (Story 1.15)', () => {
     for (const [language, words] of [['pt-BR', 'processando · 0 de 320 páginas'], ['en', 'processing · 0 of 320 pages']] as const) {
       view({

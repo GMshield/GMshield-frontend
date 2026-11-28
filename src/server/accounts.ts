@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
+import { cache } from 'react';
 
 import { createBackendClient } from './backend/client';
 import type { components } from './backend/generated/public';
@@ -101,6 +102,12 @@ export function currentAccount(sessionToken: string, options: CallOptions = {}):
     client.GET('/api/v1/me', { params: { header: { 'X-Session-Token': sessionToken } } }),
   );
 }
+
+/**
+ * The signed-in account, read once per server request (Story 6.4 part B): the signed-in layout and the Shield's page
+ * share this read, so the page's account id (which keys the pending rolls) is the layout's and `/me` is asked once.
+ */
+export const requestAccount = cache((sessionToken: string): Promise<Result<Me>> => currentAccount(sessionToken));
 
 /**
  * Renews the session (Story 1.10): a new token, the presented one still served for the overlap. A refusal

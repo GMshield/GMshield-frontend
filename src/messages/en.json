@@ -474,7 +474,8 @@
       "cleared": "Rolls cleared.",
       "clearFailed": "The rolls could not be cleared. Try again.",
       "rollsOne": "1 roll",
-      "rollsOther": "{count} rolls"
+      "rollsOther": "{count} rolls",
+      "offline": "No connection. Rolls will be saved when it returns."
     }
   },
   "characters": {

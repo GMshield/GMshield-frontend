@@ -22,6 +22,7 @@ describe('contract version', () => {
   });
 
   it('accepts the minimum and newer, refuses older or malformed versions', () => {
+    // Story 6.4 part B: it keys the pending rolls in browser storage with the account's id (`Me.id`), added in 1.60.0.
     // Story 6.4 part A: it keeps a Shield's rolls (`…/shields/{shieldId}/rolls`: POST, GET and DELETE) and reads a Shield
     // deletion's real roll count, added in 1.59.0.
     // Story 6.2 part B: it moves a note to another Shield (`PUT …/artifacts/{artifactId}/shield`) and reads a Shield
@@ -73,10 +74,11 @@ describe('contract version', () => {
     // each reference's tier and the answer's tier events, added in 1.26.0. Story 3.6: it
     // reads and changes a campaign's scope settings, added in 1.25.0 (with the current-scope page, Story 3.5); 1.24.0
     // added a material's deletion, a superseded version's removal and `superseded` (Story 3.4 part B).
-    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.59.0');
-    expect(meetsMinimum('1.59.0')).toBe(true);
-    expect(meetsMinimum('1.59.1')).toBe(true);
+    expect(MINIMUM_BACKEND_CONTRACT_VERSION).toBe('1.60.0');
     expect(meetsMinimum('1.60.0')).toBe(true);
+    expect(meetsMinimum('1.60.1')).toBe(true);
+    expect(meetsMinimum('1.61.0')).toBe(true);
+    expect(meetsMinimum('1.59.0')).toBe(false);
     expect(meetsMinimum('1.58.0')).toBe(false);
     expect(meetsMinimum('1.57.0')).toBe(false);
     expect(meetsMinimum('1.56.0')).toBe(false);

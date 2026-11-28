@@ -3,10 +3,11 @@ import type { ReactNode } from 'react';
 
 import { IndexingNotice } from '@/components/IndexingNotice';
 import { Notice } from '@/components/Notice';
+import { PendingRollsSync } from '@/components/PendingRollsSync';
 import { Shell } from '@/components/Shell';
 import { errorText, problemFields, translator } from '@/messages';
 import { currentPreferences, currentSidebar } from '@/preferences';
-import { currentAccount } from '@/server/accounts';
+import { requestAccount } from '@/server/accounts';
 import { currentConversation } from '@/server/conversations';
 import { currentCampaign, getCampaignScope, listAllCampaigns, listAllSystems } from '@/server/library';
 import { listMaterials, TRAY_STATES } from '@/server/materials';
@@ -53,6 +54,10 @@ import { systemLabel } from './campaigns/rows';
  * Story 3.6: the current campaign's scope settings are read as soon as the campaign is known, for the context bar's
  * summary and its popover. When they cannot be read the bar shows system › campaign without a summary, and the page
  * still renders.
+ *
+ * Story 6.4 part B: {@link PendingRollsSync} sends the account's dice rolls still waiting in this browser (when the layout
+ * mounts, when the connection returns, when the tab becomes visible and every 30 s while it is); it gets the account's id
+ * and renders nothing. The account is read with `requestAccount`, once per request, which the Shield's page shares.
  */
 /**
  * The states the upload tray shows (usability pass, 2026-11-21): a file being sent, waiting its turn or being read. One
@@ -67,7 +72,7 @@ export default async function SignedInLayout({ children }: { readonly children: 
   }
   const [preferences, sidebar, here] = await Promise.all([currentPreferences(), currentSidebar(), currentPath()]);
   const [account, [campaign, scope], materials, conversation, campaigns, systems] = await Promise.all([
-    currentAccount(token),
+    requestAccount(token),
     currentCampaign(token).then(async (found) => [found, found.ok ? await getCampaignScope(token, found.data.id) : null] as const),
     listMaterials(token, TRAY_STATES, { limit: 50 }),
     currentConversation(token),
@@ -152,6 +157,7 @@ export default async function SignedInLayout({ children }: { readonly children: 
       belonging={belonging}
       trayRows={waiting.filter((item) => IN_MOTION.has(item.state))}
     >
+      <PendingRollsSync accountId={account.data.id} />
       {children}
     </Shell>
   );

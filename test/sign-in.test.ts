@@ -120,8 +120,10 @@ describe('cookies and small rules', () => {
 
 describe('the backend calls', () => {
   it('send the session token as X-Session-Token, never a cookie, with the trace', async () => {
-    const server = await useBackend({ 'GET /api/v1/me': { status: 200, body: { username: 'Mestre' } }, 'DELETE /api/v1/session': { status: 204 } });
-    expect(await accounts.currentAccount(SESSION)).toEqual({ ok: true, data: { username: 'Mestre' } });
+    const me = { id: '0190a0b0-0000-7000-8000-0000000000a1', username: 'Mestre' };
+    const server = await useBackend({ 'GET /api/v1/me': { status: 200, body: me }, 'DELETE /api/v1/session': { status: 204 } });
+    // Story 6.4 part B: the account's id comes with its username.
+    expect(await accounts.currentAccount(SESSION)).toEqual({ ok: true, data: me });
     expect(await accounts.endSession(SESSION)).toMatchObject({ ok: true });
     for (const call of server.calls) {
       expect(call.headers['x-session-token']).toBe(SESSION);

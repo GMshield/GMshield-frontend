@@ -1,8 +1,21 @@
 'use client';
 
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore, type FormEvent } from 'react';
 
-import { clearRolls, readRolls, ROLL_LOG_PAGE, sendRoll, type RollPage } from '@/client/rolls';
+import {
+  addPending,
+  dropShield,
+  flush,
+  noPending,
+  onOutcome,
+  pendingFor,
+  removeRoll,
+  restoreRolls,
+  sendingFor,
+  subscribe,
+  type PendingRoll,
+} from '@/client/pending-rolls';
+import { clearRolls, readRolls, ROLL_LOG_PAGE, type RollPage } from '@/client/rolls';
 import { DICE, parseFormula, roll, rollSentence, singleDie, type Formula, type Roll } from '@/dice';
 import type { Language } from '@/messages';
 
@@ -11,6 +24,7 @@ import { useNotifications } from './notifications/NotificationsProvider';
 import { Card } from './PageHeader';
 import { PillButton } from './PillButton';
 import { RollLog, type LogEntry, type RollLogLabels } from './RollLog';
+import { useOnline } from './useOnline';
 
 export type DiceRollerLabels = RollLogLabels & {
   /** The card's heading ("Dados"). */
@@ -39,6 +53,11 @@ export type DiceRollerProps = {
   readonly language: Language;
   readonly campaignId: string;
   readonly shieldId: string;
+  /**
+   * The signed-in account's id, which keys this browser's pending rolls (Story 6.4 part B); null when it could not be
+   * read, and the rolls not saved yet then live as long as the tab.
+   */
+  readonly accountId: string | null;
   /** The newest stored rolls, read with the page (Story 6.4); null when they could not be read. */
   readonly firstPage: RollPage | null;
 };
@@ -49,7 +68,7 @@ const LOG_PAGE = ROLL_LOG_PAGE;
 const LABEL_MAX = 80;
 
 type Log = {
-  /** Newest first: the stored rolls read so far and this visit's rolls, each once by its key. */
+  /** Newest first: the stored rolls read so far and the ones saved during this visit, each once by its key. */
   readonly entries: readonly LogEntry[];
   /** The cursor of the next stored page; undefined once the oldest is read. */
   readonly cursor: string | undefined;
@@ -78,6 +97,34 @@ function newestFirst(entries: readonly LogEntry[]): LogEntry[] {
   return [...entries].sort((a, b) => Date.parse(b.rolledAt) - Date.parse(a.rolledAt));
 }
 
+function entryOf(roll: PendingRoll, state: LogEntry['state']): LogEntry {
+  return {
+    key: roll.key,
+    formula: roll.formula,
+    results: [...roll.results],
+    total: roll.total,
+    label: roll.label,
+    rolledAt: roll.rolledAt,
+    state,
+  };
+}
+
+/**
+ * The log's lines: the saved ones and this browser's pending and refused rolls of the Shield; each key once (saved first,
+ * then the stored list's), newest first.
+ */
+function merged(saved: readonly LogEntry[], pending: readonly PendingRoll[]): LogEntry[] {
+  const known = new Set(saved.map((entry) => entry.key));
+  const waiting: LogEntry[] = [];
+  for (const roll of pending) {
+    if (!known.has(roll.key)) {
+      known.add(roll.key);
+      waiting.push(entryOf(roll, roll.state === 'pending' ? 'pending' : 'failed'));
+    }
+  }
+  return waiting.length === 0 ? [...saved] : newestFirst([...waiting, ...saved]);
+}
+
 /**
  * The Shield's dice roller (Story 6.3), the only part of GMshield that works offline: a row of 44px die buttons (d4 to
  * d100, each rolling one die of its kind), then the bordered "Fórmula" field with the optional "Rótulo" beside it and the
@@ -90,12 +137,22 @@ function newestFirst(entries: readonly LogEntry[]): LogEntry[] {
  *
  * Story 6.4 part A: every roll gets a key from `crypto.randomUUID()`, shows in the log at once with its time and label
  * (the label applies to that roll only, from a die button or the formula, and empties after it), and is sent through
- * this site's relay ({@link sendRoll}), never a Server Action. Until the backend confirms it, it reads "ainda não salva";
- * a refusal or no answer makes it "não foi possível salvar" with a remove control (part A keeps it in memory only). The
- * log ({@link RollLog}) starts from the newest stored rolls read with the page; when they could not be read it says so,
- * and the roller still works.
+ * this site's relay, never a Server Action. The log ({@link RollLog}) starts from the newest stored rolls read with the page;
+ * when they could not be read it says so, and the roller still works.
+ *
+ * Story 6.4 part B (AD-31): a new roll is first kept in this browser's pending list ({@link addPending}, under the account
+ * and the Shield), then sent by the one sender ({@link flush}), which also sends the waiting rolls when the screen opens
+ * and when the connection returns. The log merges the stored rolls with this browser's pending and refused rolls of the
+ * Shield, each once by its key. Until the backend confirms a roll it reads "ainda não salva" (also offline, or with no
+ * answer); a refusal (400, 404 or 409) makes it "não foi possível salvar" with a remove control, which deletes it from the
+ * list; nothing else removes it. The marks follow the sender's results, from
+ * this screen or from the layout's sync, with no reload; another tab's changes show through the `storage` event. While
+ * the browser is offline a line above the log says the rolls will be saved when the connection returns. "Limpar
+ * rolagens" waits while a roll of the Shield is on its way in this tab (confirming checks again); confirming drops the
+ * Shield's pending and refused rolls from the list first, then clears the stored ones, and puts them back when the clear
+ * fails.
  */
-export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }: DiceRollerProps) {
+export function DiceRoller({ labels, language, campaignId, shieldId, accountId, firstPage }: DiceRollerProps) {
   const base = useId();
   const fieldId = `${base}-formula`;
   const labelId = `${base}-label`;
@@ -113,20 +170,41 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
   const [loading, setLoading] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const online = useOnline();
+  const pending = useSyncExternalStore(subscribe, () => pendingFor(accountId, shieldId), noPending);
+  const inFlight = useSyncExternalStore(subscribe, () => sendingFor(accountId, shieldId), () => false);
 
-  function settle(key: string, saved: boolean, created: boolean) {
-    setLog((previous) => {
-      if (!previous.entries.some((entry) => entry.key === key)) {
-        // Cleared or removed meanwhile: nothing left to mark.
-        return previous;
+  useEffect(() => {
+    const stop = onOutcome((outcome) => {
+      if (outcome.accountId !== accountId || outcome.shieldId !== shieldId) {
+        return;
       }
-      return {
-        ...previous,
-        stored: previous.stored + (saved && created ? 1 : 0),
-        entries: previous.entries.map((entry) => (entry.key === key ? { ...entry, state: saved ? 'saved' : 'failed' } : entry)),
-      };
+      const entry: LogEntry = outcome.stored === null ? entryOf(outcome.roll, 'saved') : { ...outcome.stored, state: 'saved' };
+      setLog((previous) =>
+        previous.entries.some((kept) => kept.key === entry.key)
+          ? previous
+          : {
+              ...previous,
+              stored: previous.stored + (outcome.created ? 1 : 0),
+              entries: newestFirst([entry, ...previous.entries]),
+            },
+      );
     });
-  }
+    // The screen opens: send what waits; and again whenever the connection returns.
+    const send = () => void flush(accountId);
+    send();
+    window.addEventListener('online', send);
+    return () => {
+      stop();
+      window.removeEventListener('online', send);
+    };
+  }, [accountId, shieldId]);
+
+  // The log's lines: the stored and saved rolls with this browser's waiting ones; the ones not saved count in a clear.
+  const entries = merged(log.entries, pending);
+  const unconfirmed = entries.length - log.entries.length;
+  // A roll still on its way could be stored after the clear and leave the screen: no clear until each one is answered.
+  const sending = inFlight;
 
   function rollFormula(formula: Formula) {
     const next = roll(formula);
@@ -134,24 +212,17 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
     const key = globalThis.crypto.randomUUID();
     const rolledAt = new Date().toISOString();
     const trimmed = label.trim();
-    const entry: LogEntry = {
+    setLabel('');
+    addPending(accountId, shieldId, {
       key,
+      campaignId,
       formula: next.formula,
       results: [...next.results],
       total: next.total,
       label: trimmed === '' ? null : trimmed,
       rolledAt,
-      state: 'pending',
-    };
-    setLabel('');
-    setLog((previous) => ({ ...previous, entries: [entry, ...previous.entries] }));
-    void sendRoll(campaignId, shieldId, {
-      key,
-      formula: next.formula,
-      results: [...next.results],
-      ...(entry.label === null ? {} : { label: entry.label }),
-      rolledAt,
-    }).then((result) => settle(key, result.ok, result.ok && result.created));
+    });
+    void flush(accountId);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -170,7 +241,7 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
       return;
     }
     setMoreFailed(false);
-    if (log.entries.length >= log.shown + LOG_PAGE || log.cursor === undefined) {
+    if (entries.length >= log.shown + LOG_PAGE || log.cursor === undefined) {
       setLog((previous) => ({ ...previous, shown: previous.shown + LOG_PAGE }));
       return;
     }
@@ -194,6 +265,13 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
   }
 
   async function clear() {
+    // A send that started after the dialog opened (the connection came back) would race the DELETE: no clear then.
+    if (sendingFor(accountId, shieldId)) {
+      return;
+    }
+    // This browser's pending and refused rolls of the Shield go first, so this tab sends none of them after the clear
+    // (another tab may still be sending one; it would then be stored after the clear).
+    const dropped = dropShield(accountId, shieldId);
     setClearing(true);
     const cleared = await clearRolls(campaignId, shieldId);
     setClearing(false);
@@ -202,13 +280,12 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
       setMoreFailed(false);
       notify({ status: 'success', message: labels.cleared });
     } else {
+      // Nothing was cleared: the waiting rolls go back, each as it was, to be sent later.
+      restoreRolls(accountId, shieldId, dropped);
       notify({ status: 'danger', message: labels.clearFailed });
     }
   }
 
-  const unconfirmed = log.entries.filter((entry) => entry.state !== 'saved').length;
-  // A roll still on its way could be stored after the clear and leave the screen: no clear until each one is answered.
-  const sending = log.entries.some((entry) => entry.state === 'pending');
   return (
     <Card heading={labels.title} headingId={headingId}>
       <div className={styles.dice} role="group" aria-label={labels.die}>
@@ -287,8 +364,9 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
       <RollLog
         labels={labels}
         language={language}
-        entries={log.entries.slice(0, log.shown)}
-        more={log.entries.length > log.shown || log.cursor !== undefined}
+        entries={entries.slice(0, log.shown)}
+        more={entries.length > log.shown || log.cursor !== undefined}
+        offline={!online}
         loading={loading}
         loadFailed={loadFailed}
         moreFailed={moreFailed}
@@ -296,7 +374,7 @@ export function DiceRoller({ labels, language, campaignId, shieldId, firstPage }
         clearing={clearing}
         sending={sending}
         onMore={() => void showMore()}
-        onRemove={(key) => setLog((previous) => ({ ...previous, entries: previous.entries.filter((entry) => entry.key !== key) }))}
+        onRemove={(key) => removeRoll(accountId, shieldId, key)}
         onClear={() => void clear()}
       />
     </Card>

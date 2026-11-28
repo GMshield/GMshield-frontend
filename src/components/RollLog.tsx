@@ -37,6 +37,8 @@ export type RollLogLabels = {
   readonly rollsOne: string;
   /** "{count} rolagens". */
   readonly rollsOther: string;
+  /** Above the log while the browser is offline ("Sem conexão. As rolagens serão salvas quando ela voltar.", Story 6.4 part B). */
+  readonly offline: string;
 };
 
 /** A line of the log: a roll as stored (or as made here), and whether the backend has it. */
@@ -49,13 +51,15 @@ export type RollLogProps = {
   readonly entries: readonly LogEntry[];
   /** Whether there is more to show ("Mostrar mais"). */
   readonly more: boolean;
+  /** Whether the browser is offline: the offline line stands above the log (Story 6.4 part B). */
+  readonly offline: boolean;
   readonly loading: boolean;
   readonly loadFailed: boolean;
   readonly moreFailed: boolean;
   /** How many rolls a clear takes; null when the stored ones are not known (no clear then). */
   readonly count: number | null;
   readonly clearing: boolean;
-  /** Whether a roll is still on its way to the backend: "Limpar rolagens" opens nothing until it is answered. */
+  /** Whether a roll of the Shield is being sent: "Limpar rolagens" opens nothing until it is answered. */
   readonly sending: boolean;
   readonly onMore: () => void;
   readonly onRemove: (key: string) => void;
@@ -84,7 +88,9 @@ const subscribeNothing = () => () => undefined;
  * dice and its total. A roll not confirmed yet reads "ainda não salva"; a refused one "não foi possível salvar", with a
  * remove control that has a spoken name. An empty log reads "Nenhuma rolagem ainda.". "Limpar rolagens" opens the 440px
  * confirmation, which names the count; while a roll is still being sent it stays focusable but opens nothing
- * (`aria-disabled`), so no roll is stored after the clear and lost from the screen. Times are the browser's own, so they show once the page runs in it (the server
+ * (`aria-disabled`), so no roll is stored after the clear and lost from the screen. Story 6.4 part B: a roll that waits in
+ * this browser reads "ainda não salva" until it is saved; while the browser is offline, "Sem conexão. As rolagens serão
+ * salvas quando ela voltar." stands under the heading, above the lines. Times are the browser's own, so they show once the page runs in it (the server
  * does not know the GM's time zone).
  */
 export function RollLog({
@@ -92,6 +98,7 @@ export function RollLog({
   language,
   entries,
   more,
+  offline,
   loading,
   loadFailed,
   moreFailed,
@@ -128,6 +135,11 @@ export function RollLog({
           </PillButton>
         )}
       </div>
+      {offline ? (
+        <p className={styles.notice} role="status" data-testid="rolls-offline">
+          {labels.offline}
+        </p>
+      ) : null}
       {loadFailed ? (
         <p className={styles.notice} role="status">
           {labels.loadFailed}
