@@ -21,8 +21,10 @@ import {
   COMBAT_SHIELD,
   FIRST_SHIELD,
   MOVED_NOTE,
+  ROLL_PAGE,
   RENAMED_SHIELD,
   SHIELD_DELETION,
+  STORED_ROLL,
   SHIELD_NOTE,
   SHIELD_NOTES,
   SHIELD_PAGE,
@@ -88,7 +90,8 @@ describe('stand-in backend', () => {
       expiresInSeconds: 604800,
       renewAfterSeconds: 900,
     });
-    expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ username: 'mestre_ana' });
+    // Story 6.4 part B: the account's id, which keys the browser's pending rolls.
+    expect(answer(contract, 'GET', '/api/v1/me', 't').body).toEqual({ id: '01890a5d-ac96-774b-bcce-b302099a8057', username: 'mestre_ana' });
     expect(answer(contract, 'DELETE', '/api/v1/session', 't')).toEqual({ status: 204, type: null, body: null });
   });
 
@@ -565,7 +568,24 @@ describe('stand-in backend', () => {
       expect(SHIELD_DELETION, key).toHaveProperty(key);
     }
     expect(SHIELD_DELETION.notes).toBe(1);
+    expect(SHIELD_DELETION.rolls).toBe(1);
     expect(answer(contract, 'DELETE', shield, 't')).toMatchObject({ status: 202, type: null, body: null });
+  });
+
+  it('answers a Shield\'s log with its one stored roll, a roll sent as stored now (201) and a clear with 204 (Story 6.4 part A)', () => {
+    const rolls = `/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/shields/${FIRST_SHIELD.id}/rolls`;
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', rolls, 't')).toMatchObject({ status: 200, body: ROLL_PAGE });
+    expect(answer(contract, 'POST', rolls, 't')).toMatchObject({ status: 201, body: STORED_ROLL });
+    expect(answer(contract, 'DELETE', rolls, 't')).toMatchObject({ status: 204, type: null, body: null });
+    for (const key of schemas.RollPage!.required ?? []) {
+      expect(ROLL_PAGE, key).toHaveProperty(key);
+    }
+    for (const key of schemas.Roll!.required ?? []) {
+      expect(STORED_ROLL, key).toHaveProperty(key);
+    }
+    expect(STORED_ROLL.total).toBe(STORED_ROLL.results.reduce((sum, face) => sum + face, 0) + 3);
   });
 
   it('answers a note\'s move with the note held by the other Shield, its version unchanged (Story 6.2 part B)', () => {

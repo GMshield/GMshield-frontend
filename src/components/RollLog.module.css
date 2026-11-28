@@ -1,0 +1,153 @@
+/*
+ * The Shield's roll log (Story 6.4), under the latest roll inside the dice card: a heading with "Limpar rolagens", then a
+ * plain list, newest first, one roll a line: the time, then the label, formula and dice (wrapping inside their column at
+ * a phone's width), then the total; an unsaved or refused roll's mark goes under them, so nothing scrolls sideways. A line holds no control but a refused roll's remove, a 44px
+ * square, so lines stay as short as their text and ten of them fit beside the notes.
+ */
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-line-height);
+}
+
+.empty,
+.notice {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) 0;
+}
+
+.line + .line {
+  border-top: 1px solid var(--color-border);
+}
+
+.time {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  line-height: var(--font-meta-line-height);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The label, the formula and the dice: they take the room left and wrap inside it. */
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  min-width: 0;
+}
+
+.label {
+  font-weight: var(--font-label-weight);
+  overflow-wrap: anywhere;
+}
+
+.formula,
+.results {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  overflow-wrap: anywhere;
+}
+
+.results {
+  min-width: 0;
+}
+
+.total {
+  font-weight: var(--font-section-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A roll's state, under its formula and total: the mark, and for a refused roll its remove control at the end. */
+.state {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The mark is text, not only a colour: "ainda não salva" in muted italics, "não foi possível salvar" in the danger colour. */
+.mark {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-meta-size);
+  font-style: italic;
+  line-height: var(--font-meta-line-height);
+}
+
+.failed {
+  color: var(--color-danger);
+  font-style: normal;
+}
+
+.remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch-target);
+  height: var(--space-touch-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background-color: var(--color-hover);
+}
+
+.remove:active {
+  background-color: var(--color-pressed);
+}
+
+.remove svg {
+  width: 20px;
+  height: 20px;
+}
+
+.more {
+  align-self: flex-start;
+}

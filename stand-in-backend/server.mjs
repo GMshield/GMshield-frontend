@@ -66,7 +66,9 @@
 // answers with no body, as declared (202 from Story 6.2 part B, contract 1.58.0). Story 6.2 part A: every artifact names
 // no Shield (`shieldId: null`) but the first Shield's one note, "Pistas da cripta", which its list holds, a new note
 // answers and its artifact page reads. Story 6.2 part B: the preview names that one note, and a note's move (PUT
-// .../artifacts/{artifactId}/shield) answers it held by "Combate".
+// .../artifacts/{artifactId}/shield) answers it held by "Combate". Story 6.4 part A: a Shield's log holds one stored roll,
+// "2d6+3" labelled "Iniciativa", which the preview counts; a roll sent answers that roll stored now (201), and a clear
+// answers 204. Story 6.4 part B (contract 1.60.0): the account (GET /api/v1/me) carries the contract's example id.
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -992,10 +994,10 @@ EXAMPLES['POST /api/v1/campaigns/{id}/shields'] = COMBAT_SHIELD;
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}'] = FIRST_SHIELD;
 EXAMPLES['PATCH /api/v1/campaigns/{id}/shields/{shieldId}'] = RENAMED_SHIELD;
 /**
- * Story 6.1 part B: what goes with a Shield: from Story 6.2 part B its one note, no rolls yet, and it is not the
- * campaign's last (it has two).
+ * Story 6.1 part B: what goes with a Shield: from Story 6.2 part B its one note, from Story 6.4 its one stored roll, and
+ * it is not the campaign's last (it has two).
  */
-export const SHIELD_DELETION = { notes: 1, rolls: 0, last: false };
+export const SHIELD_DELETION = { notes: 1, rolls: 1, last: false };
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/deletion'] = SHIELD_DELETION;
 
 /**
@@ -1032,6 +1034,22 @@ EXAMPLES['POST /api/v1/campaigns/{id}/shields/{shieldId}/notes'] = SHIELD_NOTE;
 /** Story 6.2 part B (contract 1.58.0): a note's move answers the note held by "Combate", its version unchanged. */
 export const MOVED_NOTE = { ...SHIELD_NOTE, shieldId: COMBAT_SHIELD.id };
 EXAMPLES['PUT /api/v1/campaigns/{campaignId}/artifacts/{artifactId}/shield'] = MOVED_NOTE;
+/**
+ * Story 6.4 part A (contract 1.59.0): a Shield's log holds one stored roll, "2d6+3" labelled "Iniciativa"; a roll sent
+ * answers it as stored now (201: a POST that declares 201 answers it rather than its 200, the repeat).
+ */
+export const STORED_ROLL = {
+  id: '0190a0b0-0000-7000-8000-000000000b01',
+  key: '3b241101-e2bb-4255-8caf-4136c566a962',
+  formula: '2d6+3',
+  results: [4, 5],
+  total: 12,
+  label: 'Iniciativa',
+  rolledAt: '2026-11-27T12:00:00Z',
+};
+export const ROLL_PAGE = { items: [STORED_ROLL], total: 1 };
+EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/rolls'] = ROLL_PAGE;
+EXAMPLES['POST /api/v1/campaigns/{id}/shields/{shieldId}/rolls'] = STORED_ROLL;
 
 /** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
 export function tinyPdf(text) {
@@ -1154,7 +1172,8 @@ export function answer(contract, method, pathname, traceId, search = '') {
     const statuses = Object.keys(operation.responses ?? {})
       .filter((code) => /^2\d\d$/.test(code))
       .sort((a, b) => a.localeCompare(b));
-    const status = Number(statuses[0] ?? 204);
+    // Story 6.4: a POST that declares 201 and 200 (a roll stored now, or its repeat) answers 201.
+    const status = method.toUpperCase() === 'POST' && statuses.includes('201') ? 201 : Number(statuses[0] ?? 204);
     const declared = operation.responses?.[String(status)] ?? {};
     const headers = headersOf(contract, declared.headers);
     const content = declared.content ?? {};

@@ -54,15 +54,31 @@
   line-height: var(--font-label-line-height);
 }
 
-.row {
+/*
+ * Story 6.4: "Fórmula" and the optional "Rótulo" side by side, each with its label above it, and the "Rolar" pill at the
+ * end of the row, level with the fields; at a phone's width they wrap, the pill under them.
+ */
+.fields {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: var(--space-2);
+}
+
+.field {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.submit {
+  flex: none;
 }
 
 /* The bordered field (as search/SearchPage.module.css `.input`). */
 .input {
-  flex: 1 1 8rem;
   min-width: 0;
   min-height: var(--space-touch-target);
   padding: 0 var(--space-4);

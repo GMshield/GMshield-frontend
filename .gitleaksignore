@@ -1,0 +1,5 @@
+# Gitleaks false positives (fingerprints: commit:file:rule:line). Each is a fixed test placeholder, not a secret.
+# Story 6.4: the contract's example of a roll's key (a random UUID the browser makes), in the stand-in and two tests.
+f47d1f247c61b09873e23a863c38cb13a29fb3a7:stand-in-backend/server.mjs:generic-api-key:1043
+f47d1f247c61b09873e23a863c38cb13a29fb3a7:test/shields.test.ts:generic-api-key:634
+f47d1f247c61b09873e23a863c38cb13a29fb3a7:test/rolls-relay.test.ts:generic-api-key:16

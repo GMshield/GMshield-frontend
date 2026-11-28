@@ -25,10 +25,12 @@ const { default: CampaignPage } = await import('@/app/(signed-in)/campaigns/[id]
 const { default: NewShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/new/page');
 const { default: ShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/page');
 const { default: RenameShieldPage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/edit/page');
+const { DiceRoller } = await import('@/components/DiceRoller');
 const { default: NewNotePage } = await import('@/app/(signed-in)/campaigns/[id]/shields/[shieldId]/notes/new/page');
 const { createNoteAction, createShieldAction, deleteShieldAction, renameShieldAction } = await import('@/app/(signed-in)/campaigns/[id]/shields/actions');
 const ptBR = (await import('@/messages/pt-BR.json')).default;
 const en = (await import('@/messages/en.json')).default;
+const { errorText } = await import('@/messages');
 const { startScripted } = await import('./support/servers');
 type Scripted = Awaited<ReturnType<typeof startScripted>>;
 type ShieldFormState = import('@/app/(signed-in)/campaigns/[id]/shields/form-state').ShieldFormState;
@@ -627,12 +629,23 @@ describe("a Shield's notes (Story 6.2 part A)", () => {
 
 describe("a Shield's dice roller (Story 6.3)", () => {
   const NOTES = `${SHIELDS}/${FIRST_ID}/notes`;
+  const ROLLS = `${SHIELDS}/${FIRST_ID}/rolls`;
+  const ROLL = {
+    id: '0190a0b0-0000-7000-8000-000000000b01',
+    key: '3b241101-e2bb-4255-8caf-4136c566a962',
+    formula: '2d6+3',
+    results: [4, 5],
+    total: 12,
+    label: 'Iniciativa',
+    rolledAt: '2026-11-27T12:00:00Z',
+  };
   const NOTE_ROW = { id: '0190a0b0-0000-7000-8000-000000000a12', recordType: 'note', name: 'Pistas da cripta', version: 1, createdAt: '2026-11-27T12:00:00Z', sharedFrom: null, shieldId: FIRST_ID };
 
-  it('puts the roller first, before the notes: its heading, the die buttons d4 to d100, "Fórmula" and "Rolar", in both languages', async () => {
+  it('puts the roller first, before the notes: its heading, the die buttons d4 to d100, "Fórmula", "Rótulo" and "Rolar", in both languages', async () => {
     const server = await useBackend({
       [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
       [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [NOTE_ROW], total: 1 } },
+      [`GET ${ROLLS}?limit=10`]: { status: 200, body: { items: [ROLL], total: 1 } },
     });
     for (const [language, messages] of LANGUAGES) {
       cookieJar['__Host-gmshield-lang'] = language;
@@ -643,6 +656,14 @@ describe("a Shield's dice roller (Story 6.3)", () => {
       const dice = [...html.matchAll(/<button type="button"[^>]*>d(\d+)<\/button>/g)].map((match) => Number(match[1]));
       expect(dice).toEqual([4, 6, 8, 10, 12, 20, 100]);
       expect(html).toMatch(new RegExp(`<label[^>]*>${messages.shields.dice.formula}</label>`));
+      // Story 6.4: the optional label beside the formula, and the log under the roller with its one stored roll.
+      expect(html).toMatch(new RegExp(`<label[^>]*>${messages.shields.dice.label}</label>`));
+      expect(html).toMatch(/<input[^>]*maxlength="80"/i);
+      expect(html).toMatch(new RegExp(`<h3[^>]*>${messages.shields.dice.log}</h3>`));
+      expect(html.toLowerCase()).toContain(`datetime="${ROLL.rolledAt.toLowerCase()}"`);
+      expect(html).toContain('>Iniciativa</span>');
+      expect(html).not.toContain(messages.shields.dice.unsaved);
+      expect(html).toContain(`>${messages.shields.dice.clear}</button>`);
       expect(html).toMatch(/<input[^>]*aria-invalid="false"/);
       // "Rolar" is outlined: the screen's one solid pill stays "Nova nota".
       expect(solids(html)).toEqual([messages.shields.notes.new]);
@@ -654,8 +675,43 @@ describe("a Shield's dice roller (Story 6.3)", () => {
       expect(html).toMatch(/<div[^>]*aria-live="polite"[^>]*><\/div>/);
       expect(html).not.toMatch(/<[^>]+\sstyle=/);
     }
-    // The roller reads nothing from the backend: the Shield screen's calls are the ones it made before Story 6.3.
-    expect(calls(server).every((call) => call.startsWith(`GET ${SHIELDS}/${FIRST_ID}`))).toBe(true);
+    // Story 6.4: the page reads the newest 10 stored rolls with the Shield; the roller itself sends nothing on the server.
+    // Part B: and the account, whose id keys this browser's pending rolls.
+    expect(calls(server)).toContain(`GET ${ROLLS}?limit=10`);
+    expect(calls(server)).toContain('GET /api/v1/me');
+    expect(calls(server).every((call) => call.startsWith(`GET ${SHIELDS}/${FIRST_ID}`) || call === 'GET /api/v1/me')).toBe(true);
+  });
+
+  it("Story 6.4 part B: gives the roller the account's id, or null when the account cannot be read", async () => {
+    const ACCOUNT_ID = '0190a0b0-0000-7000-8000-0000000000a1';
+    const routes = {
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+      [`GET ${ROLLS}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+    };
+    const rollerProps = async () => {
+      const found: Record<string, unknown>[] = [];
+      const visit = (node: unknown): void => {
+        if (Array.isArray(node)) {
+          node.forEach(visit);
+        } else if (typeof node === 'object' && node !== null && 'props' in node) {
+          const element = node as { type: unknown; props: { children?: unknown } & Record<string, unknown> };
+          if (element.type === DiceRoller) {
+            found.push(element.props);
+          }
+          visit(element.props.children);
+        }
+      };
+      visit(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    await useBackend({ ...routes, 'GET /api/v1/me': { status: 200, body: { id: ACCOUNT_ID, username: 'Mestre_Ana' } } });
+    expect(await rollerProps()).toMatchObject({ accountId: ACCOUNT_ID, campaignId: CAMPAIGN, shieldId: FIRST_ID });
+    await backend?.close();
+
+    await useBackend({ ...routes, 'GET /api/v1/me': problem(503, 'server.unavailable') });
+    expect(await rollerProps()).toMatchObject({ accountId: null });
   });
 
   it('stays when the notes cannot be read, and beside a Shield with no notes', async () => {
@@ -666,20 +722,45 @@ describe("a Shield's dice roller (Story 6.3)", () => {
     const failed = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
     expect(failed).toContain(ptBR.errors.codes.server.unavailable);
     expect(failed).toContain(`>${ptBR.shields.dice.roll}</button>`);
+    // Story 6.4: the rolls could not be read either: the log says so and the roller stays.
+    expect(failed).toContain(ptBR.shields.dice.loadFailed);
     await backend?.close();
 
     await useBackend({
       [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
       [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+      [`GET ${ROLLS}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
     });
     const empty = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
     expect(empty).toContain(ptBR.shields.empty);
+    expect(empty).toContain(ptBR.shields.dice.empty);
+    expect(empty).not.toContain(ptBR.shields.dice.loadFailed);
     expect(empty).toContain(`>${ptBR.shields.dice.roll}</button>`);
   });
 
   it('keeps the same keys in both languages, and the same spoken sentence', () => {
     expect(Object.keys(en.shields.dice).sort()).toEqual(Object.keys(ptBR.shields.dice).sort());
-    expect(Object.keys(ptBR.shields.dice).sort()).toEqual(['die', 'formula', 'invalid', 'roll', 'sentence', 'title']);
+    expect(Object.keys(ptBR.shields.dice).sort()).toEqual([
+      'clear', 'clearConfirm', 'clearConsequence', 'clearFailed', 'clearTitle', 'cleared', 'die', 'empty', 'failed', 'formula',
+      'invalid', 'label', 'loadFailed', 'log', 'more', 'moreFailed', 'offline', 'remove', 'roll', 'rollsOne', 'rollsOther',
+      'sentence', 'title', 'unsaved',
+    ]);
+    // Story 6.4 part B: the line above the log while offline.
+    expect(ptBR.shields.dice.offline).toBe('Sem conexão. As rolagens serão salvas quando ela voltar.');
+    expect(en.shields.dice.offline).toBe('No connection. Rolls will be saved when it returns.');
+    // Story 6.4: the log's words, as the spec names them.
+    expect(ptBR.shields.dice.label).toBe('Rótulo');
+    expect(ptBR.shields.dice.unsaved).toBe('ainda não salva');
+    expect(ptBR.shields.dice.failed).toBe('não foi possível salvar');
+    expect(ptBR.shields.dice.empty).toBe('Nenhuma rolagem ainda.');
+    expect(ptBR.shields.dice.more).toBe('Mostrar mais');
+    expect(ptBR.shields.dice.clear).toBe('Limpar rolagens');
+    // The backend's roll refusals have their own texts, in both languages.
+    for (const messages of [ptBR, en]) {
+      expect(messages.errors.codes.request.roll_invalid).toContain('{labelMax}');
+      expect(messages.errors.codes.request.roll_key_taken).not.toBe('');
+    }
+    expect(errorText({ status: 400, category: 'request', code: 'request.roll_invalid', params: { labelMax: 80 } }, 'pt-BR')).toContain('80');
     expect(ptBR.shields.dice.invalid).toBe('Use o formato 2d6+3.');
     expect(en.shields.dice.invalid).toBe('Use the format 2d6+3.');
     expect(ptBR.shields.dice.formula).toBe('Fórmula');

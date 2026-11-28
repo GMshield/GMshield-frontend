@@ -1248,6 +1248,65 @@ they sit in `src/`.
     It stays when the notes cannot be read.
   - Messages `shields.dice.*` (`title`, `formula`, `roll`, `invalid`, `sentence`, `die`). The stand-in and the demo backend
     need no change.
+- **Keep the rolls (Story 6.4 part A, public contract 1.59.0).** The backend stores each roll with its Shield; the
+  browser still draws the dice and shows each roll at once.
+  - Every roll gets a key from `crypto.randomUUID()` and goes, with its normalised formula, results, optional label and
+    time (`toISOString()`), through the relay `src/app/api/v1/campaigns/[id]/shields/[shieldId]/rolls/route.ts` (POST,
+    and GET and DELETE for the log; same origin, the session cookie, ids checked, a body of the wrong shape or a
+    malformed `limit`/`cursor` refused as `request.invalid` before the backend) and `src/client/rolls.ts`
+    (`sendRoll`, `readRolls`, `clearRolls`), never a Server Action. The relay answers 201 for a roll stored now and 200
+    for one already held under its key (`src/server/shields.ts` `keepRoll` keeps the backend's status); `listRolls` and
+    `clearRolls` sit beside it.
+  - `DiceRoller` gains the optional "Rótulo" field beside "Fórmula" (at most 80 characters): it applies to the next roll,
+    from a die button or the formula, and empties after it. Its props now name the campaign, the Shield, the
+    interface's language and `firstPage`, the newest 10 stored rolls the Shield's page reads with the Shield (null when
+    that read fails: the roller still works and the log says "Não foi possível carregar as rolagens salvas.").
+  - `RollLog` (`components/RollLog.tsx`), under the latest result: the newest 10 lines and "Mostrar mais" for 10 more
+    (from the rolls already in memory, else the next stored page by cursor). A line is the time (hour:minute in the
+    browser's own time zone, with the day and month when not from today; it shows once the page runs in the browser),
+    the label, the formula, the dice and the total. A roll not confirmed yet reads "ainda não salva"; a refusal or no
+    answer makes it "não foi possível salvar" with a 44px remove control named "Remover a rolagem {formula} das
+    {time}" (part A kept it in memory only; part B below adds the pending list and resending). An empty log reads
+    "Nenhuma rolagem ainda.". "Limpar rolagens" (shown while the log holds something) opens the 440px confirmation,
+    titled with the count ("Limpar 3 rolagens?"); confirming clears the stored rolls and the log and says
+    "Rolagens limpas." in a toast. The log merges the stored pages and this visit's rolls once each by key, newest
+    first (part B adds this browser's waiting rolls).
+  - Messages `shields.dice.*` gain `label`, `log`, `empty`, `unsaved`, `failed`, `remove`, `more`, `moreFailed`,
+    `loadFailed`, `clear`, `clearTitle`, `clearConsequence`, `clearConfirm`, `cleared`, `clearFailed`, `rollsOne` and
+    `rollsOther`. `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.59.0. The stand-in lists one stored roll, answers a roll sent
+    with it (201) and counts it in the deletion preview; the demo backend keeps the rolls of each Shield in memory.
+- **Rolls that wait and are sent again (Story 6.4 part B, AD-31, public contract 1.60.0).** A roll the backend has not
+  confirmed stays in this browser and is sent again (no Service Worker, never a cookie).
+  - `src/client/pending-rolls.ts` holds the list and the one sender, and keeps nothing else in browser storage. Each
+    Shield's list is in `localStorage` under `gmshield:rolls:{accountId}:{shieldId}`, an array of `{key, campaignId,
+    formula, results, total, label, rolledAt, state: 'pending' | 'refused'}`. Every read and write is guarded: when
+    storage cannot be reached or a write fails, the list lives in the tab's memory (part A's behaviour); malformed data
+    under a key is ignored. Without an account id (the account could not be read) the list is the tab's only.
+  - `addPending` writes a new roll as `pending` before its POST; `flush(accountId)` sends every pending roll of the
+    account, across its Shields, through `sendRoll` (15 s timeout), never the same key twice at once in one tab (another
+    tab may send it too; the backend answers a held key with the stored roll, so a repeat is harmless), and nothing
+    while `navigator.onLine` is false. 200 or 201 removes the roll; 400, 404 or 409 (with or without a problem body)
+    makes it `refused`, kept until the GM removes it (`removeRoll`): nothing leaves storage without the GM, so a stale
+    tab of another account or a proxy's 404 never deletes a roll (refused rolls of a Shield deleted elsewhere may stay
+    unseen). 401, another status, a timeout or no connection keeps it `pending`. `subscribe` (for
+    `useSyncExternalStore`, with the `storage` event for other tabs), `pendingFor`, `sendingFor`, `onOutcome`,
+    `dropShield` and `restoreRolls` serve the screen. Another account's lists are never read, sent or removed; signing
+    out leaves them in place.
+  - `PendingRollsSync` (`components/PendingRollsSync.tsx`), in the signed-in layout with `Me.id`, flushes when the
+    layout mounts (a full page load: the next sign-in, or a tab closed before its rolls were saved; a client navigation
+    keeps it mounted), on `online`, when the tab becomes visible, and every 30 s while it is visible (a flush with
+    nothing pending or offline does nothing); it renders nothing. The layout and the Shield's page share one read of the
+    account per request (`requestAccount`, a React `cache()`), which gives `DiceRoller` its `accountId`.
+  - `DiceRoller` keeps each new roll with `addPending`, then flushes; it also flushes when it opens and on `online`. The
+    log merges the stored rolls with this browser's pending and refused rolls of the Shield, once each by key: a
+    pending one reads "ainda não salva", a refused one "não foi possível salvar" with its remove control. The marks
+    follow the sender's results with no reload. While `useOnline()` is false, "Sem conexão. As rolagens serão salvas
+    quando ela voltar." stands above the log's lines (`shields.dice.offline`). "Limpar rolagens" waits while a roll of
+    the Shield is in flight in this tab, and confirming checks again; its dialog counts the waiting rolls, and confirming
+    drops them from storage before the DELETE and puts them back, each as it was, when the clear fails.
+  - `useRefreshWhileMoving` no longer refreshes while the browser is offline: a `router.refresh()` offline throws the
+    page to the browser's error page, which took the Shield's screen away from offline rolling.
+  - `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.60.0 (`Me.id`); the stand-in answers the contract's example id.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

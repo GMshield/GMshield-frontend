@@ -21,6 +21,7 @@ const { default: SignedInLayout } = await import('@/app/(signed-in)/layout');
 // The layout tests' plain page: a heading and one sentence in the interface's language (from Story 5.1 "Personagens"
 // lists the campaign's character sheets, in test/artifacts.test.tsx, and no entry page is a placeholder any more).
 const { PageHeader } = await import('@/components/PageHeader');
+const { PendingRollsSync } = await import('@/components/PendingRollsSync');
 const { translator } = await import('@/messages');
 const { currentPreferences } = await import('@/preferences');
 async function PlainPage() {
@@ -39,7 +40,8 @@ type GameRecord = import('@/server/library').GameRecord;
 
 const SESSION = 'sessionTokenBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const CREDENTIAL = 'configured-service-credential-0123456789';
-const ME = { status: 200, body: { username: 'Mestre_Ana' } };
+const ACCOUNT_ID = '0190a0b0-0000-7000-8000-0000000000a1';
+const ME = { status: 200, body: { id: ACCOUNT_ID, username: 'Mestre_Ana' } };
 const CAMPAIGN = {
   status: 200,
   body: { id: '0190a0b0-0000-7000-8000-000000000002', name: 'First campaign', system: { id: '0190a0b0-0000-7000-8000-000000000001', name: 'Untitled system' } },
@@ -132,6 +134,27 @@ describe('the signed-in layout (Story 1.11)', () => {
     expect(await layoutHtml()).toContain('data-wide="closed"');
     cookieJar['__Host-gmshield-sidebar'] = '<script>';
     expect(await layoutHtml()).toContain('data-wide="open"');
+  });
+
+  it("Story 6.4 part B: sends the account's waiting dice rolls on every signed-in page, given the account's id, rendering nothing", async () => {
+    await useBackend({ 'GET /api/v1/me': ME, 'GET /api/v1/campaigns/current': CAMPAIGN });
+    const tree = await SignedInLayout({ children: createElement('p', null, 'page') });
+    const found: unknown[] = [];
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+      } else if (typeof node === 'object' && node !== null && 'props' in node) {
+        const element = node as { type: unknown; props: { children?: unknown } & Record<string, unknown> };
+        if (element.type === PendingRollsSync) {
+          found.push(element.props);
+        }
+        visit(element.props.children);
+      }
+    };
+    visit(tree);
+    expect(found).toEqual([{ accountId: ACCOUNT_ID }]);
+    // It renders nothing of its own.
+    expect(renderToStaticMarkup(createElement(PendingRollsSync, { accountId: ACCOUNT_ID }))).toBe('');
   });
 
   it('signed out: the sign-in screen at /, with no backend call', async () => {

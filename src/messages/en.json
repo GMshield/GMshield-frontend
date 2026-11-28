@@ -457,7 +457,25 @@
       "roll": "Roll",
       "invalid": "Use the format 2d6+3.",
       "sentence": "{formula}: {dice}, total {total}",
-      "die": "Roll one die"
+      "die": "Roll one die",
+      "label": "Label",
+      "log": "Rolls",
+      "empty": "No rolls yet.",
+      "unsaved": "not saved yet",
+      "failed": "could not be saved",
+      "remove": "Remove the {formula} roll of {time}",
+      "more": "Show more",
+      "moreFailed": "More rolls could not be loaded.",
+      "loadFailed": "The saved rolls could not be loaded. New rolls still work and are saved.",
+      "clear": "Clear rolls",
+      "clearTitle": "Clear {rolls}?",
+      "clearConsequence": "They leave the log on every device. This cannot be undone.",
+      "clearConfirm": "Clear rolls",
+      "cleared": "Rolls cleared.",
+      "clearFailed": "The rolls could not be cleared. Try again.",
+      "rollsOne": "1 roll",
+      "rollsOther": "{count} rolls",
+      "offline": "No connection. Rolls will be saved when it returns."
     }
   },
   "characters": {
@@ -547,6 +565,8 @@
         "shield_name_invalid": "The name needs {min} to {max} characters.",
         "shield_name_taken": "This campaign already has a Shield with this name.",
         "last_shield": "A campaign needs at least one Shield.",
+        "roll_invalid": "This roll could not be saved: its formula, dice, label (up to {labelMax} characters) or time do not match.",
+        "roll_key_taken": "This roll is already saved in another Shield.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
         "conversation_name_invalid": "The name needs {min} to {max} characters.",
         "note_type_fixed": "A note in a Shield stays a note: its type cannot change."
