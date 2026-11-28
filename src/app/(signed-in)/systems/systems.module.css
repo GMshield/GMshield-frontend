@@ -177,3 +177,48 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
+
+/*
+ * Story 7.2: the item encyclopedia's name filter, in its list's toolbar: a label, a bordered search field and "Filtrar"
+ * on one line, the field taking the room left; on a phone the label sits above the field and "Filtrar".
+ */
+.itemFilter {
+  display: flex;
+  flex: 1 1 22rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.itemFilterLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-label-size);
+  line-height: var(--font-label-line-height);
+  white-space: nowrap;
+}
+
+.itemFilterInput {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: var(--space-touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-field);
+  background-color: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--motion-fade) ease-out;
+}
+
+.itemFilterInput:hover {
+  border-color: var(--color-text);
+}
+
+/* A phone: the label on its own line, then the field and "Filtrar" side by side. */
+@media (max-width: 767px) {
+  .itemFilterLabel {
+    flex-basis: 100%;
+  }
+}

@@ -33,6 +33,10 @@ import { listPage, type ListPage } from './list-page';
  *   answers, read-only, an artifact shared into the campaign asked, `sharedFrom` naming its own campaign; every other
  *   call here answers it `request.not_found` there.
  * - Story 6.2 part B (contract 1.58.0): {@link moveNote} moves a note a Shield holds to another Shield of its campaign.
+ * - Story 7.2 (contract 1.62.0): {@link listCampaignItems} reads the campaign's item encyclopedia, the item records of
+ *   its scope (each with its tier, material and page) and its item artifacts (own, and shared into it with
+ *   `sharedFrom`; one that overrides a record names it in `overrides`, in that record's place), alphabetical, filtered by
+ *   name (`q`); {@link itemsPage} cuts it into a screen's pages.
  */
 type Schemas = components['schemas'];
 export type Artifact = Schemas['Artifact'];
@@ -54,6 +58,8 @@ export type RelationTarget = Schemas['RelationTarget'];
 export type RelationTargetPage = Schemas['RelationTargetPage'];
 export type ArtifactSharedWith = Schemas['ArtifactSharedWith'];
 export type ArtifactSharedFrom = Schemas['ArtifactSharedFrom'];
+export type CampaignItem = Schemas['CampaignItem'];
+export type CampaignItemPage = Schemas['CampaignItemPage'];
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -339,4 +345,35 @@ export function relationTargets(
       params: { header: session(sessionToken), path: { campaignId, artifactId }, query: { ...query } },
     }),
   );
+}
+
+/**
+ * One page of the campaign's item encyclopedia (Story 7.2): the entries whose name contains `q` (case and accents
+ * ignored; at most 200 characters), from `offset`, at most `limit`, alphabetical, with how many match in all.
+ */
+export function listCampaignItems(
+  sessionToken: string,
+  campaignId: string,
+  query: { readonly q?: string; readonly offset?: number; readonly limit?: number } = {},
+  options: CallOptions = {},
+): Promise<Result<CampaignItemPage>> {
+  return call('artifacts.items', options, (client) =>
+    client.GET('/api/v1/campaigns/{campaignId}/items', {
+      params: { header: session(sessionToken), path: { campaignId }, query: { ...query } },
+    }),
+  );
+}
+
+/**
+ * Page `page` of a campaign's item encyclopedia, `size` rows a page, of the entries whose name contains `q` when it is
+ * not blank, as a screen shows it ({@link listPage}).
+ */
+export function itemsPage(
+  sessionToken: string,
+  campaignId: string,
+  q: string,
+  page: number,
+  size: number,
+): Promise<Result<ListPage<CampaignItem>>> {
+  return listPage((ask) => listCampaignItems(sessionToken, campaignId, q === '' ? ask : { ...ask, q }), page, size);
 }

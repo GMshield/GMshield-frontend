@@ -52,7 +52,6 @@ import {
   artifactTypeOptions,
   artifactVersionsTexts,
   fromOf,
-  FROM_CHARACTERS,
 } from '../texts';
 
 type Query = Readonly<Record<string, string | string[] | undefined>>;
@@ -145,7 +144,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
  *
  * Story 5.5 part A: "Substituição" ({@link ArtifactOverride}), between the fields and "Fontes", on every version shown
  * (the mark is the artifact's, not a version's): the record it overrides as a link to its page, or that it overrides
- * none, with "Substituir um registro" (the picker) or "Remover substituição".
+ * none, with "Substituir um registro" (the picker) or "Remover substituição". From Story 7.2 the link opens the
+ * campaign's record page, which leads back here.
+ *
+ * Story 7.2: opened from the item encyclopedia (`from=items`), the way back, the delete and every link of "Versões"
+ * lead back to that tab, as they do for "Personagens".
  *
  * Story 5.5 part B: "Relacionados" ({@link ArtifactRelations}), after "Substituição", on every version shown too: the
  * records the artifact is related to, from either side, each linking to its page (an artifact's, or
@@ -318,7 +321,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
   // Every page link of "Versões" keeps the version shown and where the page was opened from.
   const pageQuery: Record<string, string> = {};
   if (from !== null) {
-    pageQuery.from = FROM_CHARACTERS;
+    pageQuery.from = from;
   }
   if (older) {
     pageQuery.version = String(version);
@@ -413,6 +416,7 @@ export default async function ArtifactPage({ params, searchParams }: Props) {
       <ArtifactOverride
         campaignId={campaignId}
         artifactId={artifact.data.id}
+        from={from}
         override={
           // Null for none (and absent from a backend before contract 1.50.0).
           overrides

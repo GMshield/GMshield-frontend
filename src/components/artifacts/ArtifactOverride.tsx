@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { startTransition, useActionState, useId, useState } from 'react';
 
+import type { ArtifactFrom } from '@/app/(signed-in)/campaigns/[id]/artifacts/texts';
 import type { Language } from '@/messages';
 
 import { PillButton } from '../PillButton';
@@ -34,6 +35,8 @@ export type ArtifactOverrideTexts = OverridePickerTexts & {
 export type ArtifactOverrideProps = {
   readonly campaignId: string;
   readonly artifactId: string;
+  /** Story 7.2: where the artifact's page was opened from ("Personagens", the item encyclopedia), kept by the record's link. */
+  readonly from?: ArtifactFrom | null;
   readonly override: ShownOverride | null;
   /** The record types of the campaign's system, as the page names them; the picker's select. */
   readonly types: readonly { readonly key: string; readonly label: string }[];
@@ -47,9 +50,23 @@ export type ArtifactOverrideProps = {
 };
 
 /**
+ * The address of the record an artifact overrides (Story 7.2): the campaign's record page, which leads back to the
+ * artifact (`artifact=`), keeping where the artifact's page was opened from (`from=characters` or `from=items`).
+ */
+export function overriddenRecordHref(campaignId: string, recordId: string, artifactId: string, from: ArtifactFrom | null): string {
+  const query = new URLSearchParams();
+  if (from !== null) {
+    query.set('from', from);
+  }
+  query.set('artifact', artifactId);
+  return `/campaigns/${encodeURIComponent(campaignId)}/records/${encodeURIComponent(recordId)}?${query.toString()}`;
+}
+
+/**
  * "Substituição" on an artifact's page (Story 5.5 part A), between its fields and "Fontes". With no mark it says the
  * artifact overrides no record and offers "Substituir um registro", which opens the {@link OverridePicker}; with one it
- * names the record as a link to its page (`/search/records/{id}`) with its type, says when the mark has no effect (the
+ * names the record as a link to its page with its type (from Story 7.2 the campaign's record page,
+ * {@link overriddenRecordHref}, whose way back is this artifact), says when the mark has no effect (the
  * record deleted or out of the campaign's scope; no link then), and offers "Remover substituição". Each change goes
  * through its Server Action, whose toast says it applies from the next question; a refusal shows as an alert here, or
  * in the picker for "Substituir".
@@ -57,6 +74,7 @@ export type ArtifactOverrideProps = {
 export function ArtifactOverride({
   campaignId,
   artifactId,
+  from = null,
   override,
   types,
   recordType,
@@ -100,7 +118,7 @@ export function ArtifactOverride({
             {override.removed ? (
               <span className={styles.target}>{override.name}</span>
             ) : (
-              <Link className={styles.link} href={`/search/records/${encodeURIComponent(override.recordId)}`}>
+              <Link className={styles.link} href={overriddenRecordHref(campaignId, override.recordId, artifactId, from)}>
                 {override.name}
               </Link>
             )}

@@ -24,7 +24,7 @@ const DEFAULT_TYPE = 'note';
 
 /**
  * "Novo artefato" (Story 5.1): the form as a page of the main column, under the way back to the campaign's artifacts
- * tab, or to "Personagens" when it was opened from there (`from=characters`) ({@link ArtifactForm}): the record type (one of the campaign's system's, core or approved; `?type=`
+ * tab, or to "Personagens" (`from=characters`) or (Story 7.2) the item encyclopedia (`from=items`) when it was opened from there ({@link ArtifactForm}): the record type (one of the campaign's system's, core or approved; `?type=`
  * chooses it at the start, as "Nova ficha" does with `character_sheet`, else a note), the name, the fields and the
  * content. Once it is saved, the artifact's page opens. Another owner's campaign, an unknown one or a malformed one shows
  * the single "Não encontrado." page; another failure is a notice.
@@ -45,7 +45,8 @@ export default async function NewArtifactPage({
     return <Notice status="danger" language={language} message={errorText(campaign.problem, language)} dismissible={false} />;
   }
   const campaignId = campaign.data.id;
-  // Opened from "Personagens" ("Nova ficha"), the way back and "Cancelar" lead there, and so does the saved artifact.
+  // Opened from "Personagens" ("Nova ficha") or the item encyclopedia ("Novo artefato"), the way back and "Cancelar" lead
+  // there, and so does the saved artifact.
   const from = fromOf(query.from);
   const back = artifactBack(campaignId, from, t);
   const types = artifactTypeOptions(await systemRecordTypes(token ?? '', campaign.data.system.id), t);

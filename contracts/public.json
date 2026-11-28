@@ -600,6 +600,104 @@
         "required" : [ "artifacts", "conversations", "materials" ],
         "type" : "object"
       },
+      "CampaignItem" : {
+        "description" : "An entry of a campaign's item encyclopedia (contract 1.62.0): an extracted item record of the campaign's scope, or an item artifact of the campaign or shared into it",
+        "properties" : {
+          "id" : {
+            "description" : "The record's or the artifact's id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "record for an extracted record (getCampaignRecord opens it), artifact for an artifact (getArtifact opens it in the campaign)",
+            "enum" : [ "record", "artifact" ],
+            "type" : "string"
+          },
+          "materialName" : {
+            "description" : "The name of the material a record was extracted from; null for an artifact",
+            "example" : "Livro do Jogador",
+            "type" : [ "string", "null" ]
+          },
+          "name" : {
+            "description" : "Its name: a record's as extracted or corrected, an artifact's newest version's",
+            "example" : "Espada longa",
+            "type" : "string"
+          },
+          "overrides" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CampaignItemOverride"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "For an artifact of the campaign that overrides a system record of its scope, that record (not listed by itself); null otherwise"
+          },
+          "page" : {
+            "description" : "A record's first page in its material; null for an artifact",
+            "example" : 150,
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : [ "integer", "null" ]
+          },
+          "recordType" : {
+            "description" : "The key of its record type",
+            "example" : "item",
+            "pattern" : "^[a-z][a-z0-9_]{0,31}$",
+            "type" : "string"
+          },
+          "sharedFrom" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ArtifactSharedFrom"
+            }, {
+              "type" : "null"
+            } ],
+            "description" : "For an artifact shared into the campaign, its own campaign; null otherwise"
+          },
+          "tier" : {
+            "description" : "A record's tier in the campaign's scope; null for an artifact",
+            "enum" : [ "campaign", "system", "other" ],
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "id", "kind", "materialName", "name", "overrides", "page", "recordType", "sharedFrom", "tier" ],
+        "type" : "object"
+      },
+      "CampaignItemOverride" : {
+        "description" : "The system record an artifact of the campaign overrides, which its encyclopedia entry replaces (contract 1.62.0)",
+        "properties" : {
+          "name" : {
+            "description" : "The record's name, as extracted or corrected",
+            "example" : "Espada longa",
+            "type" : "string"
+          },
+          "recordId" : {
+            "description" : "The record's id; getCampaignRecord opens it in the campaign",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "recordId" ],
+        "type" : "object"
+      },
+      "CampaignItemPage" : {
+        "description" : "A page of a campaign's item encyclopedia (contract 1.62.0)",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CampaignItem"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many entries match in all, whatever the page",
+            "example" : 12,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
       "CampaignPage" : {
         "properties" : {
           "items" : {
@@ -3925,7 +4023,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.61.0"
+    "version" : "1.62.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -5343,6 +5441,82 @@
         },
         "summary" : "The campaign's conversations of one area (contract 1.29.0), the most recently asked first, each with its name and question count (from contract 1.31.0 dismissed questions are not counted). A page starts at an offset and names the total of the list. A conversation is made by its first question, so none is empty, though all its questions may be dismissed. request.invalid (400) without an area or for one that is not one, a limit outside 1 to 50, or an offset outside 0 to 100000; request.not_found (404) for a campaign that is not the account's (unknown, another account's or malformed)",
         "tags" : [ "conversations" ]
+      }
+    },
+    "/api/v1/campaigns/{campaignId}/items" : {
+      "get" : {
+        "operationId" : "listCampaignItems",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Only the entries whose name contains this, case and accents ignored; at most 200 characters, blank for all",
+          "in" : "query",
+          "name" : "q",
+          "schema" : {
+            "maxLength" : 200,
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "How many of the first to skip, 0 to 100000, for a numbered page",
+          "in" : "query",
+          "name" : "offset",
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "campaignId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CampaignItemPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The item encyclopedia of one of the account's campaigns (contract 1.62.0): every entry of the record type item its scope (its stored settings) holds, as answers see them, in one list alphabetical by name (ties by id), a page at a time with the total. The live extracted item records of every allowed source, each with its tier, material and first page (a switched-off tier or material lists none); the campaign's live item artifacts while its campaign tier is on; and the live item artifacts shared into it while its system tier is on, each naming its own campaign. A system record an artifact of the campaign overrides is not listed by itself: that artifact's entry names it in overrides. Model knowledge is never an entry. q keeps the entries whose name contains it, case and accents ignored. request.not_found (404) for a campaign that is not the account's (unknown, another account's, malformed or being deleted); request.invalid (400) for a q over 200 characters, a limit outside 1 to 50 or an offset outside 0 to 100000; session.required (401) without a session.",
+        "tags" : [ "artifacts" ]
       }
     },
     "/api/v1/campaigns/{campaignId}/override-targets" : {

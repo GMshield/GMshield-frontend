@@ -32,7 +32,7 @@ const { ConversationDeleteAction } = await import('@/components/conversation/Con
 const { MaterialDeleteAction } = await import('@/components/MaterialDeleteAction');
 const { SupersededVersions } = await import('@/components/SupersededVersions');
 const { References } = await import('@/components/conversation/References');
-const { TierLabel, tierWord } = await import('@/components/TierLabel');
+const { TierLabel, tierSpoken, tierWord } = await import('@/components/TierLabel');
 const { SourceView } = await import('@/components/SourceView');
 const { translator } = await import('@/messages');
 const { useOnline } = await import('@/components/useOnline');
@@ -1662,6 +1662,28 @@ describe('ItemList (Story 3.1)', () => {
     expect(screen.getAllByText('11–20 of 21')).toHaveLength(2);
     expectNoStyleAttribute(container);
   });
+
+  it('Story 7.2: a row with a tier draws its pill before the name, read as part of its link; a row without one draws none', async () => {
+    const { ItemList } = await import('@/components/ItemList');
+    const { DEFAULT_VIEW } = await import('@/view-cookie');
+    const { container } = render(
+      <ItemList
+        label="Itens"
+        rows={[
+          { ...row('a', 'Adaga', '/campaigns/c/records/a'), detail: 'Livro, p. 3', tier: 'system' },
+          { ...row('b', 'Punhal', '/campaigns/c/artifacts/b'), tier: 'custom' },
+          row('c', 'Corda', '/campaigns/c/records/c'),
+        ]}
+        viewKey="items"
+        view={DEFAULT_VIEW}
+        language="pt-BR"
+      />,
+    );
+    const links = within(screen.getByRole('list', { name: 'Itens' })).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Sistema: AdagaLivro, p. 3', 'Personalizado: Punhal', 'Corda']);
+    expect(Array.from(container.querySelectorAll<HTMLElement>('span[data-tier]')).map((pill) => pill.dataset.tier)).toEqual(['system', 'custom']);
+    expectNoStyleAttribute(container);
+  });
 });
 
 type SystemFormState = import('@/app/(signed-in)/systems/form-state').SystemFormState;
@@ -1816,6 +1838,10 @@ describe('TierLabel (Story 3.7)', () => {
     expect(container.textContent).toBe('Campanha: Sistema: Outros: Campaign: ');
     // The words are the scope's own ("shell.scope.*"), so a tier reads the same everywhere.
     expect(tierWord('other', en)).toBe(en('shell.scope.other'));
+    // Story 7.2: an entry the GM wrote reads "Personalizado" / "Custom", heard as its word too.
+    expect(tierWord('custom', pt)).toBe('Personalizado');
+    expect(tierWord('custom', en)).toBe('Custom');
+    expect(tierSpoken('custom', pt)).toBeNull();
   });
 
   it('is drawn on a reference line before its button, and not at all for a reference without a tier', () => {

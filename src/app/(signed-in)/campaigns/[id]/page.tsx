@@ -2,6 +2,7 @@ import { ArtifactExportDialog } from '@/components/artifacts/ArtifactExportDialo
 import { NamedIcon } from '@/components/Icons';
 import { ItemList, type ListRow } from '@/components/ItemList';
 import { EmptyState, PageHeader, PageSubtitle, Tabs } from '@/components/PageHeader';
+import Form from 'next/form';
 import Link from 'next/link';
 
 import { notFoundFor } from '@/app/not-found';
@@ -9,15 +10,17 @@ import { CampaignAction } from '@/components/CampaignAction';
 import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
 import { PartyForm } from '@/components/PartyForm';
+import { PillButton } from '@/components/PillButton';
 import { PillLink } from '@/components/PillLink';
 import { ScopeControls } from '@/components/ScopeControls';
-import { errorText, translator, type Language } from '@/messages';
+import { errorText, translator, type Language, type Translate } from '@/messages';
 import { pageParam } from '@/paging';
 import { currentPreferences, currentViews } from '@/preferences';
 import { isRecordTypeKey, typeLabel } from '@/record-types';
-import { artifactsPage, type ArtifactSummary, type ArtifactTypeCount } from '@/server/artifacts';
+import { requestAccount } from '@/server/accounts';
+import { artifactsPage, itemsPage, type ArtifactSummary, type ArtifactTypeCount } from '@/server/artifacts';
 import { AREAS, listConversations } from '@/server/conversations';
-import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope } from '@/server/library';
+import { campaignDeletion, currentCampaign, getCampaign, getCampaignScope, type Scope } from '@/server/library';
 import { shieldsPage, type Shield } from '@/server/shields';
 import type { ListPage } from '@/server/list-page';
 import { currentSessionToken } from '@/server/session-cookies';
@@ -33,13 +36,36 @@ import {
   deleteCampaignAction,
   openConversationAction,
 } from '../actions';
-import { artifactRow, shieldRow, systemLabel } from '../rows';
+import { artifactRow, itemRow, shieldRow, systemLabel } from '../rows';
 
-const TABS = ['overview', 'scope', 'shields', 'conversations', 'artifacts'] as const;
+const TABS = ['overview', 'scope', 'shields', 'conversations', 'artifacts', 'items'] as const;
 type Tab = (typeof TABS)[number];
 
 function tabOf(value: unknown): Tab {
   return TABS.find((tab) => tab === value) ?? 'overview';
+}
+
+/** The longest name filter the backend takes (Story 7.2), in code points. */
+const MOST_QUERY = 200;
+
+/** The encyclopedia's name filter from `?q=` (Story 7.2): trimmed, at most {@link MOST_QUERY} code points, else empty. */
+function queryOf(value: unknown): string {
+  return typeof value === 'string' ? [...value.trim()].slice(0, MOST_QUERY).join('').trim() : '';
+}
+
+/**
+ * The scope an empty encyclopedia searched (Story 7.2), named in its sentence: "no escopo desta campanha (Campanha e
+ * Sistema)", each tier that is on by its word ("Nenhuma fonte" with none), or without them when the scope cannot be read.
+ */
+function scopeText(scope: Scope | null, language: Language, t: Translate): string {
+  if (scope === null) {
+    return t('items.scopeUnread');
+  }
+  const words = [scope.campaignTier ? t('shell.scope.campaign') : null, scope.systemTier ? t('shell.scope.system') : null, scope.otherTier ? t('shell.scope.other') : null].filter(
+    (word): word is string => word !== null,
+  );
+  const tiers = words.length === 0 ? t('shell.scope.none') : new Intl.ListFormat(language, { type: 'conjunction' }).format(words);
+  return t('items.scope', { tiers });
 }
 
 /**
@@ -62,6 +88,9 @@ function tabOf(value: unknown): Tab {
  * - shields (Story 6.1): the campaign's Shields, oldest first, paged (`?page=`, rows a page from the "Exibição" menu),
  *   each opening its screen and named by its name (the first one, unnamed until renamed, as "Escudo do Mestre");
  *   "Novo escudo" (a solid pill) opens the form. Every campaign has at least one Shield.
+ * - items (Story 7.2, the last tab, "Enciclopédia de itens"): every item the campaign may use, as its scope holds them
+ *   ({@link ItemsTab}): the books' item records and the campaign's item artifacts (own and shared in) in one
+ *   alphabetical, paged list, filtered by name (`?q=`, kept by every page link).
  * An archived campaign still opens here. Another owner's id, an unknown one or a malformed one shows the single
  * "Não encontrado." page.
  *
@@ -103,15 +132,20 @@ export default async function CampaignPage({
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
   const type = typeof query.type === 'string' && isRecordTypeKey(query.type) ? query.type : null;
-  const [areas, scope, artifacts, recordTypes, shields] = await Promise.all([
+  const q = tab === 'items' ? queryOf(query.q) : '';
+  const [areas, scope, artifacts, recordTypes, shields, items, account] = await Promise.all([
     tab === 'conversations'
       ? Promise.all(AREAS.map(async (area) => ({ area, list: await listConversations(token ?? '', campaignId, area, { limit: 1 }) })))
       : null,
-    tab === 'scope' ? getCampaignScope(token ?? '', campaignId) : null,
+    // Story 7.2: the encyclopedia's empty sentences name the scope it searched.
+    tab === 'scope' || tab === 'items' ? getCampaignScope(token ?? '', campaignId) : null,
     tab === 'artifacts' ? artifactsPage(token ?? '', campaignId, type, pageParam(query.page), views.artifacts.size) : null,
     // The record types name the rows' types and the chips (an approved type by the name its system gives it).
     tab === 'artifacts' ? systemRecordTypes(token ?? '', system.id) : [],
     tab === 'shields' ? shieldsPage(token ?? '', campaignId, pageParam(query.page), views.shields.size) : null,
+    tab === 'items' ? itemsPage(token ?? '', campaignId, q, pageParam(query.page), views.items.size) : null,
+    // Story 7.2: a custom item's detail names its author, the session's GM ("por {username}"); the layout read it too.
+    tab === 'items' ? requestAccount(token ?? '') : null,
   ]);
   const refused = areas?.map(({ list }) => list).find((list) => !list.ok);
   const counted = areas?.map(({ area, list }) => ({ area, total: list.ok ? list.data.total : 0 })) ?? [];
@@ -210,7 +244,7 @@ export default async function CampaignPage({
           action={changePartyAction}
         />
       ) : null}
-      {scope === null ? null : scope.ok ? (
+      {scope === null || tab !== 'scope' ? null : scope.ok ? (
         <section className={`${styles.panel} ${styles.scope}`} aria-label={t('shell.scope.panel')}>
           <p className={styles.description}>{t('campaigns.scope.intro')}</p>
           <ScopeControls key={campaignId} campaignId={campaignId} scope={scope.data} language={language} action={changeScopeAction} />
@@ -265,6 +299,20 @@ export default async function CampaignPage({
           rows={artifacts.data.list.rows.map((artifact) => artifactRow(artifact, here, recordTypes, t))}
           typeName={(key) => typeLabel(key, recordTypes, t)}
           view={views.artifacts}
+          language={language}
+        />
+      )}
+      {items === null ? null : !items.ok ? (
+        <Notice status="danger" language={language} message={errorText(items.problem, language)} dismissible={false} />
+      ) : (
+        <ItemsTab
+          here={here}
+          q={q}
+          page={items.data}
+          rows={items.data.rows.map((item) => itemRow(item, here, account?.ok ? account.data.username : null, t))}
+          scope={scopeText(scope?.ok ? scope.data : null, language, t)}
+          t={t}
+          view={views.items}
           language={language}
         />
       )}
@@ -400,5 +448,84 @@ function ArtifactsTab({
         />
       )}
     </>
+  );
+}
+
+/**
+ * The item encyclopedia tab (Story 7.2): the name filter (a bordered search field and "Filtrar", a GET form that keeps
+ * `q` in the address) in the list's toolbar, then the entries with their pages, each with its tier pill ("Personalizado"
+ * for an artifact) and its detail. A campaign with no item says so in one sentence naming the scope searched, with
+ * "Novo artefato" (an item, leading back here); a filter with no match says so naming the scope, with "Limpar filtro".
+ */
+function ItemsTab({
+  here,
+  q,
+  page,
+  rows,
+  scope,
+  t,
+  view,
+  language,
+}: {
+  readonly here: string;
+  readonly q: string;
+  readonly page: ListPage<unknown>;
+  readonly rows: readonly ListRow[];
+  /** The scope searched, as the empty sentences name it ("no escopo desta campanha (Campanha e Sistema)"). */
+  readonly scope: string;
+  readonly t: Translate;
+  readonly view: ListView;
+  readonly language: Language;
+}) {
+  const tabHref = `${here}?tab=items`;
+  if (page.paging.total === 0 && q === '') {
+    return (
+      <EmptyState icon="rules" text={t('items.empty', { scope })}>
+        <PillLink href={`${here}/artifacts/new?type=item&from=items`} solid>
+          {t('artifacts.new')}
+        </PillLink>
+      </EmptyState>
+    );
+  }
+  const filter = (
+    // Keyed by the filter: "Limpar filtro" and a new filter start the field from the address again.
+    <Form key={q} role="search" action={here} className={styles.itemFilter} aria-label={t('items.filter')}>
+      <input type="hidden" name="tab" value="items" />
+      <label className={styles.itemFilterLabel} htmlFor="items-filter">
+        {t('items.filter')}
+      </label>
+      <input
+        id="items-filter"
+        className={styles.itemFilterInput}
+        type="search"
+        name="q"
+        defaultValue={q}
+        autoComplete="off"
+        enterKeyHint="search"
+      />
+      <PillButton type="submit">{t('items.apply')}</PillButton>
+    </Form>
+  );
+  if (page.paging.total === 0) {
+    return (
+      <>
+        <div className={styles.tabActions}>{filter}</div>
+        <EmptyState icon="search" text={t('items.noMatch', { query: q, scope })}>
+          <PillLink href={tabHref}>{t('items.clear')}</PillLink>
+        </EmptyState>
+      </>
+    );
+  }
+  return (
+    <ItemList
+      label={t('items.list')}
+      rows={rows}
+      pages={{ paging: page.paging, path: here, query: q === '' ? { tab: 'items' } : { tab: 'items', q } }}
+      icon="rules"
+      viewKey="items"
+      view={view}
+      language={language}
+      toolbar={filter}
+    />
   );
 }

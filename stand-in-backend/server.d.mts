@@ -198,3 +198,19 @@ export const ARTIFACT_VERSIONS: {
   items: { number: number; recordType: string; name: string; createdAt: string }[];
   total: number;
 };
+/** Story 7.2: a campaign's item encyclopedia, one system record and the stand-in artifact. */
+export const ITEM_RECORD_ID: string;
+export const CAMPAIGN_ITEMS: {
+  items: {
+    kind: 'record' | 'artifact';
+    id: string;
+    name: string;
+    recordType: string;
+    tier: 'campaign' | 'system' | 'other' | null;
+    materialName: string | null;
+    page: number | null;
+    sharedFrom: { campaignId: string; name: string } | null;
+    overrides: { recordId: string; name: string } | null;
+  }[];
+  total: number;
+};

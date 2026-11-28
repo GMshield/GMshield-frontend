@@ -1324,6 +1324,29 @@ they sit in `src/`.
     version re-reads the campaign and keeps the form open on its current values with `campaigns.party.stale`.
   - `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.61.0. The stand-in's starter campaign has no party, and a party change
     answers 4 players at level 5; the demo backend keeps each campaign's party in memory, with a stale 409.
+- **The item encyclopedia (Story 7.2, public contract 1.62.0).** A campaign's page gets a last tab, "Enciclopédia de
+  itens" (`?tab=items`, `ItemsTab` in `campaigns/[id]/page.tsx`): one alphabetical, paged list (`itemsPage` over
+  `listCampaignItems`, `GET /api/v1/campaigns/{id}/items`) of the item records of the campaign's scope and its item
+  artifacts, own and shared in, in the order the backend gives.
+  - The name filter is a bordered search field with "Filtrar" in the list's toolbar: a `next/form` GET form to the
+    page, so `q` stays in the address and every page link keeps it (trimmed, at most 200 code points). The list's view
+    is the `items` entry of the view cookie, with "Exibição" and the pager.
+  - A row (`itemRow`, `campaigns/rows.ts`) shows the name with a tier pill before it: `ListRow.tier`, drawn by
+    `ItemList` with `TierLabel`, which reads `custom` ("Personalizado" / "Custom", `shell.scope.custom`; `LabelTier`
+    and `CUSTOM_TIER` in `client/conversation.ts`, never a turn's tier). A record's detail is "{material}, p. {page}";
+    an artifact's "por {username}" (the session's GM, `requestAccount`), then "Substitui {name}" when it overrides a
+    record (that record is not listed by itself) and "Compartilhado de {A}" when shared in.
+  - A campaign with no item says so in one sentence naming the scope searched (the tiers that are on, from
+    `getCampaignScope`) with "Novo artefato" (`?type=item&from=items`); a filter with no match names the scope too,
+    with "Limpar filtro".
+  - A record row opens the new campaign record page, `/campaigns/{id}/records/{recordId}?from=items`
+    (`getCampaignRecord` with the address's campaign; fields, related artifacts and references on the scope's ground;
+    read-only), whose way back is the tab, or the artifact that opened it (`?artifact=`). An artifact row opens the
+    artifact's page with `from=items` (`fromOf`/`artifactBack` take `items`), whose way back, delete and "Versões"
+    links lead back to the tab. `ArtifactOverride`'s link now opens the campaign record page, leading back to the
+    artifact.
+  - `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.62.0. The stand-in answers one system record and the stand-in artifact;
+    the demo backend lists each campaign's items from its records and artifacts, with `q` and paging.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

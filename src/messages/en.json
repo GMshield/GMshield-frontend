@@ -41,6 +41,7 @@
       "campaign": "Campaign",
       "system": "System",
       "other": "Other",
+      "custom": "Custom",
       "none": "No sources",
       "modelOff": "model knowledge off",
       "modelOn": "model knowledge on",
@@ -221,6 +222,7 @@
       "shields": "Shields",
       "conversations": "Conversations",
       "artifacts": "Artifacts",
+      "items": "Item encyclopedia",
       "name": "Name",
       "system": "System",
       "state": "State",
@@ -492,6 +494,22 @@
       "rollsOne": "1 roll",
       "rollsOther": "{count} rolls",
       "offline": "No connection. Rolls will be saved when it returns."
+    }
+  },
+  "items": {
+    "list": "Items of this campaign",
+    "filter": "Filter by name",
+    "apply": "Filter",
+    "clear": "Clear filter",
+    "scope": "in this campaign's scope ({tiers})",
+    "scopeUnread": "in this campaign's scope",
+    "empty": "No items {scope}; the books' items and the ones you save show up here.",
+    "noMatch": "No item matching “{query}” {scope}.",
+    "source": "{material}, p. {page}",
+    "by": "by {username}",
+    "replaces": "Replaces {name}",
+    "record": {
+      "backArtifact": "Artifact"
     }
   },
   "characters": {

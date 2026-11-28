@@ -6,6 +6,7 @@ import {
   ARTIFACT_PAGE,
   ARTIFACT_VERSIONS,
   BOOK_VERSION,
+  CAMPAIGN_ITEMS,
   CONVERSATION,
   CONVERSATION_ID,
   DRAFT_PROPOSAL,
@@ -592,6 +593,23 @@ describe('stand-in backend', () => {
       expect(STORED_ROLL, key).toHaveProperty(key);
     }
     expect(STORED_ROLL.total).toBe(STORED_ROLL.results.reduce((sum, face) => sum + face, 0) + 3);
+  });
+
+  it('answers a campaign\'s item encyclopedia with one system record and the stand-in artifact, alphabetical (Story 7.2)', () => {
+    const items = '/api/v1/campaigns/0190a0b0-0000-7000-8000-000000000002/items';
+    type Schema = { required?: string[] };
+    const schemas = (contract.components as { schemas: Record<string, Schema> }).schemas;
+    expect(answer(contract, 'GET', items, 't')).toMatchObject({ status: 200, body: CAMPAIGN_ITEMS });
+    for (const key of schemas.CampaignItemPage!.required ?? []) {
+      expect(CAMPAIGN_ITEMS, key).toHaveProperty(key);
+    }
+    for (const item of CAMPAIGN_ITEMS.items) {
+      for (const key of schemas.CampaignItem!.required ?? []) {
+        expect(item, key).toHaveProperty(key);
+      }
+    }
+    expect(CAMPAIGN_ITEMS.items.map((item) => item.name)).toEqual(['Adaga', ARTIFACT.name]);
+    expect(CAMPAIGN_ITEMS.items[1]).toMatchObject({ kind: 'artifact', id: ARTIFACT.id, tier: null });
   });
 
   it('answers a note\'s move with the note held by the other Shield, its version unchanged (Story 6.2 part B)', () => {

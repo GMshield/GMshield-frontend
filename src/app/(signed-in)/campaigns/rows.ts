@@ -3,9 +3,11 @@ import 'server-only';
 import type { ListRow } from '@/components/ItemList';
 import type { Translate } from '@/messages';
 import { typeLabel, type NamedRecordType } from '@/record-types';
-import type { ArtifactSummary } from '@/server/artifacts';
+import type { ArtifactSummary, CampaignItem } from '@/server/artifacts';
 import type { CampaignSummary } from '@/server/library';
 import type { NoteSummary, Shield } from '@/server/shields';
+
+import type { ArtifactFrom } from './[id]/artifacts/texts';
 
 /** A campaign's system as a row shows it: its name, and its edition after it when it has one. */
 export function systemLabel(system: CampaignSummary['system'], t: Translate): string {
@@ -39,7 +41,7 @@ export function artifactRow(
   campaignPath: string,
   types: readonly NamedRecordType[] | null,
   t: Translate,
-  from?: 'characters',
+  from?: ArtifactFrom,
 ): ListRow {
   const type = types === null ? null : typeLabel(artifact.recordType, types, t);
   const shared = artifact.sharedFrom ? t('artifacts.share.listedFrom', { campaign: artifact.sharedFrom.name }) : null;
@@ -49,6 +51,43 @@ export function artifactRow(
     detail: shared === null ? type : type === null ? shared : `${type} · ${shared}`,
     href: `${campaignPath}/artifacts/${encodeURIComponent(artifact.id)}${from === undefined ? '' : `?from=${from}`}`,
     state: null,
+  };
+}
+
+/**
+ * A row of a campaign's item encyclopedia (Story 7.2), under `campaignPath`, each opening with `from=items` so its page
+ * leads back to the tab:
+ * - an extracted record: its tier pill ("Campanha", "Sistema", "Outros"), the detail "{material}, p. {page}", and its
+ *   campaign record page;
+ * - an artifact: the pill "Personalizado", the detail "por {username}" (the session's GM; an artifact shared in is the
+ *   same GM's), then "Substitui {name}" when it overrides a record and "Compartilhado de {A}" when it is shared in, and
+ *   its artifact page.
+ */
+export function itemRow(item: CampaignItem, campaignPath: string, username: string | null, t: Translate): ListRow {
+  if (item.kind === 'record') {
+    const detail =
+      item.materialName === null ? null : item.page === null ? item.materialName : t('items.source', { material: item.materialName, page: item.page });
+    return {
+      id: item.id,
+      label: item.name,
+      detail,
+      href: `${campaignPath}/records/${encodeURIComponent(item.id)}?from=items`,
+      state: null,
+      tier: item.tier,
+    };
+  }
+  const parts = [
+    username === null ? null : t('items.by', { username }),
+    item.overrides === null ? null : t('items.replaces', { name: item.overrides.name }),
+    item.sharedFrom === null ? null : t('artifacts.share.listedFrom', { campaign: item.sharedFrom.name }),
+  ].filter((part): part is string => part !== null);
+  return {
+    id: item.id,
+    label: item.name,
+    detail: parts.length === 0 ? null : parts.join(' · '),
+    href: `${campaignPath}/artifacts/${encodeURIComponent(item.id)}?from=items`,
+    state: null,
+    tier: 'custom',
   };
 }
 

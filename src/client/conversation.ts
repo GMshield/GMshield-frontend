@@ -343,6 +343,15 @@ export const MODEL_TIER = 'model' satisfies TurnTier;
 /** The tier words a turn's `tier` event may carry. */
 export const TURN_TIERS: readonly TurnTier[] = [...TIERS, MODEL_TIER];
 
+/**
+ * The word of a tier pill for an entry the GM wrote (Story 7.2, the item encyclopedia): "Personalizado". It labels an
+ * artifact in a list, never a turn's part or a reference, so it is no {@link TurnTier} and no turn event carries it.
+ */
+export const CUSTOM_TIER = 'custom';
+
+/** What a tier pill may read: a turn's tier word, or (Story 7.2) {@link CUSTOM_TIER} for an entry the GM wrote. */
+export type LabelTier = TurnTier | typeof CUSTOM_TIER;
+
 /** A tier's version of the answer starts at a code-point offset of its text (Story 3.7, `TurnTierEvent`). */
 export type TierStart = { readonly tier: TurnTier; readonly offset: number };
 
