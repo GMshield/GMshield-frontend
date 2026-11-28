@@ -1216,6 +1216,38 @@ they sit in `src/`.
   - Messages `shields.notes.move.*` and `feedback.noteMoved`. The stand-in answers the move (the note held by
     "Combate"), previews one note, and the deletion with 202; the demo backend moves a note between a campaign's
     Shields and deletes a Shield with its notes.
+- **Roll dice in the browser (Story 6.3).** Frontend only: no contract, backend or worker change. The dice roller is
+  the only part of GMshield that works offline: once a Shield's screen has loaded, rolling needs no connection, because
+  it makes no request, calls no Server Action and writes nothing to browser storage (Story 6.4 keeps the rolls).
+  - `src/dice.ts` is the one place for the dice rules, which Story 6.4's backend check copies. `DICE` (d4, d6, d8, d10,
+    d12, d20, d100), `parseFormula(text)` (a `Formula` with its normalised `text` and `terms`, or null), `singleDie`,
+    `roll(formula, random?)` (each die's result in the formula's order, and the total), `drawDie(sides, random?)` and
+    `rollSentence(roll, template)`. The grammar: a sum of terms joined by `+` or `-` ("1d8+2d6+3", "4d6-1", "d20"); a
+    term is a dice group `[N]dS` (no N means 1) or a whole-number modifier; the first term has no sign and at least one
+    dice group is needed. Terms come in any order and number: a modifier may come first ("3+1d6"), a dice group may be
+    subtracted ("2d6-1d4"), and several modifiers are allowed and kept as written. S is 4, 6, 8, 10, 12, 20 or 100, N
+    runs from 1 to 100 and a modifier from 0 to 1000, with at most 100 dice in all; the number of terms is not capped.
+    Numbers have no leading zero ("02d6", "2d06", "2d6+03" are refused). White space (tabs and line breaks too) may
+    stand only at either end and around a `+` or `-` (" 2D6 + 3 "); inside a term it is refused, between two digits
+    ("1d10 0", "2d6+1 0", "1 2d6"), between a digit and `d` ("1 d12") or between `d` and a digit ("1d 12"). `D` reads as
+    `d`. The normalised form (no white space, the count written, "1d20") is what the screen shows.
+  - Each die is drawn by rejection sampling over `Uint32` values from `crypto.getRandomValues` (`cryptoUint32`, the
+    default `random`): a value at or above the largest multiple of S under 2^32 is drawn again, so there is no modulo
+    bias. `Math.random` is never used.
+  - `DiceRoller` (`components/DiceRoller.tsx`, a client component with labels translated on the server) is a `Card`: a
+    row of 44px square die buttons (`--radius-md`, each rolling one die of its kind), then the bordered "Fórmula" field
+    and an outlined "Rolar" pill (Enter submits). Only the latest roll shows, at once and with no animation: its formula,
+    the total in the title type and the dice beside it in muted text. A polite live region says it as one sentence,
+    "2d6+3: 4, 5, total 12", again for an identical roll (the sentence is a new node each time). A formula that does not
+    read keeps its text, gets `aria-invalid` and "Use o formato 2d6+3." under it (`role="alert"`, `aria-describedby`),
+    rolls nothing and leaves the last result; the message clears when the text changes or a die button rolls.
+  - The Shield's screen puts the roller first, under the header, in the page's order and on screen: a side column on
+    the left of the notes once the main column itself is at least 50rem wide (a container query, so a docked sidebar or
+    an open source view counts; the roller gets 26rem, the notes at least 22rem), so the paged notes beside it do not
+    push the page into scrolling; above the notes when narrower (on a phone the controls wrap with no sideways scroll).
+    It stays when the notes cannot be read.
+  - Messages `shields.dice.*` (`title`, `formula`, `roll`, `invalid`, `sentence`, `die`). The stand-in and the demo backend
+    need no change.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

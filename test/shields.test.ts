@@ -624,3 +624,67 @@ describe("a Shield's notes (Story 6.2 part A)", () => {
     expect(ptBR.errors.codes.request.note_type_fixed).not.toBe('');
   });
 });
+
+describe("a Shield's dice roller (Story 6.3)", () => {
+  const NOTES = `${SHIELDS}/${FIRST_ID}/notes`;
+  const NOTE_ROW = { id: '0190a0b0-0000-7000-8000-000000000a12', recordType: 'note', name: 'Pistas da cripta', version: 1, createdAt: '2026-11-27T12:00:00Z', sharedFrom: null, shieldId: FIRST_ID };
+
+  it('puts the roller first, before the notes: its heading, the die buttons d4 to d100, "Fórmula" and "Rolar", in both languages', async () => {
+    const server = await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [NOTE_ROW], total: 1 } },
+    });
+    for (const [language, messages] of LANGUAGES) {
+      cookieJar['__Host-gmshield-lang'] = language;
+      const html = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+
+      expect(html).toMatch(new RegExp(`<h2[^>]*>${messages.shields.dice.title}</h2>`));
+      expect(html).toContain(`aria-label="${escaped(messages.shields.dice.die)}"`);
+      const dice = [...html.matchAll(/<button type="button"[^>]*>d(\d+)<\/button>/g)].map((match) => Number(match[1]));
+      expect(dice).toEqual([4, 6, 8, 10, 12, 20, 100]);
+      expect(html).toMatch(new RegExp(`<label[^>]*>${messages.shields.dice.formula}</label>`));
+      expect(html).toMatch(/<input[^>]*aria-invalid="false"/);
+      // "Rolar" is outlined: the screen's one solid pill stays "Nova nota".
+      expect(solids(html)).toEqual([messages.shields.notes.new]);
+      // The roller comes first in the page's order (above the notes when narrow; a left side column when wide).
+      expect(html.indexOf(messages.shields.dice.title)).toBeLessThan(html.indexOf(`aria-label="${escaped(messages.shields.notes.list)}"`));
+      expect(html.indexOf(messages.shields.dice.title)).toBeGreaterThan(html.indexOf('</header>'));
+      // Nothing is rolled on the server, and the live region starts silent.
+      expect(html).not.toContain('data-testid="dice-result"');
+      expect(html).toMatch(/<div[^>]*aria-live="polite"[^>]*><\/div>/);
+      expect(html).not.toMatch(/<[^>]+\sstyle=/);
+    }
+    // The roller reads nothing from the backend: the Shield screen's calls are the ones it made before Story 6.3.
+    expect(calls(server).every((call) => call.startsWith(`GET ${SHIELDS}/${FIRST_ID}`))).toBe(true);
+  });
+
+  it('stays when the notes cannot be read, and beside a Shield with no notes', async () => {
+    await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: problem(503, 'server.unavailable'),
+    });
+    const failed = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+    expect(failed).toContain(ptBR.errors.codes.server.unavailable);
+    expect(failed).toContain(`>${ptBR.shields.dice.roll}</button>`);
+    await backend?.close();
+
+    await useBackend({
+      [`GET ${SHIELDS}/${FIRST_ID}`]: { status: 200, body: FIRST },
+      [`GET ${NOTES}?limit=10`]: { status: 200, body: { items: [], total: 0 } },
+    });
+    const empty = renderToStaticMarkup(await ShieldPage({ params: Promise.resolve({ id: CAMPAIGN, shieldId: FIRST_ID }) }));
+    expect(empty).toContain(ptBR.shields.empty);
+    expect(empty).toContain(`>${ptBR.shields.dice.roll}</button>`);
+  });
+
+  it('keeps the same keys in both languages, and the same spoken sentence', () => {
+    expect(Object.keys(en.shields.dice).sort()).toEqual(Object.keys(ptBR.shields.dice).sort());
+    expect(Object.keys(ptBR.shields.dice).sort()).toEqual(['die', 'formula', 'invalid', 'roll', 'sentence', 'title']);
+    expect(ptBR.shields.dice.invalid).toBe('Use o formato 2d6+3.');
+    expect(en.shields.dice.invalid).toBe('Use the format 2d6+3.');
+    expect(ptBR.shields.dice.formula).toBe('Fórmula');
+    expect(ptBR.shields.dice.roll).toBe('Rolar');
+    expect(ptBR.shields.dice.sentence).toBe('{formula}: {dice}, total {total}');
+    expect(en.shields.dice.sentence).toBe(ptBR.shields.dice.sentence);
+  });
+});

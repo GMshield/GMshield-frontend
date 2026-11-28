@@ -1,0 +1,31 @@
+/*
+ * A Shield's screen (Story 6.3): the dice roller comes first, in the page's order and on screen. When the main column
+ * is narrow it sits above the notes (a phone's one-handed task); once the column itself is wide enough for the roller
+ * (26rem, its dice in one row) and the notes (at least 22rem), it is a side column on the left, so the paged notes
+ * beside it do not push the page into scrolling. The width is the main column's own (a container query), so a docked
+ * sidebar or an open source view narrows it as it should.
+ */
+.frame {
+  container-type: inline-size;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.dice,
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@container (min-width: 50rem) {
+  .layout {
+    grid-template-columns: 26rem minmax(22rem, 1fr);
+  }
+}
