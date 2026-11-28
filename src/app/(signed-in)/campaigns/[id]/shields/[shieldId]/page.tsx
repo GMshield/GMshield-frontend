@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 
 import { notFoundFor } from '@/app/not-found';
-import { DiceRoller } from '@/components/DiceRoller';
+import { ROLL_LOG_PAGE } from '@/client/rolls';
+import { DiceRoller, type DiceRollerLabels } from '@/components/DiceRoller';
 import { ItemList } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { EmptyState, PageHeader } from '@/components/PageHeader';
 import { PillLink } from '@/components/PillLink';
 import { ShieldDeleteAction } from '@/components/ShieldDeleteAction';
-import { errorText, translator } from '@/messages';
+import { errorText, translator, type Translate } from '@/messages';
 import { pageParam } from '@/paging';
 import { currentPreferences, currentViews } from '@/preferences';
 import { currentSessionToken } from '@/server/session-cookies';
-import { getShield, shieldDeletion, shieldNotesPage } from '@/server/shields';
+import { getShield, listRolls, shieldDeletion, shieldNotesPage } from '@/server/shields';
 
 import { noteRow, shieldName } from '../../../rows';
 import { deleteShieldAction } from '../actions';
@@ -39,7 +40,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * header ({@link ShieldDeleteAction}), with the deletion preview read with the Shield (its counts, and whether it is the
  * campaign's only Shield, which it then refuses without a dialog). Story 6.3: the dice roller ({@link DiceRoller}, the
  * screen's only offline part) comes first: a side column on the left of the notes when the main column is wide enough
- * (a container query), above them otherwise, and it stays when the notes cannot be read. Another owner's Shield, one of another
+ * (a container query), above them otherwise, and it stays when the notes cannot be read. Story 6.4: the roller gets the
+ * campaign, the Shield and the newest stored rolls, read with the page, for its log; when they cannot be read the roller
+ * still works and its log says so. Another owner's Shield, one of another
  * campaign or of a campaign being deleted, an unknown one or a malformed one shows the single "Não encontrado." page;
  * another failure is a notice.
  */
@@ -53,10 +56,11 @@ export default async function ShieldPage({ params, searchParams }: Props) {
   ]);
   const t = translator(language);
   // The signed-in layout has already sent a visitor without a session to the sign-in screen.
-  const [shield, deletion, notes] = await Promise.all([
+  const [shield, deletion, notes, rolls] = await Promise.all([
     getShield(token ?? '', id, shieldId),
     shieldDeletion(token ?? '', id, shieldId),
     shieldNotesPage(token ?? '', id, shieldId, pageParam(query.page), views.notes.size),
+    listRolls(token ?? '', id, shieldId, { limit: ROLL_LOG_PAGE }),
   ]);
   if (!shield.ok) {
     notFoundFor(shield.problem);
@@ -91,14 +95,12 @@ export default async function ShieldPage({ params, searchParams }: Props) {
         <div className={styles.layout}>
           <div className={styles.dice}>
             <DiceRoller
-              labels={{
-                title: t('shields.dice.title'),
-                formula: t('shields.dice.formula'),
-                roll: t('shields.dice.roll'),
-                invalid: t('shields.dice.invalid'),
-                sentence: t('shields.dice.sentence'),
-                die: t('shields.dice.die'),
-              }}
+              key={`dice-${shield.data.id}`}
+              labels={diceLabels(t)}
+              language={language}
+              campaignId={id}
+              shieldId={shield.data.id}
+              firstPage={rolls.ok ? rolls.data : null}
             />
           </div>
           <div className={styles.notes}>
@@ -122,4 +124,14 @@ export default async function ShieldPage({ params, searchParams }: Props) {
       </div>
     </>
   );
+}
+
+/** The roller's and its log's texts (Stories 6.3 and 6.4), in the interface's language. */
+function diceLabels(t: Translate): DiceRollerLabels {
+  const keys = [
+    'title', 'formula', 'roll', 'invalid', 'sentence', 'die', 'label', 'log', 'empty', 'unsaved', 'failed', 'remove', 'more',
+    'moreFailed', 'loadFailed', 'clear', 'clearTitle', 'clearConsequence', 'clearConfirm', 'cleared', 'clearFailed', 'rollsOne',
+    'rollsOther',
+  ] as const satisfies readonly (keyof DiceRollerLabels)[];
+  return Object.fromEntries(keys.map((key) => [key, t(`shields.dice.${key}`)])) as DiceRollerLabels;
 }

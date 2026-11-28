@@ -457,7 +457,24 @@
       "roll": "Rolar",
       "invalid": "Use o formato 2d6+3.",
       "sentence": "{formula}: {dice}, total {total}",
-      "die": "Rolar um dado"
+      "die": "Rolar um dado",
+      "label": "Rótulo",
+      "log": "Rolagens",
+      "empty": "Nenhuma rolagem ainda.",
+      "unsaved": "ainda não salva",
+      "failed": "não foi possível salvar",
+      "remove": "Remover a rolagem {formula} das {time}",
+      "more": "Mostrar mais",
+      "moreFailed": "Não foi possível carregar mais rolagens.",
+      "loadFailed": "Não foi possível carregar as rolagens salvas. As novas rolagens funcionam e são salvas.",
+      "clear": "Limpar rolagens",
+      "clearTitle": "Limpar {rolls}?",
+      "clearConsequence": "Elas saem do registro em todos os dispositivos. Isso não pode ser desfeito.",
+      "clearConfirm": "Limpar rolagens",
+      "cleared": "Rolagens limpas.",
+      "clearFailed": "Não foi possível limpar as rolagens. Tente de novo.",
+      "rollsOne": "1 rolagem",
+      "rollsOther": "{count} rolagens"
     }
   },
   "characters": {
@@ -547,6 +564,8 @@
         "shield_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "shield_name_taken": "Esta campanha já tem um escudo com este nome.",
         "last_shield": "Uma campanha precisa de pelo menos um escudo.",
+        "roll_invalid": "Esta rolagem não pôde ser salva: a fórmula, os dados, o rótulo (até {labelMax} caracteres) ou a hora não conferem.",
+        "roll_key_taken": "Esta rolagem já está salva em outro escudo.",
         "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
         "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
         "note_type_fixed": "Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar."

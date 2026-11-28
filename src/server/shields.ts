@@ -33,6 +33,14 @@ import { listPage, type ListPage } from './list-page';
  *   {@link shieldNotesPage} reads one numbered page of it.
  * - {@link createShieldNote}: a new note (`{name, content}`), answered as the artifact stored (201, version 1). A title
  *   outside 1 to 200 characters or a text over 20,000 is `request.invalid` naming its field.
+ *
+ * Story 6.4 part A (contract 1.59.0), a Shield's stored rolls. The browser draws the dice; the backend checks each roll
+ * against the same rules and keeps it once by the key the browser made. A roll is never a note or an artifact.
+ * - {@link listRolls}: the Shield's rolls, newest first, a page at a time (`limit`, `cursor`), with the log's `total`.
+ * - {@link keepRoll}: a roll made in the browser (`{key, formula, results, label?, rolledAt}`): the stored roll, and
+ *   whether it was stored now (201) or was already held under that key in this Shield (200). A roll the browser could
+ *   not have made is `request.roll_invalid`; its key held in another of the account's Shields, `request.roll_key_taken`.
+ * - {@link clearRolls}: clears the Shield's stored rolls (204).
  */
 type Schemas = components['schemas'];
 export type Shield = Schemas['Shield'];
@@ -46,6 +54,12 @@ export type NoteSummary = NotePage['items'][number];
 export type NewNote = Schemas['NewNote'];
 export type NoteQuery = NonNullable<operations['listShieldNotes']['parameters']['query']>;
 export type Note = Schemas['Artifact'];
+export type Roll = Schemas['Roll'];
+export type RollPage = Schemas['RollPage'];
+export type NewRoll = Schemas['NewRoll'];
+export type RollQuery = NonNullable<operations['listRolls']['parameters']['query']>;
+/** A kept roll: as stored, and whether this request stored it (201) or found it held under its key (200). */
+export type KeptRoll = { readonly roll: Roll; readonly created: boolean };
 
 const session = (sessionToken: string) => ({ 'X-Session-Token': sessionToken });
 
@@ -105,8 +119,8 @@ export function renameShield(
 
 /**
  * What goes with one Shield of one of the account's campaigns if it is deleted: its live notes (from contract 1.58.0)
- * and stored rolls (0 until they exist), and whether it is the campaign's only Shield (`last`); `request.not_found` for
- * any other id.
+ * and stored rolls (from contract 1.59.0), and whether it is the campaign's only Shield (`last`); `request.not_found`
+ * for any other id.
  */
 export function shieldDeletion(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<ShieldDeletion>> {
   return call('shields.deletion', options, (client) =>
@@ -168,6 +182,50 @@ export function createShieldNote(
     client.POST('/api/v1/campaigns/{id}/shields/{shieldId}/notes', {
       params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
       body,
+    }),
+  );
+}
+
+/** The stored rolls of one Shield of one of the account's campaigns, newest first, a page at a time; `request.not_found` for any other. */
+export function listRolls(
+  sessionToken: string,
+  campaignId: string,
+  shieldId: string,
+  query: RollQuery = {},
+  options: CallOptions = {},
+): Promise<Result<RollPage>> {
+  return call('shields.rolls', options, (client) =>
+    client.GET('/api/v1/campaigns/{id}/shields/{shieldId}/rolls', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId }, query },
+    }),
+  );
+}
+
+/** A roll made in the browser, kept in one Shield of one of the account's campaigns: as stored, and whether it is new. */
+export async function keepRoll(
+  sessionToken: string,
+  campaignId: string,
+  shieldId: string,
+  body: NewRoll,
+  options: CallOptions = {},
+): Promise<Result<KeptRoll>> {
+  let status = 0;
+  const result = await call('shields.keepRoll', options, async (client) => {
+    const answer = await client.POST('/api/v1/campaigns/{id}/shields/{shieldId}/rolls', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
+      body,
+    });
+    status = answer.response.status;
+    return answer;
+  });
+  return result.ok ? { ok: true, data: { roll: result.data, created: status === 201 } } : result;
+}
+
+/** Clears the stored rolls of one Shield of one of the account's campaigns (204, also when it held none). */
+export function clearRolls(sessionToken: string, campaignId: string, shieldId: string, options: CallOptions = {}): Promise<Result<undefined>> {
+  return call('shields.clearRolls', options, (client) =>
+    client.DELETE('/api/v1/campaigns/{id}/shields/{shieldId}/rolls', {
+      params: { header: session(sessionToken), path: { id: campaignId, shieldId } },
     }),
   );
 }

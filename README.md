@@ -1248,6 +1248,33 @@ they sit in `src/`.
     It stays when the notes cannot be read.
   - Messages `shields.dice.*` (`title`, `formula`, `roll`, `invalid`, `sentence`, `die`). The stand-in and the demo backend
     need no change.
+- **Keep the rolls (Story 6.4 part A, public contract 1.59.0).** The backend stores each roll with its Shield; the
+  browser still draws the dice and shows each roll at once.
+  - Every roll gets a key from `crypto.randomUUID()` and goes, with its normalised formula, results, optional label and
+    time (`toISOString()`), through the relay `src/app/api/v1/campaigns/[id]/shields/[shieldId]/rolls/route.ts` (POST,
+    and GET and DELETE for the log; same origin, the session cookie, ids checked, a body of the wrong shape or a
+    malformed `limit`/`cursor` refused as `request.invalid` before the backend) and `src/client/rolls.ts`
+    (`sendRoll`, `readRolls`, `clearRolls`), never a Server Action. The relay answers 201 for a roll stored now and 200
+    for one already held under its key (`src/server/shields.ts` `keepRoll` keeps the backend's status); `listRolls` and
+    `clearRolls` sit beside it.
+  - `DiceRoller` gains the optional "Rótulo" field beside "Fórmula" (at most 80 characters): it applies to the next roll,
+    from a die button or the formula, and empties after it. Its props now name the campaign, the Shield, the
+    interface's language and `firstPage`, the newest 10 stored rolls the Shield's page reads with the Shield (null when
+    that read fails: the roller still works and the log says "Não foi possível carregar as rolagens salvas.").
+  - `RollLog` (`components/RollLog.tsx`), under the latest result: the newest 10 lines and "Mostrar mais" for 10 more
+    (from the rolls already in memory, else the next stored page by cursor). A line is the time (hour:minute in the
+    browser's own time zone, with the day and month when not from today; it shows once the page runs in the browser),
+    the label, the formula, the dice and the total. A roll not confirmed yet reads "ainda não salva"; a refusal or no
+    answer makes it "não foi possível salvar" with a 44px remove control named "Remover a rolagem {formula} das
+    {time}" (part A keeps it in memory only; part B adds the offline pending list and resending). An empty log reads
+    "Nenhuma rolagem ainda.". "Limpar rolagens" (shown while the log holds something) opens the 440px confirmation,
+    titled with the count ("Limpar 3 rolagens?"); confirming clears the stored rolls and the log and says
+    "Rolagens limpas." in a toast. The log merges the stored pages and this visit's rolls once each by key, newest
+    first; nothing goes to browser storage.
+  - Messages `shields.dice.*` gain `label`, `log`, `empty`, `unsaved`, `failed`, `remove`, `more`, `moreFailed`,
+    `loadFailed`, `clear`, `clearTitle`, `clearConsequence`, `clearConfirm`, `cleared`, `clearFailed`, `rollsOne` and
+    `rollsOther`. `MINIMUM_BACKEND_CONTRACT_VERSION` is 1.59.0. The stand-in lists one stored roll, answers a roll sent
+    with it (201) and counts it in the deletion preview; the demo backend keeps the rolls of each Shield in memory.
 - **Text.** `translator(language)` gives `t(path, params)`, with `{name}` placeholders.
   `errorText(problem, language)` turns a problem detail into text: the code's text, else its
   category's (`request`, `server`, `integrity`, `session`, `service`, `upload`, `ingestion`, `page`, `material`,

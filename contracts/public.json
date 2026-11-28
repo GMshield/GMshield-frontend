@@ -1740,6 +1740,46 @@
         "required" : [ "name" ],
         "type" : "object"
       },
+      "NewRoll" : {
+        "description" : "A roll the browser made (contract 1.59.0)",
+        "properties" : {
+          "formula" : {
+            "description" : "The formula, under the frontend's dice grammar (src/dice.ts): dice groups [N]dS with S in 4, 6, 8, 10, 12, 20, 100 and modifiers 0 to 1000 joined by + or -, at most 100 dice",
+            "example" : "2d6+3",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "The key the browser made for the roll (crypto.randomUUID()); a roll sent again with the same key is found, not stored twice",
+            "example" : "3b241101-e2bb-4255-8caf-4136c566a962",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "An optional label: at most 80 code points after trimming; absent, null or blank for none",
+            "example" : "Iniciativa",
+            "maxLength" : 80,
+            "type" : [ "string", "null" ]
+          },
+          "results" : {
+            "description" : "Each die's result, in the formula's order: one per die, each from 1 to its die's sides",
+            "items" : {
+              "format" : "int32",
+              "maximum" : 100,
+              "minimum" : 1,
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "rolledAt" : {
+            "description" : "When the browser made the roll: from 1970-01-01T00:00:00Z to at most 5 minutes ahead of the server's clock",
+            "example" : "2026-11-27T12:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "formula", "key", "results", "rolledAt" ],
+        "type" : "object"
+      },
       "NewSearch" : {
         "description" : "A search of the campaign's scope (contract 1.28.0). The filters only narrow the scope, never widen it",
         "properties" : {
@@ -2706,6 +2746,83 @@
         "required" : [ "code", "count" ],
         "type" : "object"
       },
+      "Roll" : {
+        "description" : "A stored roll (contract 1.59.0)",
+        "properties" : {
+          "formula" : {
+            "description" : "The normalised formula (no white space, the count written)",
+            "example" : "2d6+3",
+            "type" : "string"
+          },
+          "id" : {
+            "description" : "The roll's id",
+            "example" : "0190a0b0-0000-7000-8000-000000000040",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "The key the browser made for it",
+            "example" : "3b241101-e2bb-4255-8caf-4136c566a962",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The label, trimmed; null for none",
+            "example" : "Iniciativa",
+            "type" : [ "string", "null" ]
+          },
+          "results" : {
+            "description" : "Each die's result, in the formula's order",
+            "items" : {
+              "format" : "int32",
+              "maximum" : 100,
+              "minimum" : 1,
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "rolledAt" : {
+            "description" : "When the browser made the roll",
+            "example" : "2026-11-27T12:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "The total: the results and the modifiers, each with its sign",
+            "example" : 12,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "formula", "id", "key", "label", "results", "rolledAt", "total" ],
+        "type" : "object"
+      },
+      "RollPage" : {
+        "description" : "A page of a Shield's stored rolls, newest first (contract 1.59.0)",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Roll"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "description" : "The cursor of the next page; absent on the last",
+            "example" : "0190a0b0-0000-7000-8000-000000000040",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "description" : "How many rolls the Shield holds, whatever the page",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "items", "total" ],
+        "type" : "object"
+      },
       "SavedAnswer" : {
         "description" : "A saved answer (contract 1.32.0)",
         "properties" : {
@@ -3091,7 +3208,7 @@
             "type" : "integer"
           },
           "rolls" : {
-            "description" : "How many stored rolls of the Shield go with it (0 until rolls are stored)",
+            "description" : "How many stored rolls of the Shield go with it (contract 1.59.0)",
             "example" : 0,
             "format" : "int64",
             "minimum" : 0,
@@ -3757,7 +3874,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.58.0"
+    "version" : "1.59.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -6297,7 +6414,7 @@
             "description" : "Any error"
           }
         },
-        "summary" : "What goes with one Shield of one of the account's campaigns if it is deleted: how many live notes (contract 1.58.0) and stored rolls (0 until they exist), and whether it is the campaign's only Shield (last), which cannot be deleted. request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
+        "summary" : "What goes with one Shield of one of the account's campaigns if it is deleted: how many live notes (contract 1.58.0) and stored rolls (contract 1.59.0), and whether it is the campaign's only Shield (last), which cannot be deleted. request.not_found (404) for any other id (unknown, another account's, malformed, already deleted, a Shield of another campaign or of a campaign being deleted); session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },
@@ -6447,6 +6564,199 @@
         },
         "summary" : "A new note written in one Shield of one of the account's campaigns (contract 1.57.0; 201): an artifact of the campaign of record type note, with no fields, its name and optional content as its version 1, held by the Shield (shieldId), as getArtifact answers it. It is indexed like any artifact, so answers in the campaign can cite it under the campaign tier. request.invalid (400) with params.field naming the value outside its limits (and its min and max): name (1 to 200 code points after trimming) or content (at most 20,000 after trimming); request.invalid (400) without a field for a malformed body; request.not_found (404) for a campaign or a Shield that is not the account's (unknown, another account's, malformed, a Shield of another campaign or of a campaign being deleted); none is told apart; nothing is stored then; session.required (401) without a session.",
         "tags" : [ "artifacts" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/shields/{shieldId}/rolls" : {
+      "delete" : {
+        "operationId" : "clearRolls",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "The rolls are cleared"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Clears the stored rolls of one Shield of one of the account's campaigns (contract 1.59.0; 204, no body, also when it held none). Cannot be undone. request.not_found (404) for a campaign or a Shield that is not the account's (unknown, another account's, malformed, a Shield of another campaign, a deleting Shield or one of a campaign being deleted); none is told apart; nothing is deleted then; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "get" : {
+        "operationId" : "listRolls",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "At most this many, 1 to 50",
+          "in" : "query",
+          "name" : "limit",
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RollPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "The stored rolls of one Shield of one of the account's campaigns (contract 1.59.0), newest first (by rolledAt, then by id), a page at a time after a cursor, naming the total. A cursor whose roll is gone (cleared) gives an empty page. request.not_found (404) for a campaign or a Shield that is not the account's (unknown, another account's, malformed, a Shield of another campaign, a deleting Shield or one of a campaign being deleted); none is told apart; request.invalid (400) for a limit outside 1 to 50 or a malformed cursor; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "operationId" : "keepRoll",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The Shield's id",
+          "in" : "path",
+          "name" : "shieldId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewRoll"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Roll"
+                }
+              }
+            },
+            "description" : "The roll already stored under this key"
+          },
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Roll"
+                }
+              }
+            },
+            "description" : "The roll, stored now"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Keeps a roll the browser made in one Shield of one of the account's campaigns (contract 1.59.0): 201 with the stored roll (the formula normalised, the total computed), or 200 with the roll already stored under that key in this Shield, creating nothing. The backend never rolls: it stores the roll only when its formula reads under the frontend's dice grammar, its results are its dice in order (one per die, each within its die's range), its label is at most 80 code points after trimming and its time is from 1970-01-01T00:00:00Z to at most 5 minutes ahead; request.roll_invalid (400) otherwise. request.roll_key_taken (409) when the key is held in another of the account's Shields; request.invalid (400) for a malformed body (not an object, a key missing or not a UUID); request.not_found (404) for a campaign or a Shield that is not the account's (unknown, another account's, malformed, a Shield of another campaign, a deleting Shield or one of a campaign being deleted); none is told apart; nothing is stored then; session.required (401) without a session.",
+        "tags" : [ "library" ]
       }
     },
     "/api/v1/conversations/current" : {
