@@ -450,6 +450,14 @@
         "name": "The title needs {min} to {max} characters.",
         "content": "The text can have up to {max} characters."
       }
+    },
+    "dice": {
+      "title": "Dice",
+      "formula": "Formula",
+      "roll": "Roll",
+      "invalid": "Use the format 2d6+3.",
+      "sentence": "{formula}: {dice}, total {total}",
+      "die": "Roll one die"
     }
   },
   "characters": {

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { notFoundFor } from '@/app/not-found';
+import { DiceRoller } from '@/components/DiceRoller';
 import { ItemList } from '@/components/ItemList';
 import { Notice } from '@/components/Notice';
 import { EmptyState, PageHeader } from '@/components/PageHeader';
@@ -14,6 +15,7 @@ import { getShield, shieldDeletion, shieldNotesPage } from '@/server/shields';
 
 import { noteRow, shieldName } from '../../../rows';
 import { deleteShieldAction } from '../actions';
+import styles from './page.module.css';
 
 type Props = {
   readonly params: Promise<{ readonly id: string; readonly shieldId: string }>;
@@ -35,7 +37,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * Shield's notes, newest first, as a paged list (`?page=`, the "Exibição" menu's `notes` view), each row the note's
  * title linking to its artifact page; a Shield without notes says "Este escudo ainda não tem notas.". Part B: "Excluir" comes last in the
  * header ({@link ShieldDeleteAction}), with the deletion preview read with the Shield (its counts, and whether it is the
- * campaign's only Shield, which it then refuses without a dialog). Another owner's Shield, one of another
+ * campaign's only Shield, which it then refuses without a dialog). Story 6.3: the dice roller ({@link DiceRoller}, the
+ * screen's only offline part) comes first: a side column on the left of the notes when the main column is wide enough
+ * (a container query), above them otherwise, and it stays when the notes cannot be read. Another owner's Shield, one of another
  * campaign or of a campaign being deleted, an unknown one or a malformed one shows the single "Não encontrado." page;
  * another failure is a notice.
  */
@@ -83,21 +87,39 @@ export default async function ShieldPage({ params, searchParams }: Props) {
           </>
         }
       />
-      {!notes.ok ? (
-        <Notice status="danger" language={language} message={errorText(notes.problem, language)} dismissible={false} />
-      ) : notes.data.paging.total === 0 ? (
-        <EmptyState icon="shield" text={t('shields.empty')} />
-      ) : (
-        <ItemList
-          label={t('shields.notes.list')}
-          rows={notes.data.rows.map((note) => noteRow(note, campaignPath))}
-          pages={{ paging: notes.data.paging, path: shieldPath, query: {} }}
-          icon="file"
-          viewKey="notes"
-          view={views.notes}
-          language={language}
-        />
-      )}
+      <div className={styles.frame}>
+        <div className={styles.layout}>
+          <div className={styles.dice}>
+            <DiceRoller
+              labels={{
+                title: t('shields.dice.title'),
+                formula: t('shields.dice.formula'),
+                roll: t('shields.dice.roll'),
+                invalid: t('shields.dice.invalid'),
+                sentence: t('shields.dice.sentence'),
+                die: t('shields.dice.die'),
+              }}
+            />
+          </div>
+          <div className={styles.notes}>
+            {!notes.ok ? (
+              <Notice status="danger" language={language} message={errorText(notes.problem, language)} dismissible={false} />
+            ) : notes.data.paging.total === 0 ? (
+              <EmptyState icon="shield" text={t('shields.empty')} />
+            ) : (
+              <ItemList
+                label={t('shields.notes.list')}
+                rows={notes.data.rows.map((note) => noteRow(note, campaignPath))}
+                pages={{ paging: notes.data.paging, path: shieldPath, query: {} }}
+                icon="file"
+                viewKey="notes"
+                view={views.notes}
+                language={language}
+              />
+            )}
+          </div>
+        </div>
+      </div>
     </>
   );
 }

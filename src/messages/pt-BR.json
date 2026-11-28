@@ -450,6 +450,14 @@
         "name": "O título precisa ter de {min} a {max} caracteres.",
         "content": "O texto pode ter até {max} caracteres."
       }
+    },
+    "dice": {
+      "title": "Dados",
+      "formula": "Fórmula",
+      "roll": "Rolar",
+      "invalid": "Use o formato 2d6+3.",
+      "sentence": "{formula}: {dice}, total {total}",
+      "die": "Rolar um dado"
     }
   },
   "characters": {
