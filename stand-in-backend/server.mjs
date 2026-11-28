@@ -70,7 +70,8 @@
 // "2d6+3" labelled "Iniciativa", which the preview counts; a roll sent answers that roll stored now (201), and a clear
 // answers 204. Story 6.4 part B (contract 1.60.0): the account (GET /api/v1/me) carries the contract's example id.
 // Story 7.1 (contract 1.61.0): the starter campaign has no party set, and a party change (PUT .../party) answers it with 4
-// players at level 5, version 1.
+// players at level 5, version 1. Story 7.2 (contract 1.62.0): a campaign's item encyclopedia (GET .../items) holds one
+// system record, "Adaga", and the stand-in artifact "Espada de Kael".
 //
 //   node stand-in-backend/server.mjs        PORT (default 8080), STAND_IN_CONTRACT (default ../contracts/public.json)
 import { Buffer } from 'node:buffer';
@@ -1057,6 +1058,19 @@ export const STORED_ROLL = {
 export const ROLL_PAGE = { items: [STORED_ROLL], total: 1 };
 EXAMPLES['GET /api/v1/campaigns/{id}/shields/{shieldId}/rolls'] = ROLL_PAGE;
 EXAMPLES['POST /api/v1/campaigns/{id}/shields/{shieldId}/rolls'] = STORED_ROLL;
+/**
+ * Story 7.2 (contract 1.62.0): the campaign's item encyclopedia holds the stand-in artifact "Espada de Kael" (custom)
+ * and one system record, "Adaga" of "Livro do Jogador", p. 150, alphabetical; it reads no query.
+ */
+export const ITEM_RECORD_ID = '0190a0b0-0000-7000-8000-000000000c01';
+export const CAMPAIGN_ITEMS = {
+  items: [
+    { kind: 'record', id: ITEM_RECORD_ID, name: 'Adaga', recordType: 'item', tier: 'system', materialName: 'Livro do Jogador', page: 150, sharedFrom: null, overrides: null },
+    { kind: 'artifact', id: ARTIFACT.id, name: ARTIFACT.name, recordType: 'item', tier: null, materialName: null, page: null, sharedFrom: null, overrides: null },
+  ],
+  total: 2,
+};
+EXAMPLES['GET /api/v1/campaigns/{campaignId}/items'] = CAMPAIGN_ITEMS;
 
 /** A one-page PDF that prints `text` (ASCII), its cross-reference table counted. */
 export function tinyPdf(text) {

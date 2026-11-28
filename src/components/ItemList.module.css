@@ -136,6 +136,11 @@
   overflow-wrap: anywhere;
 }
 
+/* Story 7.2: an entry's tier pill, before its name on the same line. */
+.tier {
+  margin-inline-end: var(--space-2);
+}
+
 /* A row with a name alone: the name sits in the middle of the row. */
 .row:not(:has(.detail)) .label {
   grid-row: 1 / 3;

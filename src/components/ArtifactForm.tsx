@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
 
 import type { ArtifactFormField, ArtifactFormState } from '@/app/(signed-in)/campaigns/[id]/artifacts/form-state';
+import type { ArtifactFrom } from '@/app/(signed-in)/campaigns/[id]/artifacts/texts';
 
 import { SolidPillButton } from './PillButton';
 import { PillLink } from './PillLink';
@@ -25,8 +26,11 @@ export type ArtifactFormProps = {
   readonly texts: ArtifactFormTexts;
   /** The values to start from: the type chosen (`?type=`), nothing else. */
   readonly initial: ArtifactFormState;
-  /** Where the form was opened from, posted with it so the saved artifact leads back there: "Personagens" or none. */
-  readonly from?: 'characters' | null;
+  /**
+   * Where the form was opened from, posted with it so the saved artifact leads back there: "Personagens", (Story 7.2)
+   * the item encyclopedia, or none.
+   */
+  readonly from?: ArtifactFrom | null;
   /** Where "Cancelar" goes: the campaign's artifacts tab, or "Personagens". */
   readonly cancelHref: string;
   readonly action: (previous: ArtifactFormState, form: FormData) => Promise<ArtifactFormState>;

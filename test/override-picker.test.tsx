@@ -182,7 +182,7 @@ describe('the override picker (Story 5.5 part A)', () => {
     const record = SPELLS[0]!;
     const { posted } = renderSection({ language: 'en', override: { recordId: record.id, name: record.name, typeLabel: 'Spell', removed: false } });
     expect(screen.getByText('In this campaign, it overrides:')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Bola de Fogo' }).getAttribute('href')).toBe(`/search/records/${record.id}`);
+    expect(screen.getByRole('link', { name: 'Bola de Fogo' }).getAttribute('href')).toBe(`/campaigns/${CAMPAIGN}/records/${record.id}?artifact=${ARTIFACT}`);
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Remove override' }));
     });

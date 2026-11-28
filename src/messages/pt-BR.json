@@ -41,6 +41,7 @@
       "campaign": "Campanha",
       "system": "Sistema",
       "other": "Outros",
+      "custom": "Personalizado",
       "none": "Nenhuma fonte",
       "modelOff": "conhecimento do modelo desligado",
       "modelOn": "conhecimento do modelo ligado",
@@ -221,6 +222,7 @@
       "shields": "Escudos",
       "conversations": "Conversas",
       "artifacts": "Artefatos",
+      "items": "Enciclopédia de itens",
       "name": "Nome",
       "system": "Sistema",
       "state": "Situação",
@@ -492,6 +494,22 @@
       "rollsOne": "1 rolagem",
       "rollsOther": "{count} rolagens",
       "offline": "Sem conexão. As rolagens serão salvas quando ela voltar."
+    }
+  },
+  "items": {
+    "list": "Itens desta campanha",
+    "filter": "Filtrar por nome",
+    "apply": "Filtrar",
+    "clear": "Limpar filtro",
+    "scope": "no escopo desta campanha ({tiers})",
+    "scopeUnread": "no escopo desta campanha",
+    "empty": "Nenhum item {scope}; os itens dos livros e os que você salvar aparecem aqui.",
+    "noMatch": "Nenhum item com «{query}» {scope}.",
+    "source": "{material}, p. {page}",
+    "by": "por {username}",
+    "replaces": "Substitui {name}",
+    "record": {
+      "backArtifact": "Artefato"
     }
   },
   "characters": {

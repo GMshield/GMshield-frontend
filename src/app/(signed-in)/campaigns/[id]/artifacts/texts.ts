@@ -157,17 +157,29 @@ export function artifactTypeOptions(types: readonly RecordType[], t: Translate):
 /** The one page an artifact's pages may lead back to besides its campaign's tab (`from=characters`): "Personagens". */
 export const FROM_CHARACTERS = 'characters';
 
-/** Where an artifact's pages were opened from: "Personagens" when `from` says so, else nowhere in particular (null). */
-export function fromOf(value: unknown): typeof FROM_CHARACTERS | null {
-  return value === FROM_CHARACTERS ? FROM_CHARACTERS : null;
+/** Story 7.2: the campaign's item encyclopedia tab (`from=items`), "Enciclopédia de itens". */
+export const FROM_ITEMS = 'items';
+
+/** Where an artifact's pages may have been opened from, besides the campaign's artifacts tab. */
+export type ArtifactFrom = typeof FROM_CHARACTERS | typeof FROM_ITEMS;
+
+/**
+ * Where an artifact's pages were opened from: "Personagens" or (Story 7.2) the item encyclopedia when `from` says so,
+ * else nowhere in particular (null).
+ */
+export function fromOf(value: unknown): ArtifactFrom | null {
+  return value === FROM_CHARACTERS || value === FROM_ITEMS ? value : null;
 }
 
 /**
  * The way back of a new artifact's form and of an artifact's page (Story 5.1): to "Personagens" when they were opened
- * from it, else to the campaign's artifacts tab, labelled "Artefatos".
+ * from it, (Story 7.2) to the campaign's item encyclopedia when opened from there, else to the campaign's artifacts
+ * tab, labelled "Artefatos".
  */
-export function artifactBack(campaignId: string, from: typeof FROM_CHARACTERS | null, t: Translate): { href: string; label: string } {
-  return from === FROM_CHARACTERS
-    ? { href: '/characters', label: t('shell.entries.characters') }
-    : { href: `/campaigns/${encodeURIComponent(campaignId)}?tab=artifacts`, label: t('campaigns.page.artifacts') };
+export function artifactBack(campaignId: string, from: ArtifactFrom | null, t: Translate): { href: string; label: string } {
+  if (from === FROM_CHARACTERS) {
+    return { href: '/characters', label: t('shell.entries.characters') };
+  }
+  const tab = from === FROM_ITEMS ? 'items' : 'artifacts';
+  return { href: `/campaigns/${encodeURIComponent(campaignId)}?tab=${tab}`, label: t(`campaigns.page.${tab}`) };
 }

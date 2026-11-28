@@ -328,6 +328,10 @@ describe('a campaign page (Story 3.2)', () => {
       expect(linkTo(html, `/campaigns/${ID}?tab=overview`)).toContain('aria-current="page"');
       expect(linkTo(html, `/campaigns/${ID}?tab=scope`)).not.toContain('aria-current');
       expect(linkTo(html, `/campaigns/${ID}?tab=conversations`)).not.toContain('aria-current');
+      // Story 7.2: the item encyclopedia is the last tab.
+      expect(linkTo(html, `/campaigns/${ID}?tab=items`)).not.toContain('aria-current');
+      expect(html).toContain(`>${messages.campaigns.page.items}</a>`);
+      expect(html.lastIndexOf('?tab=items"')).toBeGreaterThan(html.lastIndexOf('?tab=artifacts"'));
       expect(html).toMatch(new RegExp(`<a[^>]*href="/systems/${DND_ID}"[^>]*>D&amp;D 5.2.1</a>`));
       expect(html).not.toContain(messages.campaigns.page.archived);
       expect(html).not.toContain(messages.campaigns.page.isCurrent);

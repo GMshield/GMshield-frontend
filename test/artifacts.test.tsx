@@ -636,7 +636,8 @@ describe("an artifact's override (Story 5.5 part A)", () => {
     const html = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
 
     expect(html).toContain(ptBR.artifacts.override.replaces);
-    expect(linkTo(html, `/search/records/${RECORD}`)).not.toBe('');
+    // Story 7.2: the record opens in the campaign's context, leading back to this artifact.
+    expect(linkTo(html, `/campaigns/${CAMPAIGN}/records/${RECORD}?artifact=${SWORD}`)).not.toBe('');
     expect(html).toMatch(/>Bola de Fogo<\/a><span[^>]*> · Magia<\/span>/);
     expect(html).toContain(`>${ptBR.artifacts.override.remove}</button>`);
     expect(html).not.toContain(ptBR.artifacts.override.none);
@@ -650,7 +651,7 @@ describe("an artifact's override (Story 5.5 part A)", () => {
     });
     const gone = renderToStaticMarkup(await ArtifactPage({ params: Promise.resolve({ id: CAMPAIGN, artifactId: SWORD }) }));
     expect(gone).toContain(ptBR.artifacts.override.removed);
-    expect(linkTo(gone, `/search/records/${RECORD}`)).toBe('');
+    expect(linkTo(gone, `/campaigns/${CAMPAIGN}/records/${RECORD}?artifact=${SWORD}`)).toBe('');
     expect(gone).toContain('Bola de Fogo');
     expect(gone).toContain(`>${ptBR.artifacts.override.remove}</button>`);
   });

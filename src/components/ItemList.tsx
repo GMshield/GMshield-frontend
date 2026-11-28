@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
 
+import type { LabelTier } from '@/client/conversation';
 import { translator, type Language } from '@/messages';
 import { pageHref, type Paging } from '@/paging';
 import { DEFAULT_VIEW, viewCookieLine, viewsIn, type ListView, type ViewList } from '@/view-cookie';
@@ -16,12 +17,14 @@ import { Pager } from './Pager';
 import { ShellPanel } from './ShellPanel';
 import { StatePill, type PillState } from './StatePill';
 import { Thumbnail } from './Thumbnail';
+import { TierLabel } from './TierLabel';
 import { ViewMenu } from './ViewMenu';
 
 /**
  * One row of a list (Story 3.1): its text, an optional muted detail, the page it opens, and a material's state. From
  * the usability pass (2026-11-21) a material that has pages also carries the address of its first page's picture
- * (`thumbnail`) and how many pages a preview may turn (`pages`).
+ * (`thumbnail`) and how many pages a preview may turn (`pages`). From Story 7.2 an entry of the item encyclopedia
+ * carries its tier (`tier`), drawn before its name as a tier pill ({@link TierLabel}: "Sistema", "Personalizado"...).
  */
 export type ListRow = {
   readonly id: string;
@@ -31,6 +34,7 @@ export type ListRow = {
   readonly state: { readonly state: PillState; readonly word: string } | null;
   readonly thumbnail?: string | null;
   readonly pages?: number | null;
+  readonly tier?: LabelTier | null;
 };
 
 /**
@@ -122,6 +126,8 @@ export function ItemList({
     queueMicrotask(() => button?.focus());
   };
   const hasThumbnails = shown.some((row) => typeof row.thumbnail === 'string');
+  // Story 7.2: a row's tier pill needs the interface's words; a list without a language shows none.
+  const t = language === undefined ? null : translator(language);
   const menu =
     viewKey === undefined || language === undefined ? null : (
       <ViewMenu view={view} language={language} previews={hasThumbnails} sizes={listPages !== undefined} onChange={change} />
@@ -156,7 +162,10 @@ export function ItemList({
               <span className={styles.lead} data-kind={thumbnail === null ? 'icon' : 'thumbnail'}>
                 {thumbnail === null ? <NamedIcon name={icon} size={22} /> : <Thumbnail src={thumbnail} icon={icon} />}
               </span>
-              <span className={styles.label}>{row.label}</span>
+              <span className={styles.label}>
+                {row.tier === undefined || row.tier === null || t === null ? null : <TierLabel tier={row.tier} t={t} className={styles.tier} />}
+                {row.label}
+              </span>
               {row.state === null ? null : (
                 <span className={styles.state}>
                   <StatePill state={row.state.state} word={row.state.word} />

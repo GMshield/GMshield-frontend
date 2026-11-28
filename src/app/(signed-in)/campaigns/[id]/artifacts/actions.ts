@@ -76,7 +76,7 @@ function refusalText(problem: unknown, language: Language): string {
  * "Salvar" on a new artifact's form (Story 5.1): the campaign's id, the record type's key, the name, the fields in order
  * and the content, sent as typed (the backend trims and checks every value). Once the backend has stored it, a toast
  * says "Artefato salvo.", the whole signed-in layout is revalidated (the campaign's lists change), and the artifact's
- * page opens (with `from=characters` when the form was opened from "Personagens", so its way back leads there). A refusal comes back as its text under the part of the form it is about (the field's position from the
+ * page opens (with `from=characters` when the form was opened from "Personagens", or from Story 7.2 `from=items` from the item encyclopedia, so its way back leads there). A refusal comes back as its text under the part of the form it is about (the field's position from the
  * problem's `index`), with what was typed kept; a campaign that is gone (deleted meanwhile, another owner's) is said
  * under the form. A malformed form never reaches the backend. The proxy (src/proxy.ts) and Next.js refuse a
  * cross-origin post before this runs.
@@ -103,7 +103,8 @@ export async function createArtifactAction(previous: ArtifactFormState, form: Fo
   if (result.ok) {
     await flash('success', translator(language)('feedback.artifactSaved'));
     revalidatePath('/', 'layout');
-    // Opened from "Personagens", the artifact's page leads back there (only that one place is ever named).
+    // Opened from "Personagens" or (Story 7.2) the item encyclopedia, the artifact's page leads back there (only those
+    // places are ever named).
     const from = fromOf(form.get('from'));
     redirect(`/campaigns/${encodeURIComponent(campaignId)}/artifacts/${encodeURIComponent(result.data.id)}${from === null ? '' : `?from=${from}`}`);
   }
@@ -175,7 +176,7 @@ export async function updateArtifactAction(previous: ArtifactEditState, form: Fo
  * restore (`number`) and the newest version the page read (`version`). Once the backend has copied it as the next
  * version, a toast says "Versão N restaurada." and the whole signed-in layout is revalidated; a page that showed the
  * newest version is read again, and one that showed an earlier version (`view` `older`) moves on to the artifact's
- * page, which shows the newest (keeping `from=characters`). A stale version reads the artifact again and answers
+ * page, which shows the newest (keeping `from=characters`, or `from=items`). A stale version reads the artifact again and answers
  * `{stale, currentVersion}`, so "Manter a minha como nova versão" sends the same restore again on it. A version whose
  * type the system no longer has, and any other refusal, come back as their text, never a code. A malformed form never
  * reaches the backend.
@@ -239,10 +240,10 @@ const MOST_NAME = 1_000;
 
 /**
  * "Excluir artefato" confirmed on an artifact's page (Story 5.2 part B): the campaign's and the artifact's ids, its name
- * (for the toast) and where the page was opened from (`from=characters`). Once the backend has recorded the deletion, a
+ * (for the toast) and where the page was opened from (`from=characters`, or `from=items`). Once the backend has recorded the deletion, a
  * toast says "Artefato «Espada de Kael» excluído.", the whole signed-in layout is revalidated (the campaign's lists,
- * counts and "Personagens" change), and the page goes to the campaign's artifacts tab, or to "Personagens" when it was
- * opened from there. An artifact not found (already deleted in another tab) moves the page on the same way, without
+ * counts and "Personagens" change), and the page goes to the campaign's artifacts tab, or to "Personagens" (or the item
+ * encyclopedia) when it was opened from there. An artifact not found (already deleted in another tab) moves the page on the same way, without
  * the toast. Another refusal comes back as its text, never a code. A malformed form never reaches the backend. The proxy
  * (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
  */
