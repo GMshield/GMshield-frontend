@@ -9,6 +9,7 @@ import { errorText, problemFields, translator, type Language } from '@/messages'
 import { currentPreferences } from '@/preferences';
 import {
   changeCampaign,
+  changeCampaignParty,
   changeCampaignScope,
   chooseCampaign,
   createCampaign,
@@ -20,7 +21,14 @@ import { AREAS } from '@/server/conversations';
 import { flash } from '@/server/flash';
 import { currentSessionToken } from '@/server/session-cookies';
 
-import type { CampaignActionState, CampaignField, CampaignFormState, CampaignFormValues } from './form-state';
+import type {
+  CampaignActionState,
+  CampaignField,
+  CampaignFormState,
+  CampaignFormValues,
+  PartyField,
+  PartyFormState,
+} from './form-state';
 
 /**
  * The Server Actions of the campaigns pages and of the campaign switcher (Story 3.2): a new campaign (it becomes the
@@ -37,6 +45,8 @@ import type { CampaignActionState, CampaignField, CampaignFormState, CampaignFor
  * the context bar no longer show it; the current campaign has fallen back) and opens Minhas Mesas.
  *
  * Story 3.6: a press on a scope switch, in the context bar's popover or the campaign page's scope tab.
+ *
+ * Story 7.1: "Salvar" in the party form of a campaign's overview.
  */
 
 /** An id as the backend mints it; anything else is an item nowhere. */
@@ -70,6 +80,92 @@ function fieldOf(problem: unknown): CampaignField | null {
 
 function invalid(language: Language): string {
   return errorText({ category: 'request', code: 'request.invalid' }, language);
+}
+
+/** A party value as typed (Story 7.1): digits only; "4.0", "2,5" or "1.000" are refused before the backend is called. */
+const PARTY_NUMBER = /^\d{1,6}$/;
+/** The party field each backend problem is about (Story 7.1), and the limits each says when the form refuses first. */
+const PARTY_FIELDS: Readonly<Record<PartyField, { readonly code: string; readonly max: number }>> = {
+  size: { code: 'request.party_size_invalid', max: 20 },
+  level: { code: 'request.party_level_invalid', max: 999 },
+};
+
+/** A party field's value (Story 7.1): null for empty (not set), a number to send, or undefined for anything else. */
+function partyValue(form: FormData, name: PartyField): number | null | undefined {
+  const value = form.get(name);
+  const typed = typeof value === 'string' ? value.trim() : '';
+  if (typed === '') {
+    return null;
+  }
+  return PARTY_NUMBER.test(typed) ? Number(typed) : undefined;
+}
+
+/** The party field a backend problem is about, or null for one about the whole form. */
+function partyFieldOf(problem: unknown): PartyField | null {
+  const code = problemFields(problem).code;
+  return (Object.keys(PARTY_FIELDS) as PartyField[]).find((field) => PARTY_FIELDS[field].code === code) ?? null;
+}
+
+/**
+ * "Salvar" in a campaign overview's party form (Story 7.1): the form's `size` and `level` (empty: not set, which clears
+ * a stored value) go to the backend on the form's `version`. Once saved, a toast says the change applies from the next
+ * question and the page is refreshed, so the overview shows the new values. A value that is not digits only (a
+ * letter, a sign or a decimal) is refused beside its field before the backend is called; a value the backend refuses comes back beside its field too. A stale
+ * version brings the campaign's current values and version into the form, which stays open, and says so. The proxy
+ * (src/proxy.ts) and Next.js refuse a cross-origin post before this runs.
+ */
+export async function changePartyAction(previous: PartyFormState, form: FormData): Promise<PartyFormState> {
+  const { language } = await currentPreferences();
+  const serial = previous.serial + 1;
+  const refused = (error: string, field: PartyField | null): PartyFormState => ({
+    ...previous,
+    error,
+    field,
+    stale: false,
+    saved: false,
+    serial,
+  });
+  const id = form.get('id');
+  const version = form.get('version');
+  if (typeof id !== 'string' || !ID.test(id) || typeof version !== 'string' || !VERSION.test(version)) {
+    return refused(invalid(language), null);
+  }
+  const size = partyValue(form, 'size');
+  const level = partyValue(form, 'level');
+  for (const [field, value] of [['size', size], ['level', level]] as const) {
+    if (value === undefined) {
+      const { code, max } = PARTY_FIELDS[field];
+      return refused(errorText({ category: 'request', code, params: { min: 1, max } }, language), field);
+    }
+  }
+  // The signed-in layout has already sent a visitor without a session to the sign-in screen.
+  const token = (await currentSessionToken()) ?? '';
+  const result = await changeCampaignParty(token, id, { version: Number(version), size: size ?? null, level: level ?? null });
+  if (result.ok) {
+    const t = translator(language);
+    await flash('success', `${t('feedback.partySaved')} ${t('artifacts.edit.saved')}`);
+    refresh();
+    const { partySize, partyLevel } = result.data;
+    return { version: result.data.version, size: partySize, level: partyLevel, error: null, field: null, stale: false, saved: true, serial };
+  }
+  if (problemFields(result.problem).code === 'request.stale_version') {
+    const current = await getCampaign(token, id);
+    if (current.ok) {
+      refresh();
+      return {
+        version: current.data.version,
+        size: current.data.partySize,
+        level: current.data.partyLevel,
+        error: translator(language)('campaigns.party.stale'),
+        field: null,
+        stale: true,
+        saved: false,
+        serial,
+      };
+    }
+    return refused(errorText(current.problem, language), null);
+  }
+  return refused(errorText(result.problem, language), partyFieldOf(result.problem));
 }
 
 /** "Criar campanha": the new campaign's page (it is now the current one), or the form again with the refusal. */

@@ -55,6 +55,7 @@ export type SystemDeletion = Schemas['SystemDeletion'];
 export type CampaignDeletion = Schemas['CampaignDeletion'];
 export type NewCampaign = Schemas['NewCampaign'];
 export type CampaignChange = Schemas['CampaignChange'];
+export type CampaignPartyChange = Schemas['CampaignPartyChange'];
 export type Scope = Schemas['Scope'];
 export type ScopeChange = Schemas['ScopeChange'];
 export type ScopeMaterial = Schemas['ScopeMaterial'];
@@ -322,6 +323,21 @@ export function createCampaign(sessionToken: string, body: NewCampaign, options:
 export function changeCampaign(sessionToken: string, id: string, body: CampaignChange, options: CallOptions = {}): Promise<Result<Campaign>> {
   return call('library.campaign_change', options, (client) =>
     client.PATCH('/api/v1/campaigns/{id}', { params: { header: session(sessionToken), path: { id } }, body }),
+  );
+}
+
+/**
+ * Replaces the party size and level of one of the account's campaigns on the version it names (Story 7.1; null clears
+ * a value): `request.party_size_invalid`, `request.party_level_invalid`, `request.stale_version`, `request.not_found`.
+ */
+export function changeCampaignParty(
+  sessionToken: string,
+  id: string,
+  body: CampaignPartyChange,
+  options: CallOptions = {},
+): Promise<Result<Campaign>> {
+  return call('library.campaign_party', options, (client) =>
+    client.PUT('/api/v1/campaigns/{id}/party', { params: { header: session(sessionToken), path: { id } }, body }),
   );
 }
 

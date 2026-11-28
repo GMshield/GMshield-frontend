@@ -229,7 +229,23 @@
       "conversationsOther": "{count} conversations",
       "open": "Open",
       "restoreToOpen": "Restore the campaign to open the conversation.",
-      "noConversation": "This campaign has no conversations yet."
+      "noConversation": "This campaign has no conversations yet.",
+      "partySize": "Players",
+      "partyLevel": "Party level",
+      "notSet": "Not set",
+      "partyPurpose": "The number of players and the party level are used to fit loot and encounters to the group."
+    },
+    "party": {
+      "label": "Party",
+      "change": "Change",
+      "formLabel": "Campaign's party",
+      "size": "Players",
+      "level": "Party level",
+      "emptyHint": "From 1 to 20. Leave empty to leave it unset.",
+      "levelHint": "Most systems go from 1 to 20; supplements may go beyond.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "stale": "This campaign's party was changed elsewhere. The fields now show the current values: make your change again and save."
     },
     "delete": {
       "title": "Delete this campaign?",
@@ -569,7 +585,9 @@
         "roll_key_taken": "This roll is already saved in another Shield.",
         "stale_version": "This was changed elsewhere. Reload the page to see the current version.",
         "conversation_name_invalid": "The name needs {min} to {max} characters.",
-        "note_type_fixed": "A note in a Shield stays a note: its type cannot change."
+        "note_type_fixed": "A note in a Shield stays a note: its type cannot change.",
+        "party_size_invalid": "Enter a whole number from {min} to {max}.",
+        "party_level_invalid": "Enter a whole number from {min} to {max}."
       },
       "server": {
         "unexpected": "Something went wrong on the server. Try again in a moment.",
@@ -1118,7 +1136,8 @@
     "shieldRenamed": "Shield renamed to «{name}».",
     "shieldDeleted": "Shield deleted.",
     "noteCreated": "Note «{name}» created.",
-    "noteMoved": "Note «{name}» moved."
+    "noteMoved": "Note «{name}» moved.",
+    "partySaved": "Party saved."
   },
   "notifications": {
     "title": "Notifications",

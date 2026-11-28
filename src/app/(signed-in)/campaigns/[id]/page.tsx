@@ -8,6 +8,7 @@ import { notFoundFor } from '@/app/not-found';
 import { CampaignAction } from '@/components/CampaignAction';
 import { CampaignDeleteAction } from '@/components/CampaignDeleteAction';
 import { Notice } from '@/components/Notice';
+import { PartyForm } from '@/components/PartyForm';
 import { PillLink } from '@/components/PillLink';
 import { ScopeControls } from '@/components/ScopeControls';
 import { errorText, translator, type Language } from '@/messages';
@@ -24,7 +25,14 @@ import type { ListView } from '@/view-cookie';
 
 import { systemRecordTypes } from '../../systems/rows';
 import styles from '../../systems/systems.module.css';
-import { archiveCampaignAction, changeScopeAction, chooseCampaignAction, deleteCampaignAction, openConversationAction } from '../actions';
+import {
+  archiveCampaignAction,
+  changePartyAction,
+  changeScopeAction,
+  chooseCampaignAction,
+  deleteCampaignAction,
+  openConversationAction,
+} from '../actions';
 import { artifactRow, shieldRow, systemLabel } from '../rows';
 
 const TABS = ['overview', 'scope', 'shields', 'conversations', 'artifacts'] as const;
@@ -38,7 +46,9 @@ function tabOf(value: unknown): Tab {
  * A campaign's page (Story 3.2): its name, then "Usar esta campanha" (the one solid pill, when it is in use and not the
  * current one; the current one says so instead), "Renomear" and "Arquivar" or "Restaurar" (reversible, so with no
  * confirmation), and three tabs chosen by `?tab=`:
- * - overview (the default): the name, the system (a link to its page) and "Arquivada" when archived;
+ * - overview (the default): the name, the system (a link to its page), "Arquivada" when archived, and from Story 7.1
+ *   "Jogadores" and "Nível do grupo" ("Não definido" while not set), then, while either is not set, one sentence on
+ *   what they are for, and "Alterar", which opens the party form in place ({@link PartyForm});
  * - scope (Story 3.6): the scope controls inline, the same as the context bar's popover ({@link ScopeControls}): the
  *   three tier switches, the materials of each tier that is on with a switch each, and the model-knowledge switch (disabled until
  *   Story 3.8); a press saves at once. When the scope cannot be read, a notice says why;
@@ -86,6 +96,9 @@ export default async function CampaignPage({
     return <Notice status="danger" language={language} message={errorText(campaign.problem, language)} dismissible={false} />;
   }
   const { name, system, archived, version } = campaign.data;
+  // Story 7.1: null while not set (and from a backend that does not send them).
+  const partySize = campaign.data.partySize ?? null;
+  const partyLevel = campaign.data.partyLevel ?? null;
   const campaignId = campaign.data.id;
   const isCurrent = current.ok && current.data.id === campaignId;
   const here = `/campaigns/${encodeURIComponent(campaignId)}`;
@@ -164,7 +177,38 @@ export default async function CampaignPage({
               <dd>{t('campaigns.page.archived')}</dd>
             </div>
           ) : null}
+          <div className={styles.detail}>
+            <dt>{t('campaigns.page.partySize')}</dt>
+            <dd className={partySize === null ? styles.unset : undefined}>{partySize ?? t('campaigns.page.notSet')}</dd>
+          </div>
+          <div className={styles.detail}>
+            <dt>{t('campaigns.page.partyLevel')}</dt>
+            <dd className={partyLevel === null ? styles.unset : undefined}>{partyLevel ?? t('campaigns.page.notSet')}</dd>
+          </div>
         </dl>
+      ) : null}
+      {tab === 'overview' ? (
+        <PartyForm
+          // Keyed by the campaign alone: the refresh after a save keeps the form's answer, so its focus goes back.
+          key={`party-${campaignId}`}
+          id={campaignId}
+          version={version}
+          size={partySize}
+          level={partyLevel}
+          purpose={partySize === null || partyLevel === null ? t('campaigns.page.partyPurpose') : null}
+          texts={{
+            label: t('campaigns.party.label'),
+            change: t('campaigns.party.change'),
+            formLabel: t('campaigns.party.formLabel'),
+            size: t('campaigns.party.size'),
+            level: t('campaigns.party.level'),
+            emptyHint: t('campaigns.party.emptyHint'),
+            levelHint: t('campaigns.party.levelHint'),
+            save: t('campaigns.party.save'),
+            cancel: t('campaigns.party.cancel'),
+          }}
+          action={changePartyAction}
+        />
       ) : null}
       {scope === null ? null : scope.ok ? (
         <section className={`${styles.panel} ${styles.scope}`} aria-label={t('shell.scope.panel')}>

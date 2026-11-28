@@ -499,18 +499,34 @@
             "example" : "Primeira campanha",
             "type" : "string"
           },
+          "partyLevel" : {
+            "description" : "The party's level, 1 to 999; null while not set (contract 1.61.0)",
+            "example" : 5,
+            "format" : "int32",
+            "maximum" : 999,
+            "minimum" : 1,
+            "type" : [ "integer", "null" ]
+          },
+          "partySize" : {
+            "description" : "How many players the GM's party has, 1 to 20; null while not set (contract 1.61.0)",
+            "example" : 4,
+            "format" : "int32",
+            "maximum" : 20,
+            "minimum" : 1,
+            "type" : [ "integer", "null" ]
+          },
           "system" : {
             "$ref" : "#/components/schemas/System",
             "description" : "The campaign's system"
           },
           "version" : {
-            "description" : "The campaign's version: a rename, an archive or a restore names it and raises it by one; choosing the campaign does not (contract 1.19.0)",
+            "description" : "The campaign's version: a rename, an archive, a restore or a change of its party (contract 1.61.0) names it and raises it by one; choosing the campaign does not (contract 1.19.0)",
             "example" : 0,
             "format" : "int64",
             "type" : "integer"
           }
         },
-        "required" : [ "archived", "id", "name", "system", "version" ],
+        "required" : [ "archived", "id", "name", "partyLevel", "partySize", "system", "version" ],
         "type" : "object"
       },
       "CampaignChange" : {
@@ -606,6 +622,35 @@
           }
         },
         "required" : [ "items", "total" ],
+        "type" : "object"
+      },
+      "CampaignPartyChange" : {
+        "properties" : {
+          "level" : {
+            "description" : "The party's level, a whole number from 1 to 999 (most systems go from 1 to 20; supplements may go beyond); absent or null: not set",
+            "example" : 5,
+            "format" : "int32",
+            "maximum" : 999,
+            "minimum" : 1,
+            "type" : [ "integer", "null" ]
+          },
+          "size" : {
+            "description" : "How many players, a whole number from 1 to 20; absent or null: not set",
+            "example" : 4,
+            "format" : "int32",
+            "maximum" : 20,
+            "minimum" : 1,
+            "type" : [ "integer", "null" ]
+          },
+          "version" : {
+            "description" : "The version the change was made on, as the campaign was read",
+            "example" : 3,
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "version" ],
         "type" : "object"
       },
       "CampaignSummary" : {
@@ -3880,7 +3925,7 @@
   },
   "info" : {
     "title" : "GMshield public API",
-    "version" : "1.60.0"
+    "version" : "1.61.0"
   },
   "openapi" : "3.1.0",
   "paths" : {
@@ -5972,6 +6017,62 @@
           }
         },
         "summary" : "What goes with one of the account's campaigns if it is deleted: how many conversations and materials (those attached to it). request.not_found (404) for any other id, a campaign being deleted included; session.required (401) without a session.",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/v1/campaigns/{id}/party" : {
+      "put" : {
+        "operationId" : "changeCampaignParty",
+        "parameters" : [ {
+          "description" : "The session token",
+          "in" : "header",
+          "name" : "X-Session-Token",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The campaign's id",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CampaignPartyChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Campaign"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description" : "Any error"
+          }
+        },
+        "summary" : "Replaces the party size and level of one of the account's campaigns on the version it names (null or absent clears a value): the campaign as stored, its version raised by one. A question asked before keeps the values it was asked with; the change applies from the next question. request.party_size_invalid (400) for a size that is not a whole number from 1 to 20, request.party_level_invalid (400) for a level that is not a whole number from 1 to 999 (params min and max), request.stale_version (409) when the campaign has left that version, request.invalid (400) without a version or for a malformed body, request.not_found (404) for any other id; nothing changes then; session.required (401) without a session.",
         "tags" : [ "library" ]
       }
     },

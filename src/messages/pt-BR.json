@@ -229,7 +229,23 @@
       "conversationsOther": "{count} conversas",
       "open": "Abrir",
       "restoreToOpen": "Restaure a campanha para abrir a conversa.",
-      "noConversation": "Esta campanha ainda não tem conversas."
+      "noConversation": "Esta campanha ainda não tem conversas.",
+      "partySize": "Jogadores",
+      "partyLevel": "Nível do grupo",
+      "notSet": "Não definido",
+      "partyPurpose": "O número de jogadores e o nível do grupo servem para ajustar tesouros e encontros ao grupo."
+    },
+    "party": {
+      "label": "Grupo",
+      "change": "Alterar",
+      "formLabel": "Grupo da campanha",
+      "size": "Jogadores",
+      "level": "Nível do grupo",
+      "emptyHint": "De 1 a 20. Deixe vazio para não definir.",
+      "levelHint": "Na maioria dos sistemas, de 1 a 20; suplementos podem ir além.",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "stale": "O grupo desta campanha foi alterado em outro lugar. Os campos agora mostram os valores atuais: faça sua alteração de novo e salve."
     },
     "delete": {
       "title": "Excluir esta campanha?",
@@ -569,7 +585,9 @@
         "roll_key_taken": "Esta rolagem já está salva em outro escudo.",
         "stale_version": "Isto foi alterado em outro lugar. Recarregue a página para ver a versão atual.",
         "conversation_name_invalid": "O nome precisa ter de {min} a {max} caracteres.",
-        "note_type_fixed": "Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar."
+        "note_type_fixed": "Uma nota de um escudo continua sendo uma nota: o tipo não pode mudar.",
+        "party_size_invalid": "Informe um número inteiro de {min} a {max}.",
+        "party_level_invalid": "Informe um número inteiro de {min} a {max}."
       },
       "server": {
         "unexpected": "Algo deu errado no servidor. Tente de novo em instantes.",
@@ -1118,7 +1136,8 @@
     "shieldRenamed": "Escudo renomeado para «{name}».",
     "shieldDeleted": "Escudo excluído.",
     "noteCreated": "Nota «{name}» criada.",
-    "noteMoved": "Nota «{name}» movida."
+    "noteMoved": "Nota «{name}» movida.",
+    "partySaved": "Grupo salvo."
   },
   "notifications": {
     "title": "Notificações",

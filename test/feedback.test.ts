@@ -33,7 +33,10 @@ const { default: FilesPage } = await import('@/app/(signed-in)/files/page');
 const { previewPageAction } = await import('@/app/(signed-in)/files/actions');
 const { deleteMaterialAction, materialAction, removeVersionAction } = await import('@/app/(signed-in)/files/[id]/actions');
 const { createSystemAction, deleteSystemAction } = await import('@/app/(signed-in)/systems/actions');
-const { archiveCampaignAction, chooseCampaignAction, openSavedAnswerAction } = await import('@/app/(signed-in)/campaigns/actions');
+const { archiveCampaignAction, changePartyAction, chooseCampaignAction, openSavedAnswerAction } = await import(
+  '@/app/(signed-in)/campaigns/actions'
+);
+const { NO_PARTY_ANSWER } = await import('@/app/(signed-in)/campaigns/form-state');
 const { fileRow, previewOf } = await import('@/app/(signed-in)/files/rows');
 const { translator } = await import('@/messages');
 const { startScripted } = await import('./support/servers');
@@ -138,6 +141,22 @@ describe('what an action says once it has succeeded', () => {
     cookieJar['__Host-gmshield-lang'] = 'en';
     await chooseCampaignAction({ error: null, done: 0 }, form({ id: ID }));
     expect(flashed()?.flash?.message).toBe('«Mesa de sexta» is the current campaign.');
+  });
+
+  it('Story 7.1: saving the party says it applies from the next question, in both languages; a refusal says nothing', async () => {
+    const campaign = { id: ID, name: 'A Coroa Partida', system: { id: ID, name: 'D&D', edition: null, description: null, version: 0 }, archived: false, version: 1, partySize: 4, partyLevel: 5 };
+    const routes: Record<string, { status: number; body: unknown }> = { [`PUT /api/v1/campaigns/${ID}/party`]: { status: 200, body: campaign } };
+    await useBackend(routes);
+    const fields = { id: ID, version: '0', size: '4', level: '5' };
+    await changePartyAction(NO_PARTY_ANSWER, form(fields));
+    expect(flashed()?.flash).toEqual({ status: 'success', message: 'Grupo salvo. Vale a partir da próxima pergunta.' });
+    cookieJar['__Host-gmshield-lang'] = 'en';
+    await changePartyAction(NO_PARTY_ANSWER, form(fields));
+    expect(flashed()?.flash?.message).toBe('Party saved. It applies from the next question.');
+    setCalls = [];
+    routes[`PUT /api/v1/campaigns/${ID}/party`] = { status: 409, body: { type: 'x', title: 'x', status: 409, category: 'request', code: 'request.stale_version', params: {}, traceId: 't' } };
+    await changePartyAction(NO_PARTY_ANSWER, form(fields));
+    expect(flashed()).toBeNull();
   });
 
   it('Story 3.12: "Ir" on a saved answer of another campaign names the campaign it switched to, in both languages', async () => {
